@@ -99,7 +99,7 @@ describe("cloneNode", () => {
   });
 
   it("reuses the content handle that the copy of a template made", () => {
-    const copy = createElementNode("template").cloneNode(true) as IncaElement & {
+    const copy = createElementNode("template").cloneNode(true) as unknown as IncaElement & {
       content: IncaNode;
     };
 

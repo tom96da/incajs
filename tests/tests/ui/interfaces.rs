@@ -28,6 +28,8 @@ fn probe(cx: &mut TestAppContext) -> Value {
 #[case::an_svg_from_inner_html_is_an_element("svgIsElement", json!(true))]
 #[case::an_svg_from_inner_html_is_no_html_element("svgIsHtmlElement", json!(false))]
 #[case::a_fragment_is_a_document_fragment("fragmentIsDocumentFragment", json!(true))]
+#[case::window_is_an_event_target("windowIsEventTarget", json!(true))]
+#[case::a_text_child_reads_its_ref_as_parent_element("textParentIsTheRef", json!(true))]
 fn the_nodes_are_instances_of_their_interfaces_on_the_real_host(
     cx: &mut TestAppContext,
     #[case] key: &str,

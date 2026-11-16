@@ -76,73 +76,6 @@ describe("the node table", () => {
   });
 });
 
-describe("the release of a template", () => {
-  const registered = new Map<object, { callback: (id: number) => void; held: number }[]>();
-  const host = {
-    createNode: vi.fn<(tag: string) => number>(() => 4),
-    templateContent: vi.fn<(nodeId: number) => number | null>(() => 5),
-    holdNode: vi.fn<(nodeId: number) => void>(),
-    releaseNode: vi.fn<(nodeId: number) => void>(),
-  };
-
-  beforeEach(() => {
-    registered.clear();
-    vi.clearAllMocks();
-    vi.stubGlobal(
-      "FinalizationRegistry",
-      class {
-        constructor(private readonly callback: (id: number) => void) {}
-        register(target: object, held: number): void {
-          registered.set(target, [
-            ...(registered.get(target) ?? []),
-            { callback: this.callback, held },
-          ]);
-        }
-      },
-    );
-    globalThis.__inca_native__ = nativeStub(host as never);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("releases the node of a collected template handle once, with its id", async () => {
-    vi.resetModules();
-    const { createElementNode } = await import("./handle.mts");
-    const owner = createElementNode("template");
-
-    for (const { callback, held } of registered.get(owner)!) callback(held);
-
-    expect(host.releaseNode.mock.calls).toEqual([[owner.__node_id]]);
-  });
-});
-
-describe("the release of a removed node", () => {
-  it("registers a node that a held path covers once", async () => {
-    const registered = new Map<object, number>();
-    vi.stubGlobal(
-      "FinalizationRegistry",
-      class {
-        register(target: object): void {
-          registered.set(target, (registered.get(target) ?? 0) + 1);
-        }
-      },
-    );
-    vi.resetModules();
-    globalThis.__inca_native__ = nativeStub({ releaseNode: () => {} } as never);
-    const { createIncaElement } = await import("./handle.mts");
-    const { leftHeld, releaseWhenCollected } = await import("./lifecycle.mts");
-    const el = createIncaElement(50, "div");
-    releaseWhenCollected(el);
-
-    leftHeld(el, [el.__node_id]);
-
-    expect(registered.get(el)).toBe(1);
-    vi.unstubAllGlobals();
-  });
-});
-
 describe("a template", () => {
   const host = {
     createNode: vi.fn<(tag: string) => number>(() => 4),
@@ -284,5 +217,72 @@ describe("the prototype of a handle", () => {
     lifecycle.prototypes();
 
     expect(interfacePrototypes).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the release of a template", () => {
+  const registered = new Map<object, { callback: (id: number) => void; held: number }[]>();
+  const host = {
+    createNode: vi.fn<(tag: string) => number>(() => 4),
+    templateContent: vi.fn<(nodeId: number) => number | null>(() => 5),
+    holdNode: vi.fn<(nodeId: number) => void>(),
+    releaseNode: vi.fn<(nodeId: number) => void>(),
+  };
+
+  beforeEach(() => {
+    registered.clear();
+    vi.clearAllMocks();
+    vi.stubGlobal(
+      "FinalizationRegistry",
+      class {
+        constructor(private readonly callback: (id: number) => void) {}
+        register(target: object, held: number): void {
+          registered.set(target, [
+            ...(registered.get(target) ?? []),
+            { callback: this.callback, held },
+          ]);
+        }
+      },
+    );
+    globalThis.__inca_native__ = nativeStub(host as never);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("releases the node of a collected template handle once, with its id", async () => {
+    vi.resetModules();
+    const { createElementNode } = await import("./handle.mts");
+    const owner = createElementNode("template");
+
+    for (const { callback, held } of registered.get(owner)!) callback(held);
+
+    expect(host.releaseNode.mock.calls).toEqual([[owner.__node_id]]);
+  });
+});
+
+describe("the release of a removed node", () => {
+  it("registers a node that a held path covers once", async () => {
+    const registered = new Map<object, number>();
+    vi.stubGlobal(
+      "FinalizationRegistry",
+      class {
+        register(target: object): void {
+          registered.set(target, (registered.get(target) ?? 0) + 1);
+        }
+      },
+    );
+    vi.resetModules();
+    globalThis.__inca_native__ = nativeStub({ releaseNode: () => {} } as never);
+    const { createIncaElement } = await import("./handle.mts");
+    const { leftHeld, releaseWhenCollected } = await import("./lifecycle.mts");
+    const el = createIncaElement(50, "div");
+    releaseWhenCollected(el);
+
+    leftHeld(el, [el.__node_id]);
+
+    expect(registered.get(el)).toBe(1);
+    vi.unstubAllGlobals();
   });
 });

@@ -162,8 +162,7 @@ A number must lie from `0` to `0xffffff`. Other notations, such as color names,
 A template `ref` is an element handle. Its members behave as described for
 [`Element`](https://developer.mozilla.org/en-US/docs/Web/API/Element) and
 [`HTMLElement`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement),
-with the differences below. The listener methods are described in
-[Event targets](./events#event-targets).
+with the differences below.
 
 - A box read returns the box of the last drawn frame, so `onMounted` reads
   zeros.
@@ -218,11 +217,11 @@ with the differences below. The listener methods are described in
   are missing:
   - `SVGElement`
   - `MathMLElement`
-- `document.createDocumentFragment()` returns a fragment without these members:
-  - `querySelector()` and `querySelectorAll()`
-  - `children`
-  - `getElementById()`
-  - the listener methods
+- `document` and a fragment have no `getElementById()`.
+- The only element child of `document` is the mount container. These members give it:
+  - `document.firstElementChild`
+  - `document.lastElementChild`
+  - `document.children[0]`
 - The nodes of a copy of `document`, and the nodes its creation methods make, read `document` as
   their `ownerDocument`.
 - The methods below store U+FFFD for each half of a surrogate pair they split:

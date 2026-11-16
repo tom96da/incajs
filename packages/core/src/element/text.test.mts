@@ -195,7 +195,9 @@ describe("splitText", () => {
 
     const tail = text.splitText(2);
 
-    expect(kids(parent)).toEqual([text, tail, last]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      [text, tail, last].map((node) => node.__node_id),
+    );
     expect(tail.parentNode).toBe(parent);
   });
 
@@ -263,7 +265,7 @@ describe("textContent of an element", () => {
 
     el.textContent = value as string;
 
-    expect(kids(el)).toEqual([]);
+    expect(kids(el).map((node) => node.__node_id)).toEqual([]);
   });
 
   it("keeps the listeners of a removed child", () => {
@@ -354,7 +356,8 @@ describe("element registry", () => {
 
     setElementText(root, "hello");
 
-    expect([child, grandchild].map((el) => elementOf(el.__node_id))).toEqual([child, grandchild]);
+    expect(elementOf(child.__node_id)).toBe(child);
+    expect(elementOf(grandchild.__node_id)).toBe(grandchild);
   });
 });
 

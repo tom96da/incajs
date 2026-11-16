@@ -4,7 +4,14 @@
 import type { IncaDocument, IncaEvent, IncaEventMap, IncaEventTarget, NodeId } from "../types.mts";
 import type { HANDLER_EVENTS } from "./eventHandlers.mts";
 import type { RectLike } from "./geometry.mts";
-import type { NonDocumentTypeChildNodeMembers } from "./nodeTypes.mts";
+import type {
+  CharacterDataMembers,
+  NodeMembers,
+  NonDocumentTypeChildNodeMembers,
+  ParentNodeMembers,
+  TextContentMember,
+  TextMembers,
+} from "./nodeTypes.mts";
 import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
 
 /** A function an event handler property holds, called with its target as `this` and the event. */
@@ -160,183 +167,6 @@ export interface NamedNodeMap {
    */
   getNamedItem(qualifiedName: string): Attr | null;
   [Symbol.iterator](): IterableIterator<Attr>;
-}
-
-/** The members every node has: what it is, its data and its place in the tree. */
-export interface NodeMembers {
-  /**
-   * `1` for an element, `3` for a text node, `8` for a comment, `9` for the document and
-   * `11` for a fragment.
-   */
-  readonly nodeType: 1 | 3 | 8 | 9 | 11;
-  /**
-   * The {@link IncaElement.tagName} of an element, `"#text"` for a text node, `"#comment"` for a
-   * comment, `"#document"` for the document and `"#document-fragment"` for a fragment.
-   */
-  readonly nodeName: string;
-  /**
-   * The data of a text node or a comment, and `null` for an element, the document or a
-   * fragment. Assigning `null` or `undefined` stores `""` and any other value stores its string.
-   * Assigning to an element, the document, a fragment or a freed node does nothing.
-   */
-  nodeValue: string | null;
-  /** Whether the node hangs under `document`. */
-  readonly isConnected: boolean;
-  /** `document`, and `null` for `document` itself. */
-  readonly ownerDocument: IncaDocument | null;
-  /**
-   * The parent, or `null` for a detached node. A node inside a fragment reads the fragment. A
-   * freed node reads `null`.
-   */
-  readonly parentNode: IncaElement | IncaFragment | IncaDocument | null;
-  /** The first child, or `null`. */
-  readonly firstChild: IncaNode | null;
-  /** The last child, or `null`. */
-  readonly lastChild: IncaNode | null;
-  /** The sibling right before this node, or `null`. */
-  readonly previousSibling: IncaNode | null;
-  /** The sibling right after this node, or `null`. */
-  readonly nextSibling: IncaNode | null;
-  /**
-   * The children in order, as a live list. Every read returns the same object, which follows later
-   * changes. A freed node has an empty list.
-   */
-  readonly childNodes: NodeListOf<IncaNode>;
-  /** Whether the node has a child. */
-  hasChildNodes(): boolean;
-  /**
-   * Appends `node` as the last child. A fragment gives up its children in order and stays empty.
-   * A node that has a parent moves. Throws `HierarchyRequestError` when this node is a text node or
-   * a comment, or when `node` is this node or one of its ancestors.
-   * @returns `node`
-   */
-  appendChild<T extends IncaNode>(node: T): T;
-  /**
-   * Inserts `node` before `child`, or last when `child` is `null` or `undefined`. A fragment gives
-   * up its children in order and stays empty. Throws `HierarchyRequestError` as
-   * {@link NodeMembers.appendChild} does, and `NotFoundError` when `child` is not a child of this
-   * node.
-   * @returns `node`
-   */
-  insertBefore<T extends IncaNode>(node: T, child: IncaNode | null | undefined): T;
-  /**
-   * Removes `child`, which keeps its listeners and can be inserted again. Throws `NotFoundError`
-   * when `child` is not a child of this node.
-   * @returns `child`
-   */
-  removeChild<T extends IncaNode>(child: T): T;
-  /**
-   * Puts `node` in the place of `child`, which keeps its listeners and can be inserted again.
-   * Throws as {@link NodeMembers.insertBefore} does, with `child` as the node that has to be a
-   * child of this node.
-   * @returns `child`
-   */
-  replaceChild<T extends IncaNode>(node: IncaNode, child: T): T;
-  /**
-   * Copies the node: its tag, attributes and style, and with `deep` its descendants. The copy has
-   * no parent, no listeners and no scroll offset, and the text of an `input` carries over.
-   * @param deep - whether the descendants are copied too
-   * @returns the copy
-   */
-  cloneNode(deep?: boolean): this;
-  /**
-   * Whether `other` is this node or one of its descendants in the tree as rendered. `null` and
-   * `undefined` give `false`, and any other value that is not a node throws a `TypeError`. After
-   * the node is removed, it still answers for the subtree it keeps. A freed node contains only
-   * itself.
-   */
-  contains(other: IncaNode | null): boolean;
-  /**
-   * The topmost node above this one: `document` for a connected node, else the top of its
-   * subtree, the node itself without a parent.
-   */
-  getRootNode(): IncaNode;
-  /**
-   * The position of `other` relative to this node as a bit mask: `1` disconnected, `2` preceding,
-   * `4` following, `8` contains, `16` contained by and `32` implementation specific. Nodes of
-   * different trees give `1 | 32` plus `2` or `4`, with opposite directions for the two orders of
-   * the pair. A freed node is a tree of its own: it gives `1 | 32` plus `2` or `4` by the order of
-   * the two ids, and `0` for itself.
-   * @throws {TypeError} when `other` is not a node
-   */
-  compareDocumentPosition(other: IncaNode): number;
-  /** Whether `other` is this node. `null` and `undefined` give `false`. */
-  isSameNode(other: IncaNode | null): boolean;
-  /**
-   * Whether `other` has the same tag, attributes, style and children, compared in depth. The typed
-   * text of an `input` is not compared. `null` and `undefined` give `false`. A freed node equals
-   * only itself.
-   */
-  isEqualNode(other: IncaNode | null): boolean;
-}
-
-/** The `textContent` of a node. */
-export interface TextContentMember {
-  /**
-   * The data of a text node or a comment, and the data of the text nodes below an
-   * element in tree order, comments left out. Assigning `null` or `undefined` stores `""`
-   * and any other value stores its string. Assigning to an element replaces its children with one
-   * text node, or with none for `""`. A freed node reads `""` or its last data and ignores the
-   * assignment.
-   */
-  textContent: string;
-}
-
-/** The members of a text node and a comment that read and edit their data. */
-export interface CharacterDataMembers extends TextContentMember {
-  /** The data. Assigning `null` stores `""` and any other value stores its string. */
-  data: string;
-  /** The number of UTF-16 code units of the data. */
-  readonly length: number;
-  /**
-   * The part of the data from `offset`. Both arguments convert to unsigned 32-bit integers and
-   * count UTF-16 code units. `count` stops at the end of the data.
-   * @param offset - Where the part starts.
-   * @param count - The length of the part.
-   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
-   */
-  substringData(offset: number, count: number): string;
-  /**
-   * Adds `data` at the end of the data.
-   * @param data - The text to add.
-   */
-  appendData(data: string): void;
-  /**
-   * Adds `data` at `offset`.
-   * @param offset - Where to add.
-   * @param data - The text to add.
-   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
-   */
-  insertData(offset: number, data: string): void;
-  /**
-   * Removes `count` units from `offset`.
-   * @param offset - Where the removal starts.
-   * @param count - The number of units, stopping at the end of the data.
-   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
-   */
-  deleteData(offset: number, count: number): void;
-  /**
-   * Replaces `count` units from `offset` with `data`.
-   * @param offset - Where the replaced part starts.
-   * @param count - The number of units, stopping at the end of the data.
-   * @param data - The new text.
-   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
-   */
-  replaceData(offset: number, count: number, data: string): void;
-}
-
-/** The members only a text node has. */
-export interface TextMembers {
-  /** The data of this node and of the text nodes that touch it, in order. */
-  readonly wholeText: string;
-  /**
-   * Cuts the data at `offset`. This node keeps the head and the new node holds the tail. The new
-   * node follows this one when this one has a parent, and has no parent otherwise.
-   * @param offset - Where to cut, converted like the offset of `substringData()`.
-   * @returns The new node.
-   * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
-   */
-  splitText(offset: number): IncaText;
 }
 
 /**
@@ -496,8 +326,8 @@ export interface HtmlMembers {
 export interface IncaElement
   extends
     IncaEventTarget,
-    EventHandlers,
     NodeMembers,
+    ParentNodeMembers,
     NonDocumentTypeChildNodeMembers,
     TextContentMember,
     HtmlMembers {
@@ -536,36 +366,6 @@ export interface IncaElement
   /** The prefix of the element name, or `null` for none. */
   readonly prefix: string | null;
   /**
-   * The child elements in order, as a live collection. Every read returns the same object, which
-   * follows later changes. A removed element lists the element children it kept.
-   */
-  readonly children: HTMLCollectionOf<IncaElement>;
-  /**
-   * The parent element, or `null` for a detached node, a node inside a fragment and the mount
-   * container.
-   */
-  readonly parentElement: IncaElement | null;
-  /** The first child that is an element, or `null`. */
-  readonly firstElementChild: IncaElement | null;
-  /** The last child that is an element, or `null`. */
-  readonly lastElementChild: IncaElement | null;
-  /** The number of children that are elements. */
-  readonly childElementCount: number;
-  /**
-   * Focuses this node next frame. The node needs a `tabindex` attribute. A
-   * `true` `preventScroll` keeps every scroll container where it is. After
-   * the node is removed, the call does nothing.
-   */
-  focus(options?: { preventScroll?: boolean }): void;
-  /** Unfocuses this node next frame, if it is the focused one. */
-  blur(): void;
-  /**
-   * Fires an untrusted `click` at this node. A disabled `button` or `input` and a node
-   * whose own click is still running ignore the call. After the node is removed, the call
-   * does nothing.
-   */
-  click(): void;
-  /**
    * Captures the mouse pointer for this node while a button is held. Only `pointerId` 1 exists.
    * @throws DOMException named `NotFoundError` for another `pointerId`
    * @throws DOMException named `InvalidStateError` when the node is outside the mounted tree,
@@ -582,12 +382,6 @@ export interface IncaElement
    * removed.
    */
   hasPointerCapture(pointerId: number): boolean;
-  /**
-   * Assigning sets the `tabindex` attribute to the value's integer part,
-   * wrapped to 32 bits. Reading returns the `tabindex` attribute as an
-   * integer, or `-1` (`0` for a `button` or an `input`) when it is unset or invalid.
-   */
-  tabIndex: number;
   /**
    * The value of the attribute `name` as a string, or `null` when it is unset. Names are
    * ASCII-case-insensitive.
@@ -623,20 +417,6 @@ export interface IncaElement
    */
   readonly attributes: NamedNodeMap;
   /**
-   * The inline style as a live block. Every read returns the same object. Assigning a string
-   * writes its `cssText`, and `null` assigns `""`.
-   */
-  get style(): CSSStyleDeclaration;
-  set style(cssText: string | null);
-  /**
-   * The `data-*` attributes as a live object. Every read returns the same object. A write converts
-   * the value to text.
-   * @throws DOMException named `SyntaxError` for a write to a key with a dash before a lower case
-   * letter, and named `InvalidCharacterError` for a key that makes an invalid attribute name
-   * @throws TypeError for a write of a `Symbol` value
-   */
-  readonly dataset: DOMStringMap;
-  /**
    * Whether this element matches the selector list. `:focus-visible` and the other interactive and
    * form-state pseudo-classes never match.
    * @throws DOMException named `SyntaxError` for an invalid selector, also after this element is
@@ -654,43 +434,10 @@ export interface IncaElement
    */
   closest(selectors: string): IncaElement | null;
   /**
-   * The first descendant element that matches the selector list, or `null`. This element is never
-   * in the result. `:scope` and a leading `&` select this element. A removed element searches the
-   * subtree it kept.
-   * @throws DOMException named `SyntaxError` for an invalid selector, also after this element is
-   * removed
-   * @param selectors - A selector list.
-   * @returns The first matching descendant in document order, or `null`.
-   */
-  querySelector(selectors: string): IncaElement | null;
-  /**
-   * The descendant elements that match the selector list, in document order, as a list that later
-   * changes do not reach. Every call returns a new list. A removed element searches the subtree it
-   * kept.
-   * @throws DOMException named `SyntaxError` for an invalid selector, also after this element is
-   * removed
-   * @param selectors - A selector list.
-   * @returns The matching descendants.
-   */
-  querySelectorAll(selectors: string): NodeListOf<IncaElement>;
-  /**
    * The box this node was drawn at in the last frame, in window logical
    * pixels. A node created in the same task reads all zeros.
    */
   getBoundingClientRect(): RectLike;
-  /** The box width from the last frame, rounded. `0` until a frame draws the node. */
-  readonly offsetWidth: number;
-  /** The box height from the last frame, rounded. `0` until a frame draws the node. */
-  readonly offsetHeight: number;
-  /** The box's left edge from the last frame, relative to {@link offsetParent}. Stays fixed while the parent scrolls. */
-  readonly offsetLeft: number;
-  /** The box's top edge from the last frame, relative to {@link offsetParent}. Stays fixed while the parent scrolls. */
-  readonly offsetTop: number;
-  /**
-   * The parent, when this node and the parent both have a box from the last frame.
-   * `null` when either lacks a box or there is no parent.
-   */
-  readonly offsetParent: IncaElement | null;
   /** The box width less both borders, rounded, at least `0`. */
   readonly clientWidth: number;
   /** The box height less both borders, rounded, at least `0`. */
@@ -723,8 +470,62 @@ export interface IncaElement
   scrollIntoView(arg?: boolean | ScrollIntoViewOptions): void;
 }
 
+/**
+ * An element of the HTML namespace: an element with the members of HTML elements, the shared
+ * element members, `click()` and the offset members.
+ */
+export interface IncaHTMLElement extends IncaElement, EventHandlers<IncaHTMLElement> {
+  /**
+   * Focuses this node next frame. The node needs a `tabindex` attribute. A
+   * `true` `preventScroll` keeps every scroll container where it is. After
+   * the node is removed, the call does nothing.
+   */
+  focus(options?: { preventScroll?: boolean }): void;
+  /** Unfocuses this node next frame, if it is the focused one. */
+  blur(): void;
+  /**
+   * Assigning sets the `tabindex` attribute to the value's integer part,
+   * wrapped to 32 bits. Reading returns the `tabindex` attribute as an
+   * integer, or `-1` (`0` for a `button` or an `input`) when it is unset or invalid.
+   */
+  tabIndex: number;
+  /**
+   * The inline style as a live block. Every read returns the same object. Assigning a string
+   * writes its `cssText`, and `null` assigns `""`.
+   */
+  get style(): CSSStyleDeclaration;
+  set style(cssText: string | null);
+  /**
+   * The `data-*` attributes as a live object. Every read returns the same object. A write converts
+   * the value to text.
+   * @throws DOMException named `SyntaxError` for a write to a key with a dash before a lower case
+   * letter, and named `InvalidCharacterError` for a key that makes an invalid attribute name
+   * @throws TypeError for a write of a `Symbol` value
+   */
+  readonly dataset: DOMStringMap;
+  /**
+   * Fires an untrusted `click` at this node. A disabled `button` or `input` and a node
+   * whose own click is still running ignore the call. After the node is removed, the call
+   * does nothing.
+   */
+  click(): void;
+  /** The box width from the last frame, rounded. `0` until a frame draws the node. */
+  readonly offsetWidth: number;
+  /** The box height from the last frame, rounded. `0` until a frame draws the node. */
+  readonly offsetHeight: number;
+  /** The box's left edge from the last frame, relative to {@link offsetParent}. Stays fixed while the parent scrolls. */
+  readonly offsetLeft: number;
+  /** The box's top edge from the last frame, relative to {@link offsetParent}. Stays fixed while the parent scrolls. */
+  readonly offsetTop: number;
+  /**
+   * The parent, when this node and the parent both have a box from the last frame.
+   * `null` when either lacks a box or there is no parent.
+   */
+  readonly offsetParent: IncaElement | null;
+}
+
 /** The handle of an `<input>`. */
-export interface IncaInputElement extends IncaElement {
+export interface IncaInputElement extends IncaHTMLElement {
   /**
    * The text of the input. Assigning sets the value as a string, and `null` as `""`; line breaks
    * are dropped and a changed text puts the caret at its end.
@@ -733,7 +534,7 @@ export interface IncaInputElement extends IncaElement {
 }
 
 /** The handle of a `<template>`. */
-export interface IncaTemplateElement extends IncaElement {
+export interface IncaTemplateElement extends IncaHTMLElement {
   /** The fragment that holds the markup of the template. It is never drawn or connected. */
   readonly content: IncaFragment;
 }
@@ -743,9 +544,9 @@ export interface IncaComment
   extends
     IncaEventTarget,
     NodeMembers,
+    TextContentMember,
     CharacterDataMembers,
-    NonDocumentTypeChildNodeMembers,
-    Pick<IncaElement, "parentElement"> {
+    NonDocumentTypeChildNodeMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal
@@ -756,7 +557,14 @@ export interface IncaComment
 }
 
 /** A text leaf node. */
-export interface IncaText extends NodeMembers, CharacterDataMembers, TextMembers {
+export interface IncaText
+  extends
+    IncaEventTarget,
+    NodeMembers,
+    TextContentMember,
+    CharacterDataMembers,
+    NonDocumentTypeChildNodeMembers,
+    TextMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal
@@ -774,7 +582,8 @@ export interface IncaText extends NodeMembers, CharacterDataMembers, TextMembers
  * The node `document.createDocumentFragment()` returns: a parentless container whose children move
  * into the node it is inserted into.
  */
-export interface IncaFragment extends NodeMembers, TextContentMember {
+export interface IncaFragment
+  extends IncaEventTarget, NodeMembers, ParentNodeMembers, TextContentMember {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal

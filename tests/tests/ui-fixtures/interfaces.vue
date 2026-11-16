@@ -25,6 +25,8 @@ function probe() {
     svgIsElement: svg instanceof Element,
     svgIsHtmlElement: svg instanceof HTMLElement,
     fragmentIsDocumentFragment: document.createDocumentFragment() instanceof DocumentFragment,
+    windowIsEventTarget: window instanceof EventTarget,
+    textParentIsTheRef: paragraph.value.firstChild.parentElement === paragraph.value,
   });
 }
 </script>

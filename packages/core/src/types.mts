@@ -3,14 +3,14 @@
 
 // The package's public type surface.
 
+import type { NodeMembers, ParentNodeMembers } from "./element/nodeTypes.mts";
 import type {
   EventHandlers,
   IncaComment,
   IncaElement,
   IncaFragment,
+  IncaHTMLElement,
   IncaText,
-  NodeListOf,
-  NodeMembers,
 } from "./element/types.mts";
 import type { AttributeValue, CallbackId, NodeId, ScrollAlignment } from "./ffi/index.mts";
 
@@ -216,7 +216,8 @@ export interface IncaEventTarget {
  * The top node of the tree, the parent of the mount container. It holds at most one element and
  * any number of comments, and no text.
  */
-export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocument>, NodeMembers {
+export interface IncaDocument
+  extends IncaEventTarget, EventHandlers<IncaDocument>, NodeMembers, ParentNodeMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal
@@ -244,7 +245,7 @@ export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocumen
    * @throws TypeError when called without an argument
    * @throws DOMException named `InvalidCharacterError` when `localName` is not a valid element name
    */
-  createElement(localName: string): IncaElement;
+  createElement(localName: string): IncaHTMLElement;
   /**
    * Creates an element with a namespace. The namespace converts to a string, and `null`,
    * `undefined` and `""` mean no namespace. The name converts to a string and splits at its first
@@ -272,21 +273,6 @@ export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocumen
    * @throws TypeError when called without an argument
    */
   createComment(data: string): IncaComment;
-  /**
-   * The first element below the document that matches the selector list, or `null`.
-   * @throws DOMException named `SyntaxError` for an invalid selector
-   * @param selectors - A selector list.
-   * @returns The first matching element in document order, or `null`.
-   */
-  querySelector(selectors: string): IncaElement | null;
-  /**
-   * The elements below the document that match the selector list, in document order, as a list
-   * that later changes do not reach. Every call returns a new list.
-   * @throws DOMException named `SyntaxError` for an invalid selector
-   * @param selectors - A selector list.
-   * @returns The matching elements.
-   */
-  querySelectorAll(selectors: string): NodeListOf<IncaElement>;
 }
 
 /**

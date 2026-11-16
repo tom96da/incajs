@@ -38,7 +38,9 @@ describe("insert", () => {
     tree.insert(child, parent);
 
     expect(host.spies.insertBefore).toHaveBeenCalledWith(parent.__node_id, child.__node_id, null);
-    expect(kids(parent)).toEqual([child]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      [child].map((node) => node.__node_id),
+    );
   });
 
   it("passes the id of the anchor to the host", () => {
@@ -56,7 +58,9 @@ describe("insert", () => {
       inserted.__node_id,
       anchor.__node_id,
     );
-    expect(kids(parent)).toEqual([first, inserted, anchor]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      [first, inserted, anchor].map((node) => node.__node_id),
+    );
   });
 
   it("leaves a child alone when it is its own anchor", () => {
@@ -68,7 +72,9 @@ describe("insert", () => {
 
     tree.insert(first, parent, first);
 
-    expect(kids(parent)).toEqual([first, second]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      [first, second].map((node) => node.__node_id),
+    );
   });
 
   it("throws NotFoundError for an anchor that is no child", () => {
@@ -101,7 +107,8 @@ describe("insert", () => {
 
     tree.insert(child, newParent);
 
-    expect([kids(oldParent), kids(newParent)]).toEqual([[], [child]]);
+    expect(kids(oldParent)).toEqual([]);
+    expect(kids(newParent).map((node) => node.__node_id)).toEqual([child.__node_id]);
   });
 
   it("lets the handle of an inserted fragment be collected", async () => {
@@ -126,7 +133,7 @@ describe("remove", () => {
 
     tree.remove(child);
 
-    expect(kids(parent)).toEqual([]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual([]);
   });
 
   it("keeps the removed node in the host", () => {
@@ -182,7 +189,9 @@ describe("remove", () => {
   });
 
   it("marks the content of a template removed", () => {
-    const owner = createElementNode("template") as IncaElement & { content: IncaNode };
+    const owner = createElementNode("template") as unknown as IncaElement & {
+      content: IncaNode;
+    };
 
     tree.remove(owner);
 
@@ -309,7 +318,8 @@ describe("parentNode and nextSibling", () => {
     const comment = createCommentNode();
     for (const child of [first, text, comment]) tree.insert(child, parent);
 
-    expect([tree.nextSibling(first), tree.nextSibling(text)]).toEqual([text, comment]);
+    expect(tree.nextSibling(first)).toBe(text);
+    expect(tree.nextSibling(text)).toBe(comment);
   });
 
   it("nextSibling gives null for a node with no parent", () => {

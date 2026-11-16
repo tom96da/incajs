@@ -122,6 +122,7 @@ interface IncaNative {
   rootNodeId(): NodeId;
   documentNodeId(): NodeId;
   interfacePrototypes(): InterfacePrototypes;
+  registerUncloneable(map: WeakMap<object, unknown>): void;
   createNode(tag: string): NodeId;
   createElement(localName: string): [NodeId, TagName];
   createElementNS(namespace: string | null, qualifiedName: string): ElementEntry;

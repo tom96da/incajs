@@ -3,6 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { keep } from "../tests/keep.mts";
 import { nativeStub } from "../tests/setup.mts";
 import { document } from "./document.mts";
 import { HANDLER_EVENTS } from "./element/eventHandlers.mts";
@@ -30,6 +31,8 @@ let found: number | null = null;
 let foundAll: number[] = [];
 /** The first element child the host reports for each node. */
 let firstElements = new Map<number, number>();
+/** The last element child the host reports for each node. */
+let lastElements = new Map<number, number>();
 /** The first child of any kind the host reports for each node. */
 let firstChildren = new Map<number, number>();
 /** The children the host lists for each node. */
@@ -79,6 +82,7 @@ const native = {
     (nodeId, link, elementOnly) => {
       if (link === "first")
         return (elementOnly ? firstElements : firstChildren).get(nodeId) ?? null;
+      if (link === "last" && elementOnly) return lastElements.get(nodeId) ?? null;
       return link === "parent" && !elementOnly ? (parents.get(nodeId) ?? null) : null;
     },
   ),
@@ -98,6 +102,7 @@ beforeEach(() => {
   found = null;
   foundAll = [];
   firstElements = new Map();
+  lastElements = new Map();
   firstChildren = new Map();
   childrenOf = new Map();
   globalThis.__inca_native__ = nativeStub(native as never);
@@ -202,7 +207,8 @@ describe("document", () => {
       false,
       false,
     );
-    expect(keys).toEqual([document, "a"]);
+    expect(keys[0]).toBe(document);
+    expect(keys[1]).toBe("a");
   });
 });
 
@@ -451,16 +457,67 @@ describe("createDocumentFragment", () => {
     expect(native.setAttribute).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "addEventListener",
-    "removeEventListener",
-    "dispatchEvent",
-    "querySelector",
-    "querySelectorAll",
-    "children",
-    "getElementById",
-  ])("has no %s", (member) => {
-    expect(member in document.createDocumentFragment()).toBe(false);
+  it("has no getElementById", () => {
+    expect("getElementById" in document.createDocumentFragment()).toBe(false);
+  });
+
+  it("reads the child elements the host lists as children", () => {
+    const fragment = document.createDocumentFragment();
+    const child = createElementNode("div");
+    childrenOf.set(fragment.__node_id, [child.__node_id]);
+
+    expect([...fragment.children].map((node) => node.__node_id)).toEqual(
+      [child].map((node) => node.__node_id),
+    );
+  });
+
+  it("reads the first element child the host names", () => {
+    const fragment = document.createDocumentFragment();
+    const child = createElementNode("div");
+    firstElements.set(fragment.__node_id, child.__node_id);
+
+    expect(fragment.firstElementChild).toBe(child);
+  });
+
+  it("reads the last element child the host names", () => {
+    const fragment = document.createDocumentFragment();
+    const child = createElementNode("div");
+    lastElements.set(fragment.__node_id, child.__node_id);
+
+    expect(fragment.lastElementChild).toBe(child);
+  });
+
+  it("counts the child elements the host lists", () => {
+    const fragment = document.createDocumentFragment();
+    childrenOf.set(fragment.__node_id, [keep(createElementNode("a")).__node_id]);
+
+    expect(fragment.childElementCount).toBe(1);
+  });
+
+  it("finds an element with querySelector", () => {
+    const fragment = document.createDocumentFragment();
+    const el = createElementNode("div");
+    found = el.__node_id;
+
+    expect(fragment.querySelector("div")).toBe(el);
+  });
+
+  it("lists elements with querySelectorAll", () => {
+    const fragment = document.createDocumentFragment();
+    const el = createElementNode("div");
+    foundAll = [el.__node_id];
+
+    expect([...fragment.querySelectorAll("div")].map((node) => node.__node_id)).toEqual(
+      [el].map((node) => node.__node_id),
+    );
+  });
+
+  it("registers a listener on the node of the fragment", () => {
+    const fragment = document.createDocumentFragment();
+
+    fragment.addEventListener("click", () => {});
+
+    expect(native.addEventListener.mock.calls[0]![0]).toBe(fragment.__node_id);
   });
 
   it("reads textContent from the host", () => {
@@ -518,6 +575,34 @@ describe("a node inside a fragment", () => {
   });
 });
 
+describe("the child members of document", () => {
+  it("reads the mount container as children", () => {
+    childrenOf.set(DOCUMENT, [0]);
+
+    expect([...document.children].map((node) => node.__node_id)).toEqual(
+      [rootElement()].map((node) => node.__node_id),
+    );
+  });
+
+  it("reads the first element child the host names", () => {
+    firstElements.set(DOCUMENT, 0);
+
+    expect(document.firstElementChild).toBe(rootElement());
+  });
+
+  it("reads the last element child the host names", () => {
+    lastElements.set(DOCUMENT, 0);
+
+    expect(document.lastElementChild).toBe(rootElement());
+  });
+
+  it("counts the child elements the host lists", () => {
+    childrenOf.set(DOCUMENT, [0]);
+
+    expect(document.childElementCount).toBe(1);
+  });
+});
+
 describe("queries", () => {
   it("finds the element the host names with querySelector", () => {
     const el = createElementNode("div");
@@ -535,7 +620,9 @@ describe("queries", () => {
     const [first, second] = [createElementNode("div"), createElementNode("div")];
     foundAll = [first.__node_id, second.__node_id];
 
-    expect([...document.querySelectorAll("div")]).toEqual([first, second]);
+    expect([...document.querySelectorAll("div")].map((node) => node.__node_id)).toEqual(
+      [first, second].map((node) => node.__node_id),
+    );
     expect(native.querySelectorAll).toHaveBeenCalledExactlyOnceWith(DOCUMENT, "div");
   });
 

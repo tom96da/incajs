@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { keep } from "../../tests/keep.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement, rootElement } from "./handle.mts";
 import { markFreed, markRemoved } from "./lifecycle.mts";
@@ -24,7 +25,7 @@ describe("createIncaElement selectors", () => {
 
   /** Three elements with ids 1, 2 and 3. */
   function chain() {
-    const [outer, inner, leaf] = [1, 2, 3].map((id) => createIncaElement(id, "div"));
+    const [outer, inner, leaf] = [1, 2, 3].map((id) => keep(createIncaElement(id, "div")));
     return { outer: outer!, inner: inner!, leaf: leaf! };
   }
 
@@ -198,7 +199,9 @@ describe("createIncaElement selectors", () => {
     const { outer, inner } = chain();
     host.querySelectorAll.mockReturnValueOnce([77, 2]);
 
-    expect(Array.from(outer.querySelectorAll("div"))).toEqual([inner]);
+    expect(Array.from(outer.querySelectorAll("div")).map((node) => node.__node_id)).toEqual(
+      [inner].map((node) => node.__node_id),
+    );
   });
 
   it("querySelector returns null without a match", () => {

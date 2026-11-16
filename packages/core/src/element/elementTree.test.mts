@@ -82,7 +82,9 @@ describe("children", () => {
   it("lists the elements in tree order", () => {
     const { parent, first, second } = mixed();
 
-    expect(Array.from(parent.children)).toEqual([first, second]);
+    expect(Array.from(parent.children).map((node) => node.__node_id)).toEqual(
+      [first, second].map((node) => node.__node_id),
+    );
   });
 
   it("skips a text leaf and a comment", () => {
@@ -104,7 +106,9 @@ describe("children", () => {
 
     insert(added, parent);
 
-    expect(Array.from(earlier)).toEqual([first, second, added]);
+    expect(Array.from(earlier).map((node) => node.__node_id)).toEqual(
+      [first, second, added].map((node) => node.__node_id),
+    );
   });
 
   it("follows a removal", () => {
@@ -113,7 +117,9 @@ describe("children", () => {
 
     remove(first);
 
-    expect(Array.from(earlier)).toEqual([second]);
+    expect(Array.from(earlier).map((node) => node.__node_id)).toEqual(
+      [second].map((node) => node.__node_id),
+    );
   });
 
   it("keeps listing the element children of a removed element", () => {
@@ -123,7 +129,9 @@ describe("children", () => {
 
     remove(parent);
 
-    expect(Array.from(parent.children)).toEqual([first, second]);
+    expect(Array.from(parent.children).map((node) => node.__node_id)).toEqual(
+      [first, second].map((node) => node.__node_id),
+    );
   });
 });
 
@@ -155,7 +163,8 @@ describe("the tree members", () => {
 
     insert(added, parent);
 
-    expect([parent.lastElementChild, parent.childElementCount]).toEqual([added, 3]);
+    expect(parent.lastElementChild).toBe(added);
+    expect(parent.childElementCount).toBe(3);
   });
 
   it("follow a remove", () => {
@@ -163,8 +172,35 @@ describe("the tree members", () => {
 
     remove(first);
 
-    expect([parent.firstElementChild, parent.childElementCount]).toEqual([second, 1]);
+    expect(parent.firstElementChild).toBe(second);
+    expect(parent.childElementCount).toBe(1);
     expect(first.parentElement).toBeNull();
+  });
+});
+
+describe("the sibling members of a text node and a comment", () => {
+  it.each([
+    ["a text node", () => mixed().text],
+    ["a comment", () => mixed().comment],
+  ] as const)("read the next element after %s", (_kind, pick) => {
+    const node = pick();
+
+    expect(node.nextElementSibling?.nodeName).toBe("SPAN");
+  });
+
+  it.each([
+    ["a text node", () => mixed().text],
+    ["a comment", () => mixed().comment],
+  ] as const)("read null as the previous element of the first child, %s", (_kind, pick) => {
+    expect(pick().previousElementSibling).toBeNull();
+  });
+
+  it("read the previous element before a comment that follows an element", () => {
+    const { parent, second } = mixed();
+    const late = createCommentNode();
+    insert(late, parent);
+
+    expect(late.previousElementSibling).toBe(second);
   });
 });
 

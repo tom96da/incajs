@@ -65,7 +65,8 @@ describe("template.content", () => {
     const inside = createElementNode("div");
     owner.content.appendChild(inside);
 
-    expect([owner.content.ownerDocument, inside.ownerDocument]).toEqual([document, document]);
+    expect(owner.content.ownerDocument).toBe(document);
+    expect(inside.ownerDocument).toBe(document);
   });
 });
 

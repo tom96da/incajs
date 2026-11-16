@@ -2,24 +2,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { layoutOf, linkedNode } from "../ffi/index.mts";
-import { isRemoved } from "./lifecycle.mts";
+import { ELEMENT_RULE, HTML_ELEMENT_RULE, isRemoved, receiverNode } from "./lifecycle.mts";
 import type { NodeBox } from "../ffi/index.mts";
-import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaElement } from "./types.mts";
+import type { HandleBuilders, Receiver } from "./lifecycle.mts";
+import type { IncaElement, IncaHTMLElement } from "./types.mts";
 
 /** The members {@link layoutMembers} builds. */
 export type LayoutMembers = Pick<
   IncaElement,
-  | "getBoundingClientRect"
-  | "offsetWidth"
-  | "offsetHeight"
-  | "offsetLeft"
-  | "offsetTop"
-  | "offsetParent"
-  | "clientWidth"
-  | "clientHeight"
-  | "clientLeft"
-  | "clientTop"
+  "getBoundingClientRect" | "clientWidth" | "clientHeight" | "clientLeft" | "clientTop"
+>;
+
+/** The members {@link offsetMembers} builds. */
+export type OffsetMembers = Pick<
+  IncaHTMLElement,
+  "offsetWidth" | "offsetHeight" | "offsetLeft" | "offsetTop" | "offsetParent"
 >;
 
 /**
@@ -128,42 +125,62 @@ export function tabIndexOf(value: string | number | boolean | null, kind: string
 }
 
 /**
- * Builds the layout members of an element, read from the box of the last drawn frame.
- * @param element - the handle the members belong to
- * @param builders - the lookup of a handle by node id
+ * Reads the box of the receiver of a layout member.
+ * @param self - `this` of the member
+ * @param rule - the receiver rule of the member
+ * @returns the box, or `null`
+ */
+function boxOf(self: unknown, rule: Receiver): NodeBox | null {
+  return layoutBox(receiverNode<IncaElement>(self, rule));
+}
+
+/**
+ * Builds the layout members of `Element`, read from the box of the last drawn frame.
  * @returns the members
  */
-export function layoutMembers(element: IncaElement, builders: HandleBuilders): LayoutMembers {
+export function layoutMembers(): LayoutMembers {
   return {
-    getBoundingClientRect: () => rectOf(layoutBox(element)),
-    get offsetWidth() {
-      return Math.round(layoutBox(element)?.[2] ?? 0);
-    },
-    get offsetHeight() {
-      return Math.round(layoutBox(element)?.[3] ?? 0);
-    },
-    get offsetLeft() {
-      return offsetOf(element, builders).left;
-    },
-    get offsetTop() {
-      return offsetOf(element, builders).top;
-    },
-    get offsetParent() {
-      return offsetParentOf(element, builders);
+    getBoundingClientRect() {
+      return rectOf(boxOf(this, ELEMENT_RULE));
     },
     get clientWidth() {
-      const box = layoutBox(element);
+      const box = boxOf(this, ELEMENT_RULE);
       return box ? Math.max(0, Math.round(box[2] - 2 * box[4] - box[7])) : 0;
     },
     get clientHeight() {
-      const box = layoutBox(element);
+      const box = boxOf(this, ELEMENT_RULE);
       return box ? Math.max(0, Math.round(box[3] - 2 * box[4] - box[8])) : 0;
     },
     get clientLeft() {
-      return Math.round(layoutBox(element)?.[4] ?? 0);
+      return Math.round(boxOf(this, ELEMENT_RULE)?.[4] ?? 0);
     },
     get clientTop() {
-      return Math.round(layoutBox(element)?.[4] ?? 0);
+      return Math.round(boxOf(this, ELEMENT_RULE)?.[4] ?? 0);
+    },
+  };
+}
+
+/**
+ * Builds the offset members of `HTMLElement`, read from the box of the last drawn frame.
+ * @param builders - the lookup of a handle by node id
+ * @returns the members
+ */
+export function offsetMembers(builders: HandleBuilders): OffsetMembers {
+  return {
+    get offsetWidth() {
+      return Math.round(boxOf(this, HTML_ELEMENT_RULE)?.[2] ?? 0);
+    },
+    get offsetHeight() {
+      return Math.round(boxOf(this, HTML_ELEMENT_RULE)?.[3] ?? 0);
+    },
+    get offsetLeft() {
+      return offsetOf(receiverNode<IncaElement>(this, HTML_ELEMENT_RULE), builders).left;
+    },
+    get offsetTop() {
+      return offsetOf(receiverNode<IncaElement>(this, HTML_ELEMENT_RULE), builders).top;
+    },
+    get offsetParent() {
+      return offsetParentOf(receiverNode<IncaElement>(this, HTML_ELEMENT_RULE), builders);
     },
   };
 }

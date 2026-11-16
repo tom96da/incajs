@@ -41,6 +41,7 @@ export { insert, nextSibling, parentNode, remove } from "./element/treeOps.mts";
 export { setText } from "./element/text.mts";
 export type * from "./types.mts";
 export type * from "./element/types.mts";
+export type * from "./element/nodeTypes.mts";
 
 /**
  * What a custom renderer (`incajs/vue`) drives the host through: the tree and

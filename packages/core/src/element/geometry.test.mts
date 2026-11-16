@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage } from "../../tests/gc.mts";
+import { keep } from "../../tests/keep.mts";
 import { installMembersHost, nativeStub } from "../../tests/setup.mts";
 import { offsetOf, rectOf, tabIndexOf } from "./geometry.mts";
 import { createElementNode, createIncaElement, rootElement } from "./handle.mts";
@@ -37,7 +38,7 @@ describe("offsetOf", () => {
         2: 1,
       },
     );
-    createIncaElement(1, "div");
+    keep(createIncaElement(1, "div"));
     const child = createIncaElement(2, "div");
 
     expect(offsetOf(child, builders)).toEqual({ left: 6, top: 6 });
@@ -50,7 +51,7 @@ describe("offsetOf", () => {
       scrollOf as never,
       { 2: 1 },
     );
-    createIncaElement(1, "div");
+    keep(createIncaElement(1, "div"));
     const child = createIncaElement(2, "div");
 
     expect(offsetOf(child, builders)).toEqual({ left: 6, top: 6 });
@@ -177,7 +178,7 @@ describe("createIncaElement layout", () => {
       null,
       { 2: 1 },
     );
-    createIncaElement(1, "div");
+    keep(createIncaElement(1, "div"));
     const child = createIncaElement(2, "div");
 
     expect([child.offsetLeft, child.offsetTop]).toEqual([0, 0]);
@@ -220,7 +221,7 @@ describe("createIncaElement layout", () => {
   it("gives a null offsetParent when the parent has no record", () => {
     installMembersHost({ 2: [110, 60, 20, 20, 0, 0, 0, 0, 0] }, null, { 2: 1 });
     const child = createIncaElement(2, "div");
-    createIncaElement(1, "div");
+    keep(createIncaElement(1, "div"));
 
     expect(child.offsetParent).toBeNull();
     expect([child.offsetLeft, child.offsetTop]).toEqual([110, 60]);

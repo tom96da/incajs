@@ -51,7 +51,9 @@ describe("appendChild", () => {
 
     parent.appendChild(child);
 
-    expect(kids(parent)).toEqual([...children, child]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      [...children, child].map((node) => node.__node_id),
+    );
   });
 
   it("sets the parent of the node", () => {
@@ -86,7 +88,9 @@ describe("appendChild", () => {
 
     parent.appendChild(children[0]!);
 
-    expect(kids(parent)).toEqual([children[1], children[2], children[0]]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [children[1], children[2], children[0]].map((node) => node!.__node_id),
+    );
     expect(idsOf(parent)).toHaveLength(3);
   });
 
@@ -100,8 +104,10 @@ describe("appendChild", () => {
 
     parent.appendChild(group);
 
-    expect(kids(parent)).toEqual([...children, first, second]);
-    expect(kids(group)).toEqual([]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      [...children, first, second].map((node) => node.__node_id),
+    );
+    expect(kids(group).map((node) => node.__node_id)).toEqual([]);
     expect(first.parentNode).toBe(parent);
     expect(second.parentNode).toBe(parent);
   });
@@ -114,7 +120,9 @@ describe("insertBefore", () => {
 
     parent.insertBefore(child, children[1]!);
 
-    expect(kids(parent)).toEqual([children[0], child, children[1]]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [children[0], child, children[1]].map((node) => node!.__node_id),
+    );
     expect(child.parentNode).toBe(parent);
   });
 
@@ -124,7 +132,9 @@ describe("insertBefore", () => {
 
     parent.insertBefore(child, reference);
 
-    expect(kids(parent)).toEqual([...children, child]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      [...children, child].map((node) => node.__node_id),
+    );
   });
 
   it("sends null to the host for a missing reference", () => {
@@ -145,7 +155,9 @@ describe("insertBefore", () => {
 
     parent.insertBefore(children[0]!, children[2]!);
 
-    expect(kids(parent)).toEqual([children[1], children[0], children[2]]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [children[1], children[0], children[2]].map((node) => node!.__node_id),
+    );
     expect(idsOf(parent)).toHaveLength(3);
   });
 
@@ -154,7 +166,9 @@ describe("insertBefore", () => {
 
     parent.insertBefore(children[1]!, children[1]!);
 
-    expect(kids(parent)).toEqual(children);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      children.map((node) => node.__node_id),
+    );
   });
 
   it("moves the children of a fragment before the reference", () => {
@@ -167,8 +181,10 @@ describe("insertBefore", () => {
 
     parent.insertBefore(group, children[1]!);
 
-    expect(kids(parent)).toEqual([children[0], first, second, children[1]]);
-    expect(kids(group)).toEqual([]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [children[0], first, second, children[1]].map((node) => node!.__node_id),
+    );
+    expect(kids(group).map((node) => node.__node_id)).toEqual([]);
     expect(idsOf(parent)).toHaveLength(4);
   });
 
@@ -187,7 +203,9 @@ describe("replaceChild", () => {
 
     const old = parent.replaceChild(child, children[1]!);
 
-    expect(kids(parent)).toEqual([children[0], child, children[2]]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [children[0], child, children[2]].map((node) => node!.__node_id),
+    );
     expect(old).toBe(children[1]);
     expect(idsOf(parent)).toHaveLength(3);
   });
@@ -223,7 +241,9 @@ describe("replaceChild", () => {
 
     parent.replaceChild(children[1]!, children[1]!);
 
-    expect(kids(parent)).toEqual(children);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      children.map((node) => node.__node_id),
+    );
     expect(children[1]!.parentNode).toBe(parent);
     expect(idsOf(parent)).toHaveLength(3);
     expect(host.spies.holdNode).not.toHaveBeenCalled();
@@ -236,8 +256,10 @@ describe("replaceChild", () => {
 
     parent.replaceChild(inner, children[0]!);
 
-    expect(kids(parent)).toEqual([inner, children[1]]);
-    expect(kids(children[0]!)).toEqual([]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [inner, children[1]].map((node) => node!.__node_id),
+    );
+    expect(kids(children[0]!).map((node) => node.__node_id)).toEqual([]);
     expect(idsOf(parent)).toHaveLength(2);
   });
 
@@ -246,7 +268,9 @@ describe("replaceChild", () => {
 
     parent.replaceChild(children[0]!, children[1]!);
 
-    expect(kids(parent)).toEqual([children[0], children[2]]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [children[0], children[2]].map((node) => node!.__node_id),
+    );
     expect(idsOf(parent)).toHaveLength(2);
   });
 
@@ -255,7 +279,9 @@ describe("replaceChild", () => {
 
     parent.replaceChild(children[2]!, children[1]!);
 
-    expect(kids(parent)).toEqual([children[0], children[2]]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [children[0], children[2]].map((node) => node!.__node_id),
+    );
     expect(idsOf(parent)).toHaveLength(2);
   });
 
@@ -269,8 +295,10 @@ describe("replaceChild", () => {
 
     parent.replaceChild(group, children[0]!);
 
-    expect(kids(parent)).toEqual([first, second, children[1]]);
-    expect(kids(group)).toEqual([]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [first, second, children[1]].map((node) => node!.__node_id),
+    );
+    expect(kids(group).map((node) => node.__node_id)).toEqual([]);
     expect(idsOf(parent)).toHaveLength(3);
   });
 });
@@ -287,7 +315,9 @@ describe("removeChild", () => {
 
     parent.removeChild(children[0]!);
 
-    expect(kids(parent)).toEqual([children[1]]);
+    expect(kids(parent).map((node) => node!.__node_id)).toEqual(
+      [children[1]].map((node) => node!.__node_id),
+    );
     expect(children[0]!.parentNode).toBeNull();
   });
 
@@ -315,7 +345,9 @@ describe("removeChild", () => {
 
     parent.appendChild(children[0]!);
 
-    expect(kids(parent)).toEqual(children);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      children.map((node) => node.__node_id),
+    );
     expect(idsOf(parent)).toHaveLength(1);
   });
 
@@ -326,7 +358,7 @@ describe("removeChild", () => {
 
     remove(child);
 
-    expect(kids(group)).toEqual([]);
+    expect(kids(group).map((node) => node.__node_id)).toEqual([]);
     expect(host.spies.removeNode).toHaveBeenCalledWith(child.__node_id);
   });
 });
@@ -408,7 +440,9 @@ describe("arguments", () => {
       expect.objectContaining({ name: "NotFoundError" }),
     );
 
-    expect(kids(first)).toEqual(children);
+    expect(kids(first).map((node) => node.__node_id)).toEqual(
+      children.map((node) => node.__node_id),
+    );
     expect(children[0]!.parentNode).toBe(first);
     expect(kids(second)).toHaveLength(1);
   });
@@ -424,10 +458,16 @@ describe("arguments", () => {
       expect.objectContaining({ name: "NotFoundError" }),
     );
 
-    expect(kids(first)).toEqual(children);
+    expect(kids(first).map((node) => node.__node_id)).toEqual(
+      children.map((node) => node.__node_id),
+    );
     expect(children[0]!.parentNode).toBe(first);
-    expect(kids(group)).toEqual([inside]);
-    expect(kids(second)).toEqual(others);
+    expect(kids(group).map((node) => node.__node_id)).toEqual(
+      [inside].map((node) => node.__node_id),
+    );
+    expect(kids(second).map((node) => node.__node_id)).toEqual(
+      others.map((node) => node.__node_id),
+    );
   });
 
   it.each([
@@ -444,11 +484,17 @@ describe("arguments", () => {
       expect.objectContaining({ name: "NotFoundError" }),
     );
 
-    expect(kids(first)).toEqual(children);
+    expect(kids(first).map((node) => node.__node_id)).toEqual(
+      children.map((node) => node.__node_id),
+    );
     expect(children[0]!.parentNode).toBe(first);
-    expect(kids(group)).toEqual([inside]);
+    expect(kids(group).map((node) => node.__node_id)).toEqual(
+      [inside].map((node) => node.__node_id),
+    );
     expect(inside.parentNode).toBe(group);
-    expect(kids(second)).toEqual(others);
+    expect(kids(second).map((node) => node.__node_id)).toEqual(
+      others.map((node) => node.__node_id),
+    );
   });
 });
 
@@ -461,7 +507,8 @@ describe("a template", () => {
 
     owner.appendChild(child);
 
-    expect([kids(owner), kids(owner.content)]).toEqual([[child], []]);
+    expect(kids(owner).map((node) => node.__node_id)).toEqual([child.__node_id]);
+    expect(kids(owner.content)).toEqual([]);
   });
 
   it("makes no content for the copy of an SVG template and keeps the ids in step", () => {

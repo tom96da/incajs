@@ -23,7 +23,7 @@ export function attributeText(value: unknown): string {
  * @param count - the number the method needs
  * @param method - the method name for the message
  */
-export function requireArguments(args: readonly unknown[], count: number, method: string): void {
+export function requireArguments(args: ArrayLike<unknown>, count: number, method: string): void {
   if (args.length < count) {
     throw new TypeError(`${method}() needs ${count} argument${count === 1 ? "" : "s"}`);
   }

@@ -117,6 +117,13 @@ type as in Node. These environment variables override the terminal check:
 ## Known issues
 
 - Output is not wrapped across lines.
+- A node prints as its interface and its own properties, such as `HTMLElement {}`. These nodes
+  show one property:
+  - a text node its `text`
+  - an `input` its `value`
+  - a `template` its `content`
+- An SVG or MathML element prints as `Element`.
+- `window` prints as `EventTarget` with its handler properties, such as `onclick`.
 - An event prints as its class with only `isTrusted`, such as
   `PointerEvent { isTrusted: [Getter] }` for a click. Its other fields are
   getters on its prototype.

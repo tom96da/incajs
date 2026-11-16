@@ -4,9 +4,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../tests/setup.mts";
+import "./targets.mts";
+import { document } from "./document.mts";
+import { createIncaComment, createIncaFragment } from "./element/handle.mts";
+import { markFreed, markRemoved } from "./element/lifecycle.mts";
+import { createIncaText } from "./element/text.mts";
 import { createEventTarget } from "./eventTarget.mts";
+import { window } from "./window.mts";
 import type { HostCallback } from "./ffi/index.mts";
-import type { EventLike } from "./types.mts";
+import type { EventLike, IncaEventTarget } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
 let nextCallbackId = 0;
@@ -153,5 +159,85 @@ describe("dispatchEvent", () => {
 
     expect(target.dispatchEvent(event)).toBe(false);
     expect(native.dispatchEvent).toHaveBeenCalledExactlyOnceWith(9, event);
+  });
+});
+
+describe("the listener methods of the nodes", () => {
+  const kinds: [string, () => IncaEventTarget & { __node_id: number }][] = [
+    ["a text node", () => createIncaText(71, "x")],
+    ["a comment", () => createIncaComment(72)],
+    ["a fragment", () => createIncaFragment(73)],
+  ];
+
+  it("run a listener of a text node for a dispatch at it, with the node as this", () => {
+    const text = createIncaText(70, "x");
+    const listener = vi.fn<(this: unknown) => void>();
+    text.addEventListener("click", listener);
+    const callback = native.addEventListener.mock.calls[0]![2];
+
+    callback({ currentTarget: globalThis.__inca_targets__([70])[0] });
+
+    expect(listener.mock.contexts[0]).toBe(text);
+  });
+
+  it.each(kinds)("ignore addEventListener on a removed node, %s", (_kind, make) => {
+    const node = make();
+    markRemoved([node.__node_id]);
+
+    node.addEventListener("click", vi.fn<() => void>());
+
+    expect(native.addEventListener).not.toHaveBeenCalled();
+  });
+
+  it.each(kinds)("ignore removeEventListener on a removed node, %s", (_kind, make) => {
+    const node = make();
+    const listener = vi.fn<() => void>();
+    node.addEventListener("click", listener);
+    markRemoved([node.__node_id]);
+
+    node.removeEventListener("click", listener);
+
+    expect(native.removeEventListener).not.toHaveBeenCalled();
+  });
+
+  it.each(kinds)(
+    "answer true from dispatchEvent on a freed node with no call, %s",
+    (_kind, make) => {
+      const node = make();
+      markFreed([node.__node_id]);
+
+      expect(node.dispatchEvent(new Event("x"))).toBe(true);
+      expect(native.dispatchEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["window", () => window],
+    ["document", () => document],
+  ] as const)("run addEventListener of %s through the host", (_name, make) => {
+    make().addEventListener("click", vi.fn<() => void>());
+
+    expect(native.addEventListener).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["window", () => window],
+    ["document", () => document],
+  ] as const)("run removeEventListener of %s through the host", (_name, make) => {
+    const listener = vi.fn<() => void>();
+    make().addEventListener("click", listener);
+
+    make().removeEventListener("click", listener);
+
+    expect(native.removeEventListener).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["window", () => window],
+    ["document", () => document],
+  ] as const)("run dispatchEvent of %s through the host", (_name, make) => {
+    make().dispatchEvent(new Event("x"));
+
+    expect(native.dispatchEvent).toHaveBeenCalledOnce();
   });
 });

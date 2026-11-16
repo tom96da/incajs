@@ -26,6 +26,7 @@ export {
   outerHtml,
   queryNode,
   queryNodes,
+  registerUncloneable,
   releaseNode,
   removeChild,
   removeNode,

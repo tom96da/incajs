@@ -9,6 +9,7 @@ import type {
   DOMTokenList,
   EventHandler,
   IncaElement,
+  IncaHTMLElement,
   IncaInputElement,
 } from "./element/types.mts";
 import type {
@@ -103,14 +104,14 @@ describe("the event types", () => {
   });
 
   it("infer the event of a handler property from its name", () => {
-    const assign = (el: IncaElement) => {
+    const assign = (el: IncaHTMLElement) => {
       el.onclick = (event) => expectTypeOf(event).toEqualTypeOf<IncaPointerEvent>();
     };
     expectTypeOf(assign).returns.toBeVoid();
   });
 
   it("types pointer handler properties as IncaPointerEvent", () => {
-    const assign = (el: IncaElement) => {
+    const assign = (el: IncaHTMLElement) => {
       el.onpointerdown = (event) => expectTypeOf(event).toEqualTypeOf<IncaPointerEvent>();
       el.ongotpointercapture = (event) => expectTypeOf(event).toEqualTypeOf<IncaPointerEvent>();
     };
@@ -133,17 +134,17 @@ describe("the event types", () => {
   });
 
   it("type this of a handler property as the element", () => {
-    const assign = (el: IncaElement) => {
+    const assign = (el: IncaHTMLElement) => {
       el.onclick = function () {
-        expectTypeOf(this).toEqualTypeOf<IncaElement>();
+        expectTypeOf(this).toEqualTypeOf<IncaHTMLElement>();
       };
     };
     expectTypeOf(assign).returns.toBeVoid();
   });
 
   it("keep an object in a handler property", () => {
-    expectTypeOf<IncaElement["onclick"]>().toEqualTypeOf<
-      EventHandler<IncaPointerEvent> | object | null
+    expectTypeOf<IncaHTMLElement["onclick"]>().toEqualTypeOf<
+      EventHandler<IncaPointerEvent, IncaHTMLElement> | object | null
     >();
   });
 
@@ -259,7 +260,7 @@ describe("the style types", () => {
 
 describe("the style member", () => {
   it("reads a CSSStyleDeclaration on an element", () => {
-    expectTypeOf<IncaElement["style"]>().toEqualTypeOf<CSSStyleDeclaration>();
+    expectTypeOf<IncaHTMLElement["style"]>().toEqualTypeOf<CSSStyleDeclaration>();
   });
 
   it("types a host-only style property as a string", () => {
@@ -274,7 +275,7 @@ describe("the style member", () => {
 
 describe("the dataset type", () => {
   it("reads a key as a string or undefined", () => {
-    expectTypeOf<IncaElement["dataset"]["x"]>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<IncaHTMLElement["dataset"]["x"]>().toEqualTypeOf<string | undefined>();
   });
 });
 

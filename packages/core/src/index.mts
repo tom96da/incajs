@@ -16,6 +16,7 @@ export type {
   IncaComment,
   IncaElement,
   IncaFragment,
+  IncaHTMLElement,
   IncaInputElement,
   IncaNode,
   IncaParent,

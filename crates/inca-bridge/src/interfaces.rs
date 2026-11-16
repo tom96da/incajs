@@ -12,7 +12,7 @@
 use inca_jsenv::class::{define_class, define_global};
 use inca_jsenv::{required_prototype, store_prototype};
 use rquickjs::object::Property;
-use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult};
+use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, Value};
 
 /// The interface objects in parent order: the global, the parent and the message that a call and
 /// `new` throw. A row is defined after its parent.
@@ -203,6 +203,14 @@ pub(crate) fn interface_prototypes<'js>() -> impl Fn(Ctx<'js>) -> JsResult<Objec
         }
         Ok(prototypes)
     }
+}
+
+/// The native `registerUncloneable`: registers the brand `WeakMap` of the handles, so that
+/// `structuredClone` refuses a key of it.
+///
+/// The function throws a `TypeError` for a value that is no `WeakMap`.
+pub(crate) fn register_uncloneable<'js>() -> impl Fn(Ctx<'js>, Value<'js>) -> JsResult<()> {
+    |ctx, map| inca_jsenv::register_uncloneable(&ctx, &map)
 }
 
 #[cfg(test)]

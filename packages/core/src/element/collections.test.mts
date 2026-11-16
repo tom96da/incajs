@@ -32,7 +32,8 @@ describe("a collection", () => {
     const [a, b] = [fake(), fake()];
     const { c } = make(a!, b!);
 
-    expect([c[0], c[1]]).toEqual([a, b]);
+    expect(c[0]).toBe(a);
+    expect(c[1]).toBe(b);
   });
 
   it.each(["2", "-1", "01", "1.5"])("reads undefined for the key %s outside the list", (key) => {
