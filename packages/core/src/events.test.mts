@@ -465,3 +465,21 @@ describe("latestEventId", () => {
     },
   );
 });
+
+describe("a signal as the target", () => {
+  it("keeps two signals apart: the same listener registers on both and leaves one at a time", () => {
+    vi.clearAllMocks();
+    const first = new AbortSignal();
+    const second = new AbortSignal();
+    const listener = vi.fn<() => void>();
+
+    addEventListener(first as never, "abort", listener);
+    addEventListener(second as never, "abort", listener);
+    removeEventListener(first as never, "abort", listener);
+
+    expect(native.addEventListener).toHaveBeenCalledTimes(2);
+    expect(native.removeEventListener).toHaveBeenCalledTimes(1);
+    expect(native.removeEventListener.mock.calls[0]![0]).toBe(first);
+    expect(callbackIdFor(groupOf(second as never, "abort", false), listener)).toBeDefined();
+  });
+});

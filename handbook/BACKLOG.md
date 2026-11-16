@@ -733,8 +733,7 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core,bridge · Size: M · Impact: Low`
 
   A `signal` option is ignored, so an aborted signal leaves the listener
-  registered. Fix: add `AbortController` to the
-  runtime, then drop the registration when the signal aborts.
+  registered. Fix: drop the registration when the signal aborts.
 
 - **B-169 The Vue warning trace prints in the text color**
   `Units: core · Size: S · Impact: Low`
@@ -1889,6 +1888,17 @@ A fixed entry is deleted and its ID is never reused.
   Browsers on an isolated page clone it over the same memory. The engine shares memory between two
   buffer objects only through reference-counting hooks that the host does not set. Fix: set the
   hooks, then clone the buffer with the shared data and the same `maxByteLength`.
+
+- **B-349 A signal that one of its listeners refers to is kept until it aborts**
+  `Units: bridge · Size: M · Impact: Low`
+
+  The callback table holds every listener, so a listener that refers to its signal or controller
+  keeps the signal alive. A controller that never aborts stays with its listeners. In a Vue app a
+  component that creates a controller in `setup()`, listens to its signal with a callback that reads
+  the controller and is unmounted without an abort leaves one controller, one signal and one
+  listener per mounted instance in memory. Fix: keep the listeners of a signal weakly in a table
+  that the signal owns, and drop them with the signal. The same commit drops the matching line of
+  `docs/reference/built-ins.md`.
 
 - **B-350 `register_uncloneable` and the TypeScript logic that fills its map are to be removed**
   `Units: jsenv,core · Size: M · Impact: Low`

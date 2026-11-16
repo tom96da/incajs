@@ -182,11 +182,7 @@ pub(crate) fn callback_stored(engine: &inca_jsenv::Engine, id: u32) -> bool {
 }
 
 pub(crate) fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::Value {
-    let json = dispatcher
-        .engine
-        .eval::<String>(&format!("JSON.stringify({js})"))
-        .unwrap();
-    serde_json::from_str(&json).unwrap()
+    crate::test_support::json_of(&dispatcher.engine, js)
 }
 
 /// Whether `node` matches the state class `class`.

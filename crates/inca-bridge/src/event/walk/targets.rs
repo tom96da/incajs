@@ -3,14 +3,16 @@
 
 //! The objects that stand for the targets of a walk.
 
-use rquickjs::{Array, Ctx, Function, Result as JsResult, Value};
+use rquickjs::{Array, Ctx, Function, Object, Result as JsResult, Value};
 
 use crate::EventTargetId;
+use crate::abort::Table;
 use crate::event::array_of;
 
 /// What stands for each of `targets`: the entries of the array that the
 /// global `__inca_targets__` returns for them, or the targets themselves when
-/// the global is not a function.
+/// the global is not a function. A path of one signal goes to the signal table with no call of the
+/// global, and gives `null` for a signal whose object is gone.
 ///
 /// # Errors
 ///
@@ -19,7 +21,13 @@ pub(in crate::event) fn targets_of<'js>(
     ctx: &Ctx<'js>,
     targets: &[EventTargetId],
 ) -> JsResult<Vec<Value<'js>>> {
-    let given = array_of(ctx, targets.iter().copied())?;
+    if let [EventTargetId::Signal(id)] = *targets {
+        let found = Table::open(ctx)?.find(id)?;
+        return Ok(vec![
+            found.map_or_else(|| Value::new_null(ctx.clone()), Object::into_value),
+        ]);
+    }
+    let given = array_of(ctx, targets.iter().filter_map(|t| t.hook_target()))?;
     let Ok(hook) = ctx.globals().get::<_, Function>("__inca_targets__") else {
         return (0..targets.len()).map(|index| given.get(index)).collect();
     };
@@ -547,5 +555,50 @@ mod tests {
             ),
         );
         assert_eq!(got, serde_json::json!(true));
+    }
+
+    #[test]
+    fn a_signal_path_is_answered_without_the_hook() {
+        let (engine, _host) = crate::test_support::engine_with_bindings();
+        engine
+            .eval::<()>(
+                r"
+                globalThis.calls = 0;
+                globalThis.__inca_targets__ = () => { globalThis.calls += 1; return []; };
+                globalThis.s = new AbortController().signal;
+                ",
+            )
+            .unwrap();
+
+        let found = engine.with(|ctx| {
+            let given = [crate::EventTargetId::Signal(1)];
+            let targets = super::super::targets_of(&ctx, &given).unwrap();
+            ctx.globals().set("found", targets[0].clone()).unwrap();
+            ctx.eval::<bool, _>("found === s").unwrap()
+        });
+
+        assert!(found);
+        assert_eq!(engine.eval::<i32>("calls").unwrap(), 0);
+    }
+
+    #[test]
+    fn a_node_and_window_path_goes_to_the_hook() {
+        let (engine, _host) = crate::test_support::engine_with_bindings();
+        engine
+            .eval::<()>(
+                r"
+                globalThis.seen = null;
+                globalThis.__inca_targets__ = (ids) => { globalThis.seen = ids; return ids; };
+                ",
+            )
+            .unwrap();
+
+        engine.with(|ctx| {
+            let given = [crate::EventTargetId::Node(4), crate::EventTargetId::Window];
+            super::super::targets_of(&ctx, &given).unwrap();
+        });
+
+        let seen: String = engine.eval("JSON.stringify(seen)").unwrap();
+        assert_eq!(seen, "[4,\"$window\"]");
     }
 }

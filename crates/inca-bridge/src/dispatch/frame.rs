@@ -7,11 +7,9 @@ use gpui::{App, Window};
 use inca_gpui::EventPayload;
 use inca_gpui::event_sink::with_screen;
 use inca_jsenv::{EngineError, callbacks};
-use rquickjs::Function;
 
 use super::EventDispatcher;
 use crate::EventTargetId;
-use crate::event;
 
 impl EventDispatcher {
     /// Runs the work a window owes before it draws a frame: prints the warnings of the `<style>`
@@ -58,22 +56,12 @@ impl EventDispatcher {
         self.host.borrow_mut().focus.observe(window, cx);
         let host = &self.host;
         let entered = self.engine.with(|ctx| {
-            let released = callbacks::release(&ctx, &callback_ids);
-            let hook = ctx.globals().get::<_, Function>("__inca_released__").ok();
-            let called = released.and_then(|()| {
-                let Some(hook) = &hook else {
-                    return Ok(());
-                };
-                let nodes = event::array_of(&ctx, nodes)?;
-                let callback_ids = event::array_of(&ctx, callback_ids)?;
-                hook.call::<_, ()>((nodes, callback_ids))
-            });
-            if let Err(err) = called {
+            if let Err(err) = callbacks::release(&ctx, &callback_ids) {
                 host.borrow_mut()
                     .failures
                     .push(EngineError::capture(&ctx, &err));
             }
-            hook.is_some()
+            super::notify_released(&ctx, host, &nodes, &callback_ids)
         });
         if entered {
             self.drain_observed(window);
@@ -285,6 +273,30 @@ mod tests {
         let reported = scene.reported.borrow();
         assert_eq!(reported.len(), 1);
         assert!(reported[0].message().contains("boom"));
+    }
+
+    /// A scene with an orphan that has a listener, whose callback table is frozen.
+    fn scene_with_frozen_callbacks(cx: &mut TestAppContext) -> Scene {
+        let scene = scene(cx, RELEASED);
+        scene.js(r"
+            const n = __inca_native__;
+            n.addEventListener(n.createNode('div'), 'click', () => {}, false, false);
+            ");
+        scene.dispatcher.engine.with(|ctx| {
+            let table: rquickjs::Object =
+                inca_jsenv::vault(&ctx).unwrap().get("callbacks").unwrap();
+            let object: rquickjs::Object = ctx.globals().get("Object").unwrap();
+            let freeze: rquickjs::Function = object.get("freeze").unwrap();
+            freeze.call::<_, ()>((table,)).unwrap();
+        });
+
+        draw(cx, scene.window);
+
+        assert_eq!(scene.reported.borrow().len(), 1);
+        assert_eq!(
+            scene.json("globalThis.released.length"),
+            serde_json::json!(1)
+        );
     }
 
     #[gpui::test]

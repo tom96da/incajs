@@ -120,6 +120,14 @@ This follows the [Web Cryptography API](https://www.w3.org/TR/WebCryptoAPI/).
   - `wrapKey()`
   - `unwrapKey()`
 
+## `AbortController` and `AbortSignal` <Badge type="warning" text="unreleased"/>
+
+- `AbortSignal.timeout()` waits at most 4294967295 milliseconds.
+- A signal that one of its own listeners refers to stays in memory until it aborts.
+- One start of the host can create 2^32 - 1 signals, and a reload of the development window starts
+  the count again. After that, `new AbortController()`, `AbortSignal.abort()`,
+  `AbortSignal.timeout()` and `AbortSignal.any()` throw a `RangeError`.
+
 ## `setTimeout()` and `setInterval()`
 
 These follow the
@@ -146,6 +154,7 @@ This follows the
   listeners in total. A cleared or removed one still counts. After that, these
   throw a `RangeError`:
   - `setTimeout()`
+  - `AbortSignal.timeout()`
   - `setInterval()`
   - `requestAnimationFrame()`
   - `addEventListener()`

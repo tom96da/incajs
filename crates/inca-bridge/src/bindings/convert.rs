@@ -3,12 +3,13 @@
 
 use rquickjs::convert::Coerced;
 use rquickjs::function::Opt;
-use rquickjs::{Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value};
+use rquickjs::{Class, Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value};
 
 use inca_node::scroll::Align;
 use inca_node::{NodeId, TreeError, VirtualNode, VirtualTree};
 
 use crate::EventTargetId;
+use crate::abort::IncaSignal;
 use crate::event_target::WINDOW_TAG;
 
 /// An optional boolean argument: omitted, `undefined` and `null` give the
@@ -85,14 +86,17 @@ impl<'js> FromJs<'js> for JsAlign {
     }
 }
 
-/// An event target argument: a node id as [`JsNodeId`] takes it, or the tag
-/// `"$window"`. Any other string throws a `TypeError`.
+/// An event target argument: a node id as [`JsNodeId`] takes it, the tag `"$window"`, or an
+/// `AbortSignal` object. Any other string throws a `TypeError`.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct JsEventTargetId(pub(super) EventTargetId);
 
 impl<'js> FromJs<'js> for JsEventTargetId {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
         let Some(tag) = value.as_string() else {
+            if let Ok(signal) = Class::<IncaSignal>::from_value(&value) {
+                return Ok(Self(EventTargetId::Signal(signal.borrow().id())));
+            }
             return JsNodeId::from_js(ctx, value).map(|JsNodeId(id)| Self(EventTargetId::Node(id)));
         };
         match tag.to_string()?.as_str() {
@@ -102,7 +106,7 @@ impl<'js> FromJs<'js> for JsEventTargetId {
                 &format!(
                     concat!(
                         "unknown event target tag: {other}. ",
-                        "pass a node id or \"{window}\""
+                        "pass a node id, \"{window}\" or an AbortSignal"
                     ),
                     other = other,
                     window = WINDOW_TAG,
@@ -147,5 +151,59 @@ pub(super) fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error
         }
         TreeError::IndexSize => Exception::throw_dom(ctx, "IndexSizeError", &err.to_string()),
         _ => Exception::throw_type(ctx, &err.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use rstest::rstest;
+
+    use crate::test_support::{engine_with_bindings, error_name};
+
+    #[test]
+    fn a_signal_object_is_an_event_target() {
+        let (engine, _host) = engine_with_bindings();
+
+        let removed: bool = engine
+            .eval("__inca_native__.removeEventListener(new AbortController().signal, 'abort', 1)")
+            .unwrap();
+
+        assert!(!removed);
+    }
+
+    #[rstest]
+    #[case::plain("{}")]
+    #[case::forged("Object.create(AbortSignal.prototype)")]
+    #[case::controller("new AbortController()")]
+    fn another_object_is_no_event_target(#[case] target: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let name = error_name(
+            &engine,
+            &format!("__inca_native__.removeEventListener({target}, 'abort', 1)"),
+        );
+
+        assert_eq!(name, "TypeError");
+    }
+
+    #[test]
+    fn an_unknown_tag_names_the_three_forms() {
+        let (engine, _host) = engine_with_bindings();
+
+        let message: String = engine
+            .eval(
+                r"
+                try { __inca_native__.removeEventListener('nope', 'abort', 1); }
+                catch (e) { e.message; }
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(
+            message,
+            "unknown event target tag: nope. pass a node id, \"$window\" or an AbortSignal"
+        );
     }
 }

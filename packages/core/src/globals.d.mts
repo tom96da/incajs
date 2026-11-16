@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import type { IncaEvent, IncaEventTarget } from "incajs";
+
 // The host defines these globals before the app runs. This file carries their types.
 declare global {
   /** The document of the app. The build adds its import to every module that names it. */
@@ -364,6 +366,35 @@ declare global {
     readonly TIMEOUT_ERR: 23;
     readonly INVALID_NODE_TYPE_ERR: 24;
     readonly DATA_CLONE_ERR: 25;
+  };
+
+  /** The signal of an `AbortController`. A script cannot construct one. */
+  interface AbortSignal extends IncaEventTarget {
+    readonly aborted: boolean;
+    readonly reason: any;
+    throwIfAborted(): void;
+    onabort: ((this: AbortSignal, ev: IncaEvent) => any) | null;
+  }
+
+  /** The interface object of signals and their static methods. */
+  var AbortSignal: {
+    prototype: Pick<AbortSignal, "aborted" | "reason" | "throwIfAborted">;
+    new (): AbortSignal;
+    abort(reason?: any): AbortSignal;
+    any(signals: AbortSignal[]): AbortSignal;
+    timeout(milliseconds: number): AbortSignal;
+  };
+
+  /** A controller that aborts its signal. */
+  interface AbortController {
+    readonly signal: AbortSignal;
+    abort(reason?: any): void;
+  }
+
+  /** The interface object of controllers. */
+  var AbortController: {
+    prototype: AbortController;
+    new (): AbortController;
   };
 }
 

@@ -7,12 +7,15 @@
 //! with `__inca_test_listen__` for registering listeners, and a GPUI root that
 //! renders the host's tree.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use gpui::{Context, Render, TestAppContext, Window, WindowHandle, prelude::*};
 use inca_gpui::{Scrollbars, render_tree_with_events};
-use inca_jsenv::{Clock, Engine, EngineError, ErrorReporter, system_clock};
+use inca_jsenv::{
+    Clock, Engine, EngineError, ErrorReporter, run_timers, stderr_reporter, system_clock,
+};
 use inca_node::NodeId;
 
 use crate::bindings::install;
@@ -77,6 +80,87 @@ pub fn error_name(engine: &Engine, call: &str) -> String {
         })()
         ";
     engine.eval(&js.replace("CALL", call)).unwrap()
+}
+
+/// `expr` evaluated in `engine` and read back as JSON.
+///
+/// # Panics
+///
+/// Panics when the engine fails to evaluate `expr` or the value has no JSON form.
+#[must_use]
+pub fn json_of(engine: &Engine, expr: &str) -> serde_json::Value {
+    let text: String = engine.eval(&format!("JSON.stringify({expr})")).unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
+/// An engine over a host whose clock the test moves.
+pub struct Clocked {
+    /// The engine, with the bindings and an empty global `log` array.
+    pub engine: Rc<Engine>,
+    /// The host the engine is bound to.
+    pub host: Rc<RefCell<Host>>,
+    now: Rc<Cell<Instant>>,
+}
+
+impl Clocked {
+    /// A new engine and host on a clock that stands still.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the engine fails to initialise.
+    #[must_use]
+    pub fn new() -> Self {
+        let now = Rc::new(Cell::new(Instant::now()));
+        let clock = {
+            let now = Rc::clone(&now);
+            Rc::new(move || now.get())
+        };
+        let host = Rc::new(RefCell::new(Host::with_clock(clock)));
+        let engine = engine_for(&host);
+        engine.eval::<()>("globalThis.log = [];").unwrap();
+        Self { engine, host, now }
+    }
+
+    /// Moves the clock by `ms` and runs the timers that are due.
+    pub fn advance(&self, ms: u64) {
+        self.now.set(self.now.get() + Duration::from_millis(ms));
+        let timers = Rc::clone(&self.host.borrow().timers);
+        run_timers(&self.engine, &timers, &stderr_reporter());
+    }
+
+    /// `expr` evaluated and read back as JSON.
+    #[must_use]
+    pub fn json(&self, expr: &str) -> serde_json::Value {
+        json_of(&self.engine, expr)
+    }
+}
+
+impl Default for Clocked {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Registers the function that `js` evaluates to as an `abort` listener of the signal that will
+/// get the id `signal`, before the signal exists. The listener is never removed.
+///
+/// # Panics
+///
+/// Panics when the engine fails to evaluate `js` or store it.
+pub fn listen_ahead(engine: &Engine, host: &Rc<RefCell<Host>>, signal: u32, js: &str) {
+    let callback = engine.with(|ctx| {
+        let function: rquickjs::Value = ctx.eval(js).unwrap();
+        inca_jsenv::callbacks::store(&ctx, function)
+            .unwrap()
+            .unwrap()
+    });
+    host.borrow_mut().listeners.insert(
+        EventTargetId::Signal(signal),
+        "abort",
+        callback,
+        false,
+        false,
+    );
 }
 
 /// An engine with the bindings installed on `host` and [`LISTEN_JS`] evaluated.

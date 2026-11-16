@@ -37,6 +37,8 @@ its lifetime marker. These types derive it:
 | `TokenList` | `inca-bridge` | A `classList` object | None |
 | `TokenListIterator` | `inca-bridge` | A `classList` iterator | None |
 | `IncaStyle` | `inca-bridge` | A `CSSStyleDeclaration` object | None |
+| `IncaSignal` | `inca-bridge` | An `AbortSignal` object | Its reason, traced |
+| `IncaController` | `inca-bridge` | An `AbortController` object | Its signal, traced |
 | `UrlInstance` | `inca-jsenv` | A `URL` object | Its `searchParams` object, traced |
 | `ParamsInstance` | `inca-jsenv` | A `URLSearchParams` object | None |
 | `ParamsIterator` | `inca-jsenv` | A `URLSearchParams` iterator | None |
@@ -168,6 +170,7 @@ be passed, and `undefined` there counts as `null`.
 | `interfacePrototypes` | `() => Record<string, object>` | A new object with no prototype at each call, holding the prototypes of the node interfaces under the keys `EventTarget`, `Node`, `CharacterData`, `Text`, `Comment`, `Element`, `HTMLElement`, `ForeignElement`, `DocumentFragment`, `Document` and `HTMLDocument`. `ForeignElement` is the prototype of an SVG or MathML element; it inherits `Element.prototype`, and no global names it. Core builds its handles on these objects and reads no global. |
 | `registerUncloneable` | `(map: WeakMap) => void` | Registers the `WeakMap` of the node handles. `structuredClone` throws a `DataCloneError` for an object whose prototype is neither `Object.prototype` nor `null` when the map holds it, and clones any other object as usual. A map stays registered for the life of the realm. |
 | `windowTargetId` | `() => string` | The target that names the window in `addEventListener`, `removeEventListener`, `dispatchEvent` and `__inca_targets__`. |
+| `signalId` | `(value: unknown) => number \| null` | The id of an `AbortSignal` object, `null` for any other value. It takes one value and throws nothing for it. |
 | `createNode` | `(tag: string) => number` | Allocate a node, return its id. A tag that starts with `#` makes a node of that kind and any other tag makes an element of the HTML namespace. Throws once every id has been used. Freed at the next frame unless inserted or held, see [Retained virtual tree](#retained-virtual-tree). |
 | `createElement` | `(localName: string) => [number, string]` | Allocate an element of the HTML namespace for `localName`, lowered in ASCII, and return its id and tag. Freed at the next frame unless inserted or held, see [Retained virtual tree](#retained-virtual-tree). Throws `InvalidCharacterError` for a name that is no valid element local name. |
 | `createElementNS` | `(namespace: string \| null, qualifiedName: string) => [number, string, string \| null, string \| null, string]` | Allocate an element of `namespace` for `qualifiedName` and return its id, local name, namespace, prefix and tag name. An empty or `null` namespace gives no namespace. The name keeps its case. Freed at the next frame unless inserted or held, see [Retained virtual tree](#retained-virtual-tree). Throws `InvalidCharacterError` for a bad name and `NamespaceError` for a prefix the namespace does not allow. |
@@ -211,9 +214,9 @@ be passed, and `undefined` there counts as `null`.
 | `datasetTarget` | `() => object` | A new plain object whose prototype is `DOMStringMap.prototype`, the target of the `dataset` proxy. |
 | `inputValue` | `(nodeId: number) => string` | The text of the input node `nodeId`. Throws a `TypeError` for a node of another tag. |
 | `setInputValue` | `(nodeId: number, value: string) => void` | Replace the text of the input node `nodeId`, without CR and LF. A changed text puts the caret at its end and ends a composition. Throws a `TypeError` for a node of another tag. |
-| `addEventListener` | `(target: number \| "$window", event: string, callback: Function, capture?: boolean, passive?: boolean) => number` | Register `callback` for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). A `callback` that is not a function throws a `TypeError`. `capture` and `passive` default to `false`. |
-| `removeEventListener` | `(target: number \| "$window", event: string, callbackId: number) => boolean` | Drop one registration and its table entry, and return whether it was there. An unknown node returns `false`. |
-| `dispatchEvent` | `(target: number \| "$window", event: Event) => boolean` | Walk a script-built event over the path of `target` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script) and [Tagged targets](#tagged-targets). |
+| `addEventListener` | `(target: number \| "$window" \| object, event: string, callback: Function, capture?: boolean, passive?: boolean) => number` | Register `callback` for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). A `callback` that is not a function throws a `TypeError`. `capture` and `passive` default to `false`. |
+| `removeEventListener` | `(target: number \| "$window" \| object, event: string, callbackId: number) => boolean` | Drop one registration and its table entry, and return whether it was there. An unknown node returns `false`. |
+| `dispatchEvent` | `(target: number \| "$window" \| object, event: Event) => boolean` | Walk a script-built event over the path of `target` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script) and [Tagged targets](#tagged-targets). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
 | `setPointerCapture` | `(nodeId: number, pointerId: number) => void` | Make `nodeId` the pending pointer capture while a button is held, see [Pointer events](#pointer-events). Throws `NotFoundError` for a `pointerId` other than 1 and `InvalidStateError` for a node outside the mounted tree or that names no node. |
 | `releasePointerCapture` | `(nodeId: number, pointerId: number) => void` | Clear the pending capture when `nodeId` holds it. Throws `NotFoundError` for a `pointerId` other than 1. |
@@ -344,10 +347,11 @@ running, in order, the focus requests and their transitions, the sweep of nodes 
 are neither the root, the document, held nor the content of a template, the `__inca_released__`
 call, the focus reveal and the `scroll` events.
 
-- The host calls `__inca_released__` at most once per frame, and only when the sweep of that frame
-  freed a node.
+- The host calls `__inca_released__` at most once per frame for the sweep, and also when a signal
+  aborts or is collected, with an empty `nodeIds`.
 - `nodeIds` holds every freed node, subtrees and the content of a freed template included, and
-  `callbackIds` every registration on them. Each id arrives once. Ids that a native
+  `callbackIds` every registration on them, and the registrations that a signal collection
+  dropped, with an empty `nodeIds` then. Each id arrives once. Ids that a native
   returned as dropped never pass through it.
 - A throw is reported and the frame goes on.
 
@@ -363,7 +367,8 @@ keeps nothing.
   `currentTarget` and `composedPath()`.
 - An event whose payload names a related node calls it once more with that
   node, for `relatedTarget`.
-- `dispatchEvent` calls it whether or not a listener hears the event.
+- `dispatchEvent` calls it whether or not a listener hears the event, except at a signal: the
+  walk at a signal does not call it, and the argument type keeps `number | "$window"`.
 - When the global is not a function, these fields carry the ids.
 - A throw, or a result that is not an array, is reported and the walk runs no listener.
   `dispatchEvent` throws it.
@@ -389,6 +394,12 @@ the string `"$window"`.
 - Tags never reach `destroyNode`, the sweep or `__inca_released__`. The
   registrations live in the host and end with it, and the callbacks of the
   tags end with the JS realm.
+
+#### Signal targets
+
+A signal object names the signal as a target in `addEventListener`, `removeEventListener` and
+`dispatchEvent`. Its path is the signal alone, so `window` never hears its `abort`. `signalId` gives
+its number, or `null` for a value that is no signal.
 
 #### Event object
 
@@ -694,6 +705,8 @@ the bundle runs. The handler and its arguments sit in the callback table, which 
 for every registration of a context. Ids start at 1 and are never reused. A script reaches neither
 the table nor the allocator.
 
+- `AbortSignal.timeout()` starts a timer of this queue with one callback id, so the id `RangeError`
+  applies to it. The nesting clamp does not.
 - `setTimeout` and `setInterval` refuse a non-function handler with a
   `TypeError`, read `delay` as a 32-bit integer raised to 0 and throw the
   `RangeError` "timer ids are exhausted. restart the app" after the id

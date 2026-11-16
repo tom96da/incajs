@@ -33,6 +33,7 @@
   ],
   "type": "module",
   "sideEffects": [
+    "src/abortSignal.mts",
     "src/callbacks.mts",
     "src/targets.mts",
     "dist/chunks/hooks-*.js"

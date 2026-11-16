@@ -73,6 +73,7 @@ export {
   releasePointerCapture,
   removeListener,
   setPointerCapture,
+  signalId,
   windowTargetId,
 } from "./events.mts";
 export { HTML_NAMESPACE } from "./native.mts";
@@ -82,6 +83,7 @@ export type {
   ElementEntry,
   ElementName,
   EventTargetId,
+  HookTarget,
   HostCallback,
   InsertionPlace,
   InterfacePrototypes,
@@ -93,5 +95,6 @@ export type {
   Parsed,
   ParsedEntry,
   ScrollAlignment,
+  SignalTarget,
   WindowTargetId,
 } from "./native.mts";
