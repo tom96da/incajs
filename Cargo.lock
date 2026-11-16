@@ -2795,6 +2795,7 @@ dependencies = [
  "inca-gpui",
  "inca-jsenv",
  "inca-node",
+ "inca-test-macros",
  "log",
  "rquickjs",
  "rstest",

@@ -20,7 +20,7 @@ impl EventDispatcher {
         let (target, x, y) = {
             let host = self.host.borrow();
             let boxed = host.focus.focused_node(window, cx).and_then(|node| {
-                let center = host.layout.borrow().get(&node)?.bounds.center();
+                let center = host.layout_of(node)?.bounds.center();
                 Some((node, f32::from(center.x), f32::from(center.y)))
             });
             boxed.unwrap_or_else(|| (host.container_at(1.0, 1.0), 1.0, 1.0))

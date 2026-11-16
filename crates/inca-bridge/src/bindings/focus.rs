@@ -44,7 +44,7 @@ fn layout_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsR
     move |ctx, JsNodeId(node_id)| {
         let host = host.borrow();
         existing_node(&ctx, &host.tree, node_id)?;
-        let layout = host.layout.borrow().get(&node_id).copied();
+        let layout = host.layout_of(node_id);
         let rect = layout.map(|layout| {
             let Bounds { origin, size } = layout.bounds;
             [

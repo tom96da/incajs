@@ -11,7 +11,7 @@ use inca_gpui::debug_selector;
 use inca_node::NodeId;
 
 use super::Harness;
-use crate::snapshot::{Bounds, Node};
+use crate::snapshot::{Bounds, Lookup};
 
 impl Harness {
     /// Clicks the center of node `id`'s painted bounds. A node without
@@ -106,49 +106,17 @@ impl Harness {
             .selectors
             .entry(id)
             .or_insert_with(|| Box::leak(debug_selector(id).into_boxed_str()));
-        self.cx.debug_bounds(selector).map(|b| Bounds {
-            x: f32::from(b.origin.x),
-            y: f32::from(b.origin.y),
-            width: f32::from(b.size.width),
-            height: f32::from(b.size.height),
-        })
+        self.cx.debug_bounds(selector).map(Bounds::from)
     }
 
     pub(super) fn center_of(&mut self, id: NodeId) -> Point<Pixels> {
         let root = self.snapshot();
-        let bounds = match nearest_bounds(&root, id, None) {
-            Lookup::At(bounds) => bounds,
+        match root.nearest_bounds(id) {
+            Lookup::At(bounds) => bounds.center(),
             Lookup::Absent => panic!("no node {id} in the tree"),
             Lookup::Unbounded => panic!("node {id} and its ancestors have no bounds"),
-        };
-        point(
-            px(bounds.x + bounds.width / 2.0),
-            px(bounds.y + bounds.height / 2.0),
-        )
+        }
     }
-}
-
-/// Where [`nearest_bounds`] ended up.
-#[derive(Debug, PartialEq)]
-enum Lookup {
-    /// `id` is not under the node.
-    Absent,
-    /// `id` is there, and neither it nor an ancestor has bounds.
-    Unbounded,
-    At(Bounds),
-}
-
-/// The bounds of node `id` or of its nearest ancestor that has any.
-fn nearest_bounds(node: &Node, id: NodeId, inherited: Option<Bounds>) -> Lookup {
-    let here = node.bounds.or(inherited);
-    if node.id == id {
-        return here.map_or(Lookup::Unbounded, Lookup::At);
-    }
-    node.children
-        .iter()
-        .map(|child| nearest_bounds(child, id, here))
-        .find(|found| *found != Lookup::Absent)
-        .unwrap_or(Lookup::Absent)
 }
 
 #[cfg(test)]
@@ -158,7 +126,6 @@ mod tests {
     use super::*;
     use crate::tests::{TEST_ENTRY_PATH, eval_f64, id_where, log, node};
     use gpui::TestAppContext;
-    use std::collections::BTreeMap;
 
     /// A 100x50 box holding a text leaf, with a click listener that counts.
     const CLICKABLE: &str = r"
@@ -368,35 +335,6 @@ mod tests {
         h.hover(leaf);
 
         assert_eq!(eval_f64(&h, "globalThis.enters"), 1.0);
-    }
-
-    #[test]
-    fn nearest_bounds_inherits_from_the_closest_ancestor() {
-        let b = |x| Bounds {
-            x,
-            y: 0.0,
-            width: 1.0,
-            height: 1.0,
-        };
-        let node = |id, bounds, children| Node {
-            id,
-            tag: "div".into(),
-            text: None,
-            attributes: BTreeMap::new(),
-            bounds,
-            children,
-        };
-        let tree = node(
-            1,
-            Some(b(1.0)),
-            vec![node(2, Some(b(2.0)), vec![node(3, None, vec![])])],
-        );
-
-        assert_eq!(nearest_bounds(&tree, 3, None), Lookup::At(b(2.0)));
-        assert_eq!(nearest_bounds(&tree, 1, None), Lookup::At(b(1.0)));
-        assert_eq!(nearest_bounds(&tree, 9, None), Lookup::Absent);
-        let bare = node(1, None, vec![node(2, None, vec![])]);
-        assert_eq!(nearest_bounds(&bare, 2, None), Lookup::Unbounded);
     }
 
     #[gpui::test]

@@ -149,6 +149,29 @@ pub(crate) fn request(sender: &async_channel::Sender<String>, id: u32, method: &
         .unwrap();
 }
 
+/// A notification with `params`, which a null value leaves out.
+pub(crate) fn notify_with(sender: &async_channel::Sender<String>, method: &str, params: &Value) {
+    let mut message = json!({ "method": method });
+    if !params.is_null() {
+        message["params"] = params.clone();
+    }
+    sender.send_blocking(line(&message)).unwrap();
+}
+
+/// A request with `params`, which a null value leaves out.
+pub(crate) fn request_with(
+    sender: &async_channel::Sender<String>,
+    id: u32,
+    method: &str,
+    params: &Value,
+) {
+    let mut message = json!({ "id": id, "method": method });
+    if !params.is_null() {
+        message["params"] = params.clone();
+    }
+    sender.send_blocking(line(&message)).unwrap();
+}
+
 /// Every line written so far, decoded.
 pub(crate) fn written(capturing: &CapturingWriter) -> Vec<Value> {
     capturing

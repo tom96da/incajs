@@ -34,6 +34,8 @@ serde_path_to_error.workspace = true
 [features]
 # Exposes `harness` and `snapshot` for tests, and turns on gpui's test platform.
 test-support = ["gpui/test-support"]
+# Answers the automation requests of the dev protocol in a debug build and exposes `snapshot`.
+automation = []
 
 [dev-dependencies]
 rstest.workspace = true
@@ -42,6 +44,7 @@ rstest.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
 # Exposes the timer stand-in of its test support.
 inca-bridge = { path = "../inca-bridge", features = ["test-support"] }
+inca-test-macros = { path = "../inca-test-macros" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # font-kit is required on macOS (gpui_macos) for any text to render at all.

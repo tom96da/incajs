@@ -595,13 +595,20 @@ A fixed entry is deleted and its ID is never reused.
   firing. `Session` stays private until that environment is designed, and
   `Harness` covers what the host's own tests need.
 
-- **B-107 A test protocol and Locator library for Playwright**
+- **B-107 Typing and a Locator library for the automation requests**
   `Units: host,cli · Size: L · Impact: Low`
 
-  `snapshot`, `click`, `type` and `waitIdle` over a host protocol, plus a
-  Node Locator library (`getByText`, `getByTestId`, auto-wait) under
-  `@playwright/test`. Decide it together with B-005, which keeps the shipped
-  binary's protocol surface small.
+  The host answers `click`, `snapshot` and `waitIdle`. `type` needs keyboard
+  synthesis with IME and composed characters. A Node Locator library
+  (`getByText`, `getByTestId`, auto-wait, scroll into view and the
+  interactability checks of a click) under `@playwright/test` builds on them,
+  with the client moved into its own package below it. A `click` whose point
+  lies under a scrollbar reaches the bar: the scroll container gets
+  `pointerdown`, `mousedown`, `pointerup` and `mouseup` and no `click`, and the
+  node under the bar gets nothing. The library's scroll into view moves the
+  point into the client area of the scrolling ancestor.
+  Decide it together with B-005, which keeps the shipped binary's protocol
+  surface small.
 
 - **B-108 Screenshots in tests**
   `Units: host,ci · Size: L · Impact: Low`
@@ -624,7 +631,11 @@ A fixed entry is deleted and its ID is never reused.
 - **B-111 Text nodes have no bounds in a snapshot**
   `Units: gpui,host · Size: S · Impact: Low`
 
-  Text leaves carry no selector, so a snapshot gives them no bounds.
+  A text leaf is drawn with no container of its own, so it carries no selector
+  and the frame records no box for it. A snapshot asks none: a text node has
+  `bounds: null` in the harness and in the automation `snapshot` request. To
+  fix it, record a box for each text leaf when the frame is drawn and ask it in
+  the text arm of the snapshot.
 
 - **B-114 `inca dev` mixes the bundler's output with its own lines**
   `Units: cli · Size: S · Impact: Low`

@@ -118,7 +118,7 @@ impl EventDispatcher {
     /// `target` has no recorded box.
     fn with_offset(&self, target: NodeId, mut payload: EventPayload) -> EventPayload {
         let host = self.host.borrow();
-        let layout = host.layout.borrow().get(&target).copied();
+        let layout = host.layout_of(target);
         if let Some(mouse) = payload.mouse_mut() {
             let (left, top) = layout.map_or((0.0, 0.0), |l| {
                 let border = f32::from(l.border);
