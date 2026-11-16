@@ -97,6 +97,7 @@ fn decode<'js>(
         input,
         "input",
         "an ArrayBuffer or a view of one",
+        true,
     )?;
     let stream = flag_of(options_of(ctx, options)?.as_ref(), "stream")?;
     let bytes = bytes_of(&store, &source)?;
@@ -405,6 +406,13 @@ mod tests {
         "new Uint8Array(new Uint8Array([65, 66, 67, 68]).buffer, 0, 2)"
     )]
     #[case::data_view_with_offset("new DataView(new Uint8Array([64, 65, 66, 67]).buffer, 1, 2)")]
+    #[case::view_over_a_shared_buffer(
+        r"(() => {
+            const u = new Uint8Array(new SharedArrayBuffer(2));
+            u.set([65, 66]);
+            return u;
+        })()"
+    )]
     fn decode_reads_the_bytes_of_a_buffer_source(#[case] input: &str) {
         assert_eq!(run(&format!("new TextDecoder().decode({input})")), "AB");
     }

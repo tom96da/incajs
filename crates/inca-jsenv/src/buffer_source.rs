@@ -93,14 +93,15 @@ pub(crate) enum Source<'js> {
 }
 
 /// Finds the buffer of `input` and checks it can be read. `what` names the argument and `pass`
-/// says what to pass, in the `TypeError` for a value that is no buffer source or a resizable
-/// buffer.
+/// says what to pass, in the `TypeError` for a value that is no buffer source, shared memory or a
+/// resizable buffer. A `SharedArrayBuffer` and a view over one are refused unless `allow_shared`.
 pub(crate) fn source_of<'js>(
     ctx: &Ctx<'js>,
     store: &Object<'js>,
     input: Option<Value<'js>>,
     what: &str,
     pass: &str,
+    allow_shared: bool,
 ) -> JsResult<Source<'js>> {
     let wrong = || {
         Exception::throw_type(
@@ -126,6 +127,12 @@ pub(crate) fn source_of<'js>(
     else {
         return Ok(source);
     };
+    if !allow_shared && !is_array_buffer(buffer) {
+        return Err(Exception::throw_type(
+            ctx,
+            &format!("the {what} is shared memory. pass {pass} that is not shared"),
+        ));
+    }
     if is_resizable(store, buffer)? {
         return Err(Exception::throw_type(
             ctx,

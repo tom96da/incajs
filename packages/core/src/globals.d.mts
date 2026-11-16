@@ -93,6 +93,13 @@ declare global {
   var Performance: { prototype: Performance; new (): Performance };
   var performance: Performance;
 
+  interface Crypto {
+    getRandomValues<T extends ArrayBufferView>(array: T): T;
+    randomUUID(): `${string}-${string}-${string}-${string}-${string}`;
+  }
+  var Crypto: { prototype: Crypto; new (): Crypto };
+  var crypto: Crypto;
+
   interface Console {
     assert(condition?: boolean, ...data: unknown[]): void;
     clear(): void;

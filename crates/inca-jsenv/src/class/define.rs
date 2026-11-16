@@ -7,7 +7,8 @@
 //! Each entry gives the attributes of its kind. Methods and accessors are enumerable.
 //! [`define_function`] makes a writable, enumerable, configurable global. [`define_global`] (a
 //! class) and [`define_namespace`] make a writable, configurable, non-enumerable one. A global
-//! that is an accessor goes through [`define_accessor`] on the global object.
+//! that is an accessor with a setter goes through [`define_accessor`] on the global object, and a
+//! read-only one through [`define_getter`].
 //!
 //! The `this` entries ([`define_this_getter`], [`define_this_accessor`], [`define_this_method`])
 //! take a closure that gets the `this` value. The closure becomes the function. The property gets

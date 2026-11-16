@@ -10,6 +10,12 @@ use rquickjs::{Error, Exception, Result, Value, qjs};
 /// The kind that [`typed_array_kind`] reports for a `Uint8Array`.
 pub(crate) const UINT8: i32 = qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8.cast_signed();
 
+/// Whether the typed array `kind`, as `JS_TYPED_ARRAY_*` counts it, holds integers. The integer
+/// kinds come first, and the float kinds follow.
+pub(crate) fn is_integer_kind(kind: i32) -> bool {
+    kind <= qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64.cast_signed()
+}
+
 /// A `size_t` of the engine as a `usize`.
 fn to_usize(size: qjs::size_t) -> usize {
     usize::try_from(size).unwrap_or(usize::MAX)
@@ -133,15 +139,14 @@ pub(crate) fn copy_range(buffer: &Value<'_>, offset: usize, length: usize) -> Re
     Ok(unsafe { std::slice::from_raw_parts(data.add(start), end - start) }.to_vec())
 }
 
-/// Writes `bytes` to the start of the `Uint8Array` `target`. Bytes past its
-/// length, or past the end of its buffer, are dropped.
+/// Writes `bytes` to the start of the typed array `target`. Bytes past its length, or past the
+/// end of its buffer, are dropped.
 ///
 /// # Errors
 ///
-/// Returns [`Error::Exception`] with the exception pending when `target` is neither a
-/// `Uint8Array` nor a `Uint8ClampedArray`, when its buffer is detached or out of bounds, and
-/// when its buffer is immutable.
-pub(crate) fn write_uint8_array(target: &Value<'_>, bytes: &[u8]) -> Result<()> {
+/// Returns [`Error::Exception`] with the exception pending when `target` is no typed array, when
+/// its buffer is detached or out of bounds, and when its buffer is immutable.
+pub(crate) fn write_typed_array(target: &Value<'_>, bytes: &[u8]) -> Result<()> {
     let ctx = target.ctx();
     let (buffer, offset, length) = typed_array_parts(target)?;
     if is_immutable_array_buffer(&buffer) {
@@ -149,14 +154,6 @@ pub(crate) fn write_uint8_array(target: &Value<'_>, bytes: &[u8]) -> Result<()> 
             ctx,
             "the buffer is immutable. write to a mutable buffer",
         ));
-    }
-    let mut size: qjs::size_t = 0;
-    // SAFETY: the context and the value are live, and the call leaves the reference count alone.
-    // It returns null with an exception pending, or a pointer to `size` writable bytes.
-    let data =
-        unsafe { qjs::JS_GetUint8Array(ctx.as_raw().as_ptr(), &raw mut size, target.as_raw()) };
-    if data.is_null() {
-        return Err(Error::Exception);
     }
     let mut buffer_size: qjs::size_t = 0;
     // SAFETY: the context and the value are live, and the call leaves the reference count alone.
@@ -173,9 +170,13 @@ pub(crate) fn write_uint8_array(target: &Value<'_>, bytes: &[u8]) -> Result<()> 
         .len()
         .min(length)
         .min(to_usize(buffer_size).saturating_sub(offset));
-    // SAFETY: `data` is `offset` bytes into a buffer of `buffer_size` bytes and `count` is at
-    // most the rest of it. `bytes` is a Rust slice, so it cannot overlap engine memory.
-    unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), data, count) };
+    if count == 0 {
+        return Ok(());
+    }
+    // SAFETY: `count` is at least 1 and at most the bytes of the buffer after `offset`, so `base`
+    // plus `offset` is inside the buffer's `buffer_size` bytes and so are the `count` bytes
+    // written. `bytes` is a Rust slice, so it cannot overlap engine memory.
+    unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), base.add(offset), count) };
     Ok(())
 }
 
@@ -315,24 +316,34 @@ mod tests {
     }
 
     #[test]
-    fn write_uint8_array_writes_the_bytes_that_fit() {
+    fn write_typed_array_writes_the_bytes_that_fit() {
         with_realm(|ctx| {
             let target = value(&ctx, "globalThis.u = new Uint8Array(2)");
-            write_uint8_array(&target, &[7, 8, 9]).unwrap();
+            write_typed_array(&target, &[7, 8, 9]).unwrap();
 
             assert_eq!(value(&ctx, "u.join()").get::<String>().unwrap(), "7,8");
         });
     }
 
     #[test]
-    fn write_uint8_array_fails_for_another_typed_array() {
+    fn write_typed_array_fails_for_a_detached_view() {
         with_realm(|ctx| {
-            assert!(write_uint8_array(&value(&ctx, "new Uint16Array(2)"), &[1]).is_err());
+            let target = value(
+                &ctx,
+                r"
+                const b = new ArrayBuffer(4);
+                const u = new Uint8Array(b);
+                b.transfer();
+                u;
+                ",
+            );
+
+            assert!(write_typed_array(&target, &[1]).is_err());
         });
     }
 
     #[test]
-    fn write_uint8_array_stops_at_the_end_of_a_shrunk_buffer() {
+    fn write_typed_array_stops_at_the_end_of_a_shrunk_buffer() {
         with_realm(|ctx| {
             let target = value(
                 &ctx,
@@ -343,7 +354,7 @@ mod tests {
                 u;
                 ",
             );
-            write_uint8_array(&target, &[7, 8, 9, 10]).unwrap();
+            write_typed_array(&target, &[7, 8, 9, 10]).unwrap();
 
             assert_eq!(
                 value(&ctx, "new Uint8Array(b).join()")
@@ -355,14 +366,14 @@ mod tests {
     }
 
     #[test]
-    fn write_uint8_array_refuses_an_immutable_buffer() {
+    fn write_typed_array_refuses_an_immutable_buffer() {
         with_realm(|ctx| {
             let target = value(
                 &ctx,
                 "new Uint8Array(new ArrayBuffer(2).transferToImmutable())",
             );
 
-            assert!(write_uint8_array(&target, &[1]).is_err());
+            assert!(write_typed_array(&target, &[1]).is_err());
         });
     }
 }

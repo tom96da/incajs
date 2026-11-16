@@ -2809,6 +2809,7 @@ version = "0.0.33"
 dependencies = [
  "base64",
  "encoding_rs",
+ "getrandom 0.4.3",
  "percent-encoding",
  "rquickjs",
  "rstest",
