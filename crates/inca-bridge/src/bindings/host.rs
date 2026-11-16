@@ -215,6 +215,12 @@ impl Host {
         self.tree.root().expect("the host declares a root")
     }
 
+    /// The box of node `id` in the last drawn frame, `None` for a node that frame did not draw.
+    #[must_use]
+    pub fn layout_of(&self, id: NodeId) -> Option<NodeLayout> {
+        self.layout.borrow().get(&id).copied()
+    }
+
     /// The document, the parent of the node a mounting app attaches under.
     ///
     /// # Panics

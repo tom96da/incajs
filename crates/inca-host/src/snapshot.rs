@@ -1,10 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! A serializable copy of an app's node tree, for tests to read.
+//! A serializable copy of an app's node tree, for tests and the automation requests to read.
 
 use std::collections::BTreeMap;
 
+use gpui::{Pixels, Point, point, px};
 use inca_node::{AttributeValue, ElementSpec, ElementTag, NodeId, VirtualTree, build_spec};
 use serde::Serialize;
 use serde_json::Value;
@@ -20,6 +21,40 @@ pub struct Bounds {
     pub width: f32,
     /// Vertical extent.
     pub height: f32,
+}
+
+impl Bounds {
+    /// The center of the box, in the same coordinates.
+    #[must_use]
+    pub fn center(&self) -> Point<Pixels> {
+        point(
+            px(self.x + self.width / 2.0),
+            px(self.y + self.height / 2.0),
+        )
+    }
+}
+
+/// Reads gpui's box as logical pixels.
+impl From<gpui::Bounds<Pixels>> for Bounds {
+    fn from(b: gpui::Bounds<Pixels>) -> Self {
+        Self {
+            x: f32::from(b.origin.x),
+            y: f32::from(b.origin.y),
+            width: f32::from(b.size.width),
+            height: f32::from(b.size.height),
+        }
+    }
+}
+
+/// Where [`Node::nearest_bounds`] ended up.
+#[derive(Debug, PartialEq)]
+pub enum Lookup {
+    /// `id` is not under the node.
+    Absent,
+    /// `id` is there, and neither it nor an ancestor has bounds.
+    Unbounded,
+    /// `id` is there, and it or its nearest ancestor with bounds has these.
+    At(Bounds),
 }
 
 /// One node of a snapshot.
@@ -49,6 +84,24 @@ impl Node {
             return Some(self);
         }
         self.children.iter().find_map(|child| child.find(predicate))
+    }
+
+    /// The bounds of node `id` in this tree, or of its nearest ancestor that has any.
+    #[must_use]
+    pub fn nearest_bounds(&self, id: NodeId) -> Lookup {
+        self.nearest_bounds_from(id, None)
+    }
+
+    fn nearest_bounds_from(&self, id: NodeId, inherited: Option<Bounds>) -> Lookup {
+        let here = self.bounds.or(inherited);
+        if self.id == id {
+            return here.map_or(Lookup::Unbounded, Lookup::At);
+        }
+        self.children
+            .iter()
+            .map(|child| child.nearest_bounds_from(id, here))
+            .find(|found| *found != Lookup::Absent)
+            .unwrap_or(Lookup::Absent)
     }
 }
 
@@ -206,6 +259,35 @@ mod tests {
 
         assert_eq!(snap.find(&|n| n.tag == "b").unwrap().id, a_child);
         assert_eq!(snap.find(&|n| n.id == root).unwrap().id, root);
+    }
+
+    #[test]
+    fn nearest_bounds_inherits_from_the_closest_ancestor() {
+        let b = |x| Bounds {
+            x,
+            y: 0.0,
+            width: 1.0,
+            height: 1.0,
+        };
+        let node = |id, bounds, children| Node {
+            id,
+            tag: "div".into(),
+            text: None,
+            attributes: BTreeMap::new(),
+            bounds,
+            children,
+        };
+        let tree = node(
+            1,
+            Some(b(1.0)),
+            vec![node(2, Some(b(2.0)), vec![node(3, None, vec![])])],
+        );
+
+        assert_eq!(tree.nearest_bounds(3), Lookup::At(b(2.0)));
+        assert_eq!(tree.nearest_bounds(1), Lookup::At(b(1.0)));
+        assert_eq!(tree.nearest_bounds(9), Lookup::Absent);
+        let bare = node(1, None, vec![node(2, None, vec![])]);
+        assert_eq!(bare.nearest_bounds(2), Lookup::Unbounded);
     }
 
     #[test]

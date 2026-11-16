@@ -4,6 +4,9 @@
 //! Runs an inca app: reads its prebuilt bundle and config, then mounts the
 //! bundle in a GPUI window.
 
+#[cfg(all(feature = "automation", not(debug_assertions)))]
+compile_error!("the automation feature is for debug builds only");
+
 mod app;
 pub mod config;
 mod console_output;
@@ -17,7 +20,7 @@ mod tests;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod harness;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test-support", feature = "automation"))]
 pub mod snapshot;
 
 pub use app::{BundleError, launcher_bundle, print_config, run_bundle};

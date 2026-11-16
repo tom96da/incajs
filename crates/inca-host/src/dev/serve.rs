@@ -19,11 +19,17 @@ use crate::app::{Failure, HostedApp, Loading, clock_of, maybe_auto_resize_to_con
 /// Answers the request `id` came from. A notification carries no id and
 /// takes no reply.
 pub(super) fn respond(id: Option<&Value>, outcome: &Result<(), Failure>, writer: &SharedWriter) {
+    reply(id, outcome.as_ref().map(|()| Value::Null), writer);
+}
+
+/// Answers the request `id` came from with `outcome`. A notification carries no id and
+/// takes no reply.
+pub(super) fn reply(id: Option<&Value>, outcome: Result<Value, &Failure>, writer: &SharedWriter) {
     let Some(id) = id else { return };
     send(
         &**writer,
         &match outcome {
-            Ok(()) => Outgoing::result(id.clone()),
+            Ok(value) => Outgoing::result(id.clone(), value),
             Err(failure) => outgoing(id.clone(), failure),
         },
     );
@@ -157,10 +163,18 @@ impl Serve {
             Ok(Incoming::Call {
                 id,
                 method: Method::Reload,
+                ..
             }) => self.reload(cx, id),
+            #[cfg(any(test, feature = "automation"))]
+            Ok(Incoming::Call {
+                id,
+                method: Method::Automation(request),
+                params,
+            }) => self.automate(cx, id.as_ref(), request, params),
             Ok(Incoming::Call {
                 id,
                 method: Method::Shutdown,
+                ..
             }) => {
                 respond(id.as_ref(), &Ok(()), &self.writer);
                 return ControlFlow::Break(());

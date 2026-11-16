@@ -6,7 +6,8 @@
 //! that swaps into the window when it settles. Any other notification goes
 //! to the loading app while a load is pending, and to the window's app
 //! otherwise, as `__inca_dev__.receive(method, paramsJson)`; see
-//! [`wire`] for the wire format this speaks.
+//! [`wire`] for the wire format this speaks. With the `automation` feature, `click`, `snapshot`
+//! and `waitIdle` run in the host and are not relayed.
 //!
 //! The first entry starts as a [`crate::app::Loading`] and the window opens once its
 //! top-level `await` settles. An entry still pending after [`serve::LOAD_TIMEOUT`]
@@ -25,6 +26,8 @@ use inca_jsenv::{EngineError, ErrorReporter};
 pub(crate) use wire::ErrorCode;
 use wire::Outgoing;
 
+#[cfg(any(test, feature = "automation"))]
+mod automation;
 mod globals;
 mod reload;
 mod serve;

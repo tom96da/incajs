@@ -39,7 +39,7 @@ carries on.
 ## Startup
 
 With `--dev` the host reads stdin from the start. It relays notifications
-that arrive before `ready` into the loading app.
+that arrive before `ready` into the loading app, except the requests of "Automation".
 
 An entry whose evaluation settles in time opens the window at the app's
 content size, then the host sends `ready`. An entry still pending 2 seconds
@@ -79,6 +79,25 @@ attempt, including a report and its retraction made within one poll.
 | --- | --- | --- |
 | `reload` | `null` once the new bundle's evaluation ends | Re-read the bundle at the entry path the host started with and evaluate it afresh. The config read at startup stands. The window keeps the old bundle meanwhile. A later `reload` replaces a pending one, and every queued id gets the later outcome. Relayed notifications go to the loading bundle while it is pending, and to the window's bundle after it settles. |
 | `shutdown` | `null` | Exit 0. The client kills the child if it has not exited after the response. |
+
+### Automation
+
+A debug host built with the `automation` Cargo feature also answers the requests below. A release
+build cannot enable the feature, and a host without it answers them `-32601`. Each request acts on
+the app in the window. The host answers after the work of the request has run. On a host with the
+feature, a notification with one of these names runs the request and is not relayed into the app.
+
+| `method` | `params` | Response | Meaning |
+| --- | --- | --- | --- |
+| `click` | `{"node": number}` | `null` | Presses and releases the primary button at the center of the node's box, after a `waitIdle` pass. A node with no box is clicked at its nearest ancestor with one. The request does not check which node receives the click. |
+| `snapshot` | none | a node | The node tree under the node the app mounts under, as it is now, with the boxes of the last drawn frame. `<style>` and `<template>` elements and their content are left out. |
+| `waitIdle` | none | `null` | Runs the queued jobs and the requested frame callbacks, then draws a frame. A timer is not waited for. |
+
+A node is `{"id": number, "tag": string, "text": string | null, "attributes": object, "bounds":
+{"x", "y", "width", "height"} | null, "children": [node]}`. `text` is the content of a `#text`
+node and `null` for every other node. A `#text` node keeps its content in `attributes.value`
+too. `bounds` is the border box in window coordinates, in logical pixels, and `null` for a text
+node and for a node the last frame did not draw.
 
 ### From the host
 
@@ -172,6 +191,8 @@ The host never exits because of a message it couldn't use.
 | A line that isn't valid JSON | `-32700` | `id` is `null`, as there was none to read |
 | Valid JSON that is no request object: not an object, no `jsonrpc: "2.0"`, no readable `method`, or an `id` that is not a string, a number, or null | `-32600` | `id` is `null` |
 | A `method` this host doesn't implement | `-32601` | echoes the request's `id` |
+| `click` with no `node` that is a node id, or naming a node not in the snapshot (the tree under the node the app mounts under) | `-32602` | echoes the request's `id` |
+| An automation request before the window opens or after it closed, or a `click` on a node with no box in its ancestry | `-32001` | echoes the request's `id` |
 | A panic in the host | `-32603` | `id` is `null`. The panic message also goes to stderr |
 | A bundle that throws, or whose top-level `await` rejects, while being evaluated | `-32000` | echoes the `id`, after an `appError` for each job failure of that load. The window keeps the tree it already has |
 | A *first* bundle that throws or rejects before the window opens, or an entry file that can't be read | `-32000` | reported with `id` `null` after an `appError` for each job failure of that load, then exit 1 |

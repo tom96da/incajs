@@ -49,6 +49,12 @@ succeeds, and a new attempt reported by the app restarts the 2 seconds. While a
 reload's load is pending, notifications go to the loading app, and to the
 window's app after the load settles.
 
+A debug build with the `automation` feature also answers `click`, `snapshot` and `waitIdle` under
+`--dev`: a click at the center of a node, a copy of the node tree with the boxes of the last
+frame, and a pass that runs the queued work and draws a frame. A notification with one of these
+names runs in the host and is not relayed into the app. A release build with the feature fails
+to compile.
+
 `--print-config` reads the `inca.json` beside the entry, prints the settings
 the host applies as JSON, and returns after printing. A `null` marks a value
 the app leaves open: its root element sizes the window, and an unset limit

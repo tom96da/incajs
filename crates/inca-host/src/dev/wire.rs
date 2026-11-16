@@ -20,6 +20,18 @@ pub const PROTOCOL_VERSION: u32 = 0;
 pub enum Method {
     Reload,
     Shutdown,
+    /// A request of the automation feature, run in the host.
+    #[cfg(any(test, feature = "automation"))]
+    Automation(Automation),
+}
+
+/// A request of the automation feature.
+#[cfg(any(test, feature = "automation"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Automation {
+    Click,
+    Snapshot,
+    WaitIdle,
 }
 
 impl Method {
@@ -29,6 +41,12 @@ impl Method {
         match name {
             "reload" => Some(Method::Reload),
             "shutdown" => Some(Method::Shutdown),
+            #[cfg(any(test, feature = "automation"))]
+            "click" => Some(Method::Automation(Automation::Click)),
+            #[cfg(any(test, feature = "automation"))]
+            "snapshot" => Some(Method::Automation(Automation::Snapshot)),
+            #[cfg(any(test, feature = "automation"))]
+            "waitIdle" => Some(Method::Automation(Automation::WaitIdle)),
             _ => None,
         }
     }
@@ -42,6 +60,9 @@ pub enum Incoming {
     Call {
         id: Option<Value>,
         method: Method,
+        /// The request's `params`, read by the automation requests.
+        #[cfg(any(test, feature = "automation"))]
+        params: Option<Value>,
     },
     /// A method this host doesn't implement, kept with its own name and
     /// `params` so the caller can decide what to do with it: a request still
@@ -56,7 +77,7 @@ pub enum Incoming {
     Empty,
 }
 
-/// The reserved codes this host uses, plus one from the range JSON-RPC
+/// The codes this host answers with: reserved codes of JSON-RPC and codes from the range it
 /// leaves to the application.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCode {
@@ -65,6 +86,10 @@ pub enum ErrorCode {
     MethodNotFound,
     InternalError,
     BundleFailed,
+    #[cfg(any(test, feature = "automation"))]
+    InvalidParams,
+    #[cfg(any(test, feature = "automation"))]
+    Unavailable,
 }
 
 impl ErrorCode {
@@ -75,6 +100,10 @@ impl ErrorCode {
             ErrorCode::MethodNotFound => -32601,
             ErrorCode::InternalError => -32603,
             ErrorCode::BundleFailed => -32000,
+            #[cfg(any(test, feature = "automation"))]
+            ErrorCode::InvalidParams => -32602,
+            #[cfg(any(test, feature = "automation"))]
+            ErrorCode::Unavailable => -32001,
         }
     }
 }
@@ -128,13 +157,13 @@ impl Outgoing {
         }
     }
 
-    /// A success response. `id` is the request's, echoed unchanged.
+    /// A success response carrying `result`. `id` is the request's, echoed unchanged.
     #[must_use]
-    pub fn result(id: Value) -> Self {
+    pub fn result(id: Value, result: Value) -> Self {
         Outgoing::Result {
             jsonrpc: JSONRPC,
             id,
-            result: Value::Null,
+            result,
         }
     }
 
@@ -260,6 +289,8 @@ pub fn decode(line: &str) -> Result<Incoming, (ErrorCode, String)> {
         Some(method) => Incoming::Call {
             id: call.id,
             method,
+            #[cfg(any(test, feature = "automation"))]
+            params: call.params,
         },
         None => Incoming::Unrecognized {
             id: call.id,
@@ -297,6 +328,7 @@ mod tests {
             Incoming::Call {
                 id: Some(json!(1)),
                 method: Method::Reload,
+                params: None,
             }
         );
     }
@@ -309,6 +341,7 @@ mod tests {
             Incoming::Call {
                 id: None,
                 method: Method::Shutdown,
+                params: None,
             }
         );
     }
@@ -321,6 +354,7 @@ mod tests {
             Incoming::Call {
                 id: Some(Value::Null),
                 method: Method::Reload,
+                params: None,
             }
         );
     }
@@ -364,6 +398,37 @@ mod tests {
         );
     }
 
+    #[rstest]
+    #[case::click(
+        r#"{"jsonrpc":"2.0","id":1,"method":"click","params":{"node":3}}"#,
+        Automation::Click,
+        Some(json!({"node": 3}))
+    )]
+    #[case::snapshot(
+        r#"{"jsonrpc":"2.0","id":1,"method":"snapshot"}"#,
+        Automation::Snapshot,
+        None
+    )]
+    #[case::wait_idle(
+        r#"{"jsonrpc":"2.0","id":1,"method":"waitIdle"}"#,
+        Automation::WaitIdle,
+        None
+    )]
+    fn an_automation_method_decodes_to_a_call_with_its_params(
+        #[case] line: &str,
+        #[case] request: Automation,
+        #[case] params: Option<Value>,
+    ) {
+        assert_eq!(
+            call(line),
+            Incoming::Call {
+                id: Some(json!(1)),
+                method: Method::Automation(request),
+                params,
+            }
+        );
+    }
+
     #[test]
     fn a_blank_line_decodes_as_empty() {
         assert_eq!(call(""), Incoming::Empty);
@@ -396,7 +461,7 @@ mod tests {
 
     #[test]
     fn the_documented_messages_encode_to_their_shapes() {
-        let result = encode(&Outgoing::result(json!(1))).unwrap();
+        let result = encode(&Outgoing::result(json!(1), json!(null))).unwrap();
         assert_eq!(result, r#"{"jsonrpc":"2.0","id":1,"result":null}"#);
 
         let failure = encode(&Outgoing::error(
@@ -409,6 +474,9 @@ mod tests {
             failure,
             r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"bad line"}}"#
         );
+
+        let valued = encode(&Outgoing::result(json!(2), json!({"a": 1}))).unwrap();
+        assert_eq!(valued, r#"{"jsonrpc":"2.0","id":2,"result":{"a":1}}"#);
 
         let ready = encode(&Outgoing::ready()).unwrap();
         assert_eq!(
@@ -500,7 +568,7 @@ mod tests {
     fn every_encoded_message_is_one_line() {
         let messages = [
             Outgoing::ready(),
-            Outgoing::result(json!(1)),
+            Outgoing::result(json!(1), json!(null)),
             Outgoing::error(json!(1), ErrorCode::BundleFailed, "a\nb"),
         ];
         for message in messages {
