@@ -93,7 +93,16 @@ declare global {
   var Performance: { prototype: Performance; new (): Performance };
   var performance: Performance;
 
+  type AlgorithmIdentifier = string | { name: string };
+  type BufferSource = ArrayBufferView | ArrayBuffer;
+
+  interface SubtleCrypto {
+    digest(algorithm: AlgorithmIdentifier, data: BufferSource): Promise<ArrayBuffer>;
+  }
+  var SubtleCrypto: { prototype: SubtleCrypto; new (): SubtleCrypto };
+
   interface Crypto {
+    readonly subtle: SubtleCrypto;
     getRandomValues<T extends ArrayBufferView>(array: T): T;
     randomUUID(): `${string}-${string}-${string}-${string}-${string}`;
   }

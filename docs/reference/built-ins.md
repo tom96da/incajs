@@ -99,7 +99,18 @@ These results for `file:` URLs differ from the ones of browsers:
 
 This follows the [Web Cryptography API](https://www.w3.org/TR/WebCryptoAPI/).
 
-- `crypto.subtle` and `CryptoKey` are missing.
+- `CryptoKey` is missing, and so are all `SubtleCrypto` methods except `digest()`:
+  - `generateKey()`
+  - `importKey()`
+  - `exportKey()`
+  - `sign()`
+  - `verify()`
+  - `encrypt()`
+  - `decrypt()`
+  - `deriveKey()`
+  - `deriveBits()`
+  - `wrapKey()`
+  - `unwrapKey()`
 
 ## `setTimeout()` and `setInterval()`
 
