@@ -16,3 +16,4 @@ mod walk;
 
 pub(crate) use globals::install;
 pub use intrinsics::register_uncloneable;
+pub(crate) use walk::clone_value;

@@ -48,6 +48,10 @@ pub(crate) fn thrown(body: &str) -> String {
 pub(crate) const TIME: &str =
     "TypeError: the time is not valid. pass a finite number that is not negative";
 
+/// The error text of a `detail` that is a function.
+pub(crate) const FUNCTION_DETAIL: &str =
+    "DataCloneError: a function cannot be cloned. remove it from the value";
+
 /// Two marks, `s` at 10 and `e` at 20.
 pub(crate) const MARKS: &str = r"
     performance.mark('s', { startTime: 10 });

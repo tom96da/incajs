@@ -6,7 +6,7 @@
 use rquickjs::{Ctx, Exception, Object, Result as JsResult, Value};
 
 use super::entries::{EntryData, Kind, append, entry, prototype, timeline_entries};
-use super::record::{NAVIGATION_START, TIMING_NAMES, defined, detail_or_null, number, timestamp};
+use super::record::{NAVIGATION_START, TIMING_NAMES, cloned_detail, defined, number, timestamp};
 use crate::class::{given, require, text};
 use crate::time::now;
 
@@ -54,7 +54,7 @@ fn time_member<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<Time> {
 
 /// The members of the options of `measure()`.
 struct MeasureOptions<'js> {
-    detail: Value<'js>,
+    detail: Option<Value<'js>>,
     start: Option<Time>,
     end: Option<Time>,
     duration: Option<f64>,
@@ -83,7 +83,7 @@ fn measure_options<'js>(
         return Err(Exception::throw_type(ctx, message));
     }
     Ok(MeasureOptions {
-        detail: detail_or_null(ctx, detail),
+        detail,
         start: start.map(|value| time_member(ctx, &value)).transpose()?,
         end: end.map(|value| time_member(ctx, &value)).transpose()?,
         duration: duration.map(|value| finite(ctx, &value)).transpose()?,
@@ -96,7 +96,7 @@ pub(super) fn measure<'js>(ctx: &Ctx<'js>, args: &[Value<'js>]) -> JsResult<Valu
     let name = text(ctx, &args[0])?;
     let end_mark = given(args, 2);
     let mut options = MeasureOptions {
-        detail: detail_or_null(ctx, None),
+        detail: None,
         start: None,
         end: None,
         duration: None,
@@ -137,7 +137,8 @@ pub(super) fn measure<'js>(ctx: &Ctx<'js>, args: &[Value<'js>]) -> JsResult<Valu
         start_time: start,
         duration: end - start,
     };
-    let entry = entry(ctx, data, options.detail, prototype(ctx, Kind::Measure)?)?.into_value();
+    let detail = cloned_detail(ctx, options.detail)?;
+    let entry = entry(ctx, data, detail, prototype(ctx, Kind::Measure)?)?.into_value();
     append(ctx, entry.clone())?;
     Ok(entry)
 }
@@ -158,7 +159,7 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::tests::{MARKS, TIME, run_after, run_at, thrown_marked};
+    use crate::tests::{FUNCTION_DETAIL, MARKS, TIME, run_after, run_at, thrown_marked};
 
     const FINITE: &str = "TypeError: the duration is not valid. pass a finite number";
     const NO_START: &str = "TypeError: the options hold no start or end. pass start or end as well";
@@ -267,18 +268,79 @@ mod tests {
         assert_eq!(got, want);
     }
 
-    #[rstest]
-    #[case::stored("performance.measure('m', { start: 1, detail: d }).detail === d")]
-    #[case::default("performance.measure('m').detail === null")]
-    fn measure_stores_the_detail(#[case] check: &str) {
-        let got = run_at(&format!(
-            r"
-            const d = {{}};
-            String({check});
-            "
-        ));
+    #[test]
+    fn measure_detail_is_not_the_passed_object() {
+        assert_eq!(
+            run_at(
+                r"
+                const d = {};
+                String(performance.measure('m', { start: 1, detail: d }).detail !== d);
+                "
+            ),
+            "true"
+        );
+    }
 
-        assert_eq!(got, "true");
+    #[test]
+    fn a_change_of_the_passed_detail_does_not_show_in_the_measure() {
+        assert_eq!(
+            run_at(
+                r"
+                const d = {};
+                const m = performance.measure('m', { start: 1, detail: d });
+                d.x = 1;
+                String(m.detail.x === undefined);
+                "
+            ),
+            "true"
+        );
+    }
+
+    #[test]
+    fn measure_detail_defaults_to_null() {
+        assert_eq!(
+            run_at("String(performance.measure('m').detail === null)"),
+            "true"
+        );
+    }
+
+    #[test]
+    fn measure_throws_for_a_function_detail() {
+        assert_eq!(
+            thrown_marked("performance.measure('m', { start: 0, detail: () => {} })"),
+            FUNCTION_DETAIL
+        );
+    }
+
+    #[test]
+    fn measure_with_a_function_detail_adds_no_entry() {
+        assert_eq!(
+            run_at(
+                r"
+                try {
+                    performance.measure('m', { start: 0, detail: () => {} });
+                } catch (e) {}
+                String(performance.getEntries().length);
+                "
+            ),
+            "0"
+        );
+    }
+
+    #[test]
+    fn a_missing_mark_throws_before_the_detail_is_cloned() {
+        assert_eq!(
+            thrown_marked("performance.measure('m', { start: 'nomark', detail: () => {} })"),
+            "SyntaxError: the mark nomark does not exist. call mark() with that name first"
+        );
+    }
+
+    #[test]
+    fn a_missing_start_or_end_throws_before_the_detail_is_cloned() {
+        assert_eq!(
+            thrown_marked("performance.measure('m', { detail: () => {} })"),
+            NO_START
+        );
     }
 
     #[rstest]

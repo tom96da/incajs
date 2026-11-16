@@ -7,8 +7,9 @@
 //! The timeline is a JS array in the vault that holds the entry objects, so an entry keeps its
 //! identity. Every element of the array is defined as an own data property, so a script that adds
 //! an indexed setter to `Array.prototype` or `Object.prototype` changes nothing here. The `detail`
-//! of an entry sits in a `WeakMap` in the vault. Rust calls the `get` and `set` functions it
-//! captured at install, so a script that replaces `WeakMap.prototype` changes nothing either.
+//! of an entry is a clone of the passed value and sits in a `WeakMap` in the vault. Rust calls the
+//! `get` and `set` functions it captured at install, so a script that replaces `WeakMap.prototype`
+//! changes nothing either.
 
 use std::cmp::Ordering;
 
