@@ -232,7 +232,9 @@ describe("the tree after a replacement", () => {
 
     child.outerHTML = "<i></i>";
 
-    expect(kids(parent)).toEqual([child]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual(
+      [child].map((node) => node.__node_id),
+    );
   });
 });
 

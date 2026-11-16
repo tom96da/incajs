@@ -42,6 +42,15 @@ export function interfacePrototypes(): InterfacePrototypes {
 }
 
 /**
+ * Registers the map whose keys `structuredClone` refuses to copy: an object with a prototype of its
+ * own that the map holds is no data to copy.
+ * @param map - the `WeakMap` of the handles
+ */
+export function registerUncloneable(map: WeakMap<object, unknown>): void {
+  native().registerUncloneable(map);
+}
+
+/**
  * Allocates a new element in the native tree, as {@link createNode} does for a tag, after the
  * host checks that `localName` is a valid element name and lowers its ASCII upper case.
  * @param localName - the element name

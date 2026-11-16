@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { keep } from "../../tests/keep.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import {
@@ -189,14 +190,16 @@ describe("parentNode", () => {
 
     expect(root.parentNode).toBe(document);
   });
+});
 
-  it("is the document when no handle of it was built yet", async () => {
-    vi.resetModules();
-    const fresh = await import("./handle.mts");
-    const child = fresh.createIncaElement(12, "div");
-    links[12] = { parent: DOCUMENT };
+describe("parentElement", () => {
+  it("reads the parent element of a text node through the host", () => {
+    const parent = createElementNode("div");
+    const text = createTextNode("t");
+    links[text.__node_id] = { parent: parent.__node_id };
 
-    expect(child.parentNode).toBe(fresh.documentHandle());
+    expect(text.parentElement).toBe(parent);
+    expect(host.linkedNode).toHaveBeenCalledWith(text.__node_id, "parent", true);
   });
 });
 
@@ -257,7 +260,7 @@ describe("childNodes", () => {
     const parent = createElementNode("div");
     const list = parent.childNodes;
 
-    children[parent.__node_id] = [createTextNode("t").__node_id];
+    children[parent.__node_id] = [keep(createTextNode("t")).__node_id];
 
     expect(list.length).toBe(1);
   });
@@ -277,7 +280,9 @@ describe("childNodes", () => {
     const text = createTextNode("t");
     children[parent.__node_id] = [999, text.__node_id];
 
-    expect([...parent.childNodes]).toEqual([text]);
+    expect([...parent.childNodes].map((node) => node.__node_id)).toEqual(
+      [text].map((node) => node.__node_id),
+    );
   });
 
   it("is empty for a text node", () => {
@@ -286,7 +291,7 @@ describe("childNodes", () => {
 
   it.each([
     ["no child", () => [], false],
-    ["a live child", () => [createTextNode("t").__node_id], true],
+    ["a live child", () => [keep(createTextNode("t")).__node_id], true],
     ["a child without a live handle", () => [999], false],
   ] as const)("hasChildNodes reads %s", (_, makeIds, expected) => {
     const el = createElementNode("div");
@@ -365,5 +370,16 @@ describe("a freed node", () => {
     text.nodeValue = "changed";
 
     expect(host.setAttribute).not.toHaveBeenCalled();
+  });
+});
+
+describe("a second evaluation of core", () => {
+  it("is the document when no handle of it was built yet", async () => {
+    vi.resetModules();
+    const fresh = await import("./handle.mts");
+    const child = fresh.createIncaElement(12, "div");
+    links[12] = { parent: DOCUMENT };
+
+    expect(child.parentNode).toBe(fresh.documentHandle());
   });
 });

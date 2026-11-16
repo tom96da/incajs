@@ -99,6 +99,6 @@ describe("window", () => {
       false,
       false,
     );
-    expect(seen).toEqual([window]);
+    expect(seen[0]).toBe(window);
   });
 });

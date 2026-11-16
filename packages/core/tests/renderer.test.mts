@@ -10,7 +10,7 @@ import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "../src/element/col
 import { rectOf } from "../src/element/geometry.mts";
 import { createIncaElement } from "../src/element/handle.mts";
 import { createEventTarget } from "../src/eventTarget.mts";
-import { blur, click, focus, createNode, rootNodeId } from "../src/ffi/index.mts";
+import { createNode, rootNodeId } from "../src/ffi/index.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import { vModelText, withDirectives } from "../src/vue/runtime.mts";
 import { nativeStub } from "./setup.mts";
@@ -316,13 +316,13 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     focused = null;
     hostCallbacks.clear();
     const rootId = createNode("root");
+    const target = createEventTarget(() => rootId);
     root = {
       ...noHandlers,
       ...noMutation,
       innerHTML: "",
       outerHTML: "",
       insertAdjacentHTML: () => {},
-      style: {} as IncaElement["style"],
       getAttribute: () => null,
       setAttribute: () => {},
       hasAttribute: () => false,
@@ -332,7 +332,6 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
         () => [],
         () => null,
       ),
-      dataset: {},
       __node_id: rootId,
       id: "",
       className: "",
@@ -366,21 +365,14 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       previousElementSibling: null,
       nextElementSibling: null,
       children: htmlCollectionOf(() => []),
-      focus: () => focus(rootId),
-      blur: () => blur(rootId),
       contains: () => false,
-      click: () => click(rootId),
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
       hasPointerCapture: () => false,
-      ...createEventTarget(() => rootId),
-      tabIndex: -1,
+      addEventListener: target.addEventListener.bind(target),
+      removeEventListener: target.removeEventListener.bind(target),
+      dispatchEvent: target.dispatchEvent.bind(target),
       getBoundingClientRect: () => rectOf(null),
-      offsetWidth: 0,
-      offsetHeight: 0,
-      offsetLeft: 0,
-      offsetTop: 0,
-      offsetParent: null,
       clientWidth: 0,
       clientHeight: 0,
       clientLeft: 0,

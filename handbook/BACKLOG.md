@@ -1346,15 +1346,11 @@ A fixed entry is deleted and its ID is never reused.
   is not defined. The declaration also reads a custom property that the host drops. Fix: give the
   host `MutationObserver`, custom properties and `var()` values.
 
-- **B-271 A `DocumentFragment` lacks the query and listener members**
+- **B-271 `document` and a `DocumentFragment` lack `getElementById()`**
   `Units: core · Size: S · Impact: Low`
 
-  The fragment that `document.createDocumentFragment()` returns has the node
-  members, the mutation members, the relation members, `textContent`,
-  `hasChildNodes()` and `childNodes`. It lacks `querySelector()`,
-  `querySelectorAll()`, `children`, `getElementById()` and the listener
-  methods. Fix: add `querySelector()`, `querySelectorAll()`,
-  `children`, `getElementById()` and the listener methods.
+  `document` and the fragment that `document.createDocumentFragment()` returns have no
+  `getElementById()`. Fix: add it to both.
 
 - **B-272 `^` and `|` stay raw in the path of a URL**
   `Units: jsenv · Size: S · Impact: Low`
@@ -1677,16 +1673,13 @@ A fixed entry is deleted and its ID is never reused.
   neither child nor end tag, and Firefox writes `<p><br></p>`. The host writes the child and the
   end tag (`<p><x:br>in</x:br></p>`).
 
-- **B-319 Creating an element and parsing HTML cost 5 to 10 percent more**
-  `Units: core · Size: M · Impact: Low`
+- **B-319 Reading `tagName` and calling `insertBefore()` cost more**
+  `Units: core · Size: S · Impact: Low`
 
-  A release host creates an element with `document.createElement()` in about 64 µs, against 59 µs
-  before, a renderer element node in about 66 µs, against 61 µs, and parses `innerHTML` in about
-  146 µs per element, against 134 µs. A deep `cloneNode()` shows no difference. Each handle now
-  defines the members of `classList`, `className`, `style`, `dataset` and the name members. The
-  share of each member is not measured. Fix: define the member functions once on a shared
-  prototype and keep the state of an element in one record, then measure again with a build of the
-  parent commit of each member.
+  A release host reads `tagName` of 1000 elements in about 242 µs, against 84 µs before, and runs
+  1000 `insertBefore()` calls that move the last element in front of the first in about 7.4 ms,
+  against 7.0 ms. A member runs on the interface prototype, and each call checks its receiver in
+  the brand map. Fix: shorten the check for the common receiver, then measure again.
 
 - **B-320 An invalid inline style value hides the value of a rule**
   `Units: node · Size: M · Impact: Low`

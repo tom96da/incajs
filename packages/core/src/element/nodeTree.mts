@@ -4,21 +4,34 @@
 // The node members of every handle: identity, data and links read from the host tree.
 
 import {
+  appendChild,
   childNodeIds,
   getAttribute,
   isConnected,
   linkedNode,
+  removeChild,
   setAttribute,
+  textContent,
 } from "../ffi/index.mts";
+import { nullableText } from "./arguments.mts";
 import { nodeListOf } from "./collections.mts";
-import { isDestroyed } from "./lifecycle.mts";
+import {
+  entered,
+  isDestroyed,
+  left,
+  nodeOf,
+  receiverOf,
+  NODE_RULE,
+  receiverNode,
+} from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
 import type { IncaDocument } from "../types.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaElement, IncaFragment, IncaNode, NodeMembers } from "./types.mts";
+import type { NodeMembers } from "./nodeTypes.mts";
+import type { IncaElement, IncaFragment, IncaNode } from "./types.mts";
 
 /** The members {@link nodeTreeMembers} builds. */
-export type NodeTreeMembers = Pick<
+export type NodeTreeMembers = { textContent: string | null } & Pick<
   NodeMembers,
   | "nodeType"
   | "nodeName"
@@ -32,14 +45,15 @@ export type NodeTreeMembers = Pick<
   | "nextSibling"
   | "childNodes"
   | "hasChildNodes"
+  | "parentElement"
 >;
 
 const NODE_TYPES = { element: 1, text: 3, comment: 8, document: 9, fragment: 11 } as const;
 
 /**
- * Reads the data of a text node or comment stand-in. A freed node keeps the last data of a text
+ * Reads the data of a text node or comment. A freed node keeps the last data of a text
  * node and reads `""` for a comment.
- * @param node - the text node or comment stand-in
+ * @param node - the text node or comment
  * @returns the data
  */
 export function readData(node: IncaNode): string {
@@ -48,9 +62,9 @@ export function readData(node: IncaNode): string {
 }
 
 /**
- * Stores the data of a text node or comment stand-in. An element, the document and a freed node
+ * Stores the data of a text node or comment. An element, the document and a freed node
  * ignore it.
- * @param node - the text node or comment stand-in
+ * @param node - the text node or comment
  * @param data - the new data
  */
 export function writeData(node: IncaNode, data: string): void {
@@ -61,61 +75,116 @@ export function writeData(node: IncaNode, data: string): void {
 }
 
 /**
- * Builds the node members of `node`. Each read asks the host tree again.
- * @param node - the handle the members belong to
+ * Replaces all children of `parent` with at most a single text child holding `text`. The old
+ * children keep their listeners. An empty string leaves `parent` childless.
+ * @param parent - the element or fragment whose children are replaced
+ * @param text - the new text content
+ * @param builders - the functions that build the handles
+ */
+export function replaceWithText(parent: IncaNode, text: string, builders: HandleBuilders): void {
+  for (const childId of childNodeIds(parent.__node_id)) {
+    removeChild(parent.__node_id, childId);
+    const child = nodeOf(childId);
+    if (child) left(child);
+  }
+  if (!text) return;
+
+  const textNode = builders.createText!(text);
+  appendChild(parent.__node_id, textNode.__node_id);
+  entered(textNode);
+}
+
+/**
+ * Builds the node members of `Node`. Each read asks the host tree again.
  * @param builders - the lookups of the document handle and of a handle by node id
  * @returns the members, as getters
  */
-export function nodeTreeMembers(node: IncaNode, builders: HandleBuilders): NodeTreeMembers {
-  const id = node.__node_id;
-  const reach = (link: NodeLink): IncaNode | null => {
+export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
+  const reach = (self: unknown, link: NodeLink, elementOnly = false): IncaNode | null => {
+    const node = receiverNode(self, NODE_RULE);
     if (isDestroyed(node)) return null;
-    const found = linkedNode(id, link);
+    const found = linkedNode(node.__node_id, link, elementOnly);
     return found === null ? null : (builders.node(found) ?? null);
   };
-  let childNodes: NodeMembers["childNodes"] | undefined;
-  const liveChildren = (): IncaNode[] =>
-    isDestroyed(node) ? [] : childNodeIds(id).flatMap((child) => builders.node(child) ?? []);
+  const liveChildren = (node: IncaNode): IncaNode[] =>
+    isDestroyed(node)
+      ? []
+      : childNodeIds(node.__node_id).flatMap((child) => builders.node(child) ?? []);
   return {
     get nodeType() {
-      return NODE_TYPES[node.kind];
+      return NODE_TYPES[receiverNode(this, NODE_RULE).kind];
     },
     get nodeName() {
+      const node = receiverNode(this, NODE_RULE);
       if (node.kind === "element") return node.tagName;
       return node.kind === "fragment" ? "#document-fragment" : `#${node.kind}`;
     },
     get nodeValue() {
+      const node = receiverNode(this, NODE_RULE);
       return node.kind === "element" || node.kind === "fragment" || node.kind === "document"
         ? null
         : readData(node);
     },
     set nodeValue(value: string | null) {
-      writeData(node, String(value ?? ""));
+      writeData(receiverNode(this, NODE_RULE), String(value ?? ""));
+    },
+    get textContent() {
+      const node = receiverNode(this, NODE_RULE);
+      switch (node.kind) {
+        case "text":
+        case "comment":
+          return readData(node);
+        case "document":
+          return null;
+        default:
+          return isDestroyed(node) ? "" : textContent(node.__node_id);
+      }
+    },
+    set textContent(value: string | null) {
+      const node = receiverNode(this, NODE_RULE);
+      switch (node.kind) {
+        case "text":
+        case "comment":
+          writeData(node, nullableText(value));
+          return;
+        case "document":
+          return;
+        default:
+          if (!isDestroyed(node)) replaceWithText(node, nullableText(value), builders);
+      }
     },
     get isConnected() {
-      return !isDestroyed(node) && isConnected(id);
+      const node = receiverNode(this, NODE_RULE);
+      return !isDestroyed(node) && isConnected(node.__node_id);
     },
     get ownerDocument() {
-      return node.kind === "document" ? null : builders.document();
+      return receiverNode(this, NODE_RULE).kind === "document" ? null : builders.document();
     },
     get parentNode() {
-      return reach("parent") as IncaElement | IncaFragment | IncaDocument | null;
+      return reach(this, "parent") as IncaElement | IncaFragment | IncaDocument | null;
+    },
+    get parentElement() {
+      return reach(this, "parent", true) as IncaElement | null;
     },
     get firstChild() {
-      return reach("first");
+      return reach(this, "first");
     },
     get lastChild() {
-      return reach("last");
+      return reach(this, "last");
     },
     get previousSibling() {
-      return reach("previous");
+      return reach(this, "previous");
     },
     get nextSibling() {
-      return reach("next");
+      return reach(this, "next");
     },
     get childNodes() {
-      return (childNodes ??= nodeListOf(liveChildren));
+      const state = receiverOf(this, NODE_RULE);
+      const node = this as unknown as IncaNode;
+      return (state.childNodes ??= nodeListOf(() => liveChildren(node)));
     },
-    hasChildNodes: () => liveChildren().length > 0,
+    hasChildNodes() {
+      return liveChildren(receiverNode(this, NODE_RULE)).length > 0;
+    },
   };
 }

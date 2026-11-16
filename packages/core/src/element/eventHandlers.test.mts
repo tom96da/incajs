@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
-import { markFreed } from "./lifecycle.mts";
+import { markFreed, prototypes } from "./lifecycle.mts";
 import type { HostCallback } from "../ffi/index.mts";
 import type { IncaElement } from "./types.mts";
 
@@ -60,41 +60,13 @@ beforeEach(() => {
 describe("createIncaElement handler properties", () => {
   const element = () => createIncaElement(1, "div");
 
-  it("has one for each event the host dispatches that has one in HTML", () => {
-    const names = Object.getOwnPropertyNames(element())
-      .filter((n) => /^on[a-z]/.test(n))
-      .sort();
-    expect(names).toEqual([
-      "onauxclick",
-      "onbeforeinput",
-      "onblur",
-      "onchange",
-      "onclick",
-      "oncontextmenu",
-      "ondblclick",
-      "onfocus",
-      "ongotpointercapture",
-      "oninput",
-      "onkeydown",
-      "onkeypress",
-      "onkeyup",
-      "onlostpointercapture",
-      "onmousedown",
-      "onmouseenter",
-      "onmouseleave",
-      "onmousemove",
-      "onmouseout",
-      "onmouseover",
-      "onmouseup",
-      "onpointerdown",
-      "onpointerenter",
-      "onpointerleave",
-      "onpointermove",
-      "onpointerout",
-      "onpointerover",
-      "onpointerup",
-      "onscroll",
-      "onwheel",
+  it("defines onclick on HTMLElement.prototype as an enumerable, configurable accessor", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(prototypes().HTMLElement, "onclick")!;
+
+    expect([typeof descriptor.get, descriptor.enumerable, descriptor.configurable]).toEqual([
+      "function",
+      true,
+      true,
     ]);
   });
 

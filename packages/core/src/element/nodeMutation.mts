@@ -7,9 +7,10 @@
 import { appendChild, insertBefore, removeChild, replaceChild } from "../ffi/index.mts";
 import { nodeArgument, requireArguments } from "./arguments.mts";
 import { cloneNode } from "./clone.mts";
-import { entered, isDestroyed, left } from "./lifecycle.mts";
+import { entered, isDestroyed, left, NODE_RULE, receiverNode } from "./lifecycle.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaNode, NodeMembers } from "./types.mts";
+import type { NodeMembers } from "./nodeTypes.mts";
+import type { IncaNode } from "./types.mts";
 
 /** The members {@link nodeMutationMembers} builds. */
 export type NodeMutationMembers = Pick<
@@ -29,52 +30,57 @@ export function notFound(): Error {
 }
 
 /**
- * Builds the mutation members of `node`.
- * @param node - the handle the members belong to
+ * Builds the mutation members of `Node`.
  * @param builders - the functions that build the handles of a clone
  * @returns the members
  */
-export function nodeMutationMembers(node: IncaNode, builders: HandleBuilders): NodeMutationMembers {
-  const id = node.__node_id;
+export function nodeMutationMembers(builders: HandleBuilders): NodeMutationMembers {
+  const nodeOf = (self: unknown): IncaNode => receiverNode(self, NODE_RULE);
   /** Makes the handle of an inserted node strong. The children of a fragment are strong already. */
   const enter = (child: IncaNode): void => {
     if (child.kind !== "fragment") entered(child);
   };
   return {
-    appendChild: (...args: [node: IncaNode]) => {
-      requireArguments(args, 1, "appendChild");
-      const child = nodeArgument(args[0], 1);
-      appendChild(id, child.__node_id);
+    appendChild(node: IncaNode) {
+      const self = nodeOf(this);
+      requireArguments(arguments, 1, "appendChild");
+      const child = nodeArgument(node, 1);
+      appendChild(self.__node_id, child.__node_id);
       enter(child);
       return child;
     },
-    insertBefore: (...args: [node: IncaNode, child: IncaNode | null | undefined]) => {
-      requireArguments(args, 2, "insertBefore");
-      const child = nodeArgument(args[0], 1);
-      const reference = args[1] === null || args[1] === undefined ? null : nodeArgument(args[1], 2);
+    insertBefore(node: IncaNode, child: IncaNode | null | undefined) {
+      const self = nodeOf(this);
+      requireArguments(arguments, 2, "insertBefore");
+      const inserted = nodeArgument(node, 1);
+      const reference = child === null || child === undefined ? null : nodeArgument(child, 2);
       if (reference && isDestroyed(reference)) throw notFound();
-      insertBefore(id, child.__node_id, reference?.__node_id ?? null);
-      enter(child);
-      return child;
+      insertBefore(self.__node_id, inserted.__node_id, reference?.__node_id ?? null);
+      enter(inserted);
+      return inserted;
     },
-    removeChild: (...args: [child: IncaNode]) => {
-      requireArguments(args, 1, "removeChild");
-      const child = nodeArgument(args[0], 1);
-      if (isDestroyed(child)) throw notFound();
-      removeChild(id, child.__node_id);
-      left(child);
-      return child;
+    removeChild(child: IncaNode) {
+      const self = nodeOf(this);
+      requireArguments(arguments, 1, "removeChild");
+      const removed = nodeArgument(child, 1);
+      if (isDestroyed(removed)) throw notFound();
+      removeChild(self.__node_id, removed.__node_id);
+      left(removed);
+      return removed;
     },
-    replaceChild: (...args: [node: IncaNode, child: IncaNode]) => {
-      requireArguments(args, 2, "replaceChild");
-      const child = nodeArgument(args[0], 1);
-      const old = nodeArgument(args[1], 2);
+    replaceChild(node: IncaNode, child: IncaNode) {
+      const self = nodeOf(this);
+      requireArguments(arguments, 2, "replaceChild");
+      const inserted = nodeArgument(node, 1);
+      const old = nodeArgument(child, 2);
       if (isDestroyed(old)) throw notFound();
-      replaceChild(id, child.__node_id, old.__node_id);
-      enter(child);
-      if (old !== child) left(old);
+      replaceChild(self.__node_id, inserted.__node_id, old.__node_id);
+      enter(inserted);
+      if (old !== inserted) left(old);
       return old;
     },
-    cloneNode: (deep?: boolean) => cloneNode(node, Boolean(deep), builders),
+    cloneNode(...rest: [deep?: boolean]) {
+      return cloneNode(nodeOf(this), Boolean(rest[0]), builders);
+    },
   } as NodeMutationMembers;
 }

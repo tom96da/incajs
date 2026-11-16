@@ -89,6 +89,9 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     natives.set("interfacePrototypes", |_host| {
         crate::interfaces::interface_prototypes()
     })?;
+    natives.set("registerUncloneable", |_host| {
+        crate::interfaces::register_uncloneable()
+    })?;
     inca_jsenv::timers::install(ctx, &host.borrow().timers)?;
     inca_jsenv::frames::install(ctx, &host.borrow().frames)?;
     crate::event::install(ctx)?;

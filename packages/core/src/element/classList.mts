@@ -3,35 +3,35 @@
 
 import { classList as listOf, getAttribute, setAttribute } from "../ffi/index.mts";
 import { attributeText } from "./arguments.mts";
-import { isDestroyed } from "./lifecycle.mts";
-import type { NodeId } from "../types.mts";
+import { isDestroyed, receiverOf, receiverNode, ELEMENT_RULE } from "./lifecycle.mts";
 import type { DOMTokenList, IncaElement } from "./types.mts";
 
 /** The members {@link classMembers} builds. */
 export type ClassMembers = Pick<IncaElement, "className" | "classList">;
 
 /**
- * Builds `className` and `classList` of an element. The list is created on the first read and is
+ * Builds `className` and `classList` of `Element`. The list is created on the first read and is
  * the same object afterwards.
- * @param id - the native node's id
- * @param element - the handle the members belong to
  * @returns an object that holds the two members
  */
-export function classMembers(id: NodeId, element: IncaElement): ClassMembers {
-  let list: DOMTokenList | undefined;
+export function classMembers(): ClassMembers {
   const members = {
     get className() {
-      return isDestroyed(element) ? "" : String(getAttribute(id, "class") ?? "");
+      const node = receiverNode(this, ELEMENT_RULE);
+      return isDestroyed(node) ? "" : String(getAttribute(node.__node_id, "class") ?? "");
     },
     set className(value: string) {
+      const node = receiverNode(this, ELEMENT_RULE);
       const text = attributeText(value);
-      if (!isDestroyed(element)) setAttribute(id, "class", text);
+      if (!isDestroyed(node)) setAttribute(node.__node_id, "class", text);
     },
     get classList(): DOMTokenList {
-      return (list ??= listOf(id));
+      const state = receiverOf(this, ELEMENT_RULE);
+      return (state.classList ??= listOf((this as unknown as IncaElement).__node_id));
     },
     set classList(value: string) {
-      (list ??= listOf(id)).value = value;
+      const state = receiverOf(this, ELEMENT_RULE);
+      (state.classList ??= listOf((this as unknown as IncaElement).__node_id)).value = value;
     },
   };
   // The setter takes text and the getter returns the list, which a single property type cannot say.

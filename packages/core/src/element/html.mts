@@ -14,7 +14,15 @@ import {
   setOuterHtml,
 } from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./arguments.mts";
-import { entered, existingContent, isDestroyed, left, nodeOf } from "./lifecycle.mts";
+import {
+  entered,
+  existingContent,
+  isDestroyed,
+  left,
+  nodeOf,
+  ELEMENT_RULE,
+  receiverNode,
+} from "./lifecycle.mts";
 import type { Parsed } from "../ffi/index.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
 import type { HtmlMembers, IncaElement } from "./types.mts";
@@ -51,23 +59,24 @@ function adopt(parsed: Parsed, builders: HandleBuilders): void {
 }
 
 /**
- * Builds the markup members of `element`.
- * @param element - the handle the members belong to
+ * Builds the markup members of `Element`.
  * @param builders - the functions that build the handles of a parse result
  * @returns the members
  */
-export function htmlMembers(element: IncaElement, builders: HandleBuilders): HtmlMembers {
-  const id = element.__node_id;
+export function htmlMembers(builders: HandleBuilders): HtmlMembers {
+  const elementOf = (self: unknown): IncaElement => receiverNode<IncaElement>(self, ELEMENT_RULE);
   return {
     get innerHTML() {
-      return isDestroyed(element) ? "" : innerHtml(id);
+      const element = elementOf(this);
+      return isDestroyed(element) ? "" : innerHtml(element.__node_id);
     },
     set innerHTML(value: string) {
+      const element = elementOf(this);
       const text = markupText(value);
       if (isDestroyed(element)) return;
       const container = existingContent(element) ?? element;
       const old = childNodeIds(container.__node_id);
-      const parsed = setInnerHtml(id, text);
+      const parsed = setInnerHtml(element.__node_id, text);
       for (const child of old) {
         const handle = nodeOf(child);
         if (handle) left(handle);
@@ -75,22 +84,25 @@ export function htmlMembers(element: IncaElement, builders: HandleBuilders): Htm
       adopt(parsed, builders);
     },
     get outerHTML() {
-      return isDestroyed(element) ? "" : outerHtml(id);
+      const element = elementOf(this);
+      return isDestroyed(element) ? "" : outerHtml(element.__node_id);
     },
     set outerHTML(value: string) {
+      const element = elementOf(this);
       const text = markupText(value);
       if (isDestroyed(element)) return;
-      const parsed = setOuterHtml(id, text);
+      const parsed = setOuterHtml(element.__node_id, text);
       if (parsed === null) return;
       left(element);
       adopt(parsed, builders);
     },
-    insertAdjacentHTML: (...args: [position: string, text: string]) => {
-      requireArguments(args, 2, "insertAdjacentHTML");
-      const position = attributeText(args[0]);
-      const text = attributeText(args[1]);
+    insertAdjacentHTML(position: string, text: string) {
+      const element = elementOf(this);
+      requireArguments(arguments, 2, "insertAdjacentHTML");
+      const where = attributeText(position);
+      const markup = attributeText(text);
       if (isDestroyed(element)) return;
-      adopt(insertAdjacentHtml(id, position, text), builders);
+      adopt(insertAdjacentHtml(element.__node_id, where, markup), builders);
     },
   };
 }

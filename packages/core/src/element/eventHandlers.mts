@@ -1,8 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { isRemoved } from "./lifecycle.mts";
 import type { IncaEventMap, IncaEventTarget } from "../types.mts";
-import type { EventHandlers } from "./types.mts";
+import type { NodeState } from "./lifecycle.mts";
+import type { IncaNode } from "./types.mts";
 
 /** Every event name but the ones that have no handler property. */
 type HandlerEvent = Exclude<
@@ -47,37 +49,60 @@ export const HANDLER_EVENTS = (<const U extends readonly HandlerEvent[]>(
   "wheel",
 );
 
+/** The handler value and the listener of one event on one handle. */
+interface HandlerSlot {
+  held: unknown;
+  listener: (this: unknown, e: unknown) => void;
+}
+
 /**
- * Defines the event handler properties on `handle`. A value assigned while a property holds `null`
- * registers a bubble listener through `handle.addEventListener`, and `null` removes it.
- * @param handle - the element handle
- * @param ignored - whether an assignment is ignored, as it is once the node is removed
- * @returns `handle`, with the properties
+ * Builds the event handler properties as accessors, for one prototype or for `window`. A value
+ * assigned while a property holds `null` registers a bubble listener through `addEventListener`
+ * of the receiver, and `null` removes it. Each call builds its own getters and setters.
+ * @param receive - checks the receiver of an accessor and gives its record
+ * @returns the accessors, enumerable and configurable
  */
-export function withEventHandlers<T extends IncaEventTarget>(
-  handle: T,
-  ignored: () => boolean,
-): T & EventHandlers {
+export function handlerMembers(receive: (self: unknown) => NodeState): object {
+  const members = {};
   for (const event of HANDLER_EVENTS) {
-    let held: unknown = null;
-    const listener = function (this: unknown, e: unknown): void {
-      if (typeof held !== "function") return;
-      if (Reflect.apply(held, this, [e]) === false) {
-        (e as { preventDefault: () => void }).preventDefault();
+    const key = `on${event}`;
+    const slotOf = (state: NodeState): HandlerSlot => {
+      const slots = (state.handlers ??= new Map<string, unknown>());
+      let slot = slots.get(key) as HandlerSlot | undefined;
+      if (slot === undefined) {
+        const created: HandlerSlot = {
+          held: null,
+          listener(this: unknown, e: unknown): void {
+            if (typeof created.held !== "function") return;
+            if (Reflect.apply(created.held, this, [e]) === false) {
+              (e as { preventDefault: () => void }).preventDefault();
+            }
+          },
+        };
+        slots.set(key, created);
+        slot = created;
       }
+      return slot;
     };
-    Object.defineProperty(handle, `on${event}`, {
-      get: () => held,
+    Object.defineProperty(members, key, {
+      get() {
+        return slotOf(receive(this)).held;
+      },
       set(value: unknown) {
-        if (ignored()) return;
-        held =
+        const state = receive(this);
+        const slot = slotOf(state);
+        if (state.kind === "element" && isRemoved(this as IncaNode)) return;
+        slot.held =
           typeof value === "function" || (typeof value === "object" && value !== null)
             ? value
             : null;
-        if (held === null) handle.removeEventListener(event, listener);
-        else handle.addEventListener(event, listener);
+        const target = this as IncaEventTarget;
+        if (slot.held === null) target.removeEventListener(event, slot.listener);
+        else target.addEventListener(event, slot.listener);
       },
+      enumerable: true,
+      configurable: true,
     });
   }
-  return handle as T & EventHandlers;
+  return members;
 }

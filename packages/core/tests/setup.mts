@@ -72,6 +72,7 @@ export function nativeStub(extra: Partial<Native> = {}): Native {
   return {
     documentNodeId: () => 1,
     releaseNode: () => undefined,
+    registerUncloneable: () => undefined,
     interfacePrototypes: () => Object.assign(Object.create(null), interfaceChain()),
     ...extra,
   } as Native;

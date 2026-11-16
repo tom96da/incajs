@@ -72,7 +72,7 @@ declare global {
   /** The interface object of HTML elements, which a script cannot construct. */
   var HTMLElement: {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaElement;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaHTMLElement;
   };
 
   /** The interface object of fragments, which a script cannot construct. */

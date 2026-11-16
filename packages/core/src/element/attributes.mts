@@ -10,7 +10,7 @@ import {
 } from "../ffi/index.mts";
 import { requireArguments, attributeText } from "./arguments.mts";
 import { namedNodeMapOf } from "./collections.mts";
-import { isDestroyed } from "./lifecycle.mts";
+import { isDestroyed, partsOf, receiverNode, receiverOf, ELEMENT_RULE } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
 import type { Attr, IncaElement, NamedNodeMap } from "./types.mts";
 
@@ -109,14 +109,21 @@ class AttributeNode implements Attr {
   }
 }
 
+/** The attributes of one element: the attribute objects it handed out and its live map. */
+interface AttributeStore {
+  names: () => string[];
+  read: (name: string) => string | null;
+  find: (name: string) => Attr | null;
+  map: () => NamedNodeMap;
+}
+
 /**
- * Builds the attribute members of the element `element` that the host knows as `id`. A node the
- * host freed reads no attribute and ignores writes.
- * @param id - the native node's id
- * @param element - the handle the members belong to
- * @returns the members, with `attributes` as a getter
+ * Builds the attribute store of an element. A node the host freed reads no attribute.
+ * @param element - the handle
+ * @returns the store
  */
-export function attributeMembers(id: NodeId, element: IncaElement): AttributeMembers {
+function storeOf(element: IncaElement): AttributeStore {
+  const id = element.__node_id;
   const read = (name: string): string | null => {
     const value = readAttribute(id, name);
     return value === null ? null : attributeText(value);
@@ -151,30 +158,87 @@ export function attributeMembers(id: NodeId, element: IncaElement): AttributeMem
     return present.map((name) => held.get(name) ?? attrOf(name, read(name)!));
   };
   let map: NamedNodeMap | undefined;
+  return { names, read, find, map: () => (map ??= namedNodeMapOf(list, find)) };
+}
+
+/**
+ * Reads the attribute store of the receiver, which is created at the first read.
+ * @param self - `this` of the member
+ * @returns the element and its store
+ */
+function attributesOf(self: unknown): { element: IncaElement; store: AttributeStore } {
+  const state = receiverOf(self, ELEMENT_RULE);
+  const element = self as IncaElement;
+  return { element, store: (state.attributes ??= storeOf(element)) as AttributeStore };
+}
+
+/**
+ * Builds the attribute members and `id` of `Element`. A node the host freed reads no attribute and
+ * ignores writes.
+ * @returns the members, with `attributes` and `id` as accessors
+ */
+export function attributeMembers(): AttributeMembers & Pick<IncaElement, "id"> {
   return {
-    getAttribute: (...args: [name: string]) => {
-      requireArguments(args, 1, "getAttribute");
-      return isDestroyed(element) ? null : read(attributeText(args[0]));
+    get id() {
+      const node = receiverNode(this, ELEMENT_RULE);
+      return isDestroyed(node) ? "" : String(readAttribute(node.__node_id, "id") ?? "");
     },
-    setAttribute: (...args: [name: string, value: string]) => {
-      requireArguments(args, 2, "setAttribute");
-      const name = attributeText(args[0]);
-      const value = attributeText(args[1]);
-      if (!isDestroyed(element)) writeAttribute(id, name, value);
+    set id(value: string) {
+      const node = receiverNode(this, ELEMENT_RULE);
+      if (!isDestroyed(node)) writeAttribute(node.__node_id, "id", String(value));
     },
-    hasAttribute: (...args: [name: string]) => {
-      requireArguments(args, 1, "hasAttribute");
-      return !isDestroyed(element) && read(attributeText(args[0])) !== null;
+    getAttribute(qualifiedName: string) {
+      const { element, store } = attributesOf(this);
+      requireArguments(arguments, 1, "getAttribute");
+      return isDestroyed(element) ? null : store.read(attributeText(qualifiedName));
     },
-    removeAttribute: (...args: [name: string]) => {
-      requireArguments(args, 1, "removeAttribute");
-      const name = attributeText(args[0]);
-      if (!isDestroyed(element)) dropAttribute(id, name);
+    setAttribute(qualifiedName: string, value: string) {
+      const { element } = attributesOf(this);
+      requireArguments(arguments, 2, "setAttribute");
+      const name = attributeText(qualifiedName);
+      const text = attributeText(value);
+      if (!isDestroyed(element)) writeAttribute(element.__node_id, name, text);
     },
-    getAttributeNames: () => names(),
+    hasAttribute(qualifiedName: string) {
+      const { element, store } = attributesOf(this);
+      requireArguments(arguments, 1, "hasAttribute");
+      return !isDestroyed(element) && store.read(attributeText(qualifiedName)) !== null;
+    },
+    removeAttribute(qualifiedName: string) {
+      const { element } = attributesOf(this);
+      requireArguments(arguments, 1, "removeAttribute");
+      const name = attributeText(qualifiedName);
+      if (!isDestroyed(element)) dropAttribute(element.__node_id, name);
+    },
+    getAttributeNames() {
+      return attributesOf(this).store.names();
+    },
     get attributes() {
-      map ??= namedNodeMapOf(list, find);
-      return map;
+      return attributesOf(this).store.map();
+    },
+  };
+}
+
+/** The four name members of an element. */
+type NameMembers = Pick<IncaElement, "tagName" | "localName" | "namespaceURI" | "prefix">;
+
+/**
+ * Builds the name members of `Element`, read from the parts the record computed once.
+ * @returns the members
+ */
+export function nameMembers(): NameMembers {
+  return {
+    get localName() {
+      return partsOf(receiverOf(this, ELEMENT_RULE))[0];
+    },
+    get namespaceURI() {
+      return partsOf(receiverOf(this, ELEMENT_RULE))[1];
+    },
+    get prefix() {
+      return partsOf(receiverOf(this, ELEMENT_RULE))[2];
+    },
+    get tagName() {
+      return partsOf(receiverOf(this, ELEMENT_RULE))[3];
     },
   };
 }

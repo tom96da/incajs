@@ -6,9 +6,10 @@
 
 import { compareNodePosition, isEqualNode, rootOf } from "../ffi/index.mts";
 import { nodeArgument, requireArguments } from "./arguments.mts";
-import { isDestroyed } from "./lifecycle.mts";
+import { isDestroyed, NODE_RULE, receiverNode } from "./lifecycle.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaNode, NodeMembers } from "./types.mts";
+import type { NodeMembers } from "./nodeTypes.mts";
+import type { IncaNode } from "./types.mts";
 
 /** The members {@link nodeRelationMembers} builds. */
 export type NodeRelationMembers = Pick<
@@ -25,41 +26,45 @@ const PRECEDING = 2;
 const FOLLOWING = 4;
 
 /**
- * Builds the relation members of `node`.
- * @param node - the handle the members belong to
+ * Builds the relation members of `Node`.
  * @param builders - the lookup of a handle by node id
  * @returns the members
  */
-export function nodeRelationMembers(node: IncaNode, builders: HandleBuilders): NodeRelationMembers {
-  const id = node.__node_id;
+export function nodeRelationMembers(builders: HandleBuilders): NodeRelationMembers {
   const nullable = (value: unknown): IncaNode | null =>
     value === null || value === undefined ? null : nodeArgument(value, 1);
   return {
-    contains: (other: unknown) => {
+    contains(other: unknown) {
+      const node = receiverNode(this, NODE_RULE);
       const found = nullable(other);
       if (found === null) return false;
       if (found === node) return true;
       if (isDestroyed(node) || isDestroyed(found)) return false;
-      return (compareNodePosition(id, found.__node_id) & CONTAINED_BY) !== 0;
+      return (compareNodePosition(node.__node_id, found.__node_id) & CONTAINED_BY) !== 0;
     },
-    getRootNode: () => {
-      return isDestroyed(node) ? node : (builders.node(rootOf(id)) ?? node);
+    getRootNode() {
+      const node = receiverNode(this, NODE_RULE);
+      return isDestroyed(node) ? node : (builders.node(rootOf(node.__node_id)) ?? node);
     },
-    compareDocumentPosition: (...args: [other: IncaNode]) => {
-      requireArguments(args, 1, "compareDocumentPosition");
-      const found = nodeArgument(args[0], 1);
+    compareDocumentPosition(other: IncaNode) {
+      const node = receiverNode(this, NODE_RULE);
+      requireArguments(arguments, 1, "compareDocumentPosition");
+      const found = nodeArgument(other, 1);
       if (found === node) return 0;
       if (isDestroyed(node) || isDestroyed(found)) {
-        return DISCONNECTED | (found.__node_id < id ? PRECEDING : FOLLOWING);
+        return DISCONNECTED | (found.__node_id < node.__node_id ? PRECEDING : FOLLOWING);
       }
-      return compareNodePosition(id, found.__node_id);
+      return compareNodePosition(node.__node_id, found.__node_id);
     },
-    isSameNode: (other: unknown) => nullable(other) === node,
-    isEqualNode: (other: unknown) => {
+    isSameNode(other: unknown) {
+      return nullable(other) === receiverNode(this, NODE_RULE);
+    },
+    isEqualNode(other: unknown) {
+      const node = receiverNode(this, NODE_RULE);
       const found = nullable(other);
       if (found === null) return false;
       if (isDestroyed(node) || isDestroyed(found)) return found === node;
-      return isEqualNode(id, found.__node_id);
+      return isEqualNode(node.__node_id, found.__node_id);
     },
   } as NodeRelationMembers;
 }

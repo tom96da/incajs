@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { scrollIntoViewNode, scrollNode, scrollOf } from "../ffi/index.mts";
-import { isRemoved } from "./lifecycle.mts";
+import { isRemoved, ELEMENT_RULE, receiverNode } from "./lifecycle.mts";
 import type { ScrollAlignment } from "../types.mts";
 import type { IncaElement } from "./types.mts";
 
@@ -86,38 +86,45 @@ export type ScrollMembers = Pick<
 >;
 
 /**
- * Builds the scroll members of an element. A removed element reads zeros and ignores the calls.
- * @param element - the handle the members belong to
+ * Builds the scroll members of `Element`. A removed element reads zeros and ignores the calls.
  * @returns the members
  */
-export function scrollMembers(element: IncaElement): ScrollMembers {
-  const id = element.__node_id;
-  const scroll = () => (isRemoved(element) ? null : scrollOf(id));
+export function scrollMembers(): ScrollMembers {
+  const elementOf = (self: unknown): IncaElement => receiverNode<IncaElement>(self, ELEMENT_RULE);
+  const scroll = (element: IncaElement) =>
+    isRemoved(element) ? null : scrollOf(element.__node_id);
   return {
     get scrollLeft() {
-      return scroll()?.[0] ?? 0;
+      return scroll(elementOf(this))?.[0] ?? 0;
     },
     set scrollLeft(value: number) {
-      scrollPosition(element, [value], false);
+      scrollPosition(elementOf(this), [value], false);
     },
     get scrollTop() {
-      return scroll()?.[1] ?? 0;
+      return scroll(elementOf(this))?.[1] ?? 0;
     },
     set scrollTop(value: number) {
-      scrollPosition(element, [undefined, value], false);
+      scrollPosition(elementOf(this), [undefined, value], false);
     },
     get scrollWidth() {
-      return element.clientWidth + Math.round(scroll()?.[2] ?? 0);
+      const element = elementOf(this);
+      return element.clientWidth + Math.round(scroll(element)?.[2] ?? 0);
     },
     get scrollHeight() {
-      return element.clientHeight + Math.round(scroll()?.[3] ?? 0);
+      const element = elementOf(this);
+      return element.clientHeight + Math.round(scroll(element)?.[3] ?? 0);
     },
-    scrollTo: (...args: ScrollArgs) => scrollPosition(element, args, false),
-    scrollBy: (...args: ScrollArgs) => scrollPosition(element, args, true),
-    scrollIntoView: (arg?: boolean | ScrollIntoViewOptions) => {
+    scrollTo(...args: ScrollArgs) {
+      scrollPosition(elementOf(this), args, false);
+    },
+    scrollBy(...args: ScrollArgs) {
+      scrollPosition(elementOf(this), args, true);
+    },
+    scrollIntoView(...rest: [arg?: boolean | ScrollIntoViewOptions]) {
+      const element = elementOf(this);
       if (isRemoved(element)) return;
-      const { block, inline } = scrollIntoViewArgs(arg);
-      scrollIntoViewNode(id, block, inline);
+      const { block, inline } = scrollIntoViewArgs(rest[0]);
+      scrollIntoViewNode(element.__node_id, block, inline);
     },
   };
 }

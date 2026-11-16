@@ -67,6 +67,40 @@ const ENTRY = dedent`
   );
 `;
 
+/** The events that have a handler property, in the order the host defines them on `window`. */
+const HANDLER_EVENTS = [
+  "auxclick",
+  "beforeinput",
+  "blur",
+  "change",
+  "click",
+  "contextmenu",
+  "dblclick",
+  "focus",
+  "gotpointercapture",
+  "input",
+  "keydown",
+  "keypress",
+  "keyup",
+  "lostpointercapture",
+  "mousedown",
+  "mouseenter",
+  "mouseleave",
+  "mousemove",
+  "mouseout",
+  "mouseover",
+  "mouseup",
+  "pointerdown",
+  "pointerenter",
+  "pointerleave",
+  "pointermove",
+  "pointerout",
+  "pointerover",
+  "pointerup",
+  "scroll",
+  "wheel",
+];
+
 /** The repository's built CLI runtime, which the development server loads in the host. */
 const RUNTIME_DIST = path.resolve(import.meta.dirname, "../../packages/cli/dist/vite-runtime.js");
 
@@ -269,6 +303,68 @@ it(
     const line = await runInHost(shapeEntry);
     const hostShapes = JSON.parse(line.slice("[e2e] ".length)) as Record<string, Shape>;
     expect(hostShapes).toEqual(declared);
+  },
+  WAIT_TIMEOUT_MS * 2,
+);
+
+it(
+  "prints a node as its interface and its own properties",
+  async () => {
+    const printEntry = path.join(appDir, "print.mts");
+    await writeFile(
+      printEntry,
+      dedent`
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        console.log(
+          "[e2e]",
+          document.createElement("div"),
+          document.createTextNode("x"),
+          document.createElement("input"),
+          document.createElement("template"),
+          svg,
+          window,
+        );
+      `,
+    );
+    const handlers = HANDLER_EVENTS.map((event) => `on${event}: [Getter/Setter]`).join(", ");
+
+    expect(await runInHost(printEntry)).toBe(
+      "[e2e] HTMLElement {} Text { text: 'x' } HTMLElement { value: [Getter/Setter] } " +
+        `HTMLElement { content: [Getter] } Element {} EventTarget { ${handlers} }`,
+    );
+  },
+  WAIT_TIMEOUT_MS * 2,
+);
+
+/** Each row is the outcome in words, the value to clone and what the script prints for it. */
+it.each([
+  ["throws DataCloneError for an element", 'document.createElement("div")', "DataCloneError"],
+  ["throws DataCloneError for document", "document", "DataCloneError"],
+  ["throws DataCloneError for window", "window", "DataCloneError"],
+  ["throws DataCloneError for an event", 'new Event("x")', "DataCloneError"],
+  [
+    "gives {} for an object that only inherits a node prototype",
+    "Object.create(HTMLElement.prototype)",
+    "{}",
+  ],
+])(
+  "structuredClone %s",
+  async (_name, value, expected) => {
+    const cloneEntry = path.join(appDir, "clone.mts");
+    await writeFile(
+      cloneEntry,
+      dedent`
+        let outcome;
+        try {
+          outcome = JSON.stringify(structuredClone(${value}));
+        } catch (error) {
+          outcome = error.name;
+        }
+        console.log("[e2e] " + outcome);
+      `,
+    );
+
+    expect(await runInHost(cloneEntry)).toBe(`[e2e] ${expected}`);
   },
   WAIT_TIMEOUT_MS * 2,
 );

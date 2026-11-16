@@ -24,6 +24,7 @@ import {
   outerHtml,
   queryNode,
   queryNodes,
+  registerUncloneable,
   removeChild,
   removeNode,
   replaceChild,
@@ -41,6 +42,7 @@ import type { ElementEntry, InterfacePrototypes, NodeEntry, NodeLink, Parsed } f
 
 const native = {
   interfacePrototypes: vi.fn<() => InterfacePrototypes>(),
+  registerUncloneable: vi.fn<(map: WeakMap<object, unknown>) => void>(),
   createElementNS: vi.fn<(namespace: string | null, qualifiedName: string) => ElementEntry>(() => [
     1,
     "a",
@@ -110,6 +112,12 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.interfacePrototypes.mockReturnValueOnce(prototypes as never);
     expect(interfacePrototypes()).toBe(prototypes);
     expect(native.interfacePrototypes).toHaveBeenCalledWith();
+  });
+
+  it("registerUncloneable", () => {
+    const map = new WeakMap<object, unknown>();
+    registerUncloneable(map);
+    expect(native.registerUncloneable).toHaveBeenCalledWith(map);
   });
 
   it("createElementNS", () => {
