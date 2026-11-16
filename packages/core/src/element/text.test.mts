@@ -322,6 +322,26 @@ describe("setElementText", () => {
     expect(kids(el)[0]).toMatchObject({ kind: "text", text: "hello" });
   });
 
+  it.each<[string, (el: IncaNode) => void]>([
+    [
+      "an assignment to textContent",
+      (el) => {
+        el.textContent = "\ud800";
+      },
+    ],
+    ["setElementText", (el) => setElementText(el as never, "\ud800")],
+  ])("keeps the children when %s cannot create its text node", (_name, run) => {
+    const el = createElementNode("div");
+    const oldChild = createElementNode("div");
+    insert(oldChild, el);
+    host.setAttribute.mockImplementationOnce(() => {
+      throw new TypeError("the text has a lone surrogate");
+    });
+
+    expect(() => run(el)).toThrow(TypeError);
+    expect(oldChild.parentNode).toBe(el);
+  });
+
   it("leaves no children behind for an empty string", () => {
     const el = createElementNode("div");
     const oldChild = createElementNode("div");
