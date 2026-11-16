@@ -56,6 +56,12 @@ impl EventDispatcher {
         self.host.borrow_mut().focus.observe(window, cx);
         let host = &self.host;
         let entered = self.engine.with(|ctx| {
+            let settled = crate::abort::settle_freed(&ctx, &mut host.borrow_mut());
+            if let Err(err) = settled {
+                host.borrow_mut()
+                    .failures
+                    .push(EngineError::capture(&ctx, &err));
+            }
             if let Err(err) = callbacks::release(&ctx, &callback_ids) {
                 host.borrow_mut()
                     .failures
@@ -216,6 +222,32 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_swept_node_unpins_the_dependent_its_listener_names(cx: &mut TestAppContext) {
+        let scene = scene(cx, RELEASED);
+        scene.js(r"
+            const n = __inca_native__;
+            globalThis.keep = new AbortController();
+            (() => {
+                const dependent = AbortSignal.any([keep.signal]);
+                const orphan = n.createNode('div');
+                n.addEventListener(orphan, 'click', () => {}, false, false, dependent);
+                globalThis.w = new WeakRef(dependent);
+            })();
+            ");
+
+        draw(cx, scene.window);
+        for _ in 0..2 {
+            scene.dispatcher.engine.with(|ctx| ctx.run_gc());
+            drop(scene.dispatcher.engine.run_jobs());
+        }
+
+        assert_eq!(
+            scene.json("w.deref() === undefined"),
+            serde_json::json!(true)
+        );
+    }
+
+    #[gpui::test]
     fn the_hook_receives_the_content_ids_of_a_swept_template(cx: &mut TestAppContext) {
         let scene = scene(cx, RELEASED);
         scene.js(r"
@@ -289,10 +321,61 @@ mod tests {
             let freeze: rquickjs::Function = object.get("freeze").unwrap();
             freeze.call::<_, ()>((table,)).unwrap();
         });
+        scene
+    }
+
+    /// A scene with an orphan whose listener names a signal, and a signal table that is gone.
+    fn scene_with_broken_signal_table(cx: &mut TestAppContext) -> Scene {
+        let scene = scene(cx, RELEASED);
+        scene.js(r"
+            const n = __inca_native__;
+            globalThis.signal = new AbortController().signal;
+            n.addEventListener(n.createNode('div'), 'click', () => {}, false, false, signal);
+            ");
+        scene.dispatcher.engine.with(|ctx| {
+            inca_jsenv::vault(&ctx).unwrap().set("abort", 0).unwrap();
+        });
+        scene
+    }
+
+    #[gpui::test]
+    fn a_failed_release_of_callback_entries_is_reported(cx: &mut TestAppContext) {
+        let scene = scene_with_frozen_callbacks(cx);
 
         draw(cx, scene.window);
 
         assert_eq!(scene.reported.borrow().len(), 1);
+    }
+
+    #[gpui::test]
+    fn a_failed_release_of_callback_entries_still_calls_the_hook(cx: &mut TestAppContext) {
+        let scene = scene_with_frozen_callbacks(cx);
+
+        draw(cx, scene.window);
+
+        assert_eq!(
+            scene.json("globalThis.released.length"),
+            serde_json::json!(1)
+        );
+    }
+
+    #[gpui::test]
+    fn a_failed_settle_of_the_signal_links_is_reported(cx: &mut TestAppContext) {
+        let scene = scene_with_broken_signal_table(cx);
+
+        draw(cx, scene.window);
+
+        let reported = scene.reported.borrow();
+        assert_eq!(reported.len(), 1);
+        assert!(reported[0].message().contains("Error converting"));
+    }
+
+    #[gpui::test]
+    fn a_failed_settle_of_the_signal_links_still_calls_the_hook(cx: &mut TestAppContext) {
+        let scene = scene_with_broken_signal_table(cx);
+
+        draw(cx, scene.window);
+
         assert_eq!(
             scene.json("globalThis.released.length"),
             serde_json::json!(1)

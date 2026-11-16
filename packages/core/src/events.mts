@@ -42,8 +42,10 @@ function tracking(listener: HostCallback): HostCallback {
  * as `this` when the event fires
  * @param options - `capture` listens while the event travels down to the
  * target, `passive` ignores `preventDefault()` calls in `listener`, and
- * `once` removes the listener before it first runs
+ * `once` removes the listener before it first runs, and `signal` removes it when the signal
+ * aborts. A `signal` that is already aborted registers nothing.
  * @throws TypeError when `target` is malformed or is an unknown target tag
+ * @throws TypeError when `options.signal` is no `AbortSignal` of the host
  * @throws TypeError when a node target names no node
  * @throws RangeError when the host has issued its last callback id
  */
@@ -53,6 +55,12 @@ export function addEventListener(
   listener: EventListenerOrObject<never, never> | null,
   options: ListenerOptions = {},
 ): void {
+  const signal = options.signal;
+  if (signal !== undefined && signalTargetOf(signal) === undefined) {
+    throw new TypeError(
+      "the signal option is not an AbortSignal. pass the signal of an AbortController",
+    );
+  }
   if (listener === null || listener === undefined) return;
   const group = groupOf(target, event, options.capture);
   if (callbackIdFor(group, listener) !== undefined) return;
@@ -64,23 +72,37 @@ export function addEventListener(
           args,
         )
       : (listener.handleEvent as HostCallback).apply(listener, args);
-  // A signal is read from `currentTarget` when the listener runs, so the callback table holds none.
-  const kept = typeof target === "object" ? undefined : target;
-  const run: HostCallback = options.once
-    ? (...args) => {
-        const self = kept ?? (args[0] as { currentTarget: SignalTarget }).currentTarget;
-        removeEventListener(self, event, listener, options);
-        return call(...args);
-      }
-    : call;
+  const run = options.once ? onceOf(target, event, listener, options.capture, call) : call;
   const callbackId = addListener(
     target,
     event,
     tracking(run),
     options.capture === true,
     options.passive === true,
+    signal as SignalTarget | undefined,
   );
+  if (callbackId === null) return;
   addCallback(group, listener, callbackId);
+}
+
+/**
+ * The callback of a `once` listener: it removes the registration, then calls `call`. A signal
+ * target is read from `currentTarget` when the callback runs, so the callback table holds neither
+ * the signal nor the options.
+ */
+function onceOf(
+  target: EventTargetId,
+  event: string,
+  listener: EventListenerOrObject<never, never>,
+  capture: boolean | undefined,
+  call: HostCallback,
+): HostCallback {
+  const kept = typeof target === "object" ? undefined : target;
+  return (...args) => {
+    const self = kept ?? (args[0] as { currentTarget: SignalTarget }).currentTarget;
+    removeEventListener(self, event, listener, { capture });
+    return call(...args);
+  };
 }
 
 /**

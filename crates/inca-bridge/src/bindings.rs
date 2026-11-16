@@ -18,6 +18,7 @@ mod html;
 mod inline_style;
 mod input;
 mod insert_nodes;
+mod links;
 mod listeners;
 mod mutation;
 mod node;

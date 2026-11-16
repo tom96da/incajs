@@ -214,7 +214,7 @@ be passed, and `undefined` there counts as `null`.
 | `datasetTarget` | `() => object` | A new plain object whose prototype is `DOMStringMap.prototype`, the target of the `dataset` proxy. |
 | `inputValue` | `(nodeId: number) => string` | The text of the input node `nodeId`. Throws a `TypeError` for a node of another tag. |
 | `setInputValue` | `(nodeId: number, value: string) => void` | Replace the text of the input node `nodeId`, without CR and LF. A changed text puts the caret at its end and ends a composition. Throws a `TypeError` for a node of another tag. |
-| `addEventListener` | `(target: number \| "$window" \| object, event: string, callback: Function, capture?: boolean, passive?: boolean) => number` | Register `callback` for an event and return its id, see [Registering](#registering) and [Tagged targets](#tagged-targets). A `callback` that is not a function throws a `TypeError`. `capture` and `passive` default to `false`. |
+| `addEventListener` | `(target: number \| "$window" \| object, event: string, callback: Function, capture?: boolean, passive?: boolean, signal?: object) => number \| null` | Register `callback` for an event and return its id, or `null` when `signal` is an aborted signal, which stores nothing and takes no id. A signal object is a valid target, and `signal` removes the registration when it aborts. See [Registering](#registering) and [Tagged targets](#tagged-targets). A `callback` that is not a function throws a `TypeError`. `capture` and `passive` default to `false`. |
 | `removeEventListener` | `(target: number \| "$window" \| object, event: string, callbackId: number) => boolean` | Drop one registration and its table entry, and return whether it was there. An unknown node returns `false`. |
 | `dispatchEvent` | `(target: number \| "$window" \| object, event: Event) => boolean` | Walk a script-built event over the path of `target` and return `false` when a listener canceled it, see [Dispatching from script](#dispatching-from-script) and [Tagged targets](#tagged-targets). |
 | `click` | `(nodeId: number) => void` | Walk an untrusted `click` at `nodeId`, see [Dispatching from script](#dispatching-from-script). |
@@ -331,7 +331,13 @@ Payloads and author-facing behaviour are in
 - A walk reads each function from the table by id when it reaches the
   registration. An id with no table entry is skipped. A failed
   `addEventListener` (an unknown node, a value that is not a function or
-  exhausted ids) stores nothing and takes no id.
+  exhausted ids) stores nothing and takes no id, and so does a call with an aborted `signal`, which
+  returns `null`.
+- A registration with a `signal` is linked to it. The abort of the signal removes the registration,
+  releases its table entry and reports its id through `__inca_released__` with an empty `nodeIds`,
+  before the `abort` event runs. A registration that is removed in another way
+  (`removeEventListener`, the free of its node) leaves the list of its signal. A `signal` that is
+  no signal of the host throws a `TypeError`.
 - A throwing callback is reported, and sibling callbacks still run.
   [FAILURES.md](./FAILURES.md#where-a-failure-is-reported) gives when it is reported.
 

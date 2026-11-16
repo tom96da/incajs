@@ -729,12 +729,6 @@ A fixed entry is deleted and its ID is never reused.
   first build without HMR. Evaluation and mount errors still need the host's
   wait.
 
-- **B-168 The `signal` option of `addEventListener()` is unsupported**
-  `Units: core,bridge · Size: M · Impact: Low`
-
-  A `signal` option is ignored, so an aborted signal leaves the listener
-  registered. Fix: drop the registration when the signal aborts.
-
 - **B-169 The Vue warning trace prints in the text color**
   `Units: core · Size: S · Impact: Low`
 

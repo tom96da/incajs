@@ -27,3 +27,15 @@ fn a_timeout_signal_aborts_after_the_clock_advances(cx: &mut TestAppContext) {
 
     assert_eq!(text_of(&mut h, "timed-out"), "timeout");
 }
+
+#[gpui::test]
+fn a_click_listener_with_a_signal_stops_after_the_abort(cx: &mut TestAppContext) {
+    let mut h = load(cx, "abort-signal");
+    click(&mut h, "counted");
+    assert_eq!(text_of(&mut h, "clicks"), "1");
+
+    click(&mut h, "stop");
+    click(&mut h, "counted");
+
+    assert_eq!(text_of(&mut h, "clicks"), "1");
+}

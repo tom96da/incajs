@@ -154,6 +154,8 @@ export interface ListenerOptions {
   passive?: boolean;
   /** The listener is removed before it first runs. */
   once?: boolean;
+  /** The listener is removed when the signal aborts. A signal that is aborted already registers nothing. */
+  signal?: AbortSignal;
 }
 
 /**
