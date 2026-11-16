@@ -1912,3 +1912,10 @@ A fixed entry is deleted and its ID is never reused.
   `{ transfer: [rab] }` the browsers and the host return a clone whose buffer and view have 16
   bytes. Fix: grow the clone of the buffer to the end of the view before the view is built, as the
   transfer case does, or leave it, since the browsers disagree.
+
+- **B-353 `performance.measure()` accepts a negative `duration` option**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  `performance.measure('m', { start: 5, duration: -1 })` gives startTime 5 and duration -1, and
+  `{ end: 5, duration: -1 }` gives startTime 6 and duration -1. Chromium 153 does the same. WebKit
+  26.6 throws a `TypeError`. Fix: throw a `TypeError` for a negative duration.
