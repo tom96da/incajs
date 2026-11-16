@@ -17,6 +17,7 @@ mod handlers;
 mod id_attribute;
 mod inner_html;
 mod input;
+mod interfaces;
 mod keyboard;
 mod layout;
 mod lists;

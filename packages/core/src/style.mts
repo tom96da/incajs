@@ -23,7 +23,7 @@ let scanned = false;
 
 /** Gives a style element an earlier evaluation left a handle, and makes it strong with its text. */
 function adopt(id: NodeId): IncaElement {
-  const el = createIncaElement(id, "element", "style");
+  const el = createIncaElement(id, "style");
   for (const child of childNodeIds(id)) {
     entered(adoptTextNode(child, String(getAttribute(child, "value") ?? "")));
   }

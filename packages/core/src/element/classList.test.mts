@@ -11,7 +11,7 @@ import type { IncaElement } from "./types.mts";
 type Stored = string | number | boolean;
 
 /** Installs a fake host with one attribute map per node, and returns it with a handle. */
-function setup(initial: Record<string, Stored> = {}, kind: IncaElement["kind"] = "element") {
+function setup(initial: Record<string, Stored> = {}) {
   const store = new Map<string, Stored>(Object.entries(initial));
   const lists: object[] = [];
   const host = {
@@ -28,7 +28,7 @@ function setup(initial: Record<string, Stored> = {}, kind: IncaElement["kind"] =
     }),
   };
   globalThis.__inca_native__ = nativeStub(host as never);
-  const el: IncaElement = createIncaElement(1, kind, "div");
+  const el: IncaElement = createIncaElement(1, "div");
   return { host, el, store, lists };
 }
 
@@ -116,21 +116,9 @@ describe("classList", () => {
     expect(el.classList).toBe(before);
   });
 
-  it("gives a comment stand-in no className", () => {
-    const { el } = setup({}, "comment");
-
-    expect("className" in el).toBe(false);
-  });
-
-  it("gives a comment stand-in no classList", () => {
-    const { el } = setup({}, "comment");
-
-    expect("classList" in el).toBe(false);
-  });
-
   it("gives each handle its own list", () => {
     const { el } = setup();
-    const other = createIncaElement(2, "element", "div");
+    const other = createIncaElement(2, "div");
 
     expect(other.classList).not.toBe(el.classList);
   });

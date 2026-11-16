@@ -32,34 +32,66 @@ declare global {
   }
 
   /** The interface object of event targets, which a script cannot construct. */
-  var EventTarget: { readonly prototype: object };
+  var EventTarget: {
+    readonly prototype: object;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaEventTarget;
+  };
 
   /** The interface object of nodes, which a script cannot construct. */
-  var Node: NodeConstants & { readonly prototype: NodeConstants };
+  var Node: NodeConstants & {
+    readonly prototype: NodeConstants;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaNode;
+  };
 
   /** The interface object of text and comments, which a script cannot construct. */
-  var CharacterData: { readonly prototype: NodeConstants };
+  var CharacterData: {
+    readonly prototype: NodeConstants;
+    [Symbol.hasInstance](
+      value: unknown,
+    ): value is import("incajs").IncaText | import("incajs").IncaComment;
+  };
 
   /** The interface object of text nodes, which a script cannot construct. */
-  var Text: { readonly prototype: NodeConstants };
+  var Text: {
+    readonly prototype: NodeConstants;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaText;
+  };
 
   /** The interface object of comments, which a script cannot construct. */
-  var Comment: { readonly prototype: NodeConstants };
+  var Comment: {
+    readonly prototype: NodeConstants;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaComment;
+  };
 
   /** The interface object of elements, which a script cannot construct. */
-  var Element: { readonly prototype: NodeConstants };
+  var Element: {
+    readonly prototype: NodeConstants;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaElement;
+  };
 
   /** The interface object of HTML elements, which a script cannot construct. */
-  var HTMLElement: { readonly prototype: NodeConstants };
+  var HTMLElement: {
+    readonly prototype: NodeConstants;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaElement;
+  };
 
   /** The interface object of fragments, which a script cannot construct. */
-  var DocumentFragment: { readonly prototype: NodeConstants };
+  var DocumentFragment: {
+    readonly prototype: NodeConstants;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaFragment;
+  };
 
   /** The interface object of `document`. */
-  var Document: { readonly prototype: NodeConstants };
+  var Document: {
+    readonly prototype: NodeConstants;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaDocument;
+  };
 
   /** The interface object of the HTML document, which a script cannot construct. */
-  var HTMLDocument: { readonly prototype: NodeConstants };
+  var HTMLDocument: {
+    readonly prototype: NodeConstants;
+    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaDocument;
+  };
 
   /** The interface object of `element.dataset`, which scripts cannot construct. */
   var DOMStringMap: { readonly prototype: import("incajs").DOMStringMap };

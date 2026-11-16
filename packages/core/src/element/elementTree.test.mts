@@ -16,7 +16,7 @@ beforeEach(() => {
   host = installFakeHost();
 });
 
-/** A `div` holding a text leaf, a comment stand-in and two elements. */
+/** A `div` holding a text leaf, a comment and two elements. */
 function mixed() {
   const parent = createElementNode("div");
   const text = createTextNode("t");
@@ -54,7 +54,7 @@ describe("parentElement", () => {
 });
 
 describe("element siblings", () => {
-  it("nextElementSibling skips a text leaf and a comment stand-in", () => {
+  it("nextElementSibling skips a text leaf and a comment", () => {
     const { parent, first, second } = mixed();
     const lead = createElementNode("div");
     insert(lead, parent, parent.firstChild);
@@ -85,14 +85,10 @@ describe("children", () => {
     expect(Array.from(parent.children)).toEqual([first, second]);
   });
 
-  it("skips a text leaf and a comment stand-in", () => {
+  it("skips a text leaf and a comment", () => {
     const { parent } = mixed();
 
     expect(parent.children.length).toBe(2);
-  });
-
-  it("has an empty collection on a comment stand-in", () => {
-    expect(createCommentNode().children.length).toBe(0);
   });
 
   it("returns the same object on every read", () => {
@@ -132,7 +128,7 @@ describe("children", () => {
 });
 
 describe("element children", () => {
-  it("skip text leaves and comment stand-ins", () => {
+  it("skip text leaves and comments", () => {
     const { parent, first, second } = mixed();
 
     expect(parent.firstElementChild).toBe(first);

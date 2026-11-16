@@ -3,19 +3,14 @@
 
 import type { RendererOptions } from "@vue/runtime-core";
 
-import type { IncaCore, IncaElement, IncaNode, IncaText, TagName } from "../rendererCore.mts";
-
-/**
- * Marks `handle` so that Vue's `reactive()` and `ref()` keep the object itself.
- * A template ref then holds the same object the application receives from
- * `document.activeElement`.
- * @param handle - the node handle to mark
- * @returns `handle`
- */
-export function skipReactive<T extends object>(handle: T): T {
-  Object.defineProperty(handle, "__v_skip", { value: true });
-  return handle;
-}
+import type {
+  IncaComment,
+  IncaCore,
+  IncaElement,
+  IncaNode,
+  IncaText,
+  TagName,
+} from "../rendererCore.mts";
 
 /** {@link createNodeOps}'s return shape. */
 export type NodeOps = Omit<RendererOptions<IncaNode, IncaElement>, "patchProp">;
@@ -34,22 +29,21 @@ export function createNodeOps(core: IncaCore): NodeOps {
      * @param tag - the node's element kind
      * @returns the new, parentless, childless element
      */
-    createElement: (tag: TagName): IncaElement => skipReactive(core.createElementNode(tag)),
+    createElement: (tag: TagName): IncaElement => core.createElementNode(tag),
 
     /**
      * Creates a text leaf.
      * @param text - the initial text content
      * @returns the new text leaf
      */
-    createText: (text: string): IncaText => skipReactive(core.createTextNode(text)),
+    createText: (text: string): IncaText => core.createTextNode(text),
 
     /**
-     * Creates the hidden container that stands in for a Vue comment node
-     * (e.g. a `v-if`/`v-for` placeholder).
+     * Creates a comment, such as a `v-if`/`v-for` placeholder.
      * @param text - the comment's text
-     * @returns the new hidden element
+     * @returns the new comment
      */
-    createComment: (text: string): IncaElement => skipReactive(core.createCommentNode(text)),
+    createComment: (text: string): IncaComment => core.createCommentNode(text),
 
     setText: (node: IncaText, text: string): void => core.setText(node, text),
 

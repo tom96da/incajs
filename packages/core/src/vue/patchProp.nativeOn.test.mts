@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import * as core from "../rendererCore.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaElement } from "../rendererCore.mts";
@@ -39,7 +40,7 @@ function installNative() {
     removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
     getAttribute: vi.fn<() => null>(() => null),
   };
-  globalThis.__inca_native__ = native as never;
+  globalThis.__inca_native__ = nativeStub(native as never);
   return native;
 }
 
@@ -61,7 +62,7 @@ beforeEach(() => {
 });
 
 describe("patchProp on a handler property key", () => {
-  const element = () => core.createIncaElement(1, "element", "div");
+  const element = () => core.createIncaElement(1, "div");
 
   it.each([
     ["a function", () => {}],

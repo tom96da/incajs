@@ -4,7 +4,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
-import { createElementNode, createIncaElement } from "./handle.mts";
+import { document } from "../document.mts";
+import { HTML_NAMESPACE } from "../ffi/index.mts";
+import { createElementNode, createIncaElement, rootElement } from "./handle.mts";
 import {
   entered,
   isDestroyed,
@@ -15,6 +17,7 @@ import {
   registerNode,
   elementOf,
 } from "./lifecycle.mts";
+import type { ElementEntry, InterfacePrototypes, NodeEntry, Parsed } from "../ffi/index.mts";
 import type { IncaNode, IncaTemplateElement } from "./types.mts";
 
 /** A stand-in handle with the given node id and kind. */
@@ -130,7 +133,7 @@ describe("the release of a removed node", () => {
     globalThis.__inca_native__ = nativeStub({ releaseNode: () => {} } as never);
     const { createIncaElement } = await import("./handle.mts");
     const { leftHeld, releaseWhenCollected } = await import("./lifecycle.mts");
-    const el = createIncaElement(50, "element", "div");
+    const el = createIncaElement(50, "div");
     releaseWhenCollected(el);
 
     leftHeld(el, [el.__node_id]);
@@ -174,7 +177,7 @@ describe("a template", () => {
 describe("the name members of a freed element", () => {
   it("keep their values", () => {
     globalThis.__inca_native__ = nativeStub({ releaseNode: () => {} } as never);
-    const el = createIncaElement(1, "element", ["Y", "urn:x", "x", "X:Y"]);
+    const el = createIncaElement(1, ["Y", "urn:x", "x", "X:Y"]);
 
     markFreed([el.__node_id]);
 
@@ -184,5 +187,102 @@ describe("the name members of a freed element", () => {
       "urn:x",
       "x",
     ]);
+  });
+});
+
+describe("the prototype of a handle", () => {
+  const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+  const MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML";
+  const host = {
+    createNode: vi.fn<(tag: string) => number>(() => 40),
+    createElement: vi.fn<() => [number, string]>(() => [41, "div"]),
+    createElementNS: vi.fn<() => ElementEntry>(),
+    setAttribute: vi.fn<() => void>(),
+    setStyle: vi.fn<() => void>(),
+    holdNode: vi.fn<() => void>(),
+    rootNodeId: vi.fn<() => number>(() => 2),
+    templateContent: vi.fn<() => number>(() => 43),
+    childNodeIds: vi.fn<() => number[]>(() => []),
+    setInnerHtml: vi.fn<() => Parsed>(),
+    cloneNode: vi.fn<() => NodeEntry[] | ElementEntry[]>(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.__inca_native__ = nativeStub(host as never);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Makes an element of the namespace with `createElementNS`. */
+  const made = (namespace: string | null) => () => {
+    host.createElementNS.mockReturnValueOnce([44, "x", namespace, null, "x"]);
+    return document.createElementNS(namespace, "x");
+  };
+
+  /** Parses `entry` into a child of a new `div` and gives the handle of the child. */
+  const parsed = (entry: Parsed[1][number]) => () => {
+    host.setInnerHtml.mockReturnValueOnce([0, [entry]]);
+    createElementNode("div").innerHTML = "x";
+    return nodeOf(entry[0])!;
+  };
+
+  /** Copies a node of the host that answers `entries`, and gives the copy. */
+  const copied = (entries: NodeEntry[] | ElementEntry[]) => () => {
+    host.cloneNode.mockReturnValueOnce(entries);
+    return createElementNode("div").cloneNode();
+  };
+
+  it.each([
+    ["createElement", () => document.createElement("div"), "HTMLElement"],
+    ["createElementNS with the HTML namespace", made(HTML_NAMESPACE), "HTMLElement"],
+    ["createElementNS with the SVG namespace", made(SVG_NAMESPACE), "ForeignElement"],
+    ["createElementNS with the MathML namespace", made(MATHML_NAMESPACE), "ForeignElement"],
+    ["createElementNS with no namespace", made(null), "Element"],
+    ["createElementNS with another namespace", made("urn:x"), "Element"],
+    ["createTextNode", () => document.createTextNode("x"), "Text"],
+    ["createComment", () => document.createComment("x"), "Comment"],
+    ["createDocumentFragment", () => document.createDocumentFragment(), "DocumentFragment"],
+    ["document", () => document, "HTMLDocument"],
+    ["a copy of document", copied([[45, "#document", null]]), "HTMLDocument"],
+    ["the mount container", () => rootElement(), "HTMLElement"],
+    ["a parsed element", parsed([46, "b", HTML_NAMESPACE, 40, null]), "HTMLElement"],
+    ["a parsed svg element", parsed([46, "b", SVG_NAMESPACE, 40, null]), "ForeignElement"],
+    ["a parsed text node", parsed([47, "#text", null, 40, "t"]), "Text"],
+    ["a parsed comment", parsed([48, "#comment", null, 40, "c"]), "Comment"],
+    ["a cloned element", copied([[49, "div", HTML_NAMESPACE, null, "div"]]), "HTMLElement"],
+    ["a cloned text node", copied([[50, "#text", "t"]]), "Text"],
+    ["a cloned comment", copied([[51, "#comment", null]]), "Comment"],
+    [
+      "the content of a template",
+      () => (createElementNode("template") as IncaTemplateElement).content,
+      "DocumentFragment",
+    ],
+  ] as const)("is the prototype of %s", (_path, make, name) => {
+    expect(Object.getPrototypeOf(make())).toBe(nativeStub().interfacePrototypes()[name]);
+  });
+
+  it("stays on the stored prototype when a script overwrites the globals", () => {
+    const element = Object.getPrototypeOf(createElementNode("div"));
+    vi.stubGlobal("Element", class {});
+    vi.stubGlobal("HTMLElement", class {});
+
+    expect(Object.getPrototypeOf(createElementNode("div"))).toBe(element);
+  });
+
+  it("asks the host for the prototypes once", async () => {
+    const interfacePrototypes = vi.fn<() => InterfacePrototypes>(() =>
+      nativeStub().interfacePrototypes(),
+    );
+    globalThis.__inca_native__ = nativeStub({ interfacePrototypes } as never);
+    vi.resetModules();
+    const lifecycle = await import("./lifecycle.mts");
+
+    lifecycle.prototypes();
+    lifecycle.prototypes();
+
+    expect(interfacePrototypes).toHaveBeenCalledTimes(1);
   });
 });

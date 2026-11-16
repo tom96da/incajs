@@ -566,7 +566,7 @@ describe("v-model on an input", () => {
     inputValues.clear();
     focused = null;
     hostCallbacks.clear();
-    mountRoot = createIncaElement(rootNodeId(), "element");
+    mountRoot = createIncaElement(rootNodeId());
   });
 
   /** Mounts an `input` bound to `model` with `modifiers`, and returns its node id and handle. */

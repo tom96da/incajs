@@ -97,12 +97,31 @@ export type Parsed = [position: number, entries: ParsedEntry[]];
 export type EventTargetId = NodeId | "$window";
 
 /**
+ * The prototypes of the node interfaces that the host holds, by name. `ForeignElement` is the
+ * prototype of an SVG or MathML element and no global names it.
+ */
+export interface InterfacePrototypes {
+  EventTarget: object;
+  Node: object;
+  CharacterData: object;
+  Text: object;
+  Comment: object;
+  Element: object;
+  HTMLElement: object;
+  ForeignElement: object;
+  DocumentFragment: object;
+  Document: object;
+  HTMLDocument: object;
+}
+
+/**
  * The host-injected object every wrapper in this package forwards to. Not part of the public
  * surface.
  */
 interface IncaNative {
   rootNodeId(): NodeId;
   documentNodeId(): NodeId;
+  interfacePrototypes(): InterfacePrototypes;
   createNode(tag: string): NodeId;
   createElement(localName: string): [NodeId, TagName];
   createElementNS(namespace: string | null, qualifiedName: string): ElementEntry;

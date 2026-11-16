@@ -210,6 +210,14 @@ with the differences below. The listener methods are described in
   - `new Text()`
   - `new Comment()`
   - `new DocumentFragment()`
+- An element of the HTML namespace is an instance of `HTMLElement` whatever its tag. The interfaces
+  of single tags are missing, for example:
+  - `HTMLInputElement`
+  - `HTMLUnknownElement`
+- An element of the SVG or MathML namespace is an instance of `Element`. These interfaces
+  are missing:
+  - `SVGElement`
+  - `MathMLElement`
 - `document.createDocumentFragment()` returns a fragment without these members:
   - `querySelector()` and `querySelectorAll()`
   - `children`

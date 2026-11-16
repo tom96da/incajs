@@ -82,7 +82,7 @@ describe("textContent of a text node", () => {
   });
 });
 
-describe("textContent of a comment stand-in", () => {
+describe("textContent of a comment", () => {
   it("reads the data", () => {
     expect(createCommentNode("note").textContent).toBe("note");
   });

@@ -13,7 +13,7 @@ import {
   wholeText,
 } from "../ffi/index.mts";
 import { attributeText, nullableText, requireArguments } from "./arguments.mts";
-import { entered, hold, isDestroyed, registerNode, withNodeId } from "./lifecycle.mts";
+import { entered, hold, isDestroyed, prototypeOf, registerNode, withNodeId } from "./lifecycle.mts";
 import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers, readData, writeData } from "./nodeTree.mts";
@@ -131,7 +131,7 @@ export function createIncaText(id: NodeId, text: string, builders: HandleBuilder
     kind: "text",
     text,
   };
-  const handle = withNodeId(node as IncaText, id);
+  const handle = withNodeId(Object.setPrototypeOf(node, prototypeOf("text")) as IncaText, id);
   for (const members of [
     nodeTreeMembers(handle, builders),
     nodeMutationMembers(handle, builders),

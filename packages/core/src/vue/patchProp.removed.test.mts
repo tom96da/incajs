@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import * as core from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
@@ -11,7 +12,7 @@ import type { IncaElement } from "../rendererCore.mts";
 describe("patchProp on a removed element", () => {
   it("adds a listener slot without reaching the host", () => {
     const released = new Set<number>();
-    globalThis.__inca_native__ = {
+    globalThis.__inca_native__ = nativeStub({
       createNode: vi.fn<() => number>(() => 2),
       holdNode: vi.fn<() => void>(),
       releaseNode: vi.fn<() => void>(),
@@ -24,7 +25,7 @@ describe("patchProp on a removed element", () => {
         return 0;
       }),
       removeEventListener: vi.fn<() => boolean>(() => true),
-    } as never;
+    } as never);
     const ops = createNodeOps(core);
     const el = ops.createElement("view") as IncaElement;
     ops.remove(el);

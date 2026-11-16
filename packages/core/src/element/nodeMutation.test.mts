@@ -466,7 +466,7 @@ describe("a template", () => {
 
   it("makes no content for the copy of an SVG template and keeps the ids in step", () => {
     const svgNamespace = "http://www.w3.org/2000/svg";
-    const owner = createIncaElement(host.create("div"), "element", [
+    const owner = createIncaElement(host.create("div"), [
       "template",
       svgNamespace,
       null,

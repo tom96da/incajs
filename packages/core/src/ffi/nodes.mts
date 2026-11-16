@@ -6,6 +6,7 @@ import type { CallbackId, NodeId, TagName } from "../types.mts";
 import type {
   ElementEntry,
   ElementName,
+  InterfacePrototypes,
   NodeEntry,
   NodeLink,
   Parsed,
@@ -29,6 +30,15 @@ export function rootNodeId(): NodeId {
  */
 export function documentNodeId(): NodeId {
   return native().documentNodeId();
+}
+
+/**
+ * Returns the prototypes of the node interfaces that the host defines.
+ * @returns a new object at each call, with no prototype, that holds each prototype under the
+ *   name of its interface
+ */
+export function interfacePrototypes(): InterfacePrototypes {
+  return native().interfacePrototypes();
 }
 
 /**

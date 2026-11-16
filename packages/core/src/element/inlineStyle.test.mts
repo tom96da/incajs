@@ -27,7 +27,7 @@ function setup() {
   };
   globalThis.__inca_native__ = nativeStub(host as never);
   block.cssText = "keep";
-  return { host, el: createIncaElement(1, "element", "div") };
+  return { host, el: createIncaElement(1, "div") };
 }
 
 describe("style", () => {
@@ -94,12 +94,6 @@ describe("style", () => {
     el.style = "width: 1px";
 
     expect(block.cssText).toBe("width: 1px");
-  });
-
-  it("gives a comment stand-in no style", () => {
-    setup();
-
-    expect("style" in createIncaElement(3, "comment")).toBe(false);
   });
 
   it("writes an assigned null as an empty cssText", () => {

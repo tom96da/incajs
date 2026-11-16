@@ -5,6 +5,7 @@
 
 import type {
   EventHandlers,
+  IncaComment,
   IncaElement,
   IncaFragment,
   IncaText,
@@ -270,7 +271,7 @@ export interface IncaDocument extends IncaEventTarget, EventHandlers<IncaDocumen
    * @returns The new comment, which has no parent.
    * @throws TypeError when called without an argument
    */
-  createComment(data: string): IncaElement;
+  createComment(data: string): IncaComment;
   /**
    * The first element below the document that matches the selector list, or `null`.
    * @throws DOMException named `SyntaxError` for an invalid selector

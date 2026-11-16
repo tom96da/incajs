@@ -53,7 +53,7 @@ describe("nodeType", () => {
   it.each([
     ["an element", () => createElementNode("button"), 1],
     ["a text node", () => createTextNode("t"), 3],
-    ["a comment stand-in", () => createCommentNode(), 8],
+    ["a comment", () => createCommentNode(), 8],
   ] as const)("reads %s", (_, make, type) => {
     expect(make().nodeType).toBe(type);
   });
@@ -63,7 +63,7 @@ describe("nodeName", () => {
   it.each([
     ["an element", () => createElementNode("button"), "BUTTON"],
     ["a text node", () => createTextNode("t"), "#text"],
-    ["a comment stand-in", () => createCommentNode(), "#comment"],
+    ["a comment", () => createCommentNode(), "#comment"],
   ] as const)("reads %s", (_, make, name) => {
     expect(make().nodeName).toBe(name);
   });
@@ -90,7 +90,7 @@ describe("nodeValue", () => {
 
   it.each([
     ["a text node", () => createTextNode("first")],
-    ["a comment stand-in", () => createCommentNode()],
+    ["a comment", () => createCommentNode()],
   ] as const)("reads the data of %s from the host", (_, make) => {
     const node = make();
     data[node.__node_id] = "second";
@@ -123,13 +123,13 @@ describe("nodeValue", () => {
     expect(text.text).toBe(stored);
   });
 
-  it("sends the text of a new comment stand-in to the host", () => {
+  it("sends the text of a new comment to the host", () => {
     const comment = createCommentNode("x");
 
     expect(host.setAttribute).toHaveBeenCalledWith(comment.__node_id, "value", "x");
   });
 
-  it("sends an assignment to a comment stand-in to the host", () => {
+  it("sends an assignment to a comment to the host", () => {
     const comment = createCommentNode();
 
     comment.nodeValue = "note";
@@ -172,8 +172,8 @@ describe("ownerDocument", () => {
 
 describe("parentNode", () => {
   it("is the handle of the parent", () => {
-    const parent = createIncaElement(11, "element", "div");
-    const child = createIncaElement(12, "element", "div");
+    const parent = createIncaElement(11, "div");
+    const child = createIncaElement(12, "div");
     links[12] = { parent: 11 };
 
     expect(child.parentNode).toBe(parent);
@@ -193,7 +193,7 @@ describe("parentNode", () => {
   it("is the document when no handle of it was built yet", async () => {
     vi.resetModules();
     const fresh = await import("./handle.mts");
-    const child = fresh.createIncaElement(12, "element", "div");
+    const child = fresh.createIncaElement(12, "div");
     links[12] = { parent: DOCUMENT };
 
     expect(child.parentNode).toBe(fresh.documentHandle());
@@ -350,7 +350,7 @@ describe("a freed node", () => {
     expect(text.nodeValue).toBe("kept");
   });
 
-  it("has an empty nodeValue as a comment stand-in", () => {
+  it("has an empty nodeValue as a comment", () => {
     const comment = createCommentNode();
     markFreed([comment.__node_id]);
 

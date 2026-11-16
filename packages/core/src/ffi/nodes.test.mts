@@ -15,6 +15,7 @@ import {
   innerHtml,
   insertAdjacentHtml,
   insertBefore,
+  interfacePrototypes,
   isConnected,
   isEqualNode,
   linkedNode,
@@ -36,9 +37,10 @@ import {
   textContent,
   wholeText,
 } from "./nodes.mts";
-import type { ElementEntry, NodeEntry, NodeLink, Parsed } from "./native.mts";
+import type { ElementEntry, InterfacePrototypes, NodeEntry, NodeLink, Parsed } from "./native.mts";
 
 const native = {
+  interfacePrototypes: vi.fn<() => InterfacePrototypes>(),
   createElementNS: vi.fn<(namespace: string | null, qualifiedName: string) => ElementEntry>(() => [
     1,
     "a",
@@ -101,6 +103,13 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.replaceChild.mockReturnValueOnce(6);
     expect(replaceChild(1, 2, 3)).toBe(6);
     expect(native.replaceChild).toHaveBeenCalledWith(1, 2, 3);
+  });
+
+  it("interfacePrototypes", () => {
+    const prototypes = { Node: {} };
+    native.interfacePrototypes.mockReturnValueOnce(prototypes as never);
+    expect(interfacePrototypes()).toBe(prototypes);
+    expect(native.interfacePrototypes).toHaveBeenCalledWith();
   });
 
   it("createElementNS", () => {

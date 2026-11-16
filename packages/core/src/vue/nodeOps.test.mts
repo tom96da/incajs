@@ -4,6 +4,7 @@
 import { reactive, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import * as core from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 
@@ -23,7 +24,7 @@ const nodeOps = createNodeOps(core);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  globalThis.__inca_native__ = native as never;
+  globalThis.__inca_native__ = nativeStub(native as never);
 });
 
 describe("createNodeOps comment", () => {
@@ -59,6 +60,12 @@ describe("createNodeOps reactivity", () => {
     const el = nodeOps.createElement("div");
 
     expect(reactive(el)).toBe(el);
+    expect(ref(el).value).toBe(el);
+  });
+
+  it("keeps an element of createElementNode inside ref()", () => {
+    const el = core.createElementNode("div");
+
     expect(ref(el).value).toBe(el);
   });
 

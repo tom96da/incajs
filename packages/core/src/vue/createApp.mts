@@ -5,7 +5,7 @@ import { createRenderer } from "@vue/runtime-core";
 import type { App, Component, ComponentPublicInstance } from "@vue/runtime-core";
 
 import * as core from "../rendererCore.mts";
-import { createHeldNodeOps, createNodeOps, skipReactive } from "./nodeOps.mts";
+import { createHeldNodeOps, createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
 import type { IncaElement, IncaNode } from "../rendererCore.mts";
 
@@ -43,7 +43,8 @@ export function createIncaApp(
     patchProp: createPatchProp(core),
   };
   const renderer = createRenderer<IncaNode, IncaElement>(options);
-  // After `createRenderer`, which copies the creators that Vue's own paths use unheld.
+  // KeepAlive, Suspense and Teleport create nodes they insert later; holding them keeps the host
+  // from freeing them. They read `options` after `createRenderer`, so this assignment reaches them.
   Object.assign(options, createHeldNodeOps(core, options));
   const app = renderer.createApp(rootComponent, rootProps);
   // Captured before the override, or the replacement would call itself.
@@ -52,7 +53,7 @@ export function createIncaApp(
 
   return Object.assign(app, {
     mount: (rootContainer?: IncaElement) => {
-      const instance = mountAt(rootContainer ?? skipReactive(core.rootElement()));
+      const instance = mountAt(rootContainer ?? core.rootElement());
       mounted.add(app);
       return instance;
     },

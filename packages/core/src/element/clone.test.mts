@@ -92,12 +92,6 @@ describe("cloneNode", () => {
     expect(copy.kind).toBe("comment");
   });
 
-  it("gives a comment the default tag name", () => {
-    const copy = createCommentNode("c").cloneNode() as unknown as { tagName: string };
-
-    expect(copy.tagName).toBe("DIV");
-  });
-
   it("builds a text node with the data of the original", () => {
     const copy = createTextNode("x").cloneNode();
 

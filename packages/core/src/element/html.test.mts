@@ -308,20 +308,6 @@ describe("adopt", () => {
 
     expect("value" in kids(el)[0]!).toBe(false);
   });
-
-  it("makes a comment stand-in without the markup members", () => {
-    const el = createElementNode("div");
-    willParseInner([entry("#comment", 0, "c")]);
-
-    el.innerHTML = "<!--c-->";
-
-    const comment = kids(el)[0] as IncaElement;
-    expect([comment.kind, "innerHTML" in comment, "insertAdjacentHTML" in comment]).toEqual([
-      "comment",
-      false,
-      false,
-    ]);
-  });
 });
 
 describe("reads", () => {

@@ -35,7 +35,7 @@ function setup(initial: Record<string, string> = {}) {
     datasetTarget: vi.fn<() => object>(() => new FakeDOMStringMap()),
   };
   globalThis.__inca_native__ = nativeStub(host as never);
-  const el = createIncaElement(1, "element", "div");
+  const el = createIncaElement(1, "div");
   const dataset: DOMStringMap = el.dataset;
   return { host, el, dataset, store };
 }
@@ -48,12 +48,6 @@ describe("dataset", () => {
     const { el } = setup();
 
     expect(el.dataset).toBe(el.dataset);
-  });
-
-  it("leaves a comment stand-in without dataset", () => {
-    setup();
-
-    expect("dataset" in createIncaElement(8, "comment")).toBe(false);
   });
 
   it("reads the text the host answers", () => {

@@ -1,20 +1,21 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { holdNode, releaseNode } from "../ffi/index.mts";
+import { HTML_NAMESPACE, holdNode, interfacePrototypes, releaseNode } from "../ffi/index.mts";
 import { createIdTable } from "../idTable.mts";
-import type { ElementName } from "../ffi/index.mts";
+import type { ElementName, InterfacePrototypes } from "../ffi/index.mts";
 import type { IncaDocument, NodeId } from "../types.mts";
-import type { IncaElement, IncaFragment, IncaNode, IncaText } from "./types.mts";
+import type { IncaComment, IncaElement, IncaFragment, IncaNode, IncaText } from "./types.mts";
 
 /**
  * The functions that build and find the handles of native nodes. Every handle passes `text`,
- * `document` and `node`. An element or a fragment also passes `element` and `fragment`, the
- * builders of the kinds its clone can hold.
+ * `document` and `node`. An element or a fragment also passes `element`, `comment` and
+ * `fragment`, the builders of the kinds its clone can hold.
  */
 export interface HandleBuilders {
-  element?: (id: NodeId, kind: IncaElement["kind"], name?: ElementName) => IncaElement;
+  element?: (id: NodeId, name?: ElementName) => IncaElement;
   text: (id: NodeId, data: string) => IncaText;
+  comment?: (id: NodeId) => IncaComment;
   fragment?: (id: NodeId) => IncaFragment;
   /** The handle of the document. */
   document: () => IncaDocument;
@@ -25,6 +26,53 @@ export interface HandleBuilders {
    * rebuilds the handle of the root container when that handle was collected.
    */
   node: (id: NodeId) => IncaNode | undefined;
+}
+
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+const MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML";
+
+/** The prototypes of the host, read at the first call. */
+let stored: InterfacePrototypes | undefined;
+
+/**
+ * The prototypes of the node interfaces. Core reads them here and never from the globals, so a
+ * script that overwrites a global leaves the handles intact.
+ * @returns the prototypes by interface name
+ */
+export function prototypes(): InterfacePrototypes {
+  return (stored ??= interfacePrototypes());
+}
+
+/**
+ * Picks the prototype of a new handle.
+ * @param kind - the kind of the handle
+ * @param name - the name of an element, an HTML `div` when omitted
+ * @returns the prototype: `HTMLElement` for an element of the HTML namespace, the foreign element
+ *   prototype for the SVG and MathML namespaces, `Element` for any other namespace, and the
+ *   prototype of the interface that names each other kind
+ */
+export function prototypeOf(kind: IncaNode["kind"], name: ElementName = "div"): object {
+  const all = prototypes();
+  switch (kind) {
+    case "comment":
+      return all.Comment;
+    case "text":
+      return all.Text;
+    case "fragment":
+      return all.DocumentFragment;
+    case "document":
+      return all.HTMLDocument;
+    case "element":
+      switch (typeof name === "string" ? HTML_NAMESPACE : name[1]) {
+        case HTML_NAMESPACE:
+          return all.HTMLElement;
+        case SVG_NAMESPACE:
+        case MATHML_NAMESPACE:
+          return all.ForeignElement;
+        default:
+          return all.Element;
+      }
+  }
 }
 
 /** Every handle that `withNodeId` gave a node id. */
@@ -49,7 +97,7 @@ export function withNodeId<T extends object>(
 /**
  * Whether `value` is a node handle.
  * @param value - the value to check
- * @returns `true` for an element, a comment stand-in, a text handle or a fragment
+ * @returns `true` for an element, a comment, a text handle or a fragment
  */
 export function isNode(value: unknown): value is IncaNode {
   return typeof value === "object" && value !== null && nodes.has(value);

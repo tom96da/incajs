@@ -1481,14 +1481,6 @@ A fixed entry is deleted and its ID is never reused.
   bundle then carries a path of the machine. Fix: resolve the root to its real
   path before the keys are made.
 
-- **B-287 There is no `HTMLTemplateElement` global**
-  `Units: core · Size: S · Impact: Low`
-
-  A `template` element has `content`, but the global `HTMLTemplateElement` does not
-  exist, so `instanceof HTMLTemplateElement` throws a `ReferenceError`. Fix: define the
-  global with the `content` member when the `document` redesign adds the other node
-  classes.
-
 - **B-288 The `ownerDocument` of a template's `content` and its nodes is `document`**
   `Units: core · Size: L · Impact: Low`
 
@@ -1549,16 +1541,18 @@ A fixed entry is deleted and its ID is never reused.
   `Performance` an `EventTarget` base once the event target lives below `inca-jsenv` or the bridge
   passes a hook. The navigation parts wait for a navigation model that a window does not have.
 
-- **B-297 Nodes are not instances of `Node`, `Element` and `Text`**
-  `Units: bridge,core · Size: L · Impact: Medium`
+- **B-297 Nodes have no interface of their tag, of SVG or MathML, and no constructor**
+  `Units: bridge,core · Size: L · Impact: Low`
 
-  The globals `EventTarget`, `Node`, `CharacterData`, `Text`, `Comment`, `Element`, `HTMLElement`,
-  `DocumentFragment` and `HTMLDocument` exist, and no handle takes their prototypes. So
-  `instanceof Node` is `false` for every node except `document`. The prototype of `document` is
-  `Document.prototype`, which inherits `Node.prototype` and has its 18 constants, and `document`
-  reads `[object Document]`. In browsers it is `HTMLDocument.prototype` and reads
-  `[object HTMLDocument]`. Fix: handles that take their prototypes from the host, then the
-  interfaces of the tags, of SVG and MathML, and constructors.
+  An element of the HTML namespace is an `HTMLElement` for every tag, so `input instanceof
+  HTMLInputElement` throws, an unknown tag such as `foo` reads `[object HTMLElement]` (browsers
+  read `[object HTMLUnknownElement]`), and no `HTMLTemplateElement` holds the `content` of a
+  template. An SVG or MathML element is an `Element` whose shared members sit on a prototype with
+  no global, and reads `[object Element]`. `new EventTarget()`, `new Text()`, `new Comment()` and
+  `new DocumentFragment()` throw. No `Window` interface exists: `window` is an `EventTarget`, so
+  `console.log(window)` prints `EventTarget { ... }`. Fix: host class definitions for the
+  interfaces of the tags, for `SVGElement` and `MathMLElement` with their chains and for `Window`,
+  and constructors that create the node in the host.
 
 - **B-298 `new Document()` throws**
   `Units: node,bridge · Size: M · Impact: Low`
@@ -1867,6 +1861,13 @@ A fixed entry is deleted and its ID is never reused.
   the type of an event target. Fix: add a host call that returns the target of the window, as
   `documentNodeId()` does for the document, and let the wrapper of the host calls hand it to
   both places.
+
+- **B-341 A comment is a hidden element in the host**
+  `Units: node,gpui,core · Size: M · Impact: Low`
+
+  The host keeps a comment as a `#comment` container with `display: none` and its data in the
+  `value` attribute. Fix: add a comment node kind to the tree and to layout, then make
+  `createCommentNode()` create it and read its data through the text natives.
 
 - **B-343 An `auto` scrollbar reserves no width**
   `Units: gpui · Size: M · Impact: Low`
