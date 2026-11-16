@@ -76,20 +76,21 @@ export function writeData(node: IncaNode, data: string): void {
 
 /**
  * Replaces all children of `parent` with at most a single text child holding `text`. The old
- * children keep their listeners. An empty string leaves `parent` childless.
+ * children keep their listeners. An empty string leaves `parent` childless. A text that cannot
+ * become a node leaves the children in place.
  * @param parent - the element or fragment whose children are replaced
  * @param text - the new text content
  * @param builders - the functions that build the handles
  */
 export function replaceWithText(parent: IncaNode, text: string, builders: HandleBuilders): void {
+  const textNode = text ? builders.createText!(text) : undefined;
   for (const childId of childNodeIds(parent.__node_id)) {
     removeChild(parent.__node_id, childId);
     const child = nodeOf(childId);
     if (child) left(child);
   }
-  if (!text) return;
+  if (textNode === undefined) return;
 
-  const textNode = builders.createText!(text);
   appendChild(parent.__node_id, textNode.__node_id);
   entered(textNode);
 }
