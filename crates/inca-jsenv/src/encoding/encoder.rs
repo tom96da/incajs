@@ -10,7 +10,8 @@ use rquickjs::function::{Opt, This};
 use rquickjs::object::Property;
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, TypedArray, Value};
 
-use super::{Construct, STORE, is_detached, is_resizable, read};
+use super::Construct;
+use crate::buffer_source::{is_detached, is_resizable, read, store};
 use crate::class::{
     define_class, define_getter, define_global, define_method, define_sized_method, plain_class,
 };
@@ -18,7 +19,6 @@ use crate::quickjs::{
     UINT8, is_immutable_array_buffer, string_wtf8, typed_array_kind, typed_array_range,
     write_uint8_array,
 };
-use crate::vault::vault;
 
 const NOT_A_UINT8_ARRAY: &str = "the destination is not a Uint8Array. pass a Uint8Array";
 const NOT_AN_ENCODER: &str = "the receiver is not a TextEncoder. call the method on an instance";
@@ -101,7 +101,7 @@ fn encode_into_destination<'js>(
     let destination = destination
         .filter(|value| typed_array_kind(value) == Some(UINT8))
         .ok_or_else(wrong)?;
-    let store: Object = vault(ctx)?.get(STORE)?;
+    let store = store(ctx)?;
     let buffer: Value = read(&store, "typedBuffer", &destination)?;
     if is_resizable(&store, &buffer)? || is_immutable_array_buffer(&buffer) {
         return Err(wrong());
