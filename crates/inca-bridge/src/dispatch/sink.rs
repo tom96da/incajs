@@ -202,6 +202,14 @@ impl EventSink for EventDispatcher {
         }
     }
 
+    fn bar_drag(&self, node_id: NodeId, active: bool, window: &mut Window, cx: &mut App) {
+        if active {
+            self.state.bar_drag.set(Some(node_id));
+        } else {
+            self.end_bar_drag(Some(node_id), window, cx);
+        }
+    }
+
     fn key_input(
         &self,
         keystroke: &gpui::Keystroke,

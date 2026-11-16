@@ -272,3 +272,19 @@ fn parented_container() -> Host {
     add_div(&mut host, Some(container), 300.0, false);
     host
 }
+
+#[gpui::test]
+fn dragging_a_thumb_fires_one_scroll_at_the_container(cx: &mut TestAppContext) {
+    let host = styled_container(&[("overflow_x", "hidden"), ("overflow_y", "scroll")]);
+    let mut scene = Scene::in_mode(cx, host, &record_scroll(0), Scrollbars::Classic);
+    let none = gpui::Modifiers::none();
+    scene
+        .cx
+        .simulate_mouse_down(point(px(92.), px(10.)), gpui::MouseButton::Left, none);
+    scene
+        .cx
+        .simulate_mouse_move(point(px(92.), px(30.)), gpui::MouseButton::Left, none);
+    scene.frame();
+    scene.frame();
+    assert_eq!(scene.ran(), r#"["scroll:0:false"]"#);
+}

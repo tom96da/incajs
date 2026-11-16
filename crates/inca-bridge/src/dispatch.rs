@@ -63,6 +63,9 @@ pub(crate) struct State {
     /// Whether the `pointerdown` of the press now held was canceled. It suppresses `mousedown`,
     /// `mousemove` and `mouseup` until the `pointerup`.
     pointerdown_canceled: Cell<bool>,
+    /// The container whose scrollbar thumb is being dragged. While it is set, the pointer moves
+    /// and the hover state stay where they were.
+    bar_drag: Cell<Option<NodeId>>,
     /// The target of the last `pointerdown`, which the `contextmenu` of that press goes to.
     press_target: Cell<Option<NodeId>>,
     /// The target and button of the release that ended a capture, until its clicks and boundary

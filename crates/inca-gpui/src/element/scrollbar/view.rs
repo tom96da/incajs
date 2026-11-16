@@ -1,22 +1,20 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The element that draws the bars of a scroll container, and the state that shows and hides a
-//! thumb drawn over the content.
+//! The element that draws the bars of a scroll container, and the state it keeps between frames:
+//! when a thumb drawn over the content shows, which thumb the pointer is over and the thumb drag.
 
 use std::rc::Rc;
 
 use gpui::prelude::*;
 use gpui::{
-    Bounds, Context, ElementId, Hitbox, HitboxBehavior, Hsla, Pixels, ScrollHandle, canvas, fill,
-    px, rgb,
+    Axis, Bounds, Context, ElementId, Hitbox, HitboxBehavior, Hsla, Pixels, ScrollHandle, canvas,
+    fill, px, rgb,
 };
 
 use super::hover::sync_over_bar;
 use super::press::{Ctx, listen};
-use super::{
-    HIDE_DELAY, OVERLAY_THUMB, Parts, Scrollbars, THUMB, TRACK, gutter_of, hit_rects, parts,
-};
+use super::{Bar, HIDE_DELAY, Parts, Scrollbars, TRACK, gutter_of, hit_rects, parts, thumb_color};
 use crate::element::wheel::{WheelScrolled, anchor_insets};
 use crate::event_sink::EventSink;
 use inca_node::NodeId;
@@ -36,6 +34,18 @@ pub(super) struct ScrollbarState {
     pub(super) pressed_on_bar: bool,
     /// Whether the pointer lay over a bar at the last check.
     pub(super) over_bar: bool,
+    /// The axis whose thumb lies under the pointer.
+    pub(super) hover: Option<Axis>,
+    /// The thumb drag in progress.
+    pub(super) drag: Option<Drag>,
+}
+
+/// A thumb drag: the bar as the frame of the press drew it and the distance from the thumb start
+/// to the pointer along the axis at the press.
+#[derive(Clone, Copy)]
+pub(super) struct Drag {
+    pub(super) bar: Bar,
+    pub(super) grab: f32,
 }
 
 impl ScrollbarState {
@@ -46,6 +56,8 @@ impl ScrollbarState {
             overflowed,
             pressed_on_bar: false,
             over_bar: false,
+            hover: None,
+            drag: None,
         };
         if mode == Scrollbars::Overlay {
             state.show(cx);
@@ -55,14 +67,14 @@ impl ScrollbarState {
 
     /// Shows the thumb and hides it again after `HIDE_DELAY`, unless a later showing replaced
     /// this one.
-    fn show(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn show(&mut self, cx: &mut Context<Self>) {
         self.shown = true;
         self.generation += 1;
         let generation = self.generation;
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(HIDE_DELAY).await;
             this.update(cx, |state, cx| {
-                if state.generation == generation {
+                if state.generation == generation && state.drag.is_none() {
                     state.shown = false;
                     cx.notify();
                 }
@@ -93,9 +105,10 @@ pub(super) fn paint_plan(
     let corner = parts.corner.map(|corner| (corner, track));
     let thumbs = parts.bars().filter_map(|bar| {
         let thumb = bar.thumb?;
-        let colour = if bar.strip { THUMB } else { OVERLAY_THUMB };
+        let hover = state.hover == Some(bar.axis)
+            || state.drag.is_some_and(|drag| drag.bar.axis == bar.axis);
         let shown = bar.strip || mode == Scrollbars::Classic || state.shown;
-        shown.then(|| (thumb, Hsla::from(rgb(colour))))
+        shown.then(|| (thumb, thumb_color(hover, bar.strip)))
     });
     tracks.chain(corner).chain(thumbs).collect()
 }
@@ -143,6 +156,26 @@ pub(in crate::element) fn scrollbar<E: EventSink + Clone + 'static>(
                 }
                 state.overflowed = overflow;
             });
+            let drag_ended = state.update(cx, |state, cx| {
+                let ended = state.drag.is_some_and(|drag| {
+                    let bar = match drag.bar.axis {
+                        Axis::Horizontal => parts.x,
+                        Axis::Vertical => parts.y,
+                    };
+                    bar.is_none_or(|bar| bar.thumb.is_none())
+                });
+                if ended {
+                    state.drag = None;
+                    if mode == Scrollbars::Overlay {
+                        state.show(cx);
+                    }
+                }
+                ended
+            });
+            // The sink restyles and fires events, which a prepaint must not run.
+            if drag_ended && let Some(sink) = sink.clone() {
+                window.defer(cx, move |window, cx| sink.bar_drag(id, false, window, cx));
+            }
             let (plan, rects) = {
                 let state = state.read(cx);
                 (
@@ -163,6 +196,9 @@ pub(in crate::element) fn scrollbar<E: EventSink + Clone + 'static>(
             let ctx = Rc::new(Ctx {
                 id,
                 state,
+                handle: handle.clone(),
+                parts,
+                mode,
                 frame,
                 rects: rects.into_iter().map(|(_, rect)| rect).collect(),
                 hitboxes,
@@ -416,6 +452,8 @@ mod tests {
             overflowed: false,
             pressed_on_bar: false,
             over_bar: false,
+            hover: None,
+            drag: None,
         };
         let parts = parts(
             Bounds::new(point(px(0.), px(0.)), size(px(100.), px(100.))),
@@ -435,5 +473,75 @@ mod tests {
         tree.set_style(1, "height", 50.0).unwrap();
         let mut scene = BarScene::new(cx, Scrollbars::Overlay, tree);
         assert!(plan(&mut scene, &states, Scrollbars::Overlay, Size::default()).is_empty());
+    }
+
+    #[gpui::test]
+    fn an_overlay_thumb_does_not_hide_during_a_drag(cx: &mut TestAppContext) {
+        let (mut scene, states) = scene(cx, Scrollbars::Overlay, &Y_ONLY);
+        scene.press((95., 10.), gpui::MouseButton::Left);
+        wait(&mut scene, HIDE_DELAY);
+        assert!(thumb_shown(&mut scene, &states));
+    }
+
+    #[gpui::test]
+    fn an_overlay_thumb_hides_after_the_delay_that_the_release_of_a_drag_starts(
+        cx: &mut TestAppContext,
+    ) {
+        let (mut scene, states) = scene(cx, Scrollbars::Overlay, &Y_ONLY);
+        scene.press((95., 10.), gpui::MouseButton::Left);
+        wait(&mut scene, HIDE_DELAY);
+        scene.release((95., 10.), gpui::MouseButton::Left);
+        let renders = scene.probe.renders.get();
+        scene.cx.executor().advance_clock(HIDE_DELAY);
+        scene.cx.run_until_parked();
+        assert!(scene.probe.renders.get() > renders);
+        assert!(!thumb_shown(&mut scene, &states));
+    }
+
+    #[gpui::test]
+    fn the_end_of_a_drag_at_a_paint_starts_the_delay_of_an_overlay_thumb(cx: &mut TestAppContext) {
+        let (mut scene, states) = scene(cx, Scrollbars::Overlay, &Y_ONLY);
+        scene.press((95., 10.), gpui::MouseButton::Left);
+        wait(&mut scene, HIDE_DELAY);
+        scene
+            .probe
+            .tree
+            .borrow_mut()
+            .set_style(1, "height", 50.0)
+            .unwrap();
+        scene.frame();
+        wait(&mut scene, HIDE_DELAY);
+        let state = states.borrow()[0].clone();
+        assert!(!scene.cx.update(|_, cx| state.read(cx).shown));
+    }
+
+    #[gpui::test]
+    fn a_drag_in_a_classic_container_starts_no_timer(cx: &mut TestAppContext) {
+        let (mut scene, _states) = scene(cx, Scrollbars::Classic, &Y_ONLY);
+        scene.press((92., 10.), gpui::MouseButton::Left);
+        scene.release((92., 10.), gpui::MouseButton::Left);
+        let renders = scene.probe.renders.get();
+        scene.cx.executor().advance_clock(HIDE_DELAY);
+        scene.cx.run_until_parked();
+        assert_eq!(scene.probe.renders.get(), renders);
+    }
+
+    #[gpui::test]
+    fn the_end_of_a_drag_at_a_paint_starts_no_timer_in_a_classic_container(
+        cx: &mut TestAppContext,
+    ) {
+        let (mut scene, _states) = scene(cx, Scrollbars::Classic, &Y_ONLY);
+        scene.press((92., 10.), gpui::MouseButton::Left);
+        scene
+            .probe
+            .tree
+            .borrow_mut()
+            .set_style(1, "height", 50.0)
+            .unwrap();
+        scene.frame();
+        let renders = scene.probe.renders.get();
+        scene.cx.executor().advance_clock(HIDE_DELAY);
+        scene.cx.run_until_parked();
+        assert_eq!(scene.probe.renders.get(), renders);
     }
 }

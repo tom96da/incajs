@@ -212,6 +212,7 @@ impl EventSink for NoSink {
         input_request,
         bar_pressed,
         bar_released,
+        bar_drag,
     );
 }
 

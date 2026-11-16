@@ -5,7 +5,7 @@
 //! nothing else: no focus, no pressed state and no `click`.
 
 use gpui::{App, Window};
-use inca_gpui::EventPayload;
+use inca_gpui::{EventPayload, NO_BUTTON};
 use inca_node::NodeId;
 
 use super::{EventDispatcher, pointer_payload};
@@ -35,6 +35,22 @@ impl EventDispatcher {
         }
         if !self.state.pointerdown_canceled.get() {
             self.fire_inner(target, "mousedown", payload, window, cx);
+        }
+    }
+
+    /// Ends the freeze of the pointer moves and the hover state for a thumb drag: the freeze of
+    /// the container `only`, or the freeze of any container for `None`. It fires the boundary
+    /// events for the pointer's position.
+    pub(in crate::dispatch) fn end_bar_drag(
+        &self,
+        only: Option<NodeId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let held = self.state.bar_drag.get();
+        if held.is_some() && only.is_none_or(|node| held == Some(node)) {
+            self.state.bar_drag.set(None);
+            self.report_hover_with(self.deepest_hovered(), NO_BUTTON, window, cx);
         }
     }
 
@@ -145,5 +161,91 @@ mod tests {
         assert!(s.take().contains(&format!("lostpointercapture@{a}")));
         let host = s.host.borrow();
         assert_eq!((host.capture_pending, host.capture_active), (None, None));
+    }
+
+    /// The events of a move over `b` with the left button held during a drag of `a`.
+    fn held_move_during_a_drag(cx: &mut TestAppContext) -> Vec<String> {
+        let mut s = scene(cx);
+        s.hover(s.a);
+        s.take();
+        s.bar_drag(s.a, true);
+        s.moved_held(s.b, (5.0, 5.0));
+        s.take()
+    }
+
+    #[gpui::test]
+    fn a_thumb_drag_fires_no_pointer_or_mouse_move(cx: &mut TestAppContext) {
+        let got = held_move_during_a_drag(cx);
+        let moves = |e: &String| e.starts_with("pointermove") || e.starts_with("mousemove");
+        assert!(!got.iter().any(moves), "{got:?}");
+    }
+
+    #[gpui::test]
+    fn a_thumb_drag_fires_no_boundary_event(cx: &mut TestAppContext) {
+        let got = held_move_during_a_drag(cx);
+        assert!(got.is_empty(), "{got:?}");
+    }
+
+    #[gpui::test]
+    fn a_move_with_no_button_held_fires_mousemove_during_a_drag(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        s.hover(s.a);
+        s.take();
+        s.bar_drag(s.a, true);
+        s.moved(s.b, (5.0, 5.0));
+        let b = s.b;
+        assert!(s.take().contains(&format!("mousemove@{b}")));
+    }
+
+    #[gpui::test]
+    fn the_end_of_a_drag_fires_the_boundary_events_after_the_mouseup(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        s.hover(s.a);
+        s.take();
+        s.bar_down(s.a, 0);
+        s.bar_drag(s.a, true);
+        *s.dispatcher.state.hovered.borrow_mut() = [s.b].into();
+        s.bar_up(s.a, 0);
+        s.bar_drag(s.a, false);
+        let (a, b) = (s.a, s.b);
+        let got = s.take();
+        let order: Vec<_> = [
+            format!("mouseup@{a}"),
+            format!("mouseout@{a}"),
+            format!("mouseleave@{a}"),
+            format!("mouseover@{b}"),
+            format!("mouseenter@{b}"),
+        ]
+        .iter()
+        .map(|event| got.iter().position(|e| e == event).unwrap())
+        .collect();
+        assert!(order.windows(2).all(|pair| pair[0] < pair[1]), "{got:?}");
+    }
+
+    #[gpui::test]
+    fn the_end_of_another_containers_drag_leaves_the_freeze_in_place(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        s.bar_drag(s.b, true);
+        s.bar_drag(s.a, false);
+        assert_eq!(s.dispatcher.state.bar_drag.get(), Some(s.b));
+    }
+
+    #[gpui::test]
+    fn the_release_that_ends_a_capture_fires_the_boundary_events_at_the_pointer(
+        cx: &mut TestAppContext,
+    ) {
+        let mut s = scene(cx);
+        s.listen(
+            s.a,
+            "pointerdown",
+            &format!("(e) => __inca_native__.setPointerCapture({}, 1)", s.a),
+        );
+        s.hover(s.a);
+        s.bar_down(s.a, 0);
+        *s.dispatcher.state.hovered.borrow_mut() = [s.b].into();
+        s.take();
+        s.bar_up(s.a, 0);
+        let b = s.b;
+        assert!(s.take().contains(&format!("mouseover@{b}")));
     }
 }

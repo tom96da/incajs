@@ -205,6 +205,15 @@ impl EventSink for Probe {
         self.bars.borrow_mut().push(("bar_released".to_owned(), id));
     }
 
+    fn bar_drag(&self, id: NodeId, active: bool, window: &mut Window, _: &mut App) {
+        let name = if active { "bar_drag" } else { "bar_drag_end" };
+        self.bars.borrow_mut().push((name.to_owned(), id));
+        if !active {
+            // The bridge restyles at the end of a drag, which requests a redraw.
+            window.refresh();
+        }
+    }
+
     fn input(&self, id: NodeId) -> Option<InputState> {
         self.inputs.borrow().get(&id).cloned()
     }
@@ -303,11 +312,12 @@ pub(crate) fn probe_tree(cx: &mut TestAppContext, tracks: bool) -> Scene {
     }
 }
 
+/// The entities of type `T` that [`capture_entities`] collected.
+pub(crate) type Entities<T> = Rc<RefCell<Vec<gpui::Entity<T>>>>;
+
 /// Every entity of type `T` created from now on, in creation order. Call it before the first draw
 /// of the window.
-pub(crate) fn capture_entities<T: 'static>(
-    cx: &mut TestAppContext,
-) -> Rc<RefCell<Vec<gpui::Entity<T>>>> {
+pub(crate) fn capture_entities<T: 'static>(cx: &mut TestAppContext) -> Entities<T> {
     let entities = Rc::new(RefCell::new(Vec::new()));
     let seen = Rc::clone(&entities);
     cx.update(|cx: &mut App| {
@@ -383,6 +393,15 @@ impl BarScene {
     pub(crate) fn move_to(&mut self, (x, y): (f32, f32)) {
         self.cx
             .simulate_mouse_move(point(px(x), px(y)), None, gpui::Modifiers::none());
+    }
+
+    /// Moves the pointer to `(x, y)` with the left button held.
+    pub(crate) fn drag_to(&mut self, (x, y): (f32, f32)) {
+        self.cx.simulate_mouse_move(
+            point(px(x), px(y)),
+            gpui::MouseButton::Left,
+            gpui::Modifiers::none(),
+        );
     }
 
     pub(crate) fn press(&mut self, (x, y): (f32, f32), button: gpui::MouseButton) {

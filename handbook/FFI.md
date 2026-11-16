@@ -496,12 +496,13 @@ The string `"$window"` names the `window` export in place of a node id in `addEv
   and `buttons` 1 for Control), `detail` 0, pointer source mouse. It goes to the target of the
   press's `pointerdown`. On macOS a Control+left press and its release arrive as a left press and
   release with Control.
-- A pointer move reports the hover at once. Any other change of the containers under the pointer
-  reports once, at the end of the update. Each report compares the deepest container under the
-  pointer with the previous one and fires
-  `mouseout` at the old one, `mouseleave` on each container left (innermost
-  first), `mouseover` at the new one, `mouseenter` on each container entered
-  (outermost first). The `mouseover`/`mouseout` walk starts at the deepest
+- A pointer move reports the hover at once. During a thumb drag, from the press on the thumb to its
+  release, no `pointermove`, `mousemove` or hover report fires and `:hover` stays on the scroll
+  container. The release reports the boundary events of the pointer's position. Any other change of
+  the containers under the pointer reports once, at the end of the update. Each report compares the
+  deepest container under the pointer with the previous one and fires `mouseout` at the old one,
+  `mouseleave` on each container left (innermost first), `mouseover` at the new one, `mouseenter`
+  on each container entered (outermost first). The `mouseover`/`mouseout` walk starts at the deepest
   container. `relatedTarget` is the new container for `mouseout` and
   `mouseleave` and the old one for `mouseover` and `mouseenter`. The document is the
   outermost container of every path, so the reports reach it. A removed old
