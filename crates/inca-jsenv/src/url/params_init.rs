@@ -5,13 +5,12 @@
 
 use std::collections::HashMap;
 
-use rquickjs::atom::PredefinedAtom;
-use rquickjs::function::This;
 use rquickjs::object::Filter;
-use rquickjs::{Atom, Ctx, Error, Exception, Function, Object, Result as JsResult, Value};
+use rquickjs::{Atom, Ctx, Exception, Object, Result as JsResult, Value};
 use url::form_urlencoded;
 
 use super::usv;
+use crate::class::{Method, iterate, method_of};
 
 type List = Vec<(String, String)>;
 
@@ -21,35 +20,6 @@ const ITEM_NOT_ITERABLE: &str = "an item of the sequence is not iterable. pass [
 const WRONG_PAIR_LENGTH: &str =
     "a pair of the sequence does not have two items. pass [name, value] pairs";
 const SYMBOL_KEY: &str = "a key of the record is a symbol. use string keys";
-
-/// Calls `each` with every value `method` yields when called on `iterable`. A throw of `each`
-/// closes the iterator and propagates.
-fn iterate<'js>(
-    ctx: &Ctx<'js>,
-    iterable: &Value<'js>,
-    method: &Function<'js>,
-    mut each: impl FnMut(Value<'js>) -> JsResult<()>,
-) -> JsResult<()> {
-    let iterator: Object = method.call((This(iterable.clone()),))?;
-    let next: Function = iterator.get("next")?;
-    loop {
-        let result: Object = next.call((This(iterator.clone()),))?;
-        if result.get::<_, rquickjs::convert::Coerced<bool>>("done")?.0 {
-            return Ok(());
-        }
-        if let Err(error) = each(result.get("value")?) {
-            if !matches!(error, Error::Exception) {
-                return Err(error);
-            }
-            let exception = ctx.catch();
-            if let Ok(close) = iterator.get::<_, Function>("return") {
-                let _ = close.call::<_, Value>((This(iterator.clone()),));
-            }
-            drop(ctx.catch());
-            return Err(ctx.throw(exception));
-        }
-    }
-}
 
 /// The pairs `init` describes: a sequence of pairs, a record or a query string.
 pub(super) fn init_list<'js>(ctx: &Ctx<'js>, init: Option<&Value<'js>>) -> JsResult<List> {
@@ -63,15 +33,13 @@ pub(super) fn init_list<'js>(ctx: &Ctx<'js>, init: Option<&Value<'js>>) -> JsRes
             .into_owned()
             .collect());
     };
-    let method: Value = object.get(PredefinedAtom::SymbolIterator)?;
-    if method.is_undefined() || method.is_null() {
-        return record(ctx, object);
-    }
-    let method = method
-        .into_function()
-        .ok_or_else(|| Exception::throw_type(ctx, NOT_ITERABLE))?;
+    let method = match method_of(object)? {
+        Method::Absent => return record(ctx, object),
+        Method::NotCallable => return Err(Exception::throw_type(ctx, NOT_ITERABLE)),
+        Method::Function(method) => method,
+    };
     let mut list = Vec::new();
-    iterate(ctx, init, &method, |item| {
+    iterate(ctx, init, &method, true, |item| {
         list.push(pair_of(ctx, &item)?);
         Ok(())
     })?;
@@ -81,14 +49,12 @@ pub(super) fn init_list<'js>(ctx: &Ctx<'js>, init: Option<&Value<'js>>) -> JsRes
 /// The pair an item of a sequence holds.
 fn pair_of<'js>(ctx: &Ctx<'js>, item: &Value<'js>) -> JsResult<(String, String)> {
     let not_iterable = || Exception::throw_type(ctx, ITEM_NOT_ITERABLE);
-    let method = item
-        .as_object()
-        .ok_or_else(not_iterable)?
-        .get::<_, Value>(PredefinedAtom::SymbolIterator)?
-        .into_function()
-        .ok_or_else(not_iterable)?;
+    let object = item.as_object().ok_or_else(not_iterable)?;
+    let Method::Function(method) = method_of(object)? else {
+        return Err(not_iterable());
+    };
     let mut items = Vec::new();
-    iterate(ctx, item, &method, |value| {
+    iterate(ctx, item, &method, true, |value| {
         items.push(usv(&value)?);
         Ok(())
     })?;
