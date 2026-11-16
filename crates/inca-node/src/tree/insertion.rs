@@ -59,35 +59,38 @@ impl VirtualTree {
             return Err(TreeError::DocumentInserted(node_id));
         }
         if parent.tag_name() == DOCUMENT_TAG {
-            self.check_document_child(parent, node_id, replaced)?;
+            let tags = self
+                .nodes_to_move(node_id)
+                .into_iter()
+                .map(|id| self.nodes.get(&id).map(VirtualNode::tag_name));
+            self.check_document_child(parent, tags, |id| Some(id) != replaced, node_id)?;
         }
         Ok(())
     }
 
-    /// The rules of a document parent: no text, at most one element in all.
-    fn check_document_child(
+    /// The rules of a document parent: no text, at most one element in all. `tags` are the tags of
+    /// the nodes that go in, with `None` for an unknown node. `stays` tells which children of the
+    /// parent are still there after the insertion. `node_id` is the id of the error.
+    pub(super) fn check_document_child<'a>(
         &self,
         parent: &VirtualNode,
+        tags: impl IntoIterator<Item = Option<&'a str>>,
+        stays: impl Fn(NodeId) -> bool,
         node_id: NodeId,
-        replaced: Option<NodeId>,
     ) -> Result<(), TreeError> {
         let (mut texts, mut elements) = (0, 0);
-        for id in self.nodes_to_move(node_id) {
-            match self.nodes.get(&id).map(VirtualNode::tag_name) {
+        for tag in tags {
+            match tag {
                 Some(TEXT_TAG) => texts += 1,
                 Some(COMMENT_TAG) | None => {}
                 Some(_) => elements += 1,
             }
         }
-        let held = parent
-            .children
-            .iter()
-            .filter(|&&id| Some(id) != replaced)
-            .any(|id| {
-                self.nodes
-                    .get(id)
-                    .is_some_and(|n| n.tag_name() != COMMENT_TAG)
-            });
+        let held = parent.children.iter().filter(|&&id| stays(id)).any(|id| {
+            self.nodes
+                .get(id)
+                .is_some_and(|n| n.tag_name() != COMMENT_TAG)
+        });
         if texts > 0 || elements > 1 || (elements == 1 && held) {
             return Err(TreeError::DocumentChild(node_id));
         }
@@ -106,7 +109,7 @@ impl VirtualTree {
 
     /// Whether `candidate` is `of` itself or sits above it. The parentless content of a template
     /// continues at its template.
-    fn is_self_or_ancestor(&self, candidate: NodeId, of: NodeId) -> bool {
+    pub(super) fn is_self_or_ancestor(&self, candidate: NodeId, of: NodeId) -> bool {
         let mut current = Some(of);
         while let Some(id) = current {
             if id == candidate {
