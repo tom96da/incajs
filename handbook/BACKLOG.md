@@ -168,6 +168,14 @@ A fixed entry is deleted and its ID is never reused.
   No test installs the packed `incajs` into a scratch app and resolves `incajs/vue` and
   `incajs/style` through the published `exports`. The UI tests cover the workspace link.
 
+- **B-344 `SubtleCrypto` is missing every method except `digest()`**
+  `Units: jsenv · Size: L · Impact: Medium`
+
+  Browsers have `generateKey()`, `importKey()`, `exportKey()`, `sign()`, `verify()`, `encrypt()`,
+  `decrypt()`, `deriveKey()`, `deriveBits()`, `wrapKey()` and `unwrapKey()`, and `CryptoKey`.
+  Packages that import or generate a key fail. Fix: add `CryptoKey` and the algorithms one family
+  at a time, each as a `SubtleCrypto` method in Rust, behind the same buffer rules as `digest()`.
+
 ## P3
 
 - **B-001 Vue template type-checking**

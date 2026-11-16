@@ -43,6 +43,7 @@ its lifetime marker. These types derive it:
 | `PerformanceInstance` | `inca-jsenv` | The `performance` object | None |
 | `EntryInstance` | `inca-jsenv` | A `PerformanceMark` or `PerformanceMeasure` object | None |
 | `CryptoInstance` | `inca-jsenv` | The `crypto` object | None |
+| `SubtleInstance` | `inca-jsenv` | The `crypto.subtle` object | None |
 | `Encoder` | `inca-jsenv` | A `TextEncoder` object | None |
 | `Decoder` | `inca-jsenv` | A `TextDecoder` object | None |
 | `SourceMaps` | `inca-jsenv` | The source maps of a runtime | None |
