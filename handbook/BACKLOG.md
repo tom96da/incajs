@@ -339,16 +339,12 @@ A fixed entry is deleted and its ID is never reused.
   during a press is a second trigger. Fix: dispatch it when B-155 starts a
   drag and when a press is reset.
 
-- **B-027 No input-synthesis/state-introspection channel on the dev protocol**
+- **B-027 No Playwright-driven GUI tests of the app**
   `Units: host,cli · Size: L · Impact: Low`
 
-  `tests/tests/hmr-quickjs-state.test.mts` drives its fixture with a
-  `tick` dev notification standing in for a pointer click, because
-  there's no way to synthesize one against a real running `inca-host`
-  process from outside. A generalized version of that workaround — a dev
-  protocol method for synthesizing input and reading back app state —
-  would be the seed of future automated GUI testing (a Playwright-style
-  tool driving the app), not just this one test's stimulus.
+  The host answers `click`, `snapshot` and `waitIdle` on the dev protocol. A
+  Playwright-style test also needs typing and a Locator library, which B-107
+  holds.
 
 - **B-033 `[inca] reload`/`[inca] update`'s timing isn't the useful number**
   `Units: cli,host · Size: M · Impact: Low`
