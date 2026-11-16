@@ -102,6 +102,8 @@ pub(crate) struct Probe {
     pub(crate) focus: Rc<RefCell<Option<(NodeId, gpui::FocusHandle)>>>,
     /// The mode the view renders its scrollbars in.
     pub(crate) mode: Scrollbars,
+    /// The mode the view renders in once set, in place of `mode`.
+    pub(crate) mode_now: Rc<Cell<Option<Scrollbars>>>,
     /// The `(node, hovered)` of each `hover_changed`.
     pub(crate) hovers: Rc<RefCell<Vec<(NodeId, bool)>>>,
     /// The `(call, node)` of each `bar_pressed` and `bar_released`.
@@ -244,7 +246,8 @@ pub(crate) struct ProbeView(pub(crate) Probe);
 impl Render for ProbeView {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         self.0.renders.set(self.0.renders.get() + 1);
-        render_tree_with_events(&self.0.tree.borrow(), 0, &self.0, self.0.mode).unwrap()
+        let mode = self.0.mode_now.get().unwrap_or(self.0.mode);
+        render_tree_with_events(&self.0.tree.borrow(), 0, &self.0, mode).unwrap()
     }
 }
 
@@ -269,6 +272,7 @@ pub(crate) fn probe() -> Probe {
         requests: Rc::default(),
         focus: Rc::default(),
         mode: Scrollbars::Overlay,
+        mode_now: Rc::default(),
         hovers: Rc::default(),
         bars: Rc::default(),
         renders: Rc::default(),
