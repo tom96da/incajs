@@ -414,11 +414,17 @@ A fixed entry is deleted and its ID is never reused.
   removes the retry path. Keep one check, and decide whether it should verify
   the execute permission.
 
-- **B-079 Scrollbars are not supported**
-  `Units: gpui · Size: M · Impact: Low`
+- **B-079 A scrollbar has no track click, no arrow buttons, no `scrollbarWidth` and no `scrollbarColor`**
+  `Units: node,gpui,core · Size: M · Impact: Low`
 
-  The DOM shows a scrollbar for `overflow: scroll`. Here `gpui`'s scrollbar
-  width stays 0, so the wheel is the only way to scroll.
+  A press on the track does nothing, no arrow button is drawn, `scrollbarWidth` and
+  `scrollbarColor` are ignored, and a thumb drawn over the content hides at once where
+  Chromium fades it out in under 200 ms.
+
+  Fix: a press on the track scrolls by the client size toward the pointer and repeats while the
+  button is held. The arrow buttons need the arrow geometry of the browser, measured per
+  platform. `thin` and `none` change the reserved width, and the colours need parsing in
+  `inca-node`.
 
 - **B-082 Wheel scrolling has `gpui`'s axis rules and no gesture latching**
   `Units: gpui · Size: M · Impact: Low`
@@ -807,7 +813,7 @@ A fixed entry is deleted and its ID is never reused.
   node flush with the container edge in both cases.
 
   Fix: add `scroll-margin` on nodes and `scroll-padding` on containers as
-  style keys, and subtract them from the visible box in the reveal geometry
+  style keys, and subtract them from the client rectangle in the reveal geometry
   before aligning.
 
 - **B-177 A root taller than the window is cut off**
@@ -943,9 +949,10 @@ A fixed entry is deleted and its ID is never reused.
   subtracts the border box where the client size is the padding box, and
   measures from the first child box where the range starts at the content
   box. The anchor costs one `gpui` element and one layout node per scroll
-  container, and `record_children` skips it by counting the children from the
-  end. It has no hitbox and no listener, and the virtual tree, the snapshot
-  and the `children` of a template `ref` do not list it.
+  container, and `record_children` skips it and the bar element after the
+  children by counting the children from the end. The anchor has no hitbox and
+  no listener, and the virtual tree, the snapshot and the `children` of a
+  template `ref` do not list it.
 
   Fix: change the range computation in `gpui` (`div.rs`,
   `clamp_scroll_position` and the content size of the children) and drop the
@@ -1865,6 +1872,15 @@ A fixed entry is deleted and its ID is never reused.
   the type of an event target. Fix: add a host call that returns the target of the window, as
   `documentNodeId()` does for the document, and let the wrapper of the host calls hand it to
   both places.
+
+- **B-343 An `auto` scrollbar reserves no width**
+  `Units: gpui · Size: M · Impact: Low`
+
+  A browser reserves the width of an `auto` scrollbar only while the content overflows. Here the
+  thumb of an `auto` scrollbar is drawn over the content on every platform.
+
+  Fix: lay the container out a second time when the overflow appears, or reserve the width on the
+  overflow of the previous frame, which needs per-container state at layout time.
 
 - **B-345 `structuredClone` clones a view that tracks the length of a resizable buffer with a fixed length**
   `Units: jsenv · Size: M · Impact: Low`

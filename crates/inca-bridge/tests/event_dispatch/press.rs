@@ -354,3 +354,127 @@ fn a_right_press_fires_the_pointer_mouse_and_contextmenu_fields(cx: &mut TestApp
         r#"["pointerdown,1,mouse,2,2,3,0","mousedown,,,2,2,3,1","contextmenu,1,mouse,2,2,3,0"]"#
     );
 }
+
+/// Renders `node` with the scrollbars of a classic platform.
+struct BarRoot {
+    host: Rc<RefCell<Host>>,
+    node: NodeId,
+    dispatcher: EventDispatcher,
+}
+
+impl Render for BarRoot {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.dispatcher.begin_frame(window, cx);
+        let host = self.host.borrow();
+        render_tree_with_events(&host.tree, self.node, &self.dispatcher, Scrollbars::Classic)
+            .unwrap()
+    }
+}
+
+/// A 100x100 container that scrolls on both axes and holds a 50x20 `input`, focused at the
+/// start, and a tall child. Its listeners record `[type, target, currentTarget]` of
+/// `pointerdown`, `mousedown`, `pointerup`, `mouseup` and `click`. A press at (92, 50) lies on its
+/// vertical track.
+fn mount_bar_container(cx: &mut TestAppContext) -> (VisualTestContext, Rc<Engine>, NodeId, NodeId) {
+    let host = Rc::new(RefCell::new(Host::default()));
+    let engine = test_support::engine_for(&host);
+    let ids = engine
+        .eval::<Vec<NodeId>>(
+            r"
+            const n = __inca_native__;
+            const container = n.rootNodeId();
+            n.setStyle(container, 'width', 100);
+            n.setStyle(container, 'height', 100);
+            n.setStyle(container, 'overflow', 'scroll');
+            const input = n.createNode('input');
+            n.setStyle(input, 'width', 50);
+            n.setStyle(input, 'height', 20);
+            n.appendChild(container, input);
+            const tall = n.createNode('div');
+            n.setStyle(tall, 'width', 300);
+            n.setStyle(tall, 'height', 300);
+            n.appendChild(container, tall);
+            [container, input];
+            ",
+        )
+        .unwrap();
+    let (container, input) = (ids[0], ids[1]);
+    engine.eval::<()>("globalThis.seen = [];").unwrap();
+    for event in ["pointerdown", "mousedown", "pointerup", "mouseup", "click"] {
+        engine
+            .eval::<()>(&format!(
+                r"
+                __inca_test_listen__({container}, '{event}', (e) => {{
+                    globalThis.seen.push([e.type, e.target, e.currentTarget]);
+                }});
+                "
+            ))
+            .unwrap();
+    }
+    let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
+    let window = cx.add_window(|_, _| BarRoot {
+        host,
+        node: container,
+        dispatcher,
+    });
+    cx.update_window(window.into(), |_, window, cx| {
+        window.activate_window();
+        window.draw(cx).clear(cx);
+    })
+    .unwrap();
+    let mut cx = VisualTestContext::from_window(window.into(), cx);
+    // A click on the input focuses it.
+    cx.simulate_click(point(px(10.0), px(10.0)), Modifiers::none());
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    engine.eval::<()>("globalThis.seen.length = 0;").unwrap();
+    (cx, engine, container, input)
+}
+
+fn focused(engine: &Engine, node: NodeId) -> bool {
+    engine
+        .eval::<bool>(&format!("__inca_native__.focusedNode() === {node}"))
+        .unwrap()
+}
+
+/// Presses and releases the left button on the vertical track of the container of
+/// [`mount_bar_container`].
+fn press_the_track(cx: &mut VisualTestContext) {
+    let none = Modifiers::none();
+    let track = point(px(92.0), px(50.0));
+    cx.simulate_mouse_down(track, MouseButton::Left, none);
+    cx.simulate_mouse_up(track, MouseButton::Left, none);
+}
+
+#[gpui::test]
+fn a_press_on_a_scrollbar_keeps_the_focus(cx: &mut TestAppContext) {
+    let (mut cx, engine, _container, input) = mount_bar_container(cx);
+    assert!(focused(&engine, input));
+    press_the_track(&mut cx);
+    assert!(focused(&engine, input));
+}
+
+#[gpui::test]
+fn a_scrollbar_press_fires_four_events_at_the_container(cx: &mut TestAppContext) {
+    let (mut cx, engine, container, _input) = mount_bar_container(cx);
+    press_the_track(&mut cx);
+    let events: Vec<(String, NodeId, NodeId)> = serde_json::from_str(
+        &engine
+            .eval::<String>("JSON.stringify(globalThis.seen)")
+            .unwrap(),
+    )
+    .unwrap();
+    let want = ["pointerdown", "mousedown", "pointerup", "mouseup"]
+        .map(|name| (name.to_owned(), container, container));
+    assert_eq!(events, want);
+}
+
+#[gpui::test]
+fn a_press_on_the_content_beside_a_scrollbar_blurs_the_focused_input(cx: &mut TestAppContext) {
+    let (mut cx, engine, _container, input) = mount_bar_container(cx);
+    assert!(focused(&engine, input));
+    let none = Modifiers::none();
+
+    cx.simulate_mouse_down(point(px(50.0), px(50.0)), MouseButton::Left, none);
+
+    assert!(!focused(&engine, input));
+}

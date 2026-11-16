@@ -3,19 +3,16 @@
 
 import { native } from "./native.mts";
 import type { NodeId, ScrollAlignment } from "../types.mts";
+import type { NodeBox, NodeScroll } from "./native.mts";
 
 /**
  * Returns the box `nodeId` was drawn at in the last frame, in window logical
  * pixels, or `null` if the node has no recorded box.
  * @param nodeId - the node to read
- * @returns `[x, y, width, height, border, scrollX, scrollY]`, or `null`. `border` is one uniform
- *   width on all sides. `scrollX` and `scrollY` are the positive scroll offset the parent applied
- *   to the box.
+ * @returns the box, or `null`
  * @throws {TypeError} when `nodeId` names no node
  */
-export function layoutOf(
-  nodeId: NodeId,
-): readonly [number, number, number, number, number, number, number] | null {
+export function layoutOf(nodeId: NodeId): NodeBox | null {
   return native().layoutOf(nodeId);
 }
 
@@ -29,7 +26,7 @@ export function layoutOf(
  *   of the last drawn frame.
  * @throws {TypeError} when `nodeId` names no node
  */
-export function scrollOf(nodeId: NodeId): readonly [number, number, number, number] | null {
+export function scrollOf(nodeId: NodeId): NodeScroll | null {
   return native().scrollOf(nodeId);
 }
 

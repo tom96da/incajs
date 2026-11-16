@@ -7,6 +7,7 @@ use gpui::{
     MouseMoveEvent, MouseUpEvent, ScrollHandle, ScrollWheelEvent, Window, canvas,
 };
 
+use super::scrollbar::OverBar;
 use super::wheel::{RootStep, WheelChain, next_offset};
 use crate::event_sink::{EventPayload, EventSink, button_index};
 use inca_node::tree::NodeId;
@@ -51,6 +52,11 @@ fn control_click(cx: &App) -> ControlClick {
     cx.try_global::<ControlClick>().copied().unwrap_or_default()
 }
 
+/// Whether `cx` runs on a platform that reports a Control+click as a right press.
+pub(super) fn control_click_is_right(cx: &App) -> bool {
+    control_click(cx).macos
+}
+
 /// The button and modifiers of a press the platform reported as a right press
 /// without Control while Control is held: a left press with Control.
 fn restore_control_click(
@@ -82,7 +88,7 @@ fn completes_click(button: MouseButton, modifiers: Modifiers, macos: bool) -> bo
     !(macos && button == MouseButton::Left && modifiers.control)
 }
 
-fn restored_down(event: &MouseDownEvent, cx: &App) -> MouseDownEvent {
+pub(super) fn restored_down(event: &MouseDownEvent, cx: &App) -> MouseDownEvent {
     let (button, modifiers) =
         restore_control_click(event.button, event.modifiers, control_click(cx));
     MouseDownEvent {
@@ -92,7 +98,7 @@ fn restored_down(event: &MouseDownEvent, cx: &App) -> MouseDownEvent {
     }
 }
 
-fn restored_up(event: &MouseUpEvent, cx: &App) -> MouseUpEvent {
+pub(super) fn restored_up(event: &MouseUpEvent, cx: &App) -> MouseUpEvent {
     let (button, modifiers) =
         restore_control_click(event.button, event.modifiers, control_click(cx));
     MouseUpEvent {
@@ -130,9 +136,40 @@ fn slot(button: MouseButton) -> usize {
     usize::from(button_index(button))
 }
 
-fn mark_target(cx: &mut App, id: NodeId) {
+pub(super) fn mark_target(cx: &mut App, id: NodeId) {
     let target = cx.default_global::<MouseTarget>();
     target.current.get_or_insert(id);
+}
+
+/// Reports `id` as the target of the pointer move being handled, and to `sink` as the container
+/// under the pointer when no deeper container has reported.
+pub(super) fn move_over(
+    sink: Option<&impl EventSink>,
+    id: NodeId,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    // The first container to report is the deepest one.
+    let deepest = mouse_target(cx).is_none();
+    mark_target(cx, id);
+    if deepest && let Some(sink) = sink {
+        sink.pointer_over(id, window, cx);
+    }
+}
+
+/// Reports `hovered` for `id` to `sink`. A report that `id` is no longer hovered waits while the
+/// pointer lies over a bar of `id`, because the bar's box hides the container's own.
+pub(super) fn report_hover(
+    sink: &impl EventSink,
+    id: NodeId,
+    hovered: bool,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if !hovered && OverBar::holds(cx, id) {
+        return;
+    }
+    sink.hover_changed(id, hovered, window, cx);
 }
 
 /// Reports `id` as the event's target when no deeper container has.
@@ -148,14 +185,7 @@ pub(super) fn mark_mouse_target<Elem: InteractiveElement + FluentBuilder>(
             let slot = slot(event.button);
             cx.default_global::<MouseTarget>().pressed[slot].get_or_insert((id, event.click_count));
         })
-        .on_mouse_move(move |_, window, cx| {
-            // The first container to report is the deepest one.
-            let deepest = mouse_target(cx).is_none();
-            mark_target(cx, id);
-            if deepest && let Some(sink) = &sink {
-                sink.pointer_over(id, window, cx);
-            }
-        })
+        .on_mouse_move(move |_, window, cx| move_over(sink.as_ref(), id, window, cx))
         .on_scroll_wheel(move |_, _, cx| mark_target(cx, id));
     element
         .interactivity()
@@ -173,7 +203,7 @@ where
     element.when_some(dispatch.cloned(), |el, sink| {
         // Hover state ignores the last input kind, so a key press keeps it.
         el.hover_listener_mode(gpui::HoverListenerMode::InputModalityIndependent)
-            .on_hover(move |hovered, window, cx| sink.hover_changed(id, *hovered, window, cx))
+            .on_hover(move |hovered, window, cx| report_hover(&sink, id, *hovered, window, cx))
     })
 }
 

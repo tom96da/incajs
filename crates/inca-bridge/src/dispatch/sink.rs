@@ -178,6 +178,30 @@ impl EventSink for EventDispatcher {
         self.schedule_hover_report(window, cx);
     }
 
+    fn bar_pressed(
+        &self,
+        node_id: NodeId,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        if let EventPayload::Mouse(mouse) = payload {
+            self.bar_press(node_id, mouse.button, payload, window, cx);
+        }
+    }
+
+    fn bar_released(
+        &self,
+        node_id: NodeId,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        if let EventPayload::Mouse(mouse) = payload {
+            self.bar_release(node_id, mouse.button, payload, window, cx);
+        }
+    }
+
     fn key_input(
         &self,
         keystroke: &gpui::Keystroke,

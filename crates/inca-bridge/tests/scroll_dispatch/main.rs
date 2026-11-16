@@ -15,7 +15,7 @@ use gpui::{
     VisualTestContext, Window, point, prelude::*, px,
 };
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::{EventSink, NodeLayout, render_tree_with_events};
+use inca_gpui::{EventSink, NodeLayout, Scrollbars, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 
@@ -24,13 +24,15 @@ use inca_bridge::test_support;
 struct Root {
     host: Rc<RefCell<Host>>,
     dispatcher: EventDispatcher,
+    /// The mode the scrollbars are rendered in.
+    mode: Scrollbars,
 }
 
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.dispatcher.begin_frame(window, cx);
         let host = self.host.borrow();
-        let element = render_tree_with_events(&host.tree, 0, &self.dispatcher).unwrap();
+        let element = render_tree_with_events(&host.tree, 0, &self.dispatcher, self.mode).unwrap();
         // The walk records only the children of node 0, which is 100x100.
         let bounds = Bounds::new(Point::default(), gpui::size(px(100.), px(100.)));
         let (border, scroll) = (px(0.), Point::default());
@@ -38,6 +40,7 @@ impl Render for Root {
             bounds,
             border,
             scroll,
+            gutter: gpui::Size::default(),
         };
         self.dispatcher.record_layout(0, layout);
         element
@@ -58,8 +61,23 @@ impl Scene {
         Self::with_bindings(cx, host, js, "")
     }
 
+    /// Like [`Self::new`], with the scrollbars rendered in `mode`.
+    fn in_mode(cx: &mut TestAppContext, host: Host, js: &str, mode: Scrollbars) -> Self {
+        Self::build(cx, host, js, "", mode)
+    }
+
     /// Like [`Self::new`], with `before_draw` run before the first draw.
     fn with_bindings(cx: &mut TestAppContext, host: Host, js: &str, before_draw: &str) -> Self {
+        Self::build(cx, host, js, before_draw, Scrollbars::Overlay)
+    }
+
+    fn build(
+        cx: &mut TestAppContext,
+        host: Host,
+        js: &str,
+        before_draw: &str,
+        mode: Scrollbars,
+    ) -> Self {
         let host = Rc::new(RefCell::new(host));
         let engine = test_support::engine_for(&host);
         engine.eval::<()>("globalThis.ran = [];").unwrap();
@@ -71,6 +89,7 @@ impl Scene {
         let window = cx.add_window(|_, _| Root {
             host: Rc::clone(&host),
             dispatcher: dispatcher.clone(),
+            mode,
         });
         cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
             .unwrap();

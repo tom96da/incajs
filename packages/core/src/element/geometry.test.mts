@@ -13,7 +13,7 @@ import type { HandleBuilders } from "./lifecycle.mts";
 
 const builders = { node: nodeOf } as HandleBuilders;
 
-type Box = readonly [number, number, number, number, number, number, number];
+type Box = readonly [number, number, number, number, number, number, number, number, number];
 
 function installHost(
   boxes: Record<number, Box>,
@@ -30,9 +30,13 @@ function installHost(
 
 describe("offsetOf", () => {
   it("measures from the parent's padding edge inside its border", () => {
-    installHost({ 1: [100, 50, 200, 100, 4, 0, 0], 2: [110, 60, 20, 20, 0, 0, 0] }, undefined, {
-      2: 1,
-    });
+    installHost(
+      { 1: [100, 50, 200, 100, 4, 0, 0, 0, 0], 2: [110, 60, 20, 20, 0, 0, 0, 0, 0] },
+      undefined,
+      {
+        2: 1,
+      },
+    );
     createIncaElement(1, "element", "div");
     const child = createIncaElement(2, "element", "div");
 
@@ -42,7 +46,7 @@ describe("offsetOf", () => {
   it("adds the scroll recorded with the box and ignores a later write", () => {
     const scrollOf = vi.fn<() => readonly [number, number, number, number]>(() => [90, 90, 0, 300]);
     installHost(
-      { 1: [100, 50, 200, 100, 4, 0, 0], 2: [95, 20, 20, 20, 0, 15, 40] },
+      { 1: [100, 50, 200, 100, 4, 0, 0, 0, 0], 2: [95, 20, 20, 20, 0, 15, 40, 0, 0] },
       scrollOf as never,
       { 2: 1 },
     );
@@ -56,13 +60,13 @@ describe("offsetOf", () => {
 
 describe("rectOf", () => {
   it("derives the edges from the box and keeps fractional values", () => {
-    const rect = rectOf([10.5, 20.25, 30.75, 40, 2, 0, 0]);
+    const rect = rectOf([10.5, 20.25, 30.75, 40, 2, 0, 0, 0, 0]);
     expect([rect.x, rect.y, rect.width, rect.height]).toEqual([10.5, 20.25, 30.75, 40]);
     expect([rect.left, rect.top, rect.right, rect.bottom]).toEqual([10.5, 20.25, 41.25, 60.25]);
   });
 
   it("returns the plain values from toJSON", () => {
-    const rect = rectOf([1, 2, 3, 4, 0, 0, 0]);
+    const rect = rectOf([1, 2, 3, 4, 0, 0, 0, 0, 0]);
     expect(rect.toJSON()).toEqual({
       x: 1,
       y: 2,
@@ -132,7 +136,7 @@ describe("tabIndexOf", () => {
 
 describe("createIncaElement layout", () => {
   it("reads the rect from the last drawn box", () => {
-    installMembersHost({ 1: [10, 20, 30, 40, 2, 0, 0] });
+    installMembersHost({ 1: [10, 20, 30, 40, 2, 0, 0, 0, 0] });
     const el = createIncaElement(1, "element", "div");
     const rect = el.getBoundingClientRect();
     expect([
@@ -156,7 +160,7 @@ describe("createIncaElement layout", () => {
   });
 
   it("rounds the offset and client members", () => {
-    installMembersHost({ 1: [10.4, 20.6, 30.5, 40.2, 1.6, 0, 0] });
+    installMembersHost({ 1: [10.4, 20.6, 30.5, 40.2, 1.6, 0, 0, 0, 0] });
     const el = createIncaElement(1, "element", "div");
     expect([el.offsetWidth, el.offsetHeight]).toEqual([31, 40]);
     expect([el.offsetLeft, el.offsetTop]).toEqual([10, 21]);
@@ -167,8 +171,8 @@ describe("createIncaElement layout", () => {
   it("reads a position slightly above the parent as 0", () => {
     installMembersHost(
       {
-        1: [100, 50, 200, 100, 0, 0, 0],
-        2: [99.7, 49.7, 20, 20, 0, 0, 0],
+        1: [100, 50, 200, 100, 0, 0, 0, 0, 0],
+        2: [99.7, 49.7, 20, 20, 0, 0, 0, 0, 0],
       },
       null,
       { 2: 1 },
@@ -180,7 +184,19 @@ describe("createIncaElement layout", () => {
   });
 
   it("clamps the client size at zero", () => {
-    installMembersHost({ 1: [0, 0, 2, 2, 5, 0, 0] });
+    installMembersHost({ 1: [0, 0, 2, 2, 5, 0, 0, 0, 0] });
+    const el = createIncaElement(1, "element", "div");
+    expect([el.clientWidth, el.clientHeight]).toEqual([0, 0]);
+  });
+
+  it("leaves the scrollbar strips out of the client size", () => {
+    installMembersHost({ 1: [0, 0, 100, 80, 2, 0, 0, 15, 12] });
+    const el = createIncaElement(1, "element", "div");
+    expect([el.clientWidth, el.clientHeight]).toEqual([81, 64]);
+  });
+
+  it("clamps the client size at zero beside a scrollbar strip", () => {
+    installMembersHost({ 1: [0, 0, 10, 10, 0, 0, 0, 15, 15] });
     const el = createIncaElement(1, "element", "div");
     expect([el.clientWidth, el.clientHeight]).toEqual([0, 0]);
   });
@@ -188,8 +204,8 @@ describe("createIncaElement layout", () => {
   it("measures offsets from the offsetParent", () => {
     installMembersHost(
       {
-        1: [100, 50, 200, 100, 0, 0, 0],
-        2: [110.4, 60.6, 20, 20, 0, 0, 0],
+        1: [100, 50, 200, 100, 0, 0, 0, 0, 0],
+        2: [110.4, 60.6, 20, 20, 0, 0, 0, 0, 0],
       },
       null,
       { 2: 1 },
@@ -202,7 +218,7 @@ describe("createIncaElement layout", () => {
   });
 
   it("gives a null offsetParent when the parent has no record", () => {
-    installMembersHost({ 2: [110, 60, 20, 20, 0, 0, 0] }, null, { 2: 1 });
+    installMembersHost({ 2: [110, 60, 20, 20, 0, 0, 0, 0, 0] }, null, { 2: 1 });
     const child = createIncaElement(2, "element", "div");
     createIncaElement(1, "element", "div");
 
@@ -211,14 +227,14 @@ describe("createIncaElement layout", () => {
   });
 
   it("gives a null offsetParent to the root wrapper", () => {
-    installMembersHost({ 1: [5.4, 6, 10, 10, 0, 0, 0] });
+    installMembersHost({ 1: [5.4, 6, 10, 10, 0, 0, 0, 0, 0] });
     const el = createIncaElement(1, "element", "div");
     expect(el.offsetParent).toBeNull();
     expect([el.offsetLeft, el.offsetTop]).toEqual([5, 6]);
   });
 
   it("reads zeros for a freed element", () => {
-    installMembersHost({ 1: [10, 20, 30, 40, 2, 0, 0] });
+    installMembersHost({ 1: [10, 20, 30, 40, 2, 0, 0, 0, 0] });
     const el = createIncaElement(1, "element", "div");
     markFreed([el.__node_id]);
     expect([
@@ -241,8 +257,8 @@ describe("offsetParent of a top-level element", () => {
       container.appendChild(top);
       return new WeakRef(container);
     })();
-    boxes[host.ROOT] = [0, 0, 200, 100, 0, 0, 0];
-    boxes[top.__node_id] = [10, 10, 20, 20, 0, 0, 0];
+    boxes[host.ROOT] = [0, 0, 200, 100, 0, 0, 0, 0, 0];
+    boxes[top.__node_id] = [10, 10, 20, 20, 0, 0, 0, 0, 0];
 
     await collectGarbage(() => root.deref() === undefined);
     expect(root.deref()).toBeUndefined();

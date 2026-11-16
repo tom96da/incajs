@@ -18,7 +18,7 @@ use gpui::{Context, Render, TestAppContext, VisualTestContext};
 use inca_node::spec::{StyleSpec, build_spec, wheel_axes};
 use inca_node::tree::AttributeValue;
 use inca_node::tree::{NodeId, VirtualTree};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -100,6 +100,14 @@ pub(crate) struct Probe {
     pub(crate) requests: Rc<RefCell<Vec<(NodeId, InputRequest)>>>,
     /// The node whose focus handle `focus_handle` gives.
     pub(crate) focus: Rc<RefCell<Option<(NodeId, gpui::FocusHandle)>>>,
+    /// The mode the view renders its scrollbars in.
+    pub(crate) mode: Scrollbars,
+    /// The `(node, hovered)` of each `hover_changed`.
+    pub(crate) hovers: Rc<RefCell<Vec<(NodeId, bool)>>>,
+    /// The `(call, node)` of each `bar_pressed` and `bar_released`.
+    pub(crate) bars: Rc<RefCell<Vec<(String, NodeId)>>>,
+    /// How many times the view rendered.
+    pub(crate) renders: Rc<Cell<usize>>,
 }
 
 impl EventSink for Probe {
@@ -185,6 +193,18 @@ impl EventSink for Probe {
             .push(("release".to_owned(), released, Some(released), pressed));
     }
 
+    fn hover_changed(&self, id: NodeId, hovered: bool, _: &mut Window, _: &mut App) {
+        self.hovers.borrow_mut().push((id, hovered));
+    }
+
+    fn bar_pressed(&self, id: NodeId, _: &EventPayload, _: &mut Window, _: &mut App) {
+        self.bars.borrow_mut().push(("bar_pressed".to_owned(), id));
+    }
+
+    fn bar_released(&self, id: NodeId, _: &EventPayload, _: &mut Window, _: &mut App) {
+        self.bars.borrow_mut().push(("bar_released".to_owned(), id));
+    }
+
     fn input(&self, id: NodeId) -> Option<InputState> {
         self.inputs.borrow().get(&id).cloned()
     }
@@ -205,7 +225,6 @@ impl EventSink for Probe {
         pointer_moved,
         pointer_left,
         modifiers_changed,
-        hover_changed,
         pointer_over,
         key_input,
     );
@@ -215,7 +234,8 @@ pub(crate) struct ProbeView(pub(crate) Probe);
 
 impl Render for ProbeView {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        render_tree_with_events(&self.0.tree.borrow(), 0, &self.0).unwrap()
+        self.0.renders.set(self.0.renders.get() + 1);
+        render_tree_with_events(&self.0.tree.borrow(), 0, &self.0, self.0.mode).unwrap()
     }
 }
 
@@ -239,6 +259,10 @@ pub(crate) fn probe() -> Probe {
         inputs: Rc::default(),
         requests: Rc::default(),
         focus: Rc::default(),
+        mode: Scrollbars::Overlay,
+        hovers: Rc::default(),
+        bars: Rc::default(),
+        renders: Rc::default(),
     }
 }
 
@@ -276,6 +300,120 @@ pub(crate) fn probe_tree(cx: &mut TestAppContext, tracks: bool) -> Scene {
         prevented,
         payloads,
         focus,
+    }
+}
+
+/// Every entity of type `T` created from now on, in creation order. Call it before the first draw
+/// of the window.
+pub(crate) fn capture_entities<T: 'static>(
+    cx: &mut TestAppContext,
+) -> Rc<RefCell<Vec<gpui::Entity<T>>>> {
+    let entities = Rc::new(RefCell::new(Vec::new()));
+    let seen = Rc::clone(&entities);
+    cx.update(|cx: &mut App| {
+        cx.observe_new(move |_: &mut T, _, cx| seen.borrow_mut().push(cx.entity()))
+            .detach();
+    });
+    entities
+}
+
+/// A 100x100 root styled `root_props` that holds a 300x300 child (node 1).
+pub(crate) fn bar_tree(root_props: &[(&str, &str)]) -> VirtualTree {
+    let mut tree = VirtualTree::new();
+    let root = boxed(&mut tree, None, 100., 100.);
+    for (key, value) in root_props {
+        tree.set_style(root, *key, *value).unwrap();
+    }
+    boxed(&mut tree, Some(root), 300., 300.);
+    tree
+}
+
+/// A 200x200 root (node 0) that holds a 100x100 scroller styled `props` (node 1) and a 50x50
+/// sibling (node 3) below it. The scroller holds a 300x300 child (node 2).
+pub(crate) fn nested_bar_tree(props: &[(&str, &str)]) -> VirtualTree {
+    let mut tree = VirtualTree::new();
+    let root = boxed(&mut tree, None, 200., 200.);
+    let scroller = boxed(&mut tree, Some(root), 100., 100.);
+    for (key, value) in props {
+        tree.set_style(scroller, *key, *value).unwrap();
+    }
+    boxed(&mut tree, Some(scroller), 300., 300.);
+    boxed(&mut tree, Some(root), 50., 50.);
+    tree
+}
+
+/// A window that renders the probe's tree in the probe's mode, drawn once.
+pub(crate) struct BarScene {
+    pub(crate) probe: Probe,
+    pub(crate) cx: VisualTestContext,
+}
+
+impl BarScene {
+    pub(crate) fn new(cx: &mut TestAppContext, mode: Scrollbars, tree: VirtualTree) -> Self {
+        Self::with_probe(
+            cx,
+            Probe {
+                mode,
+                ..probe_of(tree)
+            },
+        )
+    }
+
+    pub(crate) fn with_probe(cx: &mut TestAppContext, probe: Probe) -> Self {
+        let view = probe.clone();
+        let window = cx.add_window(|_, _| ProbeView(view));
+        let mut scene = Self {
+            probe,
+            cx: VisualTestContext::from_window(window.into(), cx),
+        };
+        scene.frame();
+        scene
+    }
+
+    pub(crate) fn frame(&mut self) {
+        self.cx.update(|window, cx| window.draw(cx).clear(cx));
+    }
+
+    /// The scroll handle of `node`, which the first frame created.
+    pub(crate) fn handle(&self, node: NodeId) -> ScrollHandle {
+        self.probe.handles.borrow()[&node].clone()
+    }
+
+    /// Moves the pointer to `(x, y)` with no button held.
+    pub(crate) fn move_to(&mut self, (x, y): (f32, f32)) {
+        self.cx
+            .simulate_mouse_move(point(px(x), px(y)), None, gpui::Modifiers::none());
+    }
+
+    pub(crate) fn press(&mut self, (x, y): (f32, f32), button: gpui::MouseButton) {
+        self.cx
+            .simulate_mouse_down(point(px(x), px(y)), button, gpui::Modifiers::none());
+    }
+
+    pub(crate) fn release(&mut self, (x, y): (f32, f32), button: gpui::MouseButton) {
+        self.cx
+            .simulate_mouse_up(point(px(x), px(y)), button, gpui::Modifiers::none());
+    }
+
+    /// One wheel step of `delta` at `(x, y)`, then a draw.
+    pub(crate) fn wheel(&mut self, at: (f32, f32), delta: f32) {
+        self.wheel_undrawn(at, delta);
+        self.frame();
+    }
+
+    /// One wheel step of `delta` at `(x, y)`. The window draws what the step refreshes.
+    pub(crate) fn wheel_undrawn(&mut self, (x, y): (f32, f32), delta: f32) {
+        self.cx.simulate_event(gpui::ScrollWheelEvent {
+            position: point(px(x), px(y)),
+            delta: gpui::ScrollDelta::Pixels(point(px(0.), px(delta))),
+            ..Default::default()
+        });
+    }
+
+    /// The events the probe saw, as `(event, target)` pairs.
+    pub(crate) fn events(&self) -> Vec<(String, NodeId)> {
+        let calls = self.probe.calls.borrow();
+        calls.iter().map(|c| (c.0.clone(), c.1)).collect()
     }
 }
 
@@ -335,7 +473,7 @@ pub(crate) fn frame(cx: &mut TestAppContext, window: gpui::AnyWindowHandle) {
 
 pub(crate) fn draw(cx: &mut gpui::VisualTestContext, tree: &VirtualTree, probe: &Probe) {
     cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-        render_tree_with_events(tree, 0, probe).unwrap()
+        render_tree_with_events(tree, 0, probe, probe.mode).unwrap()
     });
 }
 

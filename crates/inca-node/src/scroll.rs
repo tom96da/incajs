@@ -12,7 +12,7 @@ pub struct Rect {
     pub height: f32,
 }
 
-/// Where the node's edge or centre lands in the visible box, per axis.
+/// Where the node's edge or centre lands in the client rectangle, per axis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Align {
     /// The start edges meet.
@@ -22,15 +22,15 @@ pub enum Align {
     /// The end edges meet.
     End,
     /// A node that shows stays put. Any other node moves the least that
-    /// brings its near edge in. A node longer than the box aligns its end when
-    /// its start lies before the box, and its start when its end lies after
-    /// it. A node that covers the whole box stays put.
+    /// brings its near edge in. A node longer than the rectangle aligns its end when
+    /// its start lies before the rectangle, and its start when its end lies after
+    /// it. A node that covers the whole rectangle stays put.
     Nearest,
-    /// A node that shows stays put. A node that lies outside the box
-    /// centres. A node that shows partly follows `Nearest`.
+    /// A node that shows stays put. A node that lies outside the client
+    /// rectangle centres. A node that shows partly follows `Nearest`.
     Reveal,
     /// A node that shows fully or partly stays put. A node that lies outside
-    /// the box centres.
+    /// the client rectangle centres.
     CenterOutside,
 }
 
@@ -81,7 +81,7 @@ pub fn scroll_delta(node: Rect, view: Rect, block: Align, inline: Align) -> (f32
 }
 
 /// Scrolls each container of `chain`, innermost first, to show `node`.
-/// `chain` pairs a container with its visible box. `scroll` receives the
+/// `chain` pairs a container with its client rectangle. `scroll` receives the
 /// container and the wanted change, and returns the change it applied. The
 /// node moves by the applied change before the next container is handled.
 pub fn scroll_chain<I: Copy>(

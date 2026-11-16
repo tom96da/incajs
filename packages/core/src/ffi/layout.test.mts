@@ -8,7 +8,9 @@ import { layoutOf, scrollIntoViewNode, scrollNode, scrollOf } from "./layout.mts
 
 const native = {
   layoutOf: vi.fn<
-    (nodeId: number) => readonly [number, number, number, number, number, number, number] | null
+    (
+      nodeId: number,
+    ) => readonly [number, number, number, number, number, number, number, number, number] | null
   >(() => null),
   scrollOf: vi.fn<(nodeId: number) => readonly [number, number, number, number] | null>(() => null),
   scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
@@ -22,8 +24,8 @@ beforeEach(() => {
 
 describe("wrapper functions forward to __inca_native__", () => {
   it("layoutOf", () => {
-    native.layoutOf.mockReturnValueOnce([1, 2, 3, 4, 0, 5, 6]);
-    expect(layoutOf(1)).toEqual([1, 2, 3, 4, 0, 5, 6]);
+    native.layoutOf.mockReturnValueOnce([1, 2, 3, 4, 0, 5, 6, 7, 8]);
+    expect(layoutOf(1)).toEqual([1, 2, 3, 4, 0, 5, 6, 7, 8]);
     expect(native.layoutOf).toHaveBeenCalledWith(1);
   });
 

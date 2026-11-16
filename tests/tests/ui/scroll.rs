@@ -46,8 +46,8 @@ fn scrolling_stops_at_the_end_of_the_content(cx: &mut TestAppContext) {
 
     h.scroll(box_, 0.0, -500.0);
 
-    // 180 of content in a 100 box leaves 80 to scroll.
-    near(y(&mut h, "first"), first - 80.0);
+    // 180 of content in a 100 box with a 15 horizontal strip leaves 95 to scroll.
+    near(y(&mut h, "first"), first - 95.0);
 }
 
 #[gpui::test]

@@ -11,7 +11,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{Context, Render, TestAppContext, Window, WindowHandle, prelude::*};
-use inca_gpui::render_tree_with_events;
+use inca_gpui::{Scrollbars, render_tree_with_events};
 use inca_jsenv::{Clock, Engine, EngineError, ErrorReporter, system_clock};
 use inca_node::NodeId;
 
@@ -115,7 +115,8 @@ impl Render for TestRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.dispatcher.begin_frame(window, cx);
         let host = self.host.borrow();
-        render_tree_with_events(&host.tree, self.node, &self.dispatcher).unwrap()
+        render_tree_with_events(&host.tree, self.node, &self.dispatcher, Scrollbars::Overlay)
+            .unwrap()
     }
 }
 

@@ -120,7 +120,7 @@ takes a percentage such as `"50%"`. A key that starts with `-` is unknown.
 | `borderRadius` | px size (`>= 0`) | applied to all four corners |
 | `color` | color (below) | cascades to descendant text leaves |
 | `fontSize` | px size (`>= 0`) | cascades to descendant text leaves; a size above `2048px` applies as `2048px` |
-| `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"clip"` \| `"scroll"` \| `"auto"`; `overflow` also takes two of them, x then y | `"hidden"` clips and script can scroll it; `"scroll"` (and its alias `"auto"`) also scrolls with the wheel; `overflowX`/`overflowY` win over `overflow` |
+| `overflow` / `overflowX` / `overflowY` | `"visible"` \| `"hidden"` \| `"clip"` \| `"scroll"` \| `"auto"`; `overflow` also takes two of them, x then y | `"hidden"` clips and script can scroll it; `"scroll"` and `"auto"` also scroll with the wheel; `overflowX`/`overflowY` win over `overflow` |
 | `padding` / `paddingX` / `paddingY` / `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft` | px size (`>= 0`) | a negative, `NaN` or infinite number is ignored |
 | `margin` / `marginX` / `marginY` / `marginTop` / `marginRight` / `marginBottom` / `marginLeft` | px size (negative allowed) \| `"auto"` | |
 | `flexGrow` / `flexShrink` | number or decimal string (`>= 0`) | |
@@ -141,7 +141,9 @@ and right, `paddingY` for top and bottom), and an axis key beats the
 shorthand. A value of the wrong shape counts as unset and the next key
 applies.
 
-Scrollbars are not supported.
+`"auto"` draws its scrollbar over the content and reserves no width. The scrollbar has no arrow
+buttons, and a click on the track does not scroll. An overlay scrollbar hides without a fade.
+`scrollbarWidth` and `scrollbarColor` are not supported, and their keys are ignored.
 
 `position` and `zIndex` are not supported, and their keys are ignored.
 
@@ -172,7 +174,7 @@ with the differences below. The listener methods are described in
   first draw, reads smaller until the next frame.
 - `scrollWidth` and `scrollHeight` of a `"visible"` or `"clip"` element equal
   its client size.
-- The scroll range of a `"hidden"` or `"scroll"` element leaves out the end
+- The scroll range of a `"hidden"`, `"scroll"` or `"auto"` element leaves out the end
   margins of its children and content that overflows a child.
 - Every scroll applies at once, whatever `behavior` says.
 - `focus()` and `scrollIntoView()` on a node that has no box yet scroll when

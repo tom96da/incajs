@@ -18,7 +18,11 @@ export type { AttributeValue, CallbackId, NodeId, ScrollAlignment };
 /** Element kind passed to `createNode`. */
 export type TagName = string;
 
-/** One overflow value; `"auto"` is an alias of `"scroll"`. */
+/**
+ * One overflow value. `"scroll"` and `"auto"` scroll with the wheel. The scrollbar of `"auto"`
+ * draws over the content, and the one of `"scroll"` reserves its width where the platform does
+ * not hide scrollbars.
+ */
 export type Overflow = "visible" | "hidden" | "clip" | "scroll" | "auto";
 
 /**
@@ -70,7 +74,11 @@ export interface StyleProps {
   borderRadius?: Px;
   /** Font size in px (`>= 0`) for this container's own text. Cascades to descendant text leaves, same as {@link StyleProps.color}. */
   fontSize?: Px;
-  /** Overflow on both axes, or `"<x> <y>"` per axis; `"scroll"` (alias `"auto"`) makes the container scroll with the wheel. Overridden per axis by {@link StyleProps.overflowX}/{@link StyleProps.overflowY}. */
+  /**
+   * Overflow on both axes, or `"<x> <y>"` per axis; `"scroll"` and `"auto"` make the container
+   * scroll with the wheel. Overridden per axis by {@link StyleProps.overflowX}/
+   * {@link StyleProps.overflowY}.
+   */
   overflow?: Overflow | `${Overflow} ${Overflow}`;
   /** Horizontal overflow; wins over {@link StyleProps.overflow}. */
   overflowX?: Overflow;

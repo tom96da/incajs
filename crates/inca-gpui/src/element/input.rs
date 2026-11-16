@@ -382,7 +382,7 @@ mod tests {
     use super::*;
     use crate::element::input::text_runs;
     use crate::tests::*;
-    use crate::{render_tree, render_tree_with_events};
+    use crate::{Scrollbars, render_tree, render_tree_with_events};
     use gpui::InputHandler as _;
     use gpui::{
         Context, Keystroke, Render, TestAppContext, TextStyle, VisualTestContext, point, size,
@@ -412,7 +412,7 @@ mod tests {
 
     fn drawn(cx: &mut VisualTestContext, probe: &Probe) {
         cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-            render_tree_with_events(&probe.tree.borrow(), 0, probe).unwrap()
+            render_tree_with_events(&probe.tree.borrow(), 0, probe, Scrollbars::Overlay).unwrap()
         });
     }
 

@@ -414,7 +414,7 @@ impl Host {
                 if is_scroll_container(&self.tree, id)
                     && let Some(l) = layout.get(&id)
                 {
-                    chain.push((id, rect_of(l.bounds, l.border)));
+                    chain.push((id, l.client_rect()));
                 }
             }
             (rect_of(own.bounds, px(0.0)), chain)

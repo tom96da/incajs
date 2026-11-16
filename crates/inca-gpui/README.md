@@ -13,7 +13,7 @@ Input dispatch (which callback fires for which `(node, event)`) goes
 through this crate's `EventSink` trait, which the caller implements.
 
 The crate also holds the logic every host shares: the `focus` module
-(per-node focus handles and the Tab order), the wheel wiring of scroll
+(per-node focus handles and the Tab order), the wheel wiring and the scrollbars of scroll
 containers, the scroll-into-view box of a laid-out node (`rect_of`),
 and the event table (`EVENTS`) with each event's `bubbles`, `cancelable` and
 `composed` flags.

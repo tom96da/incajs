@@ -17,7 +17,7 @@ use gpui_platform::application;
 
 use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::render_tree_with_events;
+use inca_gpui::{Scrollbars, render_tree_with_events};
 use inca_jsenv::Engine;
 use inca_node::{NodeId, VirtualTree};
 
@@ -30,7 +30,8 @@ struct ClickCounter {
 impl Render for ClickCounter {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let host = self.host.borrow();
-        render_tree_with_events(&host.tree, self.root, &self.dispatcher).unwrap()
+        render_tree_with_events(&host.tree, self.root, &self.dispatcher, Scrollbars::Overlay)
+            .unwrap()
     }
 }
 

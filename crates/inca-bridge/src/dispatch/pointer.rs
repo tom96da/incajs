@@ -10,6 +10,7 @@ use inca_node::NodeId;
 
 use super::EventDispatcher;
 
+mod bar;
 mod capture;
 
 /// `payload` as a pointer event about `button`: the mouse pointer and no click count.

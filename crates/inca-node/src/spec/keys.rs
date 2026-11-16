@@ -715,7 +715,7 @@ mod tests {
     #[case::keyword_case("display", text("FLEX"), Some("flex"))]
     #[case::keyword_underscore("flex_direction", text("ROW_REVERSE"), Some("row-reverse"))]
     #[case::keyword_hyphen("flex_direction", text("row-reverse"), Some("row-reverse"))]
-    #[case::keyword_alias("overflow_x", text("auto"), Some("auto"))]
+    #[case::keyword_auto("overflow_x", text("auto"), Some("auto"))]
     #[case::pair_equal("overflow", text("hidden  Hidden"), Some("hidden"))]
     #[case::pair_single("overflow", text("scroll"), Some("scroll"))]
     #[case::pair_unequal("overflow", text("HIDDEN scroll"), Some("hidden scroll"))]

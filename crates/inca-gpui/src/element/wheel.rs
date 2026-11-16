@@ -1,6 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashSet;
+
 use gpui::prelude::*;
 use gpui::{Global, Pixels, Point, ScrollHandle, Window, div, point, px};
 
@@ -22,6 +24,13 @@ impl Global for WheelChain {}
 pub(super) struct RootStep(pub(super) Option<Point<Pixels>>);
 
 impl Global for RootStep {}
+
+/// The containers a wheel step reached, until their bars have been drawn once. A container that
+/// shows its thumb while it scrolls removes its own id when it draws.
+#[derive(Default)]
+pub(super) struct WheelScrolled(pub(super) HashSet<NodeId>);
+
+impl Global for WheelScrolled {}
 
 /// The scroll change a wheel `delta` makes along the scrolling `axes`. A
 /// delta on both axes moves along y when the magnitudes tie.
@@ -73,15 +82,18 @@ pub(super) fn next_offset(
 /// origin of all child boxes to the farthest end of any child box, adds the
 /// padding and subtracts the border box, so the anchor sits twice the border
 /// width before the content box on each axis.
-#[allow(clippy::cast_possible_truncation)]
 pub(super) fn scroll_anchor(style: &StyleSpec) -> impl IntoElement {
+    let (top, left) = anchor_insets(style);
+    div().absolute().top(top).left(left).size_0()
+}
+
+/// The top and left offsets of a zero-size child that sits where the scroll anchor of a container
+/// with `style` sits.
+#[allow(clippy::cast_possible_truncation)]
+pub(super) fn anchor_insets(style: &StyleSpec) -> (Pixels, Pixels) {
     let border = style.border_width.unwrap_or(0.0) * 2.0;
     let inset = |padding: Option<f64>| px((padding.unwrap_or(0.0) - border) as f32);
-    div()
-        .absolute()
-        .top(inset(style.padding.top))
-        .left(inset(style.padding.left))
-        .size_0()
+    (inset(style.padding.top), inset(style.padding.left))
 }
 
 /// Tracks a scroll container's [`ScrollHandle`]. A container below the root
@@ -110,13 +122,16 @@ where
         }
         el.when_some(dispatch.cloned(), |el, sink| {
             el.on_scroll_wheel(move |_, window, cx| {
-                if let Some(delta) = cx.default_global::<RootStep>().0.take()
-                    && let Some(next) = sink
-                        .wheel_axes(id)
-                        .and_then(|axes| next_offset(axes, &handle, delta))
-                {
-                    handle.set_offset(next);
-                    window.refresh();
+                if let Some(delta) = cx.default_global::<RootStep>().0.take() {
+                    cx.default_global::<WheelScrolled>().0.insert(id);
+                    let axes = sink.wheel_axes(id);
+                    if let Some(next) = axes.and_then(|axes| next_offset(axes, &handle, delta)) {
+                        handle.set_offset(next);
+                    }
+                    // A step that moves nothing still shows a thumb drawn over the content.
+                    if axes.is_some_and(|axes| axes.x || axes.y) {
+                        window.refresh();
+                    }
                 }
             })
         })
@@ -138,6 +153,7 @@ mod tests {
     #![allow(clippy::float_cmp, clippy::unwrap_used)]
 
     use super::*;
+    use crate::Scrollbars;
     use crate::event_sink::EventSink;
     use crate::tests::*;
     use gpui::{Context, Render, ScrollDelta, ScrollWheelEvent, StyleRefinement, Window};
@@ -488,5 +504,23 @@ mod tests {
         let mut scene = Wheels::cached(cx, tree);
         scene.wheel(-30.);
         assert_eq!(scene.probe.layouts.borrow()[&child].scroll.y, px(30.));
+    }
+
+    #[gpui::test]
+    fn a_root_step_that_moves_nothing_redraws(cx: &mut TestAppContext) {
+        let mut scene = BarScene::new(cx, Scrollbars::Overlay, bar_tree(&[("overflow", "scroll")]));
+        scene.handle(0).set_offset(point(px(0.), px(-200.)));
+        scene.frame();
+        let renders = scene.probe.renders.get();
+        scene.wheel_undrawn((50., 50.), -40.);
+        assert!(scene.probe.renders.get() > renders);
+    }
+
+    #[gpui::test]
+    fn a_root_that_does_not_scroll_is_not_redrawn_by_a_wheel_step(cx: &mut TestAppContext) {
+        let mut scene = BarScene::new(cx, Scrollbars::Overlay, bar_tree(&[("overflow", "hidden")]));
+        let renders = scene.probe.renders.get();
+        scene.wheel_undrawn((50., 50.), -40.);
+        assert_eq!(scene.probe.renders.get(), renders);
     }
 }
