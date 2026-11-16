@@ -9,6 +9,7 @@ use rquickjs::{Ctx, Exception, FromJs, Result as JsResult, Value};
 
 use super::entries::{EntryData, Kind, append, entry, prototype};
 use crate::class::{NEEDS_NEW, new_target_prototype, options_of, require, text};
+use crate::structured_clone::clone_value;
 use crate::time::now;
 
 /// The time origin, which `measure()` takes as 0.
@@ -54,9 +55,12 @@ pub(super) fn timestamp<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<f64
     Ok(time)
 }
 
-/// The data of the mark `args` describe, and its detail. The arguments of `mark()` and of
+/// The data of the mark `args` describe, and its detail as passed. The arguments of `mark()` and of
 /// `new PerformanceMark()`.
-fn make_mark<'js>(ctx: &Ctx<'js>, args: &[Value<'js>]) -> JsResult<(EntryData, Value<'js>)> {
+fn make_mark<'js>(
+    ctx: &Ctx<'js>,
+    args: &[Value<'js>],
+) -> JsResult<(EntryData, Option<Value<'js>>)> {
     require(ctx, "mark", args, 1)?;
     let name = text(ctx, &args[0])?;
     let mut detail = None;
@@ -82,12 +86,13 @@ fn make_mark<'js>(ctx: &Ctx<'js>, args: &[Value<'js>]) -> JsResult<(EntryData, V
         start_time,
         duration: 0.0,
     };
-    Ok((data, detail_or_null(ctx, detail)))
+    Ok((data, detail))
 }
 
 /// `performance.mark()`.
 pub(super) fn mark<'js>(ctx: &Ctx<'js>, args: &[Value<'js>]) -> JsResult<Value<'js>> {
     let (data, detail) = make_mark(ctx, args)?;
+    let detail = cloned_detail(ctx, detail)?;
     let entry = entry(ctx, data, detail, prototype(ctx, Kind::Mark)?)?.into_value();
     append(ctx, entry.clone())?;
     Ok(entry)
@@ -109,6 +114,7 @@ impl<'js> IntoJsFunc<'js, ()> for MarkConstructor {
         let args: Vec<_> = (0..params.len()).filter_map(|i| params.arg(i)).collect();
         let (data, detail) = make_mark(ctx, &args)?;
         let proto = new_target_prototype(&params, prototype(ctx, Kind::Mark)?)?;
+        let detail = cloned_detail(ctx, detail)?;
         Ok(entry(ctx, data, detail, proto)?.into_value())
     }
 }
@@ -118,9 +124,19 @@ pub(super) fn defined(value: Value<'_>) -> Option<Value<'_>> {
     (!value.is_undefined()).then_some(value)
 }
 
-/// `detail`, or `null` when it is absent.
-pub(super) fn detail_or_null<'js>(ctx: &Ctx<'js>, detail: Option<Value<'js>>) -> Value<'js> {
-    detail.unwrap_or_else(|| Value::new_null(ctx.clone()))
+/// The clone of `detail`, or `null` when it is absent.
+///
+/// # Errors
+///
+/// Returns a `DataCloneError` for a detail that cannot be cloned.
+pub(super) fn cloned_detail<'js>(
+    ctx: &Ctx<'js>,
+    detail: Option<Value<'js>>,
+) -> JsResult<Value<'js>> {
+    match detail {
+        Some(detail) => clone_value(ctx, &detail, &[]),
+        None => Ok(Value::new_null(ctx.clone())),
+    }
 }
 
 #[cfg(test)]
@@ -130,7 +146,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::class::{NEEDS_NEW, NOT_AN_OBJECT};
-    use crate::tests::{TIME, run_after, run_at, thrown_marked};
+    use crate::tests::{FUNCTION_DETAIL, TIME, run_after, run_at, thrown_marked};
 
     const NO_MARK_NAME: &str = "TypeError: too few arguments for mark. pass at least 1";
 
@@ -215,19 +231,144 @@ mod tests {
         assert_eq!(got, "true");
     }
 
+    #[test]
+    fn mark_detail_is_not_the_passed_object() {
+        assert_eq!(
+            run_at(
+                r"
+                const d = {};
+                String(performance.mark('a', { detail: d }).detail !== d);
+                "
+            ),
+            "true"
+        );
+    }
+
+    #[test]
+    fn a_change_of_the_passed_detail_does_not_show_in_the_mark() {
+        assert_eq!(
+            run_at(
+                r"
+                const d = {};
+                const m = performance.mark('a', { detail: d });
+                d.x = 1;
+                String(m.detail.x === undefined);
+                "
+            ),
+            "true"
+        );
+    }
+
     #[rstest]
-    #[case::object("performance.mark('a', { detail: d }).detail === d")]
     #[case::absent("performance.mark('a').detail === null")]
     #[case::undefined("performance.mark('a', { detail: undefined }).detail === null")]
-    fn mark_stores_the_detail(#[case] check: &str) {
-        let got = run_at(&format!(
-            r"
-            const d = {{}};
-            String({check});
-            "
-        ));
+    fn mark_detail_defaults_to_null(#[case] check: &str) {
+        assert_eq!(run_at(&format!("String({check})")), "true");
+    }
 
-        assert_eq!(got, "true");
+    #[test]
+    fn mark_detail_that_is_a_primitive_reads_as_the_value() {
+        assert_eq!(
+            run_at("String(performance.mark('a', { detail: 5 }).detail)"),
+            "5"
+        );
+    }
+
+    #[test]
+    fn mark_detail_reads_as_one_object() {
+        assert_eq!(
+            run_at(
+                r"
+                const m = performance.mark('a', { detail: {} });
+                String(m.detail === m.detail);
+                "
+            ),
+            "true"
+        );
+    }
+
+    #[test]
+    fn mark_throws_for_a_function_detail() {
+        assert_eq!(
+            thrown_marked("performance.mark('a', { detail: () => {} })"),
+            FUNCTION_DETAIL
+        );
+    }
+
+    #[test]
+    fn mark_with_a_function_detail_adds_no_entry() {
+        assert_eq!(
+            run_at(
+                r"
+                try {
+                    performance.mark('a', { detail: () => {} });
+                } catch (e) {}
+                String(performance.getEntries().length);
+                "
+            ),
+            "0"
+        );
+    }
+
+    #[test]
+    fn the_constructor_throws_for_a_function_detail() {
+        assert_eq!(
+            thrown_marked("new PerformanceMark('b', { detail: () => {} })"),
+            FUNCTION_DETAIL
+        );
+    }
+
+    #[test]
+    fn the_constructor_stores_a_clone_of_the_detail() {
+        assert_eq!(
+            run_at(
+                r"
+                const d = {};
+                String(new PerformanceMark('b', { detail: d }).detail !== d);
+                "
+            ),
+            "true"
+        );
+    }
+
+    #[test]
+    fn a_reserved_name_throws_before_the_detail_is_cloned() {
+        assert_eq!(
+            thrown_marked("performance.mark('fetchStart', { detail: () => {} })"),
+            "SyntaxError: the name fetchStart is reserved. use another name"
+        );
+    }
+
+    #[test]
+    fn a_bad_start_time_throws_before_the_detail_is_cloned() {
+        assert_eq!(
+            thrown_marked("performance.mark('a', { startTime: -1, detail: () => {} })"),
+            TIME
+        );
+    }
+
+    #[test]
+    fn the_prototype_of_new_target_is_read_before_the_detail_is_cloned() {
+        assert_eq!(
+            run_at(
+                r"
+                const C = new Proxy(function () {}, {
+                    get(target, key) {
+                        if (key === 'prototype') {
+                            throw new RangeError('prototype');
+                        }
+                        return target[key];
+                    },
+                });
+                try {
+                    Reflect.construct(PerformanceMark, ['x', { detail: () => {} }], C);
+                } catch (e) {
+                    e.message;
+                }
+                "
+            ),
+            "prototype"
+        );
     }
 
     #[rstest]

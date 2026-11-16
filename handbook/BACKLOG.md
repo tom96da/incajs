@@ -1532,14 +1532,6 @@ A fixed entry is deleted and its ID is never reused.
   becomes a plain attribute and no child is created, although elements now have `innerHTML`. Fix:
   set the `innerHTML` prop as a property in `patchProp`, as the `value` prop is.
 
-- **B-295 The detail of a performance entry is the object that was passed**
-  `Units: jsenv · Size: S · Impact: Low`
-
-  `detail` of `performance.mark()` and `performance.measure()` is stored as the passed object, so
-  a later change of the object changes the entry. Fix: copy `detail` through `structuredClone` when
-  the entry is made, then drop the line about `detail` from the `performance` section of
-  `built-ins.md`.
-
 - **B-296 `performance` lacks the observer, the navigation parts and the event target**
   `Units: jsenv · Size: M · Impact: Low`
 
@@ -1549,7 +1541,6 @@ A fixed entry is deleted and its ID is never reused.
   value for the load-event names. Fix: add `PerformanceObserver` over the timeline. Give
   `Performance` an `EventTarget` base once the event target lives below `inca-jsenv` or the bridge
   passes a hook. The navigation parts wait for a navigation model that a window does not have.
-  The `detail` copy belongs to B-295.
 
 - **B-297 Nodes have no `Node`, `Element` or `Text` interface objects**
   `Units: bridge,core · Size: L · Impact: Medium`

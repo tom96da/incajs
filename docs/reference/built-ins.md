@@ -88,8 +88,6 @@ It differs in two places:
   `timeOrigin` and the entries of `mark()` and `measure()` start again with it.
 - The timeline starts empty. It holds the entries of `mark()` and `measure()`,
   and no other entry type.
-- The `detail` of a mark or a measure is the object you passed. A function is
-  accepted.
 - `toJSON()` returns `timeOrigin` only, and entries have no `navigationId`.
 - `performance` is not an `EventTarget`, so it has no `addEventListener()`.
 - `measure()` with a navigation timing name, such as `fetchStart`, as `start`
