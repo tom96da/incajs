@@ -117,7 +117,13 @@ pub(super) fn install_events(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("addEventListener", add_event_listener)?;
     n.set("removeEventListener", remove_event_listener)?;
     n.set("dispatchEvent", dispatch_event)?;
+    n.set("windowTargetId", window_target_id)?;
     n.set("click", click)
+}
+
+/// The target that names the window in the listener and dispatch calls.
+fn window_target_id(_host: Rc<RefCell<Host>>) -> impl Fn() -> EventTargetId {
+    || EventTargetId::Window
 }
 
 fn add_event_listener<'js>(
@@ -438,6 +444,24 @@ mod tests {
             callback_ids(&listeners, EventTargetId::Node(2), "click"),
             &[9],
             "another node's registrations must survive"
+        );
+    }
+
+    #[test]
+    fn a_listener_on_the_window_target_registers_on_the_window() {
+        let (engine, host) = engine_with_bindings();
+        engine
+            .eval::<u32>(
+                r"
+                const n = __inca_native__;
+                n.addEventListener(n.windowTargetId(), 'click', () => {})
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(
+            callback_ids(&host.borrow().listeners, EventTargetId::Window, "click"),
+            [1]
         );
     }
 

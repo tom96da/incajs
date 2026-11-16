@@ -11,6 +11,7 @@ import {
   setAttribute,
   setInputValue,
   setStyle,
+  windowTargetId,
 } from "../ffi/index.mts";
 import { installInterfaces, defineMembers, windowHandlerMembers } from "./interfaces.mts";
 import {
@@ -250,7 +251,7 @@ let theWindow: IncaWindow | undefined;
  */
 export function windowHandle(): IncaWindow {
   if (theWindow === undefined) {
-    const handle = createEventTarget("$window", WHEEL_EVENTS);
+    const handle = createEventTarget(windowTargetId, WHEEL_EVENTS);
     defineMembers(handle, windowHandlerMembers());
     Object.defineProperty(handle, Symbol.toStringTag, { value: "Window" });
     theWindow = handle as IncaWindow;

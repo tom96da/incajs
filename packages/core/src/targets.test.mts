@@ -8,6 +8,7 @@ import "./targets.mts";
 import { document } from "./document.mts";
 import { adoptTextNode, createIncaComment, createIncaFragment } from "./element/handle.mts";
 import { elementOf, registerNode, markFreed } from "./element/lifecycle.mts";
+import { windowTargetId } from "./ffi/index.mts";
 import { window } from "./window.mts";
 import type { IncaElement } from "./element/types.mts";
 
@@ -41,8 +42,8 @@ describe("__inca_targets__", () => {
     expect(doc).toBe(document);
   });
 
-  it("resolves the window tag to window", () => {
-    const [win] = globalThis.__inca_targets__(["$window"]);
+  it("resolves the window target to window", () => {
+    const [win] = globalThis.__inca_targets__([windowTargetId()]);
 
     expect(win).toBe(window);
   });

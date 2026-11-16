@@ -34,7 +34,7 @@ function tracking(listener: HostCallback): HostCallback {
  *
  * Any event name is accepted, and it fires when the host dispatches that name.
  * `IncaEventMap` gives the event type of each name the host dispatches.
- * @param target - the event target (node id or "$window")
+ * @param target - the event target (a node id or the window target)
  * @param event - the event name (e.g. `"click"`)
  * @param listener - a function, called with the event's `currentTarget` as
  * `this`, or an object whose `handleEvent` method is called with the object

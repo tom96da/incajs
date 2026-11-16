@@ -93,8 +93,11 @@ export type ParsedEntry = [
  */
 export type Parsed = [position: number, entries: ParsedEntry[]];
 
-/** What a listener or a dispatch names: a node id, or the tag of `window`. */
-export type EventTargetId = NodeId | "$window";
+/** The target that names `window`, as the host gives it. */
+export type WindowTargetId = string & { readonly __windowTarget: unique symbol };
+
+/** What a listener or a dispatch names: a node id, or the target of `window`. */
+export type EventTargetId = NodeId | WindowTargetId;
 
 /**
  * The prototypes of the node interfaces that the host holds, by name. `ForeignElement` is the
@@ -188,6 +191,7 @@ interface IncaNative {
   scrollNode(nodeId: NodeId, left: number | null, top: number | null): void;
   scrollIntoViewNode(nodeId: NodeId, block: ScrollAlignment, inline: ScrollAlignment): void;
   dispatchEvent(target: EventTargetId, event: EventLike): boolean;
+  windowTargetId(): WindowTargetId;
   click(nodeId: NodeId): void;
   setPointerCapture(nodeId: NodeId, pointerId: number): void;
   releasePointerCapture(nodeId: NodeId, pointerId: number): void;

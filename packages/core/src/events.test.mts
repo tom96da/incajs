@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../tests/setup.mts";
 import { callbackIdFor, groupOf, registeredGroupCount, releaseCallbacks } from "./callbacks.mts";
 import { addEventListener, removeEventListener } from "./events.mts";
+import { windowTargetId } from "./ffi/index.mts";
 import type { HostCallback, NodeLink, Parsed } from "./ffi/index.mts";
 import type { EventLike } from "./types.mts";
 
@@ -163,9 +164,9 @@ describe("identity of a registration", () => {
     const listener = vi.fn<() => void>();
 
     addEventListener(1, "click", listener);
-    addEventListener("$window", "click", listener);
+    addEventListener(windowTargetId(), "click", listener);
 
-    expect(native.addEventListener.mock.calls.map((call) => call[0])).toEqual([1, "$window"]);
+    expect(native.addEventListener.mock.calls.map((call) => call[0])).toEqual([1, "window-target"]);
   });
 
   it("ignores a second registration of the same function, node, event and capture", () => {
