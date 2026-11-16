@@ -37,6 +37,7 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### In progress
 
+- **Node interfaces**: the interface objects of nodes, so `instanceof` works, and each member defined once.
 - **Modern mutation**: the members that insert, replace and remove nodes in one call.
 - **Built-ins**: `crypto`, `structuredClone` and `AbortController`.
 - **Scrollbars**: a thumb that follows the platform setting, with dragging.
