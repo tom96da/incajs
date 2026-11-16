@@ -5,8 +5,7 @@
 // HMR update. This is the one piece of experimental HMR that spans Rust and
 // TypeScript.
 //
-// It checks state through QuickJS console output only. Whether an update
-// reaches the screen is outside this test's reach.
+// It clicks the counter and reads its label through the automation requests.
 
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -16,13 +15,15 @@ import { Writable } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from "vitest";
 
 import { defaultBundler } from "../../packages/cli/src/defaultPlugins.mts";
+import { click, snapshot, waitIdle } from "../../packages/cli/src/dev-client/automation.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/client.mts";
 import { resolveTestHostBin } from "../support/hostBin.mts";
 import { reloadHost, settleReloads } from "../support/reloads.mts";
+import type { SnapshotNode } from "../../packages/cli/src/dev-client/automation.mts";
 import type { AppErrorParams } from "../../packages/cli/src/dev-client/protocol.mts";
 import type { BuildFailure, HmrChannel } from "../../packages/cli/src/types.mts";
 
-/** How long the host is given to reload/relay before this test gives up on it. */
+/** How long the host may take to reload, relay or answer a request before the test gives up. */
 const RELOAD_TIMEOUT_MS = 10_000;
 /** Generous: a real process spawn, a real dev server, and a real file watcher all sit in the loop. */
 const WAIT_TIMEOUT_MS = 30_000;
@@ -70,17 +71,44 @@ import App from "./App.vue";
 createIncaApp(App).mount();
 `;
 
-/**
- * A click-counter-shaped app (ported from examples/click_counter/src/App.vue),
- * driven by a `tick` dev notification, because a real pointer click cannot be
- * synthesized against a running `inca-host` process from outside. `receive`
- * is chained: `vite/module-runner`'s own transport already claimed
- * `__inca_dev__.receive` for its own traffic before this script runs.
- */
+/** A click counter, ported from examples/click_counter/src/App.vue. */
 const APP_VUE_TEMPLATE = readFileSync(
   path.join(import.meta.dirname, "fixtures/click-counter.vue"),
   "utf8",
 );
+
+/** The first node under `node` (itself included, depth first) that `predicate` accepts. */
+function find(
+  node: SnapshotNode,
+  predicate: (candidate: SnapshotNode) => boolean,
+): SnapshotNode | undefined {
+  if (predicate(node)) return node;
+  for (const child of node.children) {
+    const hit = find(child, predicate);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/** The node whose first child is the label text. */
+function counter(root: SnapshotNode): SnapshotNode {
+  const hit = find(root, (node) => node.children[0]?.text?.startsWith("Click") === true);
+  if (!hit) throw new Error("no counter in the snapshot");
+  return hit;
+}
+
+/** The counter's label. */
+function label(root: SnapshotNode): string {
+  return counter(root).children[0]!.text!;
+}
+
+/** Clicks the counter and returns its label once the click has run. */
+async function clickCounter(client: HostClient): Promise<string> {
+  const target = counter(await snapshot(client, RELOAD_TIMEOUT_MS));
+  await click(client, target.id, RELOAD_TIMEOUT_MS);
+  await waitIdle(client, RELOAD_TIMEOUT_MS);
+  return label(await snapshot(client, RELOAD_TIMEOUT_MS));
+}
 
 function appVue(style: string, labelSuffix: string): string {
   return APP_VUE_TEMPLATE.replace("__LABEL_SUFFIX__", labelSuffix).replace("__STYLE__", style);
@@ -112,7 +140,6 @@ let vuePath: string;
 let channel: HmrChannel | undefined;
 let hostClient: HostClient | undefined;
 let stderrText = "";
-let notifiedCount = 0;
 let ready = false;
 let buildErrors: BuildFailure[] = [];
 let appErrors: AppErrorParams[] = [];
@@ -132,7 +159,6 @@ beforeAll(async () => {
     stderr: discard(),
     quiet: true,
     notify: (payload) => {
-      notifiedCount += 1;
       hostClient?.notify("vite", payload);
     },
     // A full reload needs a fresh Session, which only inca-host's own
@@ -193,47 +219,33 @@ it(
       timeout: WAIT_TIMEOUT_MS,
     });
 
-    client.notify("tick", {});
-    await vi.waitFor(() => expect(stderrText).toContain("[e2e] clicks=1"), {
-      timeout: WAIT_TIMEOUT_MS,
-    });
-    client.notify("tick", {});
-    await vi.waitFor(() => expect(stderrText).toContain("[e2e] clicks=2"), {
-      timeout: WAIT_TIMEOUT_MS,
-    });
+    expect(await clickCounter(client)).toBe("Clicked 1 time(s)");
+    expect(await clickCounter(client)).toBe("Clicked 2 time(s)");
 
     // Template-only edit: no new setup() call, so `clicks` must survive.
-    const beforeTemplateEdit = notifiedCount;
-    await writeFile(vuePath, appVue(STYLE_V2, ""));
-    await vi.waitFor(() => expect(notifiedCount).toBeGreaterThan(beforeTemplateEdit), {
-      timeout: WAIT_TIMEOUT_MS,
-    });
+    await writeFile(vuePath, appVue(STYLE_V2, "").replace("<div", '<div data-version="2"'));
+    // The `data-version` attribute shows that the template patch has landed.
+    await vi.waitFor(
+      async () =>
+        expect(counter(await snapshot(client, RELOAD_TIMEOUT_MS)).attributes["data-version"]).toBe(
+          "2",
+        ),
+      { timeout: WAIT_TIMEOUT_MS },
+    );
+    expect(label(await snapshot(client, RELOAD_TIMEOUT_MS))).toBe("Clicked 2 time(s)");
 
-    client.notify("tick", {});
-    await vi.waitFor(() => expect(stderrText).toContain("[e2e] clicks=3"), {
-      timeout: WAIT_TIMEOUT_MS,
-    });
-    client.notify("tick", {});
-    await vi.waitFor(() => expect(stderrText).toContain("[e2e] clicks=4"), {
-      timeout: WAIT_TIMEOUT_MS,
-    });
+    expect(await clickCounter(client)).toBe("Clicked 3 time(s)");
+    expect(await clickCounter(client)).toBe("Clicked 4 time(s)");
 
-    // Script edit: a fresh setup() call resets `clicks` back to 0. Wait on
-    // the mount marker. `notify` also fires on the earlier `file-changed`
-    // event, before the module re-evaluates.
+    // Script edit: a fresh setup() call resets `clicks` back to 0.
+    // Wait on the mount marker: the `file-changed` event arrives before the module re-evaluates.
     const beforeScriptEdit = mountedCount(stderrText);
     await writeFile(vuePath, appVue(STYLE_V2, "!"));
     await vi.waitFor(() => expect(mountedCount(stderrText)).toBeGreaterThan(beforeScriptEdit), {
       timeout: WAIT_TIMEOUT_MS,
     });
 
-    client.notify("tick", {});
-    // The assertion above already consumed the pre-edit run of clicks=1, so a
-    // second, later occurrence proves the reset. The trailing-boundary match
-    // keeps a future clicks=10+ from inflating the count.
-    await vi.waitFor(() => expect(stderrText.match(/\[e2e\] clicks=1(?!\d)/g)?.length).toBe(2), {
-      timeout: WAIT_TIMEOUT_MS,
-    });
+    expect(await clickCounter(client)).toBe("Clicked 1 time(s)!");
 
     // A broken script edit is reported through `onError` but doesn't take
     // the host down.
@@ -253,11 +265,7 @@ it(
       timeout: WAIT_TIMEOUT_MS,
     });
 
-    client.notify("tick", {});
-    await vi.waitFor(
-      () => expect(stderrText.match(/\[e2e\] clicks=1(?!\d)/g)?.length).toBeGreaterThanOrEqual(3),
-      { timeout: WAIT_TIMEOUT_MS },
-    );
+    expect(await clickCounter(client)).toBe("Clicked 1 time(s)!");
   },
   WAIT_TIMEOUT_MS + 30_000,
 );
@@ -284,12 +292,10 @@ it(
       timeout: WAIT_TIMEOUT_MS,
     });
 
-    // stderr is one ordered stream, so a later line means the mount has finished.
-    client.notify("tick", {});
-    await vi.waitFor(
-      () => expect(stderrText.slice(stderrText.indexOf("[e2e] rendered"))).toContain("clicks="),
-      { timeout: WAIT_TIMEOUT_MS },
-    );
+    await waitIdle(client, RELOAD_TIMEOUT_MS);
+    const box = counter(await snapshot(client, RELOAD_TIMEOUT_MS));
+    expect(box.children.filter((child) => child.tag === "div")).toHaveLength(25);
+    expect(box.bounds).not.toBeNull();
     expect(appErrors).toEqual([]);
   },
   WAIT_TIMEOUT_MS + 10_000,
@@ -390,10 +396,7 @@ describe("a session that starts on a broken source", () => {
       });
       await vi.waitFor(() => expect(session.ready()).toBe(true), { timeout: WAIT_TIMEOUT_MS });
 
-      session.client.notify("tick", {});
-      await vi.waitFor(() => expect(session.stderr()).toContain("[e2e] clicks=1"), {
-        timeout: WAIT_TIMEOUT_MS,
-      });
+      expect(await clickCounter(session.client)).toBe("Clicked 1 time(s)");
       expect(session.buildErrors).toHaveLength(1);
       expect(session.appErrors).toEqual([]);
     },
@@ -422,10 +425,7 @@ describe("a session that starts on a broken source", () => {
       });
       await vi.waitFor(() => expect(session.ready()).toBe(true), { timeout: WAIT_TIMEOUT_MS });
 
-      session.client.notify("tick", {});
-      await vi.waitFor(() => expect(session.stderr()).toContain("[e2e] clicks=1"), {
-        timeout: WAIT_TIMEOUT_MS,
-      });
+      expect(await clickCounter(session.client)).toBe("Clicked 1 time(s)");
       expect(session.appErrors).toHaveLength(1);
       expect(session.buildErrors).toEqual([]);
     },
