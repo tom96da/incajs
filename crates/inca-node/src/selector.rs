@@ -21,7 +21,9 @@ use selectors::parser::{
 };
 use selectors::{Element, OpaqueElement};
 
-use crate::tree::{COMMENT_TAG, DOCUMENT_TAG, NodeId, TEXT_TAG, VirtualNode, VirtualTree};
+use crate::tree::{
+    COMMENT_TAG, DOCUMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, VirtualNode, VirtualTree,
+};
 
 mod matching;
 mod query;
