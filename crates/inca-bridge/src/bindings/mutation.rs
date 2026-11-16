@@ -59,8 +59,9 @@ fn replace_child<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId, JsNodeId) -> JsResult<usize> {
     move |ctx, JsNodeId(parent_id), JsNodeId(node_id), JsNodeId(child_id)| {
         let mut host = host.borrow_mut();
-        let mut left = host.leaving(&host.tree.nodes_to_move(node_id));
-        left.extend(host.leaving(&[child_id]));
+        let mut leaving = host.tree.nodes_to_move(node_id);
+        leaving.push(child_id);
+        let left = host.leaving(&leaving);
         let position = host
             .tree
             .replace_child(parent_id, node_id, child_id)
