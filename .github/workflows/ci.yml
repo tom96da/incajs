@@ -410,7 +410,7 @@ jobs:
           - name: Oxlint
             run: pnpm exec oxlint --type-aware tests
           - name: Clippy
-            run: cargo clippy -p inca-tests --all-targets -- -D warnings
+            run: cargo clippy -p inca-tests -p inca-host --features inca-host/automation --all-targets -- -D warnings
 
       - parallel:
           - name: Oxfmt
@@ -425,7 +425,7 @@ jobs:
         run: cargo test -p inca-tests
 
       - name: Build inca-host
-        run: cargo build -p inca-host
+        run: cargo build -p inca-host --features automation
 
       - name: Test (real inca-host + real Vite dev server)
         run: pnpm -F @incajs/e2e-tests test
@@ -504,7 +504,7 @@ jobs:
         run: bun --bun run -F incajs -F @incajs/cli build --no-publint --no-attw
 
       - name: Build inca-host
-        run: cargo build -p inca-host
+        run: cargo build -p inca-host --features automation
 
       - name: Test (real inca-host + real Vite dev server)
         run: bun --bun run -F @incajs/e2e-tests test

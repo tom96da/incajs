@@ -120,17 +120,20 @@ here, never in a crate or a package.
 - `tests/support/hostBin.mts` exports `resolveTestHostBin()`, which returns
   `target/debug/inca-host`, else `target/release/inca-host`. The tests that spawn the host import
   it.
-- The `test-support` feature of `inca-host` gates its `Harness` and `snapshot` and enables gpui's
-  test platform. The `test-support` feature of `inca-bridge` exposes the engine helpers its tests
-  share. A dev-dependency turns each on.
+- The `test-support` feature of `inca-host` gates its `Harness` and `snapshot` (`automation` gates
+  `snapshot` too) and enables gpui's test platform. The `test-support` feature of `inca-bridge`
+  exposes the engine helpers its tests share. A dev-dependency turns each on.
+- The `automation` feature of `inca-host` answers `click`, `snapshot` and `waitIdle` on the dev
+  protocol, in a debug build only. The e2e tests need a host built with it.
 
 ### Required checks
 
 All of the following must pass:
 
 - `pnpm -F incajs -F @incajs/cli build`, then
-  `cargo clippy -p inca-tests --all-targets -- -D warnings` and `cargo test -p inca-tests`
-- `cargo build -p inca-host`, then `pnpm -F @incajs/e2e-tests test`
+  `cargo clippy -p inca-tests -p inca-host --features inca-host/automation --all-targets -- -D warnings`
+  and `cargo test -p inca-tests`
+- `cargo build -p inca-host --features automation`, then `pnpm -F @incajs/e2e-tests test`
 
 On CI, the Rust & Node jobs lint, format-check and type-check `tests/`.
 
