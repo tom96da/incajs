@@ -165,4 +165,46 @@ describe("resolveAppConfig", () => {
       }),
     );
   });
+
+  // c12 adds the `jiti` hint only when `jiti` is not installed, and none is in node_modules today.
+  describe("a config file that fails to load", () => {
+    async function loadFailure(body: string): Promise<Error> {
+      const app = await makeApp({ name: "click_counter", version: "0.0.0-0" });
+      await writeConfig(app, body);
+      return resolveAppConfig(app).then(
+        () => {
+          throw new Error("expected a rejection");
+        },
+        (error: Error) => error,
+      );
+    }
+
+    it("rejects with the first error's message and the file name, without jiti", async () => {
+      const error = await loadFailure("export default {;\n");
+
+      expect(error.message).toContain("inca.config.ts");
+      expect(error.message).toContain((error.cause as Error).message);
+      expect(error.message).not.toContain("jiti");
+    });
+
+    it("keeps the first error as the cause", async () => {
+      const error = await loadFailure("export default {;\n");
+
+      expect(error.cause).toBeInstanceOf(Error);
+    });
+
+    it("has no jiti in the stack", async () => {
+      const error = await loadFailure("export default {;\n");
+
+      expect(error.stack).not.toContain("jiti");
+    });
+
+    it("rethrows an error from a default export function unchanged", async () => {
+      const error = await loadFailure(
+        `export default () => { throw Object.assign(new Error("boom"), { code: "E_BOOM" }); };\n`,
+      );
+
+      expect(error).toMatchObject({ message: "boom", code: "E_BOOM" });
+    });
+  });
 });

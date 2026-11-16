@@ -646,13 +646,6 @@ A fixed entry is deleted and its ID is never reused.
   error frame between the stamped `[inca]` lines, so one failure appears in
   two output styles.
 
-- **B-115 The config loader's `jiti` hint suggests an unneeded install**
-  `Units: cli · Size: S · Impact: Low`
-
-  When a config file fails to load, `c12` appends `Hint install jiti for
-  compatibility` to the file's own error, such as a syntax error. The hint
-  suggests a package that does not apply to the failure.
-
 - **B-116 `inca package` on Linux writes no icon and no `.desktop` file**
   `Units: cli · Size: M · Impact: Medium`
 
