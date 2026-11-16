@@ -93,7 +93,8 @@ pub(crate) enum Source<'js> {
 }
 
 /// Finds the buffer of `input` and checks it can be read. `what` names the argument and `pass`
-/// says what to pass, in the `TypeError` for a value that is no buffer source.
+/// says what to pass, in the `TypeError` for a value that is no buffer source or a resizable
+/// buffer.
 pub(crate) fn source_of<'js>(
     ctx: &Ctx<'js>,
     store: &Object<'js>,
@@ -126,7 +127,10 @@ pub(crate) fn source_of<'js>(
         return Ok(source);
     };
     if is_resizable(store, buffer)? {
-        return Err(wrong());
+        return Err(Exception::throw_type(
+            ctx,
+            &format!("the {what} is resizable memory. pass {pass} that is not resizable"),
+        ));
     }
     Ok(source)
 }

@@ -444,6 +444,7 @@ mod tests {
 
     #[rstest]
     #[case::fixed_typed("new Uint8Array(rab, 0, 2)")]
+    #[case::length_tracking_typed("new Uint8Array(rab)")]
     #[case::fixed_data_view("new DataView(rab, 0, 2)")]
     #[case::buffer("rab")]
     #[case::growable_buffer("new SharedArrayBuffer(4, { maxByteLength: 4 })")]
@@ -455,7 +456,7 @@ mod tests {
                 new TextDecoder().decode({input});
                 "
             )),
-            "TypeError: the input is not a buffer source. pass an ArrayBuffer or a view of one"
+            "TypeError: the input is resizable memory. pass an ArrayBuffer or a view of one that is not resizable"
         );
     }
 
@@ -472,7 +473,7 @@ mod tests {
                 new TextDecoder().decode({input})
                 "
             )),
-            "TypeError: the input is not a buffer source. pass an ArrayBuffer or a view of one"
+            "TypeError: the input is resizable memory. pass an ArrayBuffer or a view of one that is not resizable"
         );
     }
 
