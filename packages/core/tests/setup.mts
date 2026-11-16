@@ -30,8 +30,8 @@ export function nativeStub(extra: Partial<Native> = {}): Native {
 
 globalThis.__inca_native__ ??= nativeStub();
 
-/** `[x, y, width, height, border, scrollX, scrollY]` of a drawn node. */
-type Box = readonly [number, number, number, number, number, number, number];
+/** `[x, y, width, height, border, scrollX, scrollY, gutterWidth, gutterHeight]` of a drawn node. */
+type Box = readonly [number, number, number, number, number, number, number, number, number];
 
 /**
  * Installs a fake host whose reads give `boxes`, `scroll` and the parents in `parents`, and returns

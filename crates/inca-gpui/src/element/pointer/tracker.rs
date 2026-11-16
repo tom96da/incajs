@@ -9,6 +9,8 @@ use super::{
     ScrollWheelEvent, Styled, WheelChain, Window, canvas, completes_click, control_click,
     mouse_target, next_offset, opens_context_menu, restored_down, restored_up, slot,
 };
+use crate::element::scrollbar::OverBar;
+use crate::element::wheel::WheelScrolled;
 
 /// `event` with the click count of its button's recorded press, if any.
 fn with_press_count(event: &MouseUpEvent, cx: &App) -> MouseUpEvent {
@@ -47,6 +49,49 @@ fn report_release(
     cx.default_global::<MouseTarget>().pressed[slot] = None;
 }
 
+/// Reports the wheel step of `event` once every container has reported itself, and applies it
+/// to the innermost tracked container that can move.
+fn report_wheel(
+    sink: &impl EventSink,
+    root: NodeId,
+    event: &ScrollWheelEvent,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let mut chain = std::mem::take(&mut cx.default_global::<WheelChain>().0);
+    let delta = event.delta.pixel_delta(window.line_height());
+    let could_move = |(id, handle): &(NodeId, ScrollHandle)| {
+        sink.wheel_axes(*id)
+            .and_then(|axes| next_offset(axes, handle, delta))
+    };
+    let below_could_move = chain.iter().any(|link| could_move(link).is_some());
+    let target = target_or(cx, root);
+    sink.pointer_input("wheel", target, &event.into(), window, cx);
+    let mut step_taken = window.default_prevented();
+    // The container that took the step, else the innermost one the step
+    // reached.
+    let mut reached = chain.first().map(|(id, _)| *id);
+    if !step_taken
+        && let Some((&(id, ref handle), next)) = chain
+            .iter()
+            .find_map(|link| could_move(link).map(|next| (link, next)))
+    {
+        handle.set_offset(next);
+        reached = Some(id);
+        step_taken = true;
+    }
+    if let Some(id) = reached {
+        cx.default_global::<WheelScrolled>().0.insert(id);
+        if sink.wheel_axes(id).is_some_and(|axes| axes.x || axes.y) {
+            window.refresh();
+        }
+    }
+    // The root's own listener takes the step when it is under the pointer.
+    cx.default_global::<RootStep>().0 = (!step_taken && !below_could_move).then_some(delta);
+    chain.clear();
+    cx.default_global::<WheelChain>().0 = chain;
+}
+
 // Zero-size first child of the root. Its capture handlers run before any
 // container's, and its bubble handlers run after every container's below the
 // root, so each input is reported once, with its target settled.
@@ -62,6 +107,7 @@ pub(in crate::element) fn pointer_tracker<E: EventSink + Clone + 'static>(
                 move |event: &MouseMoveEvent, phase, window, cx| match phase {
                     DispatchPhase::Capture => {
                         cx.default_global::<MouseTarget>().current = None;
+                        cx.default_global::<OverBar>().0 = None;
                         cx.default_global::<ControlClick>().held = event.modifiers.control;
                         moved.pointer_moved(event.position, cx);
                     }
@@ -111,34 +157,9 @@ pub(in crate::element) fn pointer_tracker<E: EventSink + Clone + 'static>(
                     DispatchPhase::Capture => {
                         cx.default_global::<MouseTarget>().current = None;
                         cx.default_global::<WheelChain>().0.clear();
+                        cx.default_global::<WheelScrolled>().0.clear();
                     }
-                    DispatchPhase::Bubble => {
-                        let mut chain = std::mem::take(&mut cx.default_global::<WheelChain>().0);
-                        let delta = event.delta.pixel_delta(window.line_height());
-                        let could_move = |(id, handle): &(NodeId, ScrollHandle)| {
-                            scrolled
-                                .wheel_axes(*id)
-                                .and_then(|axes| next_offset(axes, handle, delta))
-                        };
-                        let below_could_move = chain.iter().any(|link| could_move(link).is_some());
-                        let target = target_or(cx, root);
-                        scrolled.pointer_input("wheel", target, &event.into(), window, cx);
-                        let mut step_taken = window.default_prevented();
-                        if !step_taken
-                            && let Some(((_, handle), next)) = chain
-                                .iter()
-                                .find_map(|link| could_move(link).map(|next| (link, next)))
-                        {
-                            handle.set_offset(next);
-                            window.refresh();
-                            step_taken = true;
-                        }
-                        // The root's own listener takes the step when it is under the pointer.
-                        cx.default_global::<RootStep>().0 =
-                            (!step_taken && !below_could_move).then_some(delta);
-                        chain.clear();
-                        cx.default_global::<WheelChain>().0 = chain;
-                    }
+                    DispatchPhase::Bubble => report_wheel(&scrolled, root, event, window, cx),
                 },
             );
             let dispatch = dispatch.clone();
@@ -160,12 +181,13 @@ mod tests {
     use super::*;
     use crate::element::pointer::tests::{LEAF, at, report};
     use crate::tests::*;
-    use crate::{clear_presses, pressed_target};
+    use crate::{Scrollbars, clear_presses, pressed_target, render_tree_with_events};
     use gpui::prelude::*;
     use gpui::{
         MouseButton, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext, point, px,
     };
     use inca_node::tree::VirtualTree;
+    use std::cell::RefCell;
     use std::rc::Rc;
 
     /// Runs one of each mouse event at `pos`.
@@ -446,5 +468,105 @@ mod tests {
         let tracked = bounds(&mut tracked.cx);
         let mut plain = probe_tree(cx, false);
         assert_eq!(tracked, bounds(&mut plain.cx));
+    }
+
+    /// What `WheelScrolled` held at each render.
+    type Seen = Rc<RefCell<Vec<Vec<NodeId>>>>;
+
+    struct SeenView(Probe, Seen);
+
+    impl Render for SeenView {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let mut ids: Vec<_> = cx
+                .default_global::<WheelScrolled>()
+                .0
+                .iter()
+                .copied()
+                .collect();
+            ids.sort_unstable();
+            self.1.borrow_mut().push(ids);
+            render_tree_with_events(&self.0.tree.borrow(), 0, &self.0, Scrollbars::Overlay).unwrap()
+        }
+    }
+
+    /// Draws `tree`, whose root is node 0. The view records the contents of `WheelScrolled`
+    /// each time it renders, which is after the tracker and before any bar element.
+    fn seen_scene(cx: &mut TestAppContext, tree: VirtualTree) -> (VisualTestContext, Seen) {
+        let seen = Seen::default();
+        let view = SeenView(probe_of(tree), Rc::clone(&seen));
+        let window = cx.add_window(|_, _| view);
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        (cx, seen)
+    }
+
+    /// A root (node 0, 200x200) that holds a scroller (node 1, 100x100) that holds an inner
+    /// scroller (node 2, 50x50) at its start and a tall child (node 4). `overflow` is the
+    /// value of both scrollers.
+    fn nested_scrollers(overflow: &str) -> VirtualTree {
+        let mut tree = VirtualTree::new();
+        let root = boxed(&mut tree, None, 200., 200.);
+        let outer = boxed(&mut tree, Some(root), 100., 100.);
+        let inner = boxed(&mut tree, Some(outer), 50., 50.);
+        boxed(&mut tree, Some(inner), 50., 200.);
+        boxed(&mut tree, Some(outer), 50., 200.);
+        for id in [outer, inner] {
+            tree.set_style(id, "overflow", overflow).unwrap();
+        }
+        tree
+    }
+
+    /// One wheel step of `delta` at `at`. Returns the contents of `WheelScrolled` at the last
+    /// render, drawing once more when the step rendered nothing.
+    fn wheel_then_seen(
+        cx: &mut VisualTestContext,
+        seen: &Seen,
+        at: (f32, f32),
+        delta: f32,
+    ) -> Vec<NodeId> {
+        let renders = seen.borrow().len();
+        cx.simulate_event(ScrollWheelEvent {
+            position: self::at(at),
+            delta: ScrollDelta::Pixels(point(px(0.), px(delta))),
+            ..Default::default()
+        });
+        if seen.borrow().len() == renders {
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+        }
+        let seen = seen.borrow();
+        seen.last().unwrap().clone()
+    }
+
+    #[gpui::test]
+    fn a_wheel_step_records_the_container_that_took_it(cx: &mut TestAppContext) {
+        let (mut cx, seen) = seen_scene(cx, nested_scrollers("scroll"));
+        assert_eq!(wheel_then_seen(&mut cx, &seen, (10., 10.), -40.), [2]);
+    }
+
+    #[gpui::test]
+    fn a_step_no_container_takes_records_the_innermost_one_it_reached(cx: &mut TestAppContext) {
+        let (mut cx, seen) = seen_scene(cx, nested_scrollers("scroll"));
+        assert_eq!(wheel_then_seen(&mut cx, &seen, (10., 10.), 40.), [2]);
+    }
+
+    #[gpui::test]
+    fn a_wheel_step_over_no_container_records_nothing(cx: &mut TestAppContext) {
+        let (mut cx, seen) = seen_scene(cx, nested_scrollers("scroll"));
+        cx.update(|_, cx| cx.default_global::<WheelScrolled>().0.insert(99));
+        assert!(wheel_then_seen(&mut cx, &seen, (150., 150.), -40.).is_empty());
+    }
+
+    #[gpui::test]
+    fn a_wheel_step_over_a_hidden_container_requests_no_redraw(cx: &mut TestAppContext) {
+        let (mut cx, seen) = seen_scene(cx, nested_scrollers("hidden"));
+        cx.simulate_mouse_move(at((10., 10.)), None, gpui::Modifiers::none());
+        cx.update(|window, cx| window.draw(cx).clear(cx));
+        let renders = seen.borrow().len();
+        cx.simulate_event(ScrollWheelEvent {
+            position: at((10., 10.)),
+            delta: ScrollDelta::Pixels(point(px(0.), px(-40.))),
+            ..Default::default()
+        });
+        assert_eq!(seen.borrow().len(), renders);
     }
 }

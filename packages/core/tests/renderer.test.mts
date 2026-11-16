@@ -160,7 +160,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     },
     layoutOf(
       _nodeId: NodeId,
-    ): readonly [number, number, number, number, number, number, number] | null {
+    ): readonly [number, number, number, number, number, number, number, number, number] | null {
       return null;
     },
     scrollOf(_nodeId: NodeId): readonly [number, number, number, number] | null {

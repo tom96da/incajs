@@ -3,6 +3,7 @@
 
 import { layoutOf, linkedNode } from "../ffi/index.mts";
 import { isRemoved } from "./lifecycle.mts";
+import type { NodeBox } from "../ffi/index.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
 import type { IncaElement } from "./types.mts";
 
@@ -21,16 +22,13 @@ export type LayoutMembers = Pick<
   | "clientTop"
 >;
 
-/** `[x, y, width, height, border, scrollX, scrollY]` of a node's last drawn frame. */
-export type LayoutBox = readonly [number, number, number, number, number, number, number];
-
 /**
  * Reads the box a node was last drawn at. A removed node, or one with no
  * recorded box, yields `null`.
  * @param el - the node to read
  * @returns the box, or `null`
  */
-export function layoutBox(el: IncaElement): LayoutBox | null {
+export function layoutBox(el: IncaElement): NodeBox | null {
   return isRemoved(el) ? null : layoutOf(el.__node_id);
 }
 
@@ -91,10 +89,10 @@ export interface RectLike extends RectValues {
 
 /**
  * Builds a rect from a node's box. Values stay unrounded.
- * @param layout - the box from {@link LayoutBox}, or `null` for no record
+ * @param layout - the box from {@link NodeBox}, or `null` for no record
  * @returns the rect; all zeros for `null`
  */
-export function rectOf(layout: LayoutBox | null): RectLike {
+export function rectOf(layout: NodeBox | null): RectLike {
   const [x, y, width, height] = layout ?? [0, 0, 0, 0, 0];
   const values: RectValues = {
     x,
@@ -155,11 +153,11 @@ export function layoutMembers(element: IncaElement, builders: HandleBuilders): L
     },
     get clientWidth() {
       const box = layoutBox(element);
-      return box ? Math.max(0, Math.round(box[2] - 2 * box[4])) : 0;
+      return box ? Math.max(0, Math.round(box[2] - 2 * box[4] - box[7])) : 0;
     },
     get clientHeight() {
       const box = layoutBox(element);
-      return box ? Math.max(0, Math.round(box[3] - 2 * box[4])) : 0;
+      return box ? Math.max(0, Math.round(box[3] - 2 * box[4] - box[8])) : 0;
     },
     get clientLeft() {
       return Math.round(layoutBox(element)?.[4] ?? 0);

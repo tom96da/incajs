@@ -480,6 +480,22 @@ pub(crate) mod pointer {
             });
         }
 
+        /// A press of `button` on a scrollbar of the container `node`.
+        pub(crate) fn bar_down(&mut self, node: NodeId, button: u8) {
+            let sink = self.dispatcher.clone();
+            self.cx.update(|window, cx| {
+                sink.bar_pressed(node, &button_payload(button), window, cx);
+            });
+        }
+
+        /// A release of `button` after a press on a scrollbar of the container `node`.
+        pub(crate) fn bar_up(&mut self, node: NodeId, button: u8) {
+            let sink = self.dispatcher.clone();
+            self.cx.update(|window, cx| {
+                sink.bar_released(node, &button_payload(button), window, cx);
+            });
+        }
+
         /// A release of `button` over `node`, pressed over `pressed`.
         pub(crate) fn up(&mut self, node: NodeId, pressed: NodeId, button: u8) {
             self.up_counted(node, pressed, button, 1);

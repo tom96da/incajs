@@ -317,3 +317,24 @@ fn a_pending_retry_asks_for_one_more_frame(cx: &mut TestAppContext, request: &st
     assert_eq!(pending, 1);
     assert_eq!(after_retry, 0);
 }
+
+#[gpui::test]
+fn scroll_into_view_aligns_to_the_client_rectangle_beside_a_strip(cx: &mut TestAppContext) {
+    let mut h = Scene::in_mode(
+        cx,
+        Host::default(),
+        &reveal_fixture("scroll", false),
+        Scrollbars::Classic,
+    );
+    run(
+        &mut h,
+        "__inca_native__.setStyle(box, 'overflow_x', 'scroll');",
+    );
+    run(
+        &mut h,
+        "__inca_native__.scrollIntoViewNode(items[1], 'nearest', 'nearest');",
+    );
+    // The item ends 103 below the padding edge. The client height is 100 less the two borders
+    // and the 15 of the horizontal strip.
+    assert_eq!(num(&h, "top(box)"), 28.0);
+}

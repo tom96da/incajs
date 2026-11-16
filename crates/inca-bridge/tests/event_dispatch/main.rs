@@ -16,7 +16,7 @@ use gpui::{
     px,
 };
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::render_tree_with_events;
+use inca_gpui::{Scrollbars, render_tree_with_events};
 use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 
@@ -50,7 +50,8 @@ struct ClickableRoot {
 impl Render for ClickableRoot {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let host = self.host.borrow();
-        render_tree_with_events(&host.tree, self.node, &self.dispatcher).unwrap()
+        render_tree_with_events(&host.tree, self.node, &self.dispatcher, Scrollbars::Overlay)
+            .unwrap()
     }
 }
 

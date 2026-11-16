@@ -35,8 +35,9 @@ use gpui::{
 };
 use gpui_platform::application;
 
-use inca_gpui::{EventSink, NodeLayout, render_tree_with_events};
+use inca_gpui::{EventSink, NodeLayout, Scrollbars, build_element_with_events, node_gutter};
 use inca_jsenv::{EngineError, ErrorReporter, PendingModule, stderr_reporter};
+use inca_node::build_spec;
 
 use crate::config::{
     self, DEFAULT_APP_NAME, effective_config, is_resizable, window_min_size, window_size,
@@ -110,23 +111,30 @@ impl Render for HostedApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let session = &self.session;
         session.dispatcher.begin_frame(window, cx);
+        session.dispatcher.clear_layout();
+        let mode = Scrollbars::of(cx);
         let host = session.host.borrow();
         let top = host.tree.document_element();
-        let element = top
-            .and_then(|id| render_tree_with_events(&host.tree, id, &session.dispatcher))
-            .unwrap_or_else(|| div().into_any_element());
+        let spec = top.and_then(|id| build_spec(&host.tree, id));
+        let element = spec.as_ref().map_or_else(
+            || div().into_any_element(),
+            |spec| build_element_with_events(spec, &session.dispatcher, mode),
+        );
         // The element of the document fills the window; the walk records only its children.
         if let Some(id) = top {
+            let gutter = spec
+                .as_ref()
+                .map(|spec| node_gutter(spec, &session.dispatcher, mode))
+                .unwrap_or_default();
             session.dispatcher.record_layout(
                 id,
                 NodeLayout {
                     bounds: Bounds::new(Point::default(), window.viewport_size()),
                     border: px(0.0),
                     scroll: Point::default(),
+                    gutter,
                 },
             );
-        } else {
-            session.dispatcher.clear_layout();
         }
         element
     }
@@ -468,6 +476,7 @@ mod tests {
 
     use super::*;
     use gpui::TestAppContext;
+    use inca_test_macros::gpui_cases;
     use rstest::rstest;
 
     use crate::tests::{ScratchDir, TEST_ENTRY_PATH};
@@ -710,32 +719,38 @@ mod tests {
         assert!(ran, "an onMounted-style effect must not wait for an event");
     }
 
+    /// Runs `script` in the engine of `window`, redraws it and evaluates `read` to a string.
+    fn after_draw(
+        cx: &mut TestAppContext,
+        window: WindowHandle<HostedApp>,
+        script: &str,
+        read: &str,
+    ) -> String {
+        cx.update(|cx| {
+            window
+                .read_with(cx, |app, _| app.session.engine.eval::<()>(script).unwrap())
+                .unwrap();
+            cx.update_window(window.into(), |_, window, cx| {
+                window.refresh();
+                window.draw(cx).clear(cx);
+            })
+            .unwrap();
+            window
+                .read_with(cx, |app, _| {
+                    app.session.engine.eval::<String>(read).unwrap()
+                })
+                .unwrap()
+        })
+    }
+
     #[gpui::test]
     fn the_root_has_a_box_only_while_the_document_holds_it(cx: &mut TestAppContext) {
         cx.update(|cx| start(cx, TEST_ENTRY_PATH, "", stderr_reporter()).unwrap());
         cx.run_until_parked();
         let window = cx.update(|cx| cx.windows()[0].downcast::<HostedApp>().unwrap());
         let drawn_box = |cx: &mut TestAppContext, script: &str| -> bool {
-            cx.update(|cx| {
-                window
-                    .read_with(cx, |app, _| app.session.engine.eval::<()>(script).unwrap())
-                    .unwrap();
-                cx.update_window(window.into(), |_, window, cx| {
-                    window.refresh();
-                    window.draw(cx).clear(cx);
-                })
-                .unwrap();
-                window
-                    .read_with(cx, |app, _| {
-                        app.session
-                            .engine
-                            .eval::<bool>(
-                                "__inca_native__.layoutOf(__inca_native__.rootNodeId()) !== null",
-                            )
-                            .unwrap()
-                    })
-                    .unwrap()
-            })
+            let read = "String(__inca_native__.layoutOf(__inca_native__.rootNodeId()) !== null)";
+            after_draw(cx, window, script, read) == "true"
         };
         assert!(drawn_box(cx, ""));
 
@@ -749,5 +764,24 @@ mod tests {
         );
 
         assert_eq!((removed, appended), (false, true));
+    }
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::scroll("scroll", "15,15")]
+    #[case::auto("auto", "0,0")]
+    fn the_root_box_records_the_strips_of_its_own_overflow(
+        cx: &mut TestAppContext,
+        overflow: &str,
+        strips: &str,
+    ) {
+        cx.update(|cx| start(cx, TEST_ENTRY_PATH, "", stderr_reporter()).unwrap());
+        cx.run_until_parked();
+        let window = cx.update(|cx| cx.windows()[0].downcast::<HostedApp>().unwrap());
+        let script = format!(
+            "__inca_native__.setStyle(__inca_native__.rootNodeId(), 'overflow', '{overflow}');"
+        );
+        let read = "String(__inca_native__.layoutOf(__inca_native__.rootNodeId()).slice(7))";
+        assert_eq!(after_draw(cx, window, &script, read), strips);
     }
 }

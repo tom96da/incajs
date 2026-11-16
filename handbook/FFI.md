@@ -138,7 +138,7 @@ value:
 | `background` / `border_color` / `text_color` | number from `0` to `0xffffff`, or string (`"#rgb"`, `"#rgba"`, `"#rrggbb"`, `"#rrggbbaa"`, `"transparent"`, `rgb()`, `rgba()`); any other value except `''` warns | |
 | `corner_radius` | px value (`>= 0`) | One radius for all four corners. |
 | `text_size` | px value (`>= 0`, limited to `2048`) | |
-| `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"clip"`\|`"scroll"`\|`"auto"` (= `"scroll"`); `overflow` also takes `"<x> <y>"` | `overflow` sets both axes and an axis key beats it. Beside a `hidden` or `scroll` axis, an unset or `visible` axis becomes `scroll` and `clip` becomes `hidden`. `hidden` clips and takes script scrolling, `clip` clips without scrolling, and only `scroll` takes the wheel. |
+| `overflow` / `overflow_x` / `overflow_y` | `"visible"`\|`"hidden"`\|`"clip"`\|`"scroll"`\|`"auto"`; `overflow` also takes `"<x> <y>"` | `overflow` sets both axes and an axis key beats it. Beside a `hidden`, `scroll` or `auto` axis, an unset or `visible` axis becomes `auto` and `clip` becomes `hidden`. `hidden` clips and takes script scrolling, `clip` clips without scrolling, and `scroll` and `auto` take the wheel. |
 | `padding` (+ `_x`/`_y`/`_top`/`_right`/`_bottom`/`_left`) | px value (`>= 0`) | `padding` sets the four sides, `_x` the left and right, `_y` the top and bottom. A side beats an axis and an axis beats `padding`. A value of the wrong type falls through to the next key. |
 | `margin` (+ the same suffixes) | px value (negatives allowed) or `"auto"` | The sides and precedence of `padding`. |
 | `flex_grow` / `flex_shrink` | decimal value `>= 0` | |
@@ -223,12 +223,12 @@ be passed, and `undefined` there counts as `null`.
 | `querySelector` | `(nodeId: number, selector: string) => number \| null` | The id of the first descendant of `nodeId` that matches the selector list, in document order. `nodeId` is never a result. `:scope` and a top-level `&` are `nodeId`, and the whole tree takes part in the match. The document has no scope element, so `:scope` selects the element of the document. Text and `#comment` nodes are never results, and a `#text` or `#comment` start finds nothing. Throws a `SyntaxError` for an invalid selector, also for a `#text` or `#comment` start, and a `TypeError` for an unknown node. |
 | `querySelectorAll` | `(nodeId: number, selector: string) => number[]` | The ids of every descendant of `nodeId` that matches, each once, in document order. Follows the rules of `querySelector`. |
 | `checkSelector` | `(selector: string) => void` | Throws a `SyntaxError` for an invalid selector list and returns for a valid one. It takes no node. |
-| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` or `input` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside a container's box centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
+| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` or `input` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside the client rectangle of a container centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
 | `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
-| `layoutOf` | `(nodeId: number) => [x, y, width, height, border, scrollX, scrollY] \| null` | Read the border box of `nodeId` in window pixels as the last drawn frame placed it, with `border` the uniform border width. `scrollX` and `scrollY` are the positive scroll offset the parent applied to that box. `null` for a node with no recorded box. |
+| `layoutOf` | `(nodeId: number) => [x, y, width, height, border, scrollX, scrollY, gutterWidth, gutterHeight] \| null` | Read the border box of `nodeId` in window pixels as the last drawn frame placed it, with `border` the uniform border width. `scrollX` and `scrollY` are the positive scroll offset the parent applied to that box. `gutterWidth` and `gutterHeight` are the strips the vertical and the horizontal scrollbar reserve inside the border. `null` for a node with no recorded box. |
 | `scrollOf` | `(nodeId: number) => [left, top, maxLeft, maxTop] \| null` | Read the scroll offset (positive) and its maximum as of the last drawn frame, with the offset clamped to that maximum. `null` for a node whose `overflow` is `visible` or `clip` on both axes. |
-| `scrollIntoViewNode` | `(nodeId: number, block: string, inline: string) => void` | Scroll every scroll container above `nodeId` until the node shows, innermost first. `block` is the vertical and `inline` the horizontal alignment: `"start"`, `"center"`, `"end"` or `"nearest"`. `"nearest"` keeps a node that shows in place. A node shorter than the box aligns the edge that lies outside it, and a longer node aligns its end when its start lies before the box, and its start when its end lies after the box. Uses the boxes of the last drawn frame. A node with no recorded box is retried once on the next frame. |
+| `scrollIntoViewNode` | `(nodeId: number, block: string, inline: string) => void` | Scroll every scroll container above `nodeId` until the node shows in its client rectangle, innermost first. `block` is the vertical and `inline` the horizontal alignment: `"start"`, `"center"`, `"end"` or `"nearest"`. `"nearest"` keeps a node that shows in place. A node shorter than the client rectangle aligns the edge that lies outside it, and a longer node aligns its end when its start lies before the rectangle, and its start when its end lies after the rectangle. Uses the boxes of the last drawn frame. A node with no recorded box is retried once on the next frame. |
 | `scrollNode` | `(nodeId: number, left: number \| null, top: number \| null) => void` | Set the scroll offset of the axes given, a `null` axis keeps its value. Values below 0 become 0, and the host clamps the upper end at the next frame. A node whose `overflow` is `visible` or `clip` on both axes ignores the call. |
 
 Shared throw rules, all as a `TypeError` except where noted:
@@ -466,11 +466,15 @@ The string `"$window"` names the `window` export in place of a node id in `addEv
   `contextmenu` is the deepest container under the pointer, or the document
   element when there is none. While a pointer capture is active, the pointer events and
   `mousedown`, `mouseup`, `mousemove` go to the capturing node.
+- A press on a scrollbar (a track, or a thumb that shows) and a move or release over one target
+  the scroll container. The press fires `pointerdown` and `mousedown`, the release `pointerup` and
+  `mouseup`, and a right press also `contextmenu`. It moves no focus, records no press and fires
+  no `click`. The corner between two scrollbars is part of the content.
 - An inert node and its subtree stay outside hit testing and hover.
 - The host applies one scroll step for each `wheel` after its listeners ran.
   The step goes to the first container under the pointer that is live
-  (connected, displayed, not `hidden`, not inert, `overflow` `scroll` on the
-  axis) and can still move. It clamps at the end and the remainder goes
+  (connected, displayed, not `hidden`, not inert, `overflow` `scroll` or `auto`
+  on the axis) and can still move. It clamps at the end and the remainder goes
   nowhere. The root takes the step only when no container below it could move
   before the listeners. A container that scrolls on both axes takes the larger
   delta, and a tie moves along y.
@@ -586,7 +590,7 @@ The string `"$window"` names the `window` export in place of a node id in `addEv
   `hidden`, `inert` and `display`, and moving or removing a node, re-check
   the node's subtree before that frame's queued focus requests.
 - An uncanceled `mousedown` focuses the nearest node on the target's path that can take focus, and
-  blurs the window when there is none.
+  blurs the window when there is none. A press on a scrollbar focuses nothing.
 - A window activation change dispatches `blur` and `focusout`, or `focus` and
   `focusin`, to the focused node. While the window is inactive a later `blur`
   of that node is held back, and a node focused meanwhile receives `focus` and

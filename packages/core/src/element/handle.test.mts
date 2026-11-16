@@ -22,7 +22,10 @@ import type { IncaElement, IncaInputElement } from "./types.mts";
 /** Installs a fake host whose reads give `stored`, `boxes` and `scroll`, and returns it. */
 function installHost(
   stored: string | number | boolean | null = null,
-  boxes: Record<number, readonly [number, number, number, number, number, number, number]> = {},
+  boxes: Record<
+    number,
+    readonly [number, number, number, number, number, number, number, number, number]
+  > = {},
   scroll: readonly [number, number, number, number] | null = null,
 ) {
   const host = {
@@ -30,7 +33,9 @@ function installHost(
       () => stored,
     ),
     layoutOf: vi.fn<
-      (nodeId: number) => readonly [number, number, number, number, number, number, number] | null
+      (
+        nodeId: number,
+      ) => readonly [number, number, number, number, number, number, number, number, number] | null
     >((nodeId) => boxes[nodeId] ?? null),
     scrollOf: vi.fn<(nodeId: number) => readonly [number, number, number, number] | null>(
       () => scroll,
@@ -496,7 +501,7 @@ describe("createIncaElement after the node is removed", () => {
   });
 
   it("reads zero box members without asking the host", () => {
-    const host = installHost(null, { 1: [10, 20, 30, 40, 2, 0, 0] });
+    const host = installHost(null, { 1: [10, 20, 30, 40, 2, 0, 0, 0, 0] });
     const el = createIncaElement(1, "element", "div");
     markRemoved([el.__node_id]);
 

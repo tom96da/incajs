@@ -34,7 +34,8 @@ fn repeated_builds_with_no_event_never_touch_the_js_engine() {
 
     for _ in 0..5 {
         let host = host.borrow();
-        let _ = render_tree_with_events(&host.tree, node, &dispatcher).unwrap();
+        let _ =
+            render_tree_with_events(&host.tree, node, &dispatcher, Scrollbars::Overlay).unwrap();
     }
 
     assert_eq!(

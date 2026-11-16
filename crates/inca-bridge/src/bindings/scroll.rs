@@ -221,6 +221,7 @@ mod tests {
                 bounds: Bounds::new(point(px(10.0), px(50.0)), gpui::size(px(5.0), px(5.0))),
                 border: px(0.0),
                 scroll: point(px(1.0), px(2.0)),
+                gutter: gpui::Size::default(),
             };
             host.layout.borrow_mut().insert(id, layout);
         };

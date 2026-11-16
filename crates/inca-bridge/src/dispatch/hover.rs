@@ -463,6 +463,7 @@ mod tests {
                 ),
                 border: px(border),
                 scroll: gpui::Point::default(),
+                gutter: gpui::Size::default(),
             },
         );
     }

@@ -118,7 +118,7 @@ describe("createIncaElement scroll members", () => {
   });
 
   it("report scrollWidth and scrollHeight as client size plus the maximum offset", () => {
-    installMembersHost({ 7: [0, 0, 20, 10, 0, 0, 0] }, [0, 0, 30, 60]);
+    installMembersHost({ 7: [0, 0, 20, 10, 0, 0, 0, 0, 0] }, [0, 0, 30, 60]);
     const el = createIncaElement(7, "element", "div");
     expect([el.scrollWidth, el.scrollHeight]).toEqual([50, 70]);
   });

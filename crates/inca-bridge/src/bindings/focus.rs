@@ -55,10 +55,12 @@ fn layout_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsR
                 layout.border,
                 layout.scroll.x,
                 layout.scroll.y,
+                layout.gutter.width,
+                layout.gutter.height,
             ]
             .map(|px| f64::from(f32::from(px)))
         });
-        or_null(&ctx, rect.as_ref().map(<[f64; 7]>::as_slice))
+        or_null(&ctx, rect.as_ref().map(<[f64; 9]>::as_slice))
     }
 }
 
@@ -159,6 +161,7 @@ mod tests {
             ),
             border: gpui::px(1.0),
             scroll: gpui::point(gpui::px(6.0), gpui::px(7.5)),
+            gutter: gpui::size(gpui::px(8.0), gpui::px(9.5)),
         }
     }
 
@@ -172,7 +175,7 @@ mod tests {
             .eval(&format!("__inca_native__.layoutOf({node})"))
             .unwrap();
 
-        assert_eq!(read, [1.5, 2.0, 3.0, 4.5, 1.0, 6.0, 7.5]);
+        assert_eq!(read, [1.5, 2.0, 3.0, 4.5, 1.0, 6.0, 7.5, 8.0, 9.5]);
     }
 
     #[test]

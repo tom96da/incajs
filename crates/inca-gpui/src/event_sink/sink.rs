@@ -34,15 +34,15 @@ pub trait EventSink {
     /// The handle to track this node's focus with, if it's focusable.
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle>;
 
-    /// Tracks this node's scroll offset. A scroll container (`hidden` or
-    /// `scroll` on either axis) gets one. After the `wheel` listeners ran, the
+    /// Tracks this node's scroll offset. A scroll container (`hidden`, `scroll` or `auto` on
+    /// either axis) gets one. After the `wheel` listeners ran, the
     /// wheel step goes to the innermost container under the pointer that can
     /// move, and is not applied after `preventDefault()`.
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
 
     /// The axes along which a wheel step can scroll `node_id` now, read from
     /// the live tree (see [`inca_node::wheel_axes`]). `None` when the node is unknown,
-    /// detached, hidden or inert. A shown container without `scroll` overflow
+    /// detached, hidden or inert. A shown container with neither `scroll` nor `auto` overflow
     /// gives `false` on both axes.
     fn wheel_axes(&self, node_id: NodeId) -> Option<inca_node::WheelAxes>;
 
@@ -140,6 +140,28 @@ pub trait EventSink {
         cx: &mut App,
     );
 
+    /// Reports a mouse button press on a scrollbar of the container `node_id`. The sink fires
+    /// `pointerdown` and `mousedown` at the container, and `pointermove` for a button that is
+    /// not the first held. It focuses nothing and records no press, so no `click` follows.
+    fn bar_pressed(
+        &self,
+        node_id: NodeId,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    );
+
+    /// Reports the release of a press that [`EventSink::bar_pressed`] reported. The sink fires
+    /// `pointerup` and `mouseup` at the container, and `pointermove` for a button that is not
+    /// the last released. It fires no `click`.
+    fn bar_released(
+        &self,
+        node_id: NodeId,
+        payload: &EventPayload,
+        window: &mut Window,
+        cx: &mut App,
+    );
+
     /// The text state of the `input` node `node_id`, `None` for any other
     /// node.
     fn input(&self, node_id: NodeId) -> Option<InputState>;
@@ -216,6 +238,26 @@ macro_rules! noop_sink_methods {
             &self,
             _: &gpui::Keystroke,
             _: bool,
+            _: &$crate::event_sink::EventPayload,
+            _: &mut gpui::Window,
+            _: &mut gpui::App,
+        ) {
+        }
+    };
+    (@one bar_pressed) => {
+        fn bar_pressed(
+            &self,
+            _: inca_node::NodeId,
+            _: &$crate::event_sink::EventPayload,
+            _: &mut gpui::Window,
+            _: &mut gpui::App,
+        ) {
+        }
+    };
+    (@one bar_released) => {
+        fn bar_released(
+            &self,
+            _: inca_node::NodeId,
             _: &$crate::event_sink::EventPayload,
             _: &mut gpui::Window,
             _: &mut gpui::App,

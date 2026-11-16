@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use gpui::prelude::*;
-use gpui::{AnyElement, App, Bounds, ElementId, Pixels, Point, ScrollHandle, Window, div};
+use gpui::{AnyElement, App, Bounds, ElementId, Pixels, Point, ScrollHandle, Size, Window, div};
 
-use super::children::{record_children, rendered_children};
+use super::children::{has_bar, record_children, rendered_children};
 use super::input::InputElement;
 use super::pointer::{
     mark_mouse_target, pointer_tracker, root_keys, wire_focus, wire_hover, wire_modifier_keys,
 };
-use super::style::{apply_style, clip_scroll_axes};
+use super::scrollbar::{Scrollbars, gutter_of, scrollbar};
+use super::style::{apply_style, clip_scroll_axes, reserve_gutter};
 use super::wheel::{scroll_anchor, wire_scroll};
 use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
 use inca_node::spec::{ElementSpec, ElementTag, WheelAxes, build_spec};
@@ -34,12 +35,14 @@ pub fn debug_selector(id: NodeId) -> String {
 /// [`NodeId`].
 ///
 /// The root container (`root`) also carries the pointer tracker and the key
-/// listeners when there is a dispatcher.
+/// listeners when there is a dispatcher. A scroll container with a handle reserves the
+/// width of its bars as `mode` says and draws them.
 fn build_element_inner<E: EventSink + Clone + 'static>(
     spec: &ElementSpec,
     dispatch: Option<&E>,
     root: bool,
     track: bool,
+    mode: Scrollbars,
 ) -> AnyElement {
     match &spec.tag {
         ElementTag::Text(content) => content.clone().into_any_element(),
@@ -50,8 +53,9 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                 .and_then(|d| d.scroll_handle(id));
             let element = div().debug_selector(move || debug_selector(id));
             // Before `.id()`: only `Div` has the listener.
+            let trailing = usize::from(has_bar(spec, handle.as_ref()));
             let element = element.when_some(dispatch, |el, dispatch| {
-                record_children(el, spec, handle.clone(), dispatch.clone())
+                record_children(el, spec, handle.clone(), dispatch.clone(), mode, trailing)
             });
 
             let element = element.when_some(dispatch.filter(|_| root), |el, dispatch| {
@@ -66,7 +70,7 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                 let element = wire_hover(element, dispatch.filter(|_| hover), id);
                 let element =
                     element.when(hover, |el| mark_mouse_target(el, id, dispatch.cloned()));
-                finish_container(element, spec, dispatch, root, track, handle.is_some())
+                finish_container(element, spec, dispatch, root, track, mode, handle)
             } else {
                 finish_container(
                     wire_focus(element, dispatch, id),
@@ -74,7 +78,8 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
                     dispatch,
                     root,
                     track,
-                    false,
+                    mode,
+                    None,
                 )
             }
         }
@@ -85,22 +90,29 @@ fn build_element_inner<E: EventSink + Clone + 'static>(
 /// element it turned out to be. The root container (`root`) also carries the
 /// pointer tracker, as its first child, when there is a dispatcher. A scroll
 /// container carries its scroll anchor after the tracker and before the
-/// children.
+/// children, and its bar element after the children when it has a `handle` and
+/// an axis that scrolls.
 fn finish_container<E>(
     mut element: E,
     spec: &ElementSpec,
     dispatch: Option<&(impl EventSink + Clone + 'static)>,
     root: bool,
     track: bool,
-    scrolls: bool,
+    mode: Scrollbars,
+    handle: Option<ScrollHandle>,
 ) -> AnyElement
 where
     E: Styled + ParentElement + IntoElement + 'static,
 {
     apply_style(element.style(), &spec.style);
     // The pointer tracker and the root's listener apply the wheel step of a tracked container.
-    if scrolls {
+    if handle.is_some() {
         clip_scroll_axes(element.style());
+    }
+    let bar = has_bar(spec, handle.as_ref());
+    if bar {
+        let gutter = gutter_of(spec.style.scroll_keyword_axes(), mode);
+        reserve_gutter(element.style(), &spec.style, gutter);
     }
     if let Some(dispatch) = dispatch.filter(|_| root) {
         element = element.child(pointer_tracker(spec.id, dispatch.clone()));
@@ -121,16 +133,18 @@ where
         ));
     }
     for child in rendered_children(spec) {
-        element = element.child(build_element_inner(child, dispatch, false, track));
+        element = element.child(build_element_inner(child, dispatch, false, track, mode));
+    }
+    if let Some(handle) = handle.filter(|_| bar) {
+        element = element.child(scrollbar(spec, handle, mode, dispatch.cloned(), track));
     }
     element.into_any_element()
 }
 
 /// The laid-out box of a node, as the last drawn frame placed it.
 ///
-/// `bounds` is in window coordinates, after the scrolling of every ancestor.
-/// A node inside a scrolled container is therefore reported where it is
-/// drawn.
+/// `bounds` is the border box in window coordinates, after the scrolling of every ancestor.
+/// A node inside a scrolled container is therefore reported where it is drawn.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NodeLayout {
     /// The border box.
@@ -141,6 +155,10 @@ pub struct NodeLayout {
     /// The scroll offset (positive) the parent applied to `bounds`. Adding it
     /// back gives the box as laid out before scrolling.
     pub scroll: Point<Pixels>,
+    /// The strip each bar that reserves width takes inside the border: `width` for the vertical
+    /// bar and `height` for the horizontal bar. 0 on an axis with no such bar.
+    /// [`NodeLayout::client_rect`] leaves the strips out.
+    pub gutter: Size<Pixels>,
 }
 
 /// Type-only stand-in for [`build_element_inner`]'s `dispatch` parameter
@@ -192,6 +210,8 @@ impl EventSink for NoSink {
         input,
         record_input,
         input_request,
+        bar_pressed,
+        bar_released,
     );
 }
 
@@ -200,17 +220,19 @@ impl EventSink for NoSink {
 /// whose containers dispatch input events into JS.
 #[must_use]
 pub fn build_element(spec: &ElementSpec) -> AnyElement {
-    build_element_inner::<NoSink>(spec, None, true, false)
+    build_element_inner::<NoSink>(spec, None, true, false, Scrollbars::Overlay)
 }
 
 /// Like [`build_element`], but input on the containers dispatches into JS
-/// via `dispatch` (any type implementing this crate's [`EventSink`] trait).
+/// via `dispatch` (any type implementing this crate's [`EventSink`] trait). A scroll
+/// container draws its scrollbars as `mode` says.
 #[must_use]
 pub fn build_element_with_events<E: EventSink + Clone + 'static>(
     spec: &ElementSpec,
     dispatch: &E,
+    mode: Scrollbars,
 ) -> AnyElement {
-    build_element_inner(spec, Some(dispatch), true, dispatch.tracks_pointer())
+    build_element_inner(spec, Some(dispatch), true, dispatch.tracks_pointer(), mode)
 }
 
 /// Composes [`build_spec`] and [`build_element`]: builds `root` and its
@@ -228,9 +250,10 @@ pub fn render_tree_with_events<E: EventSink + Clone + 'static>(
     tree: &VirtualTree,
     root: NodeId,
     dispatch: &E,
+    mode: Scrollbars,
 ) -> Option<AnyElement> {
     dispatch.clear_layout();
-    build_spec(tree, root).map(|spec| build_element_with_events(&spec, dispatch))
+    build_spec(tree, root).map(|spec| build_element_with_events(&spec, dispatch, mode))
 }
 
 #[cfg(test)]
@@ -668,5 +691,20 @@ mod tests {
             probe.layouts.borrow()[&child].bounds,
             rect(0., drawn, 100., 300.)
         );
+    }
+
+    #[gpui::test]
+    fn a_container_without_a_dispatcher_reserves_no_strip(cx: &mut TestAppContext) {
+        let mut tree = VirtualTree::new();
+        let root = boxed(&mut tree, None, 100., 100.);
+        tree.set_style(root, "overflow", "scroll").unwrap();
+        let child = tree.create_node("div").unwrap();
+        tree.set_style(child, "height", 30.0).unwrap();
+        tree.append_child(root, child).unwrap();
+        let window = cx.add_window(|_, _| TreeView(tree));
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        assert_eq!(cx.debug_bounds("node-1").unwrap().size.width, px(100.));
     }
 }

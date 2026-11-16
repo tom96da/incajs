@@ -15,14 +15,19 @@ pub(super) fn overflow_pair_from_str(s: &str) -> Option<(OverflowSpec, OverflowS
 }
 
 /// The computed axes: beside an axis that is `hidden` or scrolls, an unset or `visible` axis
-/// scrolls and a `clip` axis is `hidden`.
+/// computes to `auto` and a `clip` axis to `hidden`.
 pub(super) fn computed_axes(
     x: Option<OverflowSpec>,
     y: Option<OverflowSpec>,
 ) -> (Option<OverflowSpec>, Option<OverflowSpec>) {
-    let scrollable = |axis| matches!(axis, Some(OverflowSpec::Hidden | OverflowSpec::Scroll));
+    let scrollable = |axis| {
+        matches!(
+            axis,
+            Some(OverflowSpec::Hidden | OverflowSpec::Scroll | OverflowSpec::Auto)
+        )
+    };
     let computed = |axis, other| match axis {
-        None | Some(OverflowSpec::Visible) if scrollable(other) => Some(OverflowSpec::Scroll),
+        None | Some(OverflowSpec::Visible) if scrollable(other) => Some(OverflowSpec::Auto),
         Some(OverflowSpec::Clip) if scrollable(other) => Some(OverflowSpec::Hidden),
         axis => axis,
     };
@@ -204,14 +209,15 @@ mod tests {
     #[rstest]
     #[case::hidden(&[("overflow", "hidden")], (Some(OverflowSpec::Hidden), Some(OverflowSpec::Hidden)))]
     #[case::visible(&[("overflow", "visible")], (Some(OverflowSpec::Visible), Some(OverflowSpec::Visible)))]
-    #[case::auto(&[("overflow", "auto")], (Some(OverflowSpec::Scroll), Some(OverflowSpec::Scroll)))]
+    #[case::auto(&[("overflow", "auto")], (Some(OverflowSpec::Auto), Some(OverflowSpec::Auto)))]
     #[case::clip(&[("overflow", "clip")], (Some(OverflowSpec::Clip), Some(OverflowSpec::Clip)))]
     #[case::clip_axis_key(&[("overflow_x", "clip")], (Some(OverflowSpec::Clip), None))]
     #[case::two_values(&[("overflow", "hidden scroll")], (Some(OverflowSpec::Hidden), Some(OverflowSpec::Scroll)))]
     #[case::two_non_scrollable_values(&[("overflow", "clip visible")], (Some(OverflowSpec::Clip), Some(OverflowSpec::Visible)))]
-    #[case::visible_beside_hidden(&[("overflow", "visible hidden")], (Some(OverflowSpec::Scroll), Some(OverflowSpec::Hidden)))]
-    #[case::clip_beside_auto(&[("overflow", "clip auto")], (Some(OverflowSpec::Hidden), Some(OverflowSpec::Scroll)))]
-    #[case::unset_beside_scroll(&[("overflow_x", "scroll")], (Some(OverflowSpec::Scroll), Some(OverflowSpec::Scroll)))]
+    #[case::visible_beside_hidden(&[("overflow", "visible hidden")], (Some(OverflowSpec::Auto), Some(OverflowSpec::Hidden)))]
+    #[case::clip_beside_auto(&[("overflow", "clip auto")], (Some(OverflowSpec::Hidden), Some(OverflowSpec::Auto)))]
+    #[case::unset_beside_scroll(&[("overflow_x", "scroll")], (Some(OverflowSpec::Scroll), Some(OverflowSpec::Auto)))]
+    #[case::unset_beside_auto(&[("overflow_x", "auto")], (Some(OverflowSpec::Auto), Some(OverflowSpec::Auto)))]
     fn overflow_props_compute_to_these_axes(
         #[case] props: &[(&str, &str)],
         #[case] want: (Option<OverflowSpec>, Option<OverflowSpec>),

@@ -41,6 +41,26 @@ export type ElementName =
   | [localName: string, namespaceURI: string | null, prefix: string | null, tagName: string];
 
 /**
+ * The last drawn box of a node in window logical pixels. `border` is one uniform width. `scrollX`
+ * and `scrollY` are the positive scroll offset the parent applied to the box, and `gutterWidth`
+ * and `gutterHeight` are the strips the scrollbars reserve inside the border.
+ */
+export type NodeBox = readonly [
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  border: number,
+  scrollX: number,
+  scrollY: number,
+  gutterWidth: number,
+  gutterHeight: number,
+];
+
+/** The scroll offset of a node and its maximum, as of the last drawn frame. */
+export type NodeScroll = readonly [left: number, top: number, maxLeft: number, maxTop: number];
+
+/**
  * What a native returns for a copy of a node without a name: id, the marker or tag, and the text
  * of a `#text` copy (`null` for any other node).
  */
@@ -143,10 +163,8 @@ interface IncaNative {
   focusNode(nodeId: NodeId, preventScroll?: boolean): void;
   blurNode(nodeId: NodeId): void;
   focusedNode(): NodeId | null;
-  layoutOf(
-    nodeId: NodeId,
-  ): readonly [number, number, number, number, number, number, number] | null;
-  scrollOf(nodeId: NodeId): readonly [number, number, number, number] | null;
+  layoutOf(nodeId: NodeId): NodeBox | null;
+  scrollOf(nodeId: NodeId): NodeScroll | null;
   scrollNode(nodeId: NodeId, left: number | null, top: number | null): void;
   scrollIntoViewNode(nodeId: NodeId, block: ScrollAlignment, inline: ScrollAlignment): void;
   dispatchEvent(target: EventTargetId, event: EventLike): boolean;

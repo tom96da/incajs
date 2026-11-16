@@ -1,7 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use gpui::{Display, Fill, FlexDirection, Hsla, Length, Overflow, StyleRefinement, px, rgba};
+use gpui::{
+    DefiniteLength, Display, Fill, FlexDirection, Hsla, Length, Overflow, Pixels, Size,
+    StyleRefinement, px, rgba,
+};
 
 use inca_node::spec::{
     AlignSpec, ColorSpec, DisplaySpec, FlexDirectionSpec, LengthSpec, OverflowSpec, StyleSpec,
@@ -63,12 +66,28 @@ pub(super) fn clip_scroll_axes(style: &mut StyleRefinement) {
     }
 }
 
+/// Adds `gutter` to the right and bottom padding of `style`, the padding `spec` sets (0 when it
+/// sets none). A side with no gutter keeps its padding.
+pub(super) fn reserve_gutter(style: &mut StyleRefinement, spec: &StyleSpec, gutter: Size<Pixels>) {
+    let side = |padding: Option<f64>, gutter: Pixels| -> Option<DefiniteLength> {
+        #[allow(clippy::cast_possible_truncation)]
+        let padding = px(padding.unwrap_or(0.0) as f32);
+        (gutter > Pixels::ZERO).then(|| (padding + gutter).into())
+    };
+    if let Some(right) = side(spec.padding.right, gutter.width) {
+        style.padding.right = Some(right);
+    }
+    if let Some(bottom) = side(spec.padding.bottom, gutter.height) {
+        style.padding.bottom = Some(bottom);
+    }
+}
+
 fn overflow_from_spec(spec: OverflowSpec) -> Overflow {
     match spec {
         OverflowSpec::Visible => Overflow::Visible,
         OverflowSpec::Clip => Overflow::Clip,
         OverflowSpec::Hidden => Overflow::Hidden,
-        OverflowSpec::Scroll => Overflow::Scroll,
+        OverflowSpec::Scroll | OverflowSpec::Auto => Overflow::Scroll,
     }
 }
 
@@ -271,5 +290,21 @@ mod tests {
         assert_eq!(style.display, Some(gpui::Display::Flex));
         assert_eq!(style.size.width, Some(Length::from(px(120.0))));
         assert_eq!(style.size.height, Some(Length::from(px(40.0))));
+    }
+
+    #[test]
+    fn a_gutter_adds_to_the_padding_of_its_side() {
+        let spec = style_of(&[("padding_right", num(3.0)), ("padding_bottom", num(2.0))]);
+        let mut refinement = StyleRefinement::default();
+        reserve_gutter(&mut refinement, &spec, gpui::size(px(15.), px(0.)));
+        assert_eq!(refinement.padding.right, Some(px(18.).into()));
+        assert_eq!(refinement.padding.bottom, None);
+    }
+
+    #[test]
+    fn a_gutter_becomes_the_padding_of_a_side_with_none() {
+        let mut refinement = StyleRefinement::default();
+        reserve_gutter(&mut refinement, &style_of(&[]), gpui::size(px(0.), px(15.)));
+        assert_eq!(refinement.padding.bottom, Some(px(15.).into()));
     }
 }
