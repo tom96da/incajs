@@ -24,7 +24,8 @@ const native = {
       callback: HostCallback,
       capture?: boolean,
       passive?: boolean,
-    ) => number
+      signal?: unknown,
+    ) => number | null
   >(() => 41),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
@@ -53,6 +54,7 @@ describe("wrapper functions forward to __inca_native__", () => {
       callback,
       true,
       false,
+      undefined,
     );
   });
 
@@ -105,5 +107,21 @@ describe("signalId", () => {
 
     expect(signalId(value)).toBe(7);
     expect(native.signalId).toHaveBeenCalledWith(value);
+  });
+});
+
+describe("addListener with a signal", () => {
+  it("forwards the signal as the sixth argument", () => {
+    const signal = {} as never;
+
+    addListener(1, "click", () => undefined, false, false, signal);
+
+    expect(native.addEventListener.mock.calls[0]![5]).toBe(signal);
+  });
+
+  it("gives the null the host answers", () => {
+    native.addEventListener.mockReturnValueOnce(null);
+
+    expect(addListener(1, "click", () => undefined, false, false, {} as never)).toBeNull();
   });
 });

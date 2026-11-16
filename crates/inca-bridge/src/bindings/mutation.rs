@@ -111,6 +111,7 @@ fn remove_node<'js>(
             .iter()
             .flat_map(|&id| host.listeners.release(id))
             .collect();
+        crate::abort::settle_freed(&ctx, &mut host)?;
         callbacks::release(&ctx, &callback_ids)?;
         pair(&ctx, &callback_ids, &node_ids)
     }

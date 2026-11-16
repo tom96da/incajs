@@ -40,7 +40,8 @@ const native = {
       callback: HostCallback,
       capture?: boolean,
       passive?: boolean,
-    ) => number
+      signal?: unknown,
+    ) => number | null
   >(() => nextCallbackId++),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
@@ -182,6 +183,7 @@ describe("identity of a registration", () => {
       expect.any(Function),
       true,
       false,
+      undefined,
     );
   });
 
@@ -481,5 +483,124 @@ describe("a signal as the target", () => {
     expect(native.removeEventListener).toHaveBeenCalledTimes(1);
     expect(native.removeEventListener.mock.calls[0]![0]).toBe(first);
     expect(callbackIdFor(groupOf(second as never, "abort", false), listener)).toBeDefined();
+  });
+});
+
+describe("the signal option", () => {
+  const listener = (): (() => void) => vi.fn<() => void>();
+
+  it.each([
+    ["an empty object", {}],
+    ["null", null],
+    ["a number", 5],
+    ["a string", "x"],
+    ["a forged signal", Object.create(AbortSignal.prototype) as object],
+    ["a plain event target", Object.create(Object.getPrototypeOf(AbortSignal.prototype) as object)],
+  ])("throws a TypeError for %s", (_name, signal) => {
+    expect(() => addEventListener(1, "click", listener(), { signal: signal as never })).toThrow(
+      new TypeError(
+        "the signal option is not an AbortSignal. pass the signal of an AbortController",
+      ),
+    );
+  });
+
+  it("accepts an undefined signal", () => {
+    addEventListener(1, "click", listener(), { signal: undefined });
+
+    expect(native.addEventListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a signal", () => {
+    addEventListener(1, "click", listener(), { signal: new AbortSignal() });
+
+    expect(native.addEventListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not changed by a script that replaces the global AbortSignal", () => {
+    const original = globalThis.AbortSignal;
+    const signal = new AbortSignal();
+    globalThis.AbortSignal = class {} as never;
+    try {
+      addEventListener(1, "click", listener(), { signal });
+    } finally {
+      globalThis.AbortSignal = original;
+    }
+
+    expect(native.addEventListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads the option once", () => {
+    const signal = new AbortSignal();
+    let reads = 0;
+    const options = {
+      get signal() {
+        return ++reads === 1 ? signal : {};
+      },
+    };
+
+    addEventListener(1, "click", listener(), options as never);
+
+    expect([reads, native.addEventListener.mock.calls[0]![5]]).toEqual([1, signal]);
+  });
+
+  it("checks the option before the null listener", () => {
+    expect(() => addEventListener(1, "click", null, { signal: {} as never })).toThrow(TypeError);
+  });
+
+  it("hands the signal to the host as the sixth argument", () => {
+    const signal = new AbortSignal();
+
+    addEventListener(1, "click", listener(), { signal });
+
+    expect(native.addEventListener.mock.calls[0]![5]).toBe(signal);
+  });
+
+  it("registers no callback when the host answers null", () => {
+    native.addEventListener.mockImplementationOnce(() => null);
+    const fn = listener();
+    const groups = registeredGroupCount();
+
+    addEventListener(1, "click", fn, { signal: new AbortSignal() });
+
+    expect(callbackIdFor(groupOf(1, "click", false), fn)).toBeUndefined();
+    expect(registeredGroupCount()).toBe(groups);
+  });
+
+  it("does not call the host for a duplicate registration", () => {
+    const fn = listener();
+    addEventListener(1, "click", fn);
+
+    addEventListener(1, "click", fn, { signal: new AbortSignal() });
+
+    expect(native.addEventListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("is ignored by removeEventListener", () => {
+    const fn = listener();
+    addEventListener(1, "click", fn);
+
+    removeEventListener(1, "click", fn, { signal: new AbortSignal() } as never);
+
+    expect(native.removeEventListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes a once listener that has a signal when it runs", () => {
+    const signal = new AbortSignal();
+    addEventListener(1, "click", listener(), { once: true, signal });
+
+    received()({});
+
+    expect(native.removeEventListener).toHaveBeenCalledTimes(1);
+    expect(native.addEventListener.mock.calls[0]![5]).toBe(signal);
+  });
+
+  it("lets a once listener remove itself after the options object changed", () => {
+    const options = { once: true, capture: true } as { once?: boolean; capture?: boolean };
+    addEventListener(1, "click", listener(), options);
+    options.capture = false;
+
+    received()({});
+
+    expect(native.removeEventListener).toHaveBeenCalledTimes(1);
   });
 });

@@ -198,7 +198,8 @@ interface IncaNative {
     callback: HostCallback,
     capture?: boolean,
     passive?: boolean,
-  ): CallbackId;
+    signal?: SignalTarget,
+  ): CallbackId | null;
   removeEventListener(target: EventTargetId, event: string, callbackId: CallbackId): boolean;
   removeNode(nodeId: NodeId): [callbackIds: CallbackId[], nodeIds: NodeId[]];
   holdNode(nodeId: NodeId): void;

@@ -262,3 +262,23 @@ describe("the collection of a signal", () => {
     expect(ref.deref()).toBeUndefined();
   });
 });
+
+describe("the collection of a signal with a once listener registered with the signal option", () => {
+  it("frees the signal when nothing refers to it", async () => {
+    let next = 0;
+    globalThis.__inca_native__ = nativeStub({
+      addEventListener: () => ++next,
+      removeEventListener: () => true,
+    } as never);
+    let ref: WeakRef<object>;
+    (() => {
+      const signal = new AbortSignal();
+      signal.addEventListener("abort", () => undefined, { once: true, signal });
+      ref = new WeakRef(signal);
+    })();
+
+    await collectGarbage(() => ref.deref() === undefined);
+
+    expect(ref.deref()).toBeUndefined();
+  });
+});

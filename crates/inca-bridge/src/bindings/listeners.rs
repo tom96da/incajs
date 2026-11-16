@@ -7,13 +7,15 @@ use std::rc::Rc;
 
 use inca_jsenv::callbacks;
 use inca_node::NodeId;
+use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use super::Natives;
-use super::convert::{Flag, JsCallbackId, JsEventTargetId, JsNodeId, existing_node};
+use super::convert::{Flag, JsCallbackId, JsEventTargetId, JsNodeId, existing_node, or_null};
 use super::host::Host;
+use super::links::{Link, Links};
 use crate::EventTargetId;
-use crate::abort::{Table, after_removal};
+use crate::abort::{Table, after_removal, settle_freed};
 use crate::event_target::HookTarget;
 
 /// One registration: the callback id, the phase it listens in and whether it
@@ -40,6 +42,8 @@ pub struct Listener {
 #[derive(Debug, Default)]
 pub struct EventListeners {
     pub(super) by_target: HashMap<EventTargetId, HashMap<String, Vec<Listener>>>,
+    /// The registrations a signal removes when it aborts.
+    pub(crate) links: Links,
 }
 
 impl EventListeners {
@@ -84,6 +88,9 @@ impl EventListeners {
         if events.is_empty() {
             self.by_target.remove(&target);
         }
+        if removed {
+            self.links.unlink(callback_id);
+        }
         removed
     }
 
@@ -97,10 +104,15 @@ impl EventListeners {
     /// Drops every registration on `target` and returns the callback ids that were there, in no
     /// particular order.
     pub(crate) fn release_target(&mut self, target: EventTargetId) -> Vec<u32> {
-        self.by_target
+        let ids: Vec<u32> = self
+            .by_target
             .remove(&target)
             .map(|events| events.into_values().flatten().map(|l| l.callback).collect())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        for &id in &ids {
+            self.links.unlink(id);
+        }
+        ids
     }
 
     /// Whether `target` has a registration for `event`.
@@ -140,10 +152,25 @@ fn window_target_id(_host: Rc<RefCell<Host>>) -> impl Fn() -> HookTarget {
     || HookTarget::Window
 }
 
+/// The message of a `signal` option that is no `AbortSignal`.
+const NOT_A_SIGNAL: &str =
+    "the signal option is not an AbortSignal. pass the signal of an AbortController";
+
+/// `addEventListener(target, event, callback, capture, passive, signal)`: registers `callback`
+/// and returns its id, or `null` when `signal` is aborted already, which stores nothing. A
+/// registration with a signal is removed when the signal aborts.
 fn add_event_listener<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsEventTargetId, String, Value<'js>, Flag, Flag) -> JsResult<u32> {
-    move |ctx, JsEventTargetId(target), event, callback, capture, passive| {
+) -> impl Fn(
+    Ctx<'js>,
+    JsEventTargetId,
+    String,
+    Value<'js>,
+    Flag,
+    Flag,
+    Opt<Value<'js>>,
+) -> JsResult<Value<'js>> {
+    move |ctx, JsEventTargetId(target), event, callback, capture, passive, signal| {
         let mut host = host.borrow_mut();
         if let EventTargetId::Node(node_id) = target {
             existing_node(&ctx, &host.tree, node_id)?;
@@ -154,9 +181,23 @@ fn add_event_listener<'js>(
                 "addEventListener takes a function. pass a function as the callback",
             ));
         }
+        let signal = match signal.0.filter(|value| !value.is_undefined()) {
+            Some(value) => Some(
+                crate::abort::signal_id(&value)
+                    .ok_or_else(|| Exception::throw_type(&ctx, NOT_A_SIGNAL))?,
+            ),
+            None => None,
+        };
+        if signal.is_some_and(|signal| host.signals.is_aborted(signal)) {
+            return or_null::<u32>(&ctx, None);
+        }
         let id = callbacks::store(&ctx, callback)?
             .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))?;
-        let pins = matches!(target, EventTargetId::Signal(signal) if event == "abort" && host.signals.pins(signal));
+        let pins = matches!(target, EventTargetId::Signal(own) if event == "abort" && host.signals.pins(own));
+        let link = Link {
+            target,
+            event: event.clone(),
+        };
         host.listeners.insert(
             target,
             event,
@@ -164,12 +205,18 @@ fn add_event_listener<'js>(
             capture.0.flatten().unwrap_or(false),
             passive.0.flatten().unwrap_or(false),
         );
-        if let EventTargetId::Signal(signal) = target
+        if let EventTargetId::Signal(own) = target
             && pins
         {
-            Table::open(&ctx)?.pin(signal)?;
+            Table::open(&ctx)?.pin(own)?;
         }
-        Ok(id)
+        if let Some(signal) = signal {
+            host.listeners.links.link(signal, id, link);
+            if host.signals.pins(signal) {
+                Table::open(&ctx)?.pin(signal)?;
+            }
+        }
+        or_null(&ctx, Some(id))
     }
 }
 
@@ -177,15 +224,14 @@ fn remove_event_listener<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsEventTargetId, String, JsCallbackId) -> JsResult<bool> {
     move |ctx, JsEventTargetId(target), event, JsCallbackId(callback_id)| {
-        let removed = host
-            .borrow_mut()
-            .listeners
-            .remove(target, &event, callback_id);
+        let mut host = host.borrow_mut();
+        let removed = host.listeners.remove(target, &event, callback_id);
         if removed {
             callbacks::release(&ctx, &[callback_id])?;
             if let EventTargetId::Signal(signal) = target {
-                after_removal(&host.borrow(), &Table::open(&ctx)?, signal)?;
+                after_removal(&host, &Table::open(&ctx)?, signal)?;
             }
+            settle_freed(&ctx, &mut host)?;
         }
         Ok(removed)
     }

@@ -3,7 +3,7 @@
 
 import { native } from "./native.mts";
 import type { CallbackId, EventLike, NodeId } from "../types.mts";
-import type { EventTargetId, HostCallback, WindowTargetId } from "./native.mts";
+import type { EventTargetId, HostCallback, SignalTarget, WindowTargetId } from "./native.mts";
 
 /**
  * Registers `callback` for `event` on a target.
@@ -12,9 +12,12 @@ import type { EventTargetId, HostCallback, WindowTargetId } from "./native.mts";
  * @param callback - what the host calls with the event object
  * @param capture - whether the listener runs while the event travels down to the target
  * @param passive - whether the host ignores `preventDefault()` calls made in the callback
- * @returns the callback id that names the registration
+ * @param signal - a signal that removes the registration when it aborts
+ * @returns the callback id that names the registration, or `null` when `signal` is aborted
+ * already, which registers nothing
  * @throws TypeError when `target` is malformed or is an unknown target tag
  * @throws TypeError when a node target names no node
+ * @throws TypeError when `signal` is no signal of the host
  * @throws RangeError when the host has issued its last callback id
  */
 export function addListener(
@@ -23,8 +26,9 @@ export function addListener(
   callback: HostCallback,
   capture?: boolean,
   passive?: boolean,
-): CallbackId {
-  return native().addEventListener(target, event, callback, capture, passive);
+  signal?: SignalTarget,
+): CallbackId | null {
+  return native().addEventListener(target, event, callback, capture, passive, signal);
 }
 
 /**

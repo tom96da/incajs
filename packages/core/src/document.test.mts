@@ -153,6 +153,7 @@ describe("document", () => {
       expect.any(Function),
       false,
       false,
+      undefined,
     );
   });
 
@@ -206,6 +207,7 @@ describe("document", () => {
       expect.any(Function),
       false,
       false,
+      undefined,
     );
     expect(keys[0]).toBe(document);
     expect(keys[1]).toBe("a");

@@ -109,6 +109,7 @@ describe("createIncaElement handler properties", () => {
       expect.any(Function),
       false,
       false,
+      undefined,
     );
   });
 

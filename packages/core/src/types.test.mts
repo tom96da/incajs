@@ -25,6 +25,7 @@ import type {
   IncaPointerEvent,
   IncaUIEvent,
   IncaWheelEvent,
+  ListenerOptions,
   Px,
   StyleProps,
 } from "./types.mts";
@@ -337,6 +338,22 @@ describe("the abort globals", () => {
   it("infer the base event of an abort listener", () => {
     const listen = (signal: AbortSignal) =>
       signal.addEventListener("abort", (event) => expectTypeOf(event).toEqualTypeOf<IncaEvent>());
+    expectTypeOf(listen).returns.toBeVoid();
+  });
+});
+
+describe("the signal option", () => {
+  it("is the global AbortSignal", () => {
+    expectTypeOf<ListenerOptions["signal"]>().toEqualTypeOf<AbortSignal | undefined>();
+  });
+
+  it("takes a signal of a controller and of any() in a listener call", () => {
+    const listen = (target: IncaEventTarget, controller: AbortController) => {
+      target.addEventListener("click", () => undefined, { signal: controller.signal });
+      target.addEventListener("click", () => undefined, {
+        signal: AbortSignal.any([controller.signal]),
+      });
+    };
     expectTypeOf(listen).returns.toBeVoid();
   });
 });

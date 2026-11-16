@@ -253,7 +253,7 @@ describe("a signal as the receiver", () => {
     signal.removeEventListener("abort", listener);
 
     expect(native.addEventListener.mock.calls[0]!.slice(0, 2)).toEqual([signal, "abort"]);
-    expect(native.addEventListener.mock.calls[0]!.slice(3)).toEqual([false, false]);
+    expect(native.addEventListener.mock.calls[0]!.slice(3, 5)).toEqual([false, false]);
     expect(native.dispatchEvent).toHaveBeenCalledWith(signal, event);
     expect(native.removeEventListener.mock.calls[0]!.slice(0, 2)).toEqual([signal, "abort"]);
   });

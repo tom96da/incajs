@@ -245,13 +245,33 @@ pub(crate) fn abort_signal<'js>(
     Ok(())
 }
 
-/// Runs the abort steps of signal `id`: fires the event and ends the strong hold.
+/// Runs the abort steps of signal `id`: removes the registrations that name it as their `signal`
+/// option, tells core their ids, fires the event and ends the strong hold.
 fn run_abort_steps(
     ctx: &Ctx<'_>,
     host: &Rc<RefCell<Host>>,
     table: &Table<'_>,
     id: u32,
 ) -> JsResult<()> {
+    let removed = {
+        let mut host = host.borrow_mut();
+        let linked = host.listeners.links.take(id);
+        let mut ids = Vec::new();
+        for (callback, link) in linked {
+            if host.listeners.remove(link.target, &link.event, callback) {
+                ids.push(callback);
+                if let EventTargetId::Signal(target) = link.target {
+                    after_removal(&host, table, target)?;
+                }
+            }
+        }
+        settle_freed(ctx, &mut host)?;
+        ids
+    };
+    callbacks::release(ctx, &removed)?;
+    if !removed.is_empty() {
+        crate::dispatch::notify_released(ctx, host, &[], &removed);
+    }
     if table.find(id)?.is_some() {
         crate::event::fire_abort(ctx, host, id);
     }
@@ -263,12 +283,27 @@ fn run_abort_steps(
 pub(crate) fn after_removal(host: &Host, table: &Table<'_>, id: u32) -> JsResult<()> {
     let listened = host
         .listeners
-        .has_listener(EventTargetId::Signal(id), "abort");
+        .has_listener(EventTargetId::Signal(id), "abort")
+        || host.listeners.links.has(id);
     if host.signals.pins(id) && listened {
         Ok(())
     } else {
         table.unpin(id)
     }
+}
+
+/// Ends the strong hold of each signal that lost a link, where nothing needs it any more. Runs no
+/// script.
+pub(crate) fn settle_freed(ctx: &Ctx<'_>, host: &mut Host) -> JsResult<()> {
+    let freed = host.listeners.links.take_freed();
+    if freed.is_empty() {
+        return Ok(());
+    }
+    let table = Table::open(ctx)?;
+    for id in freed {
+        after_removal(host, &table, id)?;
+    }
+    Ok(())
 }
 
 /// Drops everything of the collected signal `id`: its state, its own registrations and the
@@ -278,10 +313,12 @@ pub(crate) fn release_signal(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, id: u32) -
     let ids = {
         let mut host = host.borrow_mut();
         let orphaned = host.signals.release(id);
+        host.listeners.links.forget(id);
         let ids = host.listeners.release_target(EventTargetId::Signal(id));
         for dependent in orphaned {
             after_removal(&host, &table, dependent)?;
         }
+        settle_freed(ctx, &mut host)?;
         table.forget(id)?;
         ids
     };
@@ -632,5 +669,4 @@ mod tests {
         assert_eq!(signals.by_id[&b].sources, [a]);
         assert_eq!(signals.mark_aborted(a), Some(vec![b]));
     }
-
 }

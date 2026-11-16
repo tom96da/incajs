@@ -51,6 +51,7 @@ describe("window", () => {
       expect.any(Function),
       false,
       false,
+      undefined,
     );
     expect(native.removeEventListener).toHaveBeenCalledExactlyOnceWith(
       "window-target",
@@ -98,6 +99,7 @@ describe("window", () => {
       expect.any(Function),
       false,
       false,
+      undefined,
     );
     expect(seen[0]).toBe(window);
   });

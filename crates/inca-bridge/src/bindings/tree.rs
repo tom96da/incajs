@@ -82,6 +82,7 @@ fn destroy_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
         host.move_tab_start(node_id, before);
         let freed = host.tree.destroy_node(node_id);
         let callback_ids = host.free_ids(&freed);
+        crate::abort::settle_freed(&ctx, &mut host)?;
         callbacks::release(&ctx, &callback_ids)?;
         Ok(callback_ids)
     }

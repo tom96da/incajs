@@ -22,7 +22,6 @@ methods of the DOM `Event` interface (see Base fields).
 ## Event targets
 
 - The mount container (the container `mount()` targets, see [Elements](./elements.md)) stands in for `html` and `body` in `composedPath()`.
-- The `signal` option of `addEventListener()` is unsupported.
 - A removed node drops its listeners. `addEventListener()` and an
   assignment to a handler property do nothing on it.
 - An attribute that holds code, such as `onclick="count++"`, runs nothing.
