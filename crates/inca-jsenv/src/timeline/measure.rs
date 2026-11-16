@@ -60,16 +60,24 @@ struct MeasureOptions<'js> {
     duration: Option<f64>,
 }
 
-/// Reads the options object of `measure()`. `with_end_mark` tells that the call has an end mark.
+/// Reads the options object of `measure()`. Each member is converted right after it is read, in
+/// the order `detail`, `duration`, `end`, `start`. `with_end_mark` tells that the call has an end
+/// mark.
 fn measure_options<'js>(
     ctx: &Ctx<'js>,
     options: &Object<'js>,
     with_end_mark: bool,
 ) -> JsResult<MeasureOptions<'js>> {
     let detail = defined(options.get("detail")?);
-    let duration = defined(options.get("duration")?);
-    let end = defined(options.get("end")?);
-    let start = defined(options.get("start")?);
+    let duration = defined(options.get("duration")?)
+        .map(|value| finite(ctx, &value))
+        .transpose()?;
+    let end = defined(options.get("end")?)
+        .map(|value| time_member(ctx, &value))
+        .transpose()?;
+    let start = defined(options.get("start")?)
+        .map(|value| time_member(ctx, &value))
+        .transpose()?;
     if with_end_mark && (start.is_some() || end.is_some() || duration.is_some()) {
         let message = "the end mark comes with start, end or duration. pass the end in the options";
         return Err(Exception::throw_type(ctx, message));
@@ -84,9 +92,9 @@ fn measure_options<'js>(
     }
     Ok(MeasureOptions {
         detail,
-        start: start.map(|value| time_member(ctx, &value)).transpose()?,
-        end: end.map(|value| time_member(ctx, &value)).transpose()?,
-        duration: duration.map(|value| finite(ctx, &value)).transpose()?,
+        start,
+        end,
+        duration,
     })
 }
 
@@ -469,6 +477,149 @@ mod tests {
         assert_eq!(
             thrown_marked("performance.measure('m', 5)"),
             "SyntaxError: the mark 5 does not exist. call mark() with that name first"
+        );
+    }
+
+    #[test]
+    fn measure_converts_duration_before_it_reads_end() {
+        assert_eq!(
+            run_at(
+                r"
+                let end = 1;
+                const options = {
+                    duration: {
+                        valueOf() {
+                            end = 9;
+                            return 5;
+                        },
+                    },
+                    get end() {
+                        return end;
+                    },
+                };
+                const m = performance.measure('m', options);
+                `${m.startTime},${m.duration}`;
+                "
+            ),
+            "4,5"
+        );
+    }
+
+    #[test]
+    fn measure_reads_the_options_in_the_order_detail_duration_end_start() {
+        assert_eq!(
+            run_at(
+                r"
+                const log = [];
+                const options = {
+                    get detail() {
+                        log.push('detail');
+                    },
+                    get duration() {
+                        log.push('duration');
+                        return 1;
+                    },
+                    get end() {
+                        log.push('end');
+                        return 2;
+                    },
+                    get start() {
+                        log.push('start');
+                        return 3;
+                    },
+                };
+                try {
+                    performance.measure('m', options);
+                } catch (e) {
+                    log.push(e.name);
+                }
+                log.join();
+                "
+            ),
+            "detail,duration,end,start,TypeError"
+        );
+    }
+
+    #[test]
+    fn a_throwing_duration_conversion_stops_the_later_reads() {
+        assert_eq!(
+            run_at(
+                r"
+                const log = [];
+                const options = {
+                    get duration() {
+                        return {
+                            valueOf() {
+                                throw new RangeError('boom');
+                            },
+                        };
+                    },
+                    get end() {
+                        log.push('end');
+                        return 1;
+                    },
+                    get start() {
+                        return 2;
+                    },
+                };
+                let text;
+                try {
+                    performance.measure('m', options);
+                } catch (e) {
+                    text = `${e.name}: ${e.message}`;
+                }
+                `${text}|${log.join()}`;
+                "
+            ),
+            "RangeError: boom|"
+        );
+    }
+
+    #[test]
+    fn measure_throws_for_all_three_options_after_it_converts_them() {
+        assert_eq!(
+            run_at(
+                r"
+                const log = [];
+                const options = {
+                    get duration() {
+                        log.push('get duration');
+                        return {
+                            valueOf() {
+                                log.push('duration');
+                                return 1;
+                            },
+                        };
+                    },
+                    get end() {
+                        log.push('get end');
+                        return {
+                            toString() {
+                                log.push('end');
+                                return 'e';
+                            },
+                        };
+                    },
+                    get start() {
+                        log.push('get start');
+                        return {
+                            toString() {
+                                log.push('start');
+                                return 's';
+                            },
+                        };
+                    },
+                };
+                let name;
+                try {
+                    performance.measure('m', options);
+                } catch (e) {
+                    name = e.name;
+                }
+                `${log.join()}|${name}`;
+                "
+            ),
+            "get duration,duration,get end,end,get start,start|TypeError"
         );
     }
 }
