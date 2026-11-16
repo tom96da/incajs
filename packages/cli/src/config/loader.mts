@@ -201,6 +201,20 @@ function parsePackageJson(raw: string, pkgPath: string): AppPackageJson {
   }
 }
 
+/** The sentence c12 appends to the error of a config file that fails to import. */
+// Matches the text of c12 4.0.0-rc.2.
+const JITI_HINT = /\s+Hint install `jiti` for compatibility\.$/;
+
+/**
+ * @param error - what `loadConfig` threw
+ * @returns a copy of an `Error` whose message ends with the `jiti` hint, without it and with the
+ * same `cause`; any other value unchanged
+ */
+function withoutJitiHint(error: unknown): unknown {
+  if (!(error instanceof Error) || !JITI_HINT.test(error.message)) return error;
+  return new Error(error.message.replace(JITI_HINT, ""), { cause: error.cause });
+}
+
 /** Loads `inca.config.ts`, and reports whether `package.json`'s `"inca"` key supplied anything. */
 async function loadIncaConfig(
   cwd: string,
@@ -209,7 +223,13 @@ async function loadIncaConfig(
   const moduleCache = createRequire(import.meta.url).cache;
   // Bun lists no key of the cache, so each name is deleted directly.
   for (const ext of CONFIG_EXTENSIONS) delete moduleCache[path.join(cwd, "inca.config" + ext)];
-  const { config, layers } = await loadConfig<IncaConfig>({ cwd, ...CONFIG_LOOKUP });
+  let loaded;
+  try {
+    loaded = await loadConfig<IncaConfig>({ cwd, ...CONFIG_LOOKUP });
+  } catch (error) {
+    throw withoutJitiHint(error);
+  }
+  const { config, layers } = loaded;
   const pkgJsonLayer = layers?.find((layer) => layer.configFile === "package.json");
   return { config, usedPackageJsonKey: Object.keys(pkgJsonLayer?.config ?? {}).length > 0 };
 }
