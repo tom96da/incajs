@@ -7,12 +7,13 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, Bounds, DispatchPhase, Entity, Hitbox, MouseDownEvent, MouseExitEvent, MouseMoveEvent,
-    MouseUpEvent, Pixels, Window,
+    App, Bounds, DispatchPhase, Entity, Hitbox, MouseButton, MouseDownEvent, MouseExitEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, ScrollHandle, Window,
 };
 
 use super::hover::sync_over_bar;
 use super::view::ScrollbarState;
+use super::{Parts, Scrollbars};
 use crate::element::pointer::{
     control_click_is_right, mark_target, move_over, opens_context_menu, restored_down, restored_up,
 };
@@ -23,6 +24,10 @@ use inca_node::NodeId;
 pub(super) struct Ctx<E> {
     pub(super) id: NodeId,
     pub(super) state: Entity<ScrollbarState>,
+    pub(super) handle: ScrollHandle,
+    /// The bars as the frame drew them.
+    pub(super) parts: Parts,
+    pub(super) mode: Scrollbars,
     /// The border box of the container.
     pub(super) frame: Bounds<Pixels>,
     /// The areas that answer to the pointer.
@@ -34,7 +39,7 @@ pub(super) struct Ctx<E> {
 }
 
 impl<E> Ctx<E> {
-    fn over_bar(&self, window: &Window) -> bool {
+    pub(super) fn over_bar(&self, window: &Window) -> bool {
         self.hitboxes.iter().any(|hitbox| hitbox.is_hovered(window))
     }
 }
@@ -62,6 +67,7 @@ pub(super) fn listen<E: EventSink + Clone + 'static>(window: &mut Window, ctx: R
     });
     window.on_mouse_event(move |_: &MouseExitEvent, phase, window, cx| {
         if phase == DispatchPhase::Bubble {
+            ctx.set_hover(None, cx);
             sync_over_bar(&ctx, None, window, cx);
         }
     });
@@ -72,12 +78,37 @@ fn press<E: EventSink>(ctx: &Ctx<E>, event: &MouseDownEvent, window: &mut Window
     ctx.state
         .update(cx, |state, _| state.pressed_on_bar = on_bar);
     if !on_bar {
+        // A drag still set at a new left press lost its release.
+        if event.button == MouseButton::Left && ctx.state.read(cx).drag.is_some() {
+            ctx.end_drag(window, cx);
+        }
         return;
     }
     mark_target(cx, ctx.id);
+    let drag = ctx
+        .drag_at(event.position)
+        .filter(|_| event.button == MouseButton::Left);
+    let mode = ctx.mode;
+    // A left press that starts no drag ends one whose release was lost.
+    let lost = event.button == MouseButton::Left && ctx.state.read(cx).drag.is_some();
+    if drag.is_none() && lost {
+        ctx.end_drag(window, cx);
+    }
+    if let Some(drag) = drag {
+        ctx.state.update(cx, |state, cx| {
+            state.drag = Some(drag);
+            if mode == Scrollbars::Overlay {
+                state.show(cx);
+            }
+            cx.notify();
+        });
+    }
     if let Some(sink) = &ctx.sink {
         let event = restored_down(event, cx);
         sink.bar_pressed(ctx.id, &(&event).into(), window, cx);
+        if drag.is_some() {
+            sink.bar_drag(ctx.id, true, window, cx);
+        }
         if opens_context_menu(event.button, event.modifiers, control_click_is_right(cx)) {
             let payload = EventPayload::context_menu(&event);
             sink.fire(ctx.id, "contextmenu", &payload, window, cx);
@@ -87,12 +118,19 @@ fn press<E: EventSink>(ctx: &Ctx<E>, event: &MouseDownEvent, window: &mut Window
 }
 
 fn release<E: EventSink>(ctx: &Ctx<E>, event: &MouseUpEvent, window: &mut Window, cx: &mut App) {
-    if ctx.state.read(cx).pressed_on_bar {
+    let (pressed, dragging) = {
+        let state = ctx.state.read(cx);
+        (state.pressed_on_bar, state.drag.is_some())
+    };
+    if pressed || dragging {
         ctx.state
             .update(cx, |state, _| state.pressed_on_bar = false);
         if let Some(sink) = &ctx.sink {
             let event = restored_up(event, cx);
             sink.bar_released(ctx.id, &(&event).into(), window, cx);
+        }
+        if dragging && event.button == MouseButton::Left {
+            ctx.end_drag(window, cx);
         }
         cx.stop_propagation();
     } else if ctx.sink.is_some() && ctx.over_bar(window) {
@@ -105,6 +143,7 @@ fn movement<E: EventSink>(ctx: &Ctx<E>, event: &MouseMoveEvent, window: &mut Win
         ctx.state
             .update(cx, |state, _| state.pressed_on_bar = false);
     }
+    ctx.drag_move(event, window, cx);
     if let Some(sink) = &ctx.sink
         && sync_over_bar(ctx, Some(event.position), window, cx)
     {
@@ -271,14 +310,14 @@ mod tests {
     fn a_press_on_the_strip_beside_a_shown_overlay_thumb_is_claimed(cx: &mut TestAppContext) {
         let mut scene = overlay(cx, &Y_SCROLL);
         scene.press((88., 10.), LEFT);
-        assert_eq!(bars(&scene), [("bar_pressed".to_owned(), 1)]);
+        assert_eq!(bars(&scene)[0], ("bar_pressed".to_owned(), 1));
     }
 
     #[gpui::test]
     fn a_press_on_the_thumb_of_a_classic_auto_bar_is_claimed_at_load(cx: &mut TestAppContext) {
         let mut scene = classic(cx, &Y_AUTO);
         scene.press(OVERLAY_THUMB, LEFT);
-        assert_eq!(bars(&scene), [("bar_pressed".to_owned(), 1)]);
+        assert_eq!(bars(&scene)[0], ("bar_pressed".to_owned(), 1));
         assert!(scene.events().is_empty());
     }
 
@@ -307,11 +346,11 @@ mod tests {
         scene.frame();
         scene.wheel_undrawn(CONTENT, -40.);
         scene.press((95., 20.), LEFT);
-        assert_eq!(bars(&scene), [("bar_pressed".to_owned(), 1)]);
+        assert_eq!(bars(&scene)[0], ("bar_pressed".to_owned(), 1));
     }
 
     #[gpui::test]
-    fn a_press_in_the_content_after_a_lost_release_reaches_the_page(cx: &mut TestAppContext) {
+    fn a_release_in_the_content_after_a_lost_release_reaches_the_page(cx: &mut TestAppContext) {
         let mut scene = classic(cx, &BOTH);
         scene.press(THUMB, LEFT);
         scene.press(CONTENT, LEFT);
@@ -324,6 +363,14 @@ mod tests {
                 ("release".to_owned(), 2)
             ]
         );
+    }
+
+    #[gpui::test]
+    fn a_press_in_the_content_ends_a_drag_whose_release_was_lost(cx: &mut TestAppContext) {
+        let mut scene = classic(cx, &BOTH);
+        scene.press(THUMB, LEFT);
+        scene.press(CONTENT, LEFT);
+        assert_eq!(bars(&scene).last(), Some(&("bar_drag_end".to_owned(), 1)));
     }
 
     #[gpui::test]

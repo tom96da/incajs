@@ -311,6 +311,7 @@ mod tests {
             input_request,
             bar_pressed,
             bar_released,
+            bar_drag,
         );
     }
 

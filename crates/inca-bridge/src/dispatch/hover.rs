@@ -55,6 +55,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
+        let physical = self.state.bar_drag.get().or(physical);
         let path = physical.map(|id| self.path_from(id)).unwrap_or_default();
         let changed = self.host.borrow_mut().tree.set_hover_path(&path);
         self.restyle(changed, true, window);

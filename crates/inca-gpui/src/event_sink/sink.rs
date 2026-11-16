@@ -162,6 +162,13 @@ pub trait EventSink {
         cx: &mut App,
     );
 
+    /// Reports that a drag of the thumb of the container `node_id` started (`active`) or ended.
+    /// Until it ends, the sink fires no `pointermove`, `mousemove` or hover event, and `:hover`
+    /// stays on the container. The end of the drag that holds the freeze fires the boundary
+    /// events that the pointer's position now calls for; the end of another container's drag
+    /// changes nothing.
+    fn bar_drag(&self, node_id: NodeId, active: bool, window: &mut Window, cx: &mut App);
+
     /// The text state of the `input` node `node_id`, `None` for any other
     /// node.
     fn input(&self, node_id: NodeId) -> Option<InputState>;
@@ -263,6 +270,9 @@ macro_rules! noop_sink_methods {
             _: &mut gpui::App,
         ) {
         }
+    };
+    (@one bar_drag) => {
+        fn bar_drag(&self, _: inca_node::NodeId, _: bool, _: &mut gpui::Window, _: &mut gpui::App) {}
     };
     (@one input) => {
         fn input(&self, _: inca_node::NodeId) -> Option<$crate::input::InputState> {

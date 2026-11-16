@@ -473,6 +473,27 @@ pub(crate) mod pointer {
             *self.dispatcher.state.hovered.borrow_mut() = [node].into();
         }
 
+        /// A raw move over `node` to `(x, y)` with the left button held.
+        pub(crate) fn moved_held(&mut self, node: NodeId, (x, y): (f32, f32)) {
+            let sink = self.dispatcher.clone();
+            let payload = EventPayload::Mouse(MousePayload {
+                buttons: 1,
+                ..MousePayload::at(at(x, y), gpui::Modifiers::none())
+            });
+            self.cx.update(|window, cx| {
+                sink.pointer_moved(at(x, y), cx);
+                sink.pointer_over(node, window, cx);
+                sink.pointer_input("mousemove", node, &payload, window, cx);
+            });
+        }
+
+        /// Starts (`active`) or ends the drag of a thumb of the container `node`.
+        pub(crate) fn bar_drag(&mut self, node: NodeId, active: bool) {
+            let sink = self.dispatcher.clone();
+            self.cx
+                .update(|window, cx| sink.bar_drag(node, active, window, cx));
+        }
+
         pub(crate) fn down(&mut self, node: NodeId, button: u8) {
             let sink = self.dispatcher.clone();
             self.cx.update(|window, cx| {

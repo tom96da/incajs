@@ -35,6 +35,10 @@ impl EventDispatcher {
     ) {
         if matches!(payload, EventPayload::Mouse(mouse) if mouse.buttons == 0) {
             self.clear_press(window);
+            self.end_bar_drag(None, window, cx);
+        }
+        if self.state.bar_drag.get().is_some() {
+            return;
         }
         self.begin_pointer(payload, NO_BUTTON, window, cx);
         let target = self.captured_or(target);

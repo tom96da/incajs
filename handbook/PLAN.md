@@ -1018,7 +1018,7 @@ runs alongside Phase 3.4.
 - [x] Wheel scrolling in scroll containers — semantics in
       [FFI.md](./FFI.md#event-dispatch)
 - [x] A `scroll` event — see [events.md](../docs/reference/events.md)
-- [ ] A scrollbar — see B-079 in `specs/BACKLOG.md`
+- [x] A scrollbar — see B-079 in `specs/BACKLOG.md`
 
 ### Style and content
 

@@ -4,13 +4,14 @@
 //! The scrollbars of a scroll container: the platform setting, the width a bar reserves and the
 //! geometry of its track and thumb.
 
+mod drag;
 mod hover;
 mod press;
 mod view;
 
 use std::time::Duration;
 
-use gpui::{App, Axis, Bounds, Pixels, Point, Size, point, px, size};
+use gpui::{App, Axis, Bounds, Hsla, Pixels, Point, Size, point, px, rgb, size};
 
 use inca_node::spec::WheelAxes;
 
@@ -38,6 +39,8 @@ const HIDE_DELAY: Duration = Duration::from_millis(1000);
 const TRACK: u32 = 0x00fc_fcfc;
 const THUMB: u32 = 0x008b_8b8b;
 const OVERLAY_THUMB: u32 = 0x008d_8d8d;
+/// The color of a thumb under the pointer and of a thumb being dragged.
+const THUMB_HOVER: u32 = 0x0063_6363;
 
 /// How the platform shows scrollbars.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,6 +92,12 @@ pub(super) struct Bar {
     pub(super) thumb: Option<Bounds<Pixels>>,
     /// Whether the bar reserves its strip, so the track is painted.
     pub(super) strip: bool,
+    /// The coordinate along the axis where the thumb starts at scroll position 0.
+    pub(super) origin: f32,
+    /// How far the thumb moves along the axis; 0 with no thumb.
+    pub(super) travel: f32,
+    /// The range of the axis.
+    pub(super) max: f32,
 }
 
 /// The bars of a container and the corner between two reserved strips.
@@ -149,16 +158,15 @@ impl Lane {
         }
         let region = (track - 2. * (BUTTON_PX + THUMB_END_INSET_PX)).max(0.);
         let across = edge - self.border - GUTTER_PX;
+        let origin = start + self.border + BUTTON_PX + THUMB_END_INSET_PX;
+        let mut travel = 0.;
         let thumb = (self.max > 0. && region > 0.).then(|| {
             let length = (region * client / (client + self.max))
                 .round()
                 .max(MIN_THUMB_PX)
                 .min(region);
-            let along = start
-                + self.border
-                + BUTTON_PX
-                + THUMB_END_INSET_PX
-                + (region - length) * self.scroll / self.max;
+            travel = region - length;
+            let along = origin + travel * self.scroll / self.max;
             if self.strip > 0. {
                 let inset = across + THUMB_INSET_PX;
                 rect(self.axis, along, length, inset, THUMB_THICKNESS_PX)
@@ -172,6 +180,9 @@ impl Lane {
             track: rect(self.axis, start + self.border, track, across, GUTTER_PX),
             thumb,
             strip: self.strip > 0.,
+            origin,
+            travel,
+            max: self.max,
         })
     }
 }
@@ -226,6 +237,37 @@ pub(super) fn parts(
     }
 }
 
+/// The thumb's extent along the axis and the whole strip across: where a press starts a drag.
+pub(super) fn thumb_zone(bar: &Bar) -> Option<Bounds<Pixels>> {
+    let thumb = bar.thumb?;
+    Some(match bar.axis {
+        Axis::Vertical => Bounds::new(
+            point(bar.track.origin.x, thumb.origin.y),
+            size(bar.track.size.width, thumb.size.height),
+        ),
+        Axis::Horizontal => Bounds::new(
+            point(thumb.origin.x, bar.track.origin.y),
+            size(thumb.size.width, bar.track.size.height),
+        ),
+    })
+}
+
+/// The scroll position a drag of `bar` gives with the pointer at `pointer` along the axis, `grab`
+/// being the distance from the thumb start to the pointer at the press.
+pub(super) fn drag_offset(bar: &Bar, grab: f32, pointer: f32) -> f32 {
+    bar.max * (pointer - grab - bar.origin).clamp(0., bar.travel) / bar.travel
+}
+
+/// The color of a thumb, `hover` holding for the pointer over it and for a drag.
+pub(super) fn thumb_color(hover: bool, strip: bool) -> Hsla {
+    let color = match (hover, strip) {
+        (true, _) => THUMB_HOVER,
+        (false, true) => THUMB,
+        (false, false) => OVERLAY_THUMB,
+    };
+    Hsla::from(rgb(color))
+}
+
 /// The areas that answer to the pointer, with the axis of each: the track of a bar that reserves
 /// its strip, the strip of an overlay bar whose thumb shows (`shown`), and the extent of the
 /// thumb of a classic bar that reserves nothing.
@@ -240,18 +282,11 @@ pub(super) fn hit_rects(
             let rect = if bar.strip {
                 bar.track
             } else {
-                let thumb = bar.thumb?;
-                match (mode, bar.axis) {
-                    (Scrollbars::Overlay, _) if shown => bar.track,
-                    (Scrollbars::Overlay, _) => return None,
-                    (Scrollbars::Classic, Axis::Vertical) => Bounds::new(
-                        point(bar.track.origin.x, thumb.origin.y),
-                        size(bar.track.size.width, thumb.size.height),
-                    ),
-                    (Scrollbars::Classic, Axis::Horizontal) => Bounds::new(
-                        point(thumb.origin.x, bar.track.origin.y),
-                        size(thumb.size.width, bar.track.size.height),
-                    ),
+                let zone = thumb_zone(bar)?;
+                match mode {
+                    Scrollbars::Overlay if shown => bar.track,
+                    Scrollbars::Overlay => return None,
+                    Scrollbars::Classic => zone,
                 }
             };
             Some((bar.axis, rect))
@@ -562,5 +597,42 @@ mod tests {
         BarScene::with_probe(cx, probe.clone());
         let range = probe.handles.borrow()[&scroller].max_offset();
         assert_eq!(range, point(px(0.), px(0.)));
+    }
+
+    #[rstest]
+    #[case::strip_idle(false, true, THUMB)]
+    #[case::overlay_idle(false, false, OVERLAY_THUMB)]
+    #[case::strip_hover(true, true, THUMB_HOVER)]
+    #[case::overlay_hover(true, false, THUMB_HOVER)]
+    fn the_thumb_color_follows_the_hover_and_the_strip(
+        #[case] hover: bool,
+        #[case] strip: bool,
+        #[case] want: u32,
+    ) {
+        assert_eq!(thumb_color(hover, strip), Hsla::from(rgb(want)));
+    }
+
+    /// A vertical bar with a thumb that travels 32 along a range of 765, starting at 3.
+    fn travelling_bar() -> Bar {
+        Bar {
+            axis: Axis::Vertical,
+            track: rect(85., 0., 15., 85.),
+            thumb: None,
+            strip: true,
+            origin: 3.,
+            travel: 32.,
+            max: 765.,
+        }
+    }
+
+    #[rstest]
+    #[case::moved_ten(13., 239.0625)]
+    #[case::before_the_origin(0., 0.)]
+    #[case::far_beyond(1003., 765.)]
+    fn a_drag_scrolls_by_the_pointer_travel_over_the_thumb_travel(
+        #[case] pointer: f32,
+        #[case] want: f32,
+    ) {
+        assert_eq!(drag_offset(&travelling_bar(), 0., pointer), want);
     }
 }
