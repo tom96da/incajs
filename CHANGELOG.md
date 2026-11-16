@@ -15,6 +15,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - `crypto.getRandomValues()` and `crypto.randomUUID()` are available ([5152e892](https://github.com/tom96da/incajs/commit/5152e892))
 - `crypto.subtle.digest()` is available, with SHA-1, SHA-256, SHA-384 and SHA-512 ([71911211](https://github.com/tom96da/incajs/commit/71911211))
 - `structuredClone()` is available and moves the `ArrayBuffer` objects of `transfer` ([65ea6c62](https://github.com/tom96da/incajs/commit/65ea6c62))
+- scroll containers draw a scrollbar, and its width is left out of the client size ([27fc09ec](https://github.com/tom96da/incajs/commit/27fc09ec))
+- the thumb of a scrollbar can be dragged ([982ec9b6](https://github.com/tom96da/incajs/commit/982ec9b6))
 
 ### Changed
 
@@ -23,6 +25,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Fixed
 
 - the `detail` of a mark or a measure is a copy of the object you passed ([9d97fd77](https://github.com/tom96da/incajs/commit/9d97fd77))
+- Tab focuses the node that `replaceChild()` moves into the place of the pressed node ([cb62077c](https://github.com/tom96da/incajs/commit/cb62077c))
+- a config file that fails to load shows an appropriate error message ([d11364d6](https://github.com/tom96da/incajs/commit/d11364d6))
 
 ## [0.0.33] - 2026-11-15
 
