@@ -35,6 +35,8 @@ const parentNode = [
   "querySelector",
   "querySelectorAll",
 ];
+const parentInsertion = ["append", "prepend", "replaceChildren"];
+const childInsertion = ["before", "after", "replaceWith", "remove"];
 const siblings = ["previousElementSibling", "nextElementSibling"];
 const shared = ["focus", "blur", "tabIndex", "style", "dataset", ...handlers];
 
@@ -74,6 +76,7 @@ const MEMBERS: Record<string, string[]> = {
     "insertData",
     "deleteData",
     "replaceData",
+    ...childInsertion,
     ...siblings,
   ],
   Text: ["wholeText", "splitText", "kind"],
@@ -113,6 +116,8 @@ const MEMBERS: Record<string, string[]> = {
     "releasePointerCapture",
     "hasPointerCapture",
     ...parentNode,
+    ...parentInsertion,
+    ...childInsertion,
     ...siblings,
     "kind",
   ],
@@ -126,7 +131,7 @@ const MEMBERS: Record<string, string[]> = {
     ...shared,
   ],
   ForeignElement: shared,
-  DocumentFragment: [...parentNode, "kind"],
+  DocumentFragment: [...parentNode, ...parentInsertion, "kind"],
   Document: [
     "activeElement",
     "createDocumentFragment",
@@ -135,6 +140,7 @@ const MEMBERS: Record<string, string[]> = {
     "createTextNode",
     "createComment",
     ...parentNode,
+    ...parentInsertion,
     ...handlers,
     "kind",
   ],

@@ -2854,6 +2854,7 @@ dependencies = [
  "inca-node",
  "inca-test-macros",
  "rquickjs",
+ "rstest",
  "serde_json",
 ]
 

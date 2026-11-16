@@ -80,19 +80,6 @@ A fixed entry is deleted and its ID is never reused.
   stderr nothing reads. Where that output could go per platform and whether an
   app can opt out are undecided.
 
-- **B-028 A template `ref` lacks most element members**
-  `Units: core,bridge · Size: L · Impact: Medium`
-
-  The element handle lacks:
-  - the modern mutation methods (`append`, `prepend`, `before`, `after`,
-    `remove`, `replaceWith`, `replaceChildren`).
-
-  The members it has differ from a browser in the box reads (B-160), the
-  `offsetParent` chain (B-161), the scroll members (B-172, B-174, B-216 and
-  B-217) and `scroll-margin` (B-176).
-
-  Fix: build the members on the host tree, in stages.
-
 - **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
   `Units: cli · Size: M · Impact: Medium · Status: needs repro`
 
@@ -1163,8 +1150,8 @@ A fixed entry is deleted and its ID is never reused.
   callback table holds each listener strongly and a kept listener would pin the
   element. Fix: keep the element and its listeners alive while JS holds a
   reference to it. The callback table holds its listeners weakly, so a
-  detached element with a listener is collected once JS drops it, and
-  `remove()` stops releasing listeners.
+  detached element with a listener is collected once JS drops it, and a removal by a template
+  stops releasing listeners.
 
 - **B-248 The platform packages ship no notice for their MIT and Apache-2.0 dependencies**
   `Units: cli,host · Size: M · Impact: Low`
@@ -1287,16 +1274,22 @@ A fixed entry is deleted and its ID is never reused.
   (a listener, a rejection, a limit stop) stays in the message text. Fix: give
   `EngineError` a kind.
 
-- **B-264 Text data stores U+FFFD for each half of a split surrogate pair**
-  `Units: gpui · Size: M · Impact: Low`
+- **B-264 The host tree cannot hold a lone surrogate**
+  `Units: node,bridge · Size: M · Impact: Low`
 
   The host keeps text data as UTF-8, so an offset that falls inside a surrogate
   pair cannot keep the halves. With the data `"a😀b"`, `splitText(2)` leaves
   `"a\u{FFFD}"` and `"\u{FFFD}b"`, and `substringData(2, 1)` returns
   `"\u{FFFD}"`; `insertData`, `deleteData` and `replaceData` with such an
   offset do the same. Chromium, WebKit and Firefox keep the lone surrogates
-  (`d83d`, `de00`). Fix: store text data as UTF-16 in the host tree, or as
-  WTF-8.
+  (`d83d`, `de00`).
+
+  A string with a lone surrogate that a member writes into the document, as text data or as an
+  attribute value, throws a `TypeError`, because the host reads every string as UTF-8. Chromium
+  153 and WebKit 26.6 keep it.
+
+  Fix: store text data and attribute values as UTF-16 in the host tree, or as WTF-8, and read a JS
+  string into them without the UTF-8 check.
 
 - **B-265 `requestAnimationFrame` callbacks wait while another window covers the app's window on macOS**
   `Units: host,bridge · Size: M · Impact: Low`
@@ -1516,7 +1509,8 @@ A fixed entry is deleted and its ID is never reused.
 
   Chromium fires `blur` and `focusout` at the focused element when its removal takes it out of the
   document. `innerHTML` and `outerHTML` fire them. `removeChild()`, `replaceChild()`, the
-  `textContent` setter and the moves of `appendChild()` drop the focus silently. Fix: one shared
+  `textContent` setter, `remove()`, `replaceWith()`, `replaceChildren()` and the moves of
+  `appendChild()` and the other insertion members drop the focus silently. Fix: one shared
   step before the tree change that every mutation native calls, then drop the line about
   `removeChild()` and `replaceChild()` from `elements.md`.
 
@@ -1733,15 +1727,16 @@ A fixed entry is deleted and its ID is never reused.
 - **B-325 A node removed through a member keeps the handles of its subtree until a frame**
   `Units: bridge,core · Size: M · Impact: Low`
 
-  `removeChild`, `replaceChild`, `innerHTML` and `outerHTML` release the handle of the removed
-  top node only. The handles of its descendants are strong table entries until the host reports
-  them freed, which happens at a frame, after the handle of the top is collected. An app that
-  removes large subtrees through these members in one task without yielding to a frame keeps
-  every descendant handle alive, and a run that does so long enough runs out of memory. A
-  descendant that refers to the removed top, through a property or the closure of a listener,
-  keeps the top alive as well: the host never frees that subtree. The nodes Vue removes are not
-  affected: the renderer removes through a call that returns the subtree. Fix: let the host return the ids of the subtree from `removeChild`,
-  `replaceChild` and the markup setters, as `removeNode` does, and follow `leftHeld`: weak entries
+  `removeChild`, `replaceChild`, `remove()`, `replaceWith()`, `replaceChildren()`, `innerHTML` and
+  `outerHTML` release the handle of the removed top nodes only. The handles of its descendants are
+  strong table entries until the host reports them freed, which happens at a frame, after the
+  handle of the top is collected. An app that removes large subtrees through these members in one
+  task without yielding to a frame keeps every descendant handle alive, and a run that does so
+  long enough runs out of memory. A descendant that refers to the removed top, through a property
+  or the closure of a listener, keeps the top alive as well: the host never frees that subtree.
+  The nodes Vue removes are not affected: the renderer removes through a call that returns the
+  subtree. Fix: let the host return the ids of the subtree from `removeChild`, `replaceChild`,
+  `insertNodes` and the markup setters, as `removeNode` does, and follow `leftHeld`: weak entries
   for the descendants and a keeper list on the handle of the top.
 
 - **B-326 `run_jobs` reports a stopped module without the limit**
@@ -1851,6 +1846,15 @@ A fixed entry is deleted and its ID is never reused.
   The host keeps a comment as a `#comment` container with `display: none` and its data in the
   `value` attribute. Fix: add a comment node kind to the tree and to layout, then make
   `createCommentNode()` create it and read its data through the text natives.
+
+- **B-342 A mutation method that throws with several nodes moves none of them**
+  `Units: core,bridge · Size: M · Impact: Low`
+
+  A mutation method that throws with several nodes leaves every node where it was. Chromium 153
+  and WebKit 26.6 have moved the earlier nodes out of their parents by then, and a single node
+  moves nothing.
+
+  Fix: run the conversion into a fragment before the checks.
 
 - **B-343 An `auto` scrollbar reserves no width**
   `Units: gpui · Size: M · Impact: Low`

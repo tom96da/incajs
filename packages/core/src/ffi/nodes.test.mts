@@ -15,6 +15,7 @@ import {
   innerHtml,
   insertAdjacentHtml,
   insertBefore,
+  insertNodes,
   interfacePrototypes,
   isConnected,
   isEqualNode,
@@ -38,7 +39,14 @@ import {
   textContent,
   wholeText,
 } from "./nodes.mts";
-import type { ElementEntry, InterfacePrototypes, NodeEntry, NodeLink, Parsed } from "./native.mts";
+import type {
+  ElementEntry,
+  InsertionPlace,
+  InterfacePrototypes,
+  NodeEntry,
+  NodeLink,
+  Parsed,
+} from "./native.mts";
 
 const native = {
   interfacePrototypes: vi.fn<() => InterfacePrototypes>(),
@@ -54,6 +62,13 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
+  insertNodes: vi.fn<
+    (
+      nodeId: number,
+      place: InsertionPlace,
+      nodes: (number | string)[],
+    ) => [number[], number[]] | null
+  >(() => null),
   cloneNode: vi.fn<(nodeId: number, deep: boolean) => NodeEntry[]>(() => []),
   rootOf: vi.fn<(nodeId: number) => number>((nodeId) => nodeId),
   compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => 0),
@@ -254,6 +269,13 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.templateContent.mockReturnValueOnce(8);
     expect(templateContent(1)).toBe(8);
     expect(native.templateContent).toHaveBeenCalledWith(1);
+  });
+
+  it("insertNodes forwards its arguments and gives the lists the host returns", () => {
+    native.insertNodes.mockReturnValueOnce([[7], [8]]);
+
+    expect(insertNodes(1, "before", [2, "s"])).toEqual([[7], [8]]);
+    expect(native.insertNodes).toHaveBeenCalledWith(1, "before", [2, "s"]);
   });
 
   it("removeNode gives the callback ids and the node ids the host reports", () => {

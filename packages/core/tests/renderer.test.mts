@@ -16,6 +16,7 @@ import { vModelText, withDirectives } from "../src/vue/runtime.mts";
 import { nativeStub } from "./setup.mts";
 import type { NodeMutationMembers } from "../src/element/nodeMutation.mts";
 import type { NodeRelationMembers } from "../src/element/nodeRelations.mts";
+import type { ChildNodeMembers, ParentNodeMutationMembers } from "../src/element/nodeTypes.mts";
 import type { DOMTokenList, EventHandlers } from "../src/element/types.mts";
 import type { HostCallback } from "../src/ffi/index.mts";
 import type { IncaElement, NodeId } from "../src/index.mts";
@@ -24,7 +25,13 @@ import type { IncaElement, NodeId } from "../src/index.mts";
 const noHandlers = {} as EventHandlers;
 
 /** The mutation members, absent: nothing here calls them. */
-const noMutation = {} as Pick<IncaElement, keyof NodeMutationMembers | keyof NodeRelationMembers>;
+const noMutation = {} as Pick<
+  IncaElement,
+  | keyof NodeMutationMembers
+  | keyof NodeRelationMembers
+  | keyof ParentNodeMutationMembers
+  | keyof ChildNodeMembers
+>;
 
 /**
  * What the fake host knows of each registration beyond its node and event.

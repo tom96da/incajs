@@ -23,6 +23,7 @@ inca-jsenv = { path = "../crates/inca-jsenv" }
 inca-node = { path = "../crates/inca-node" }
 inca-test-macros = { path = "../crates/inca-test-macros" }
 rquickjs.workspace = true
+rstest.workspace = true
 serde_json.workspace = true
 
 [lints]
