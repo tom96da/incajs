@@ -10,6 +10,20 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `crypto.getRandomValues()` and `crypto.randomUUID()` are available ([5152e892](https://github.com/tom96da/incajs/commit/5152e892))
+- `crypto.subtle.digest()` is available, with SHA-1, SHA-256, SHA-384 and SHA-512 ([71911211](https://github.com/tom96da/incajs/commit/71911211))
+- `structuredClone()` is available and moves the `ArrayBuffer` objects of `transfer` ([65ea6c62](https://github.com/tom96da/incajs/commit/65ea6c62))
+
+### Changed
+
+- `TextDecoder.decode()` names a resizable buffer as the cause when it refuses one ([9343be0c](https://github.com/tom96da/incajs/commit/9343be0c))
+
+### Fixed
+
+- the `detail` of a mark or a measure is a copy of the object you passed ([9d97fd77](https://github.com/tom96da/incajs/commit/9d97fd77))
+
 ## [0.0.33] - 2026-11-15
 
 ### Added
