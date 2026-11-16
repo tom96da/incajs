@@ -139,6 +139,7 @@ Policy: the standard decides. Where it is silent, two of the three engines
 | `specs/w3c/uievents` | [w3c/uievents](https://github.com/w3c/uievents) | `8c1b809` (2026-02-21) | `focus`, `blur`, `focusin`, `focusout`, keyboard and mouse events. |
 | `specs/w3c/uievents-code` | [w3c/uievents-code](https://github.com/w3c/uievents-code) | `b201684` (2023-08-18) | The values of `code`. |
 | `specs/w3c/uievents-key` | [w3c/uievents-key](https://github.com/w3c/uievents-key) | `140cae8` (2024-09-28) | The values of `key`. |
+| `specs/w3c/webcrypto` | [w3c/webcrypto](https://github.com/w3c/webcrypto) | `84ce201` (2026-10-22) | `getRandomValues()`, `randomUUID()` and `subtle.digest()`. The text is `spec/Overview.html`. |
 | `specs/whatwg/dom` | [whatwg/dom](https://github.com/whatwg/dom) | `b76da7a` (2026-10-05) | Event dispatch, propagation, `preventDefault`. The text is `dom.bs`. |
 | `specs/whatwg/encoding` | [whatwg/encoding](https://github.com/whatwg/encoding) | `be17ac5` (2026-10-19) | `TextEncoder`, `TextDecoder` and the encoding labels. The text is `encoding.bs`. |
 | `specs/whatwg/html` | [whatwg/html](https://github.com/whatwg/html) | `ba3400b` (2026-10-06) | Focus, `tabindex`, Tab order, the focus fixup rules. The text is `source`. |
