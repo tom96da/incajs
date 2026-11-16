@@ -62,14 +62,28 @@ pub(super) fn finish_transfer(walk: &Walk<'_>) -> JsResult<()> {
     Ok(())
 }
 
+/// Resizes the clone of a resizable buffer to the length the source has now. A fixed buffer keeps
+/// its length.
+fn resize_to_source<'js>(
+    walk: &Walk<'js>,
+    source: &Value<'js>,
+    clone: &Value<'js>,
+) -> JsResult<()> {
+    if is_resizable(&store(&walk.ctx)?, source)? {
+        let tk = &walk.tk;
+        let length: usize = tk.call("byteLength", (This(source.clone()),))?;
+        tk.call::<_, Value>("resize", (This(clone.clone()), length))?;
+    }
+    Ok(())
+}
+
 /// Writes the bytes the source has now over the clone, resizing a resizable clone first.
 fn rewrite<'js>(walk: &Walk<'js>, source: &Value<'js>, clone: &Value<'js>) -> JsResult<()> {
-    let tk = &walk.tk;
+    resize_to_source(walk, source, clone)?;
     let bytes = copy_range(source, 0, usize::MAX)?;
-    if is_resizable(&store(&walk.ctx)?, source)? {
-        tk.call::<_, Value>("resize", (This(clone.clone()), bytes.len()))?;
-    }
-    let view = tk.construct_member("typed", "Uint8Array", (clone.clone(),))?;
+    let view = walk
+        .tk
+        .construct_member("typed", "Uint8Array", (clone.clone(),))?;
     write_typed_array(view.as_value(), &bytes)
 }
 
@@ -124,7 +138,7 @@ impl<'js> Walk<'js> {
         };
         let clone = self.visit(buffer.clone())?;
         if self.transfers.contains(&buffer) {
-            rewrite(self, &buffer, &clone)?;
+            resize_to_source(self, &buffer, &clone)?;
         }
         let view = match name {
             Some(name) => self
@@ -666,6 +680,31 @@ mod tests {
                 "
             )),
             "object"
+        );
+    }
+
+    #[test]
+    fn a_replaced_byte_length_getter_changes_no_transferred_view_clone() {
+        assert_eq!(
+            run(r"
+                const rab = new ArrayBuffer(8, { maxByteLength: 32 });
+                const x = {
+                    a: rab,
+                    get g() {
+                        rab.resize(16);
+                        x.v = new Uint8Array(rab, 0, 16);
+                        return 1;
+                    },
+                    v: null,
+                };
+                Object.defineProperty(ArrayBuffer.prototype, 'byteLength', {
+                    get() {
+                        return 1;
+                    },
+                });
+                String(structuredClone(x, { transfer: [rab] }).v.length);
+                "),
+            "16"
         );
     }
 

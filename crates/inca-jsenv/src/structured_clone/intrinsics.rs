@@ -80,6 +80,7 @@ const INTRINSICS_JS: &str = r"
             domMessage: get(DOMException.prototype, 'message'),
             errorStack: get(Error.prototype, 'stack'),
             resize: ArrayBuffer.prototype.resize,
+            byteLength: get(ArrayBuffer.prototype, 'byteLength'),
             maxByteLength: get(ArrayBuffer.prototype, 'maxByteLength'),
             typedLength: get(typed, 'length'),
             typedOffset: get(typed, 'byteOffset'),
