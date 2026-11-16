@@ -596,6 +596,30 @@ mod tests {
         assert_eq!(s.focused(cx), Some(s.second));
     }
 
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::replace_child("replaceChild({parent}, {first}, {plain})", |s: &Scene| s.first)]
+    #[case::insert_nodes("insertNodes({field}, 'after', [{first}, {plain}])", |s: &Scene| s.second)]
+    fn a_call_that_takes_several_nodes_out_starts_tab_before_all_of_them(
+        cx: &mut TestAppContext,
+        #[case] call: &str,
+        #[case] focused: fn(&Scene) -> NodeId,
+    ) {
+        let s = scene(cx);
+        s.plain_between_the_buttons();
+        s.mouse_down(cx, s.plain);
+        let call = call
+            .replace("{parent}", &s.parent.to_string())
+            .replace("{first}", &s.first.to_string())
+            .replace("{plain}", &s.plain.to_string())
+            .replace("{field}", &s.field.to_string());
+        s.engine
+            .eval::<()>(&format!("__inca_native__.{call};"))
+            .unwrap();
+        s.key(cx, "tab", false, false);
+        assert_eq!(s.focused(cx), Some(focused(&s)));
+    }
+
     #[gpui::test]
     fn moving_the_pressed_node_leaves_the_tab_start_in_its_place(cx: &mut TestAppContext) {
         let s = scene(cx);
