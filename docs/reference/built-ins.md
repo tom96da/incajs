@@ -71,6 +71,16 @@ These results for `file:` URLs differ from the ones of browsers:
 - The host `localhost` is dropped, also by the `hostname` setter.
 - `file:///c:/../x` and `/x` against `file:///C:/a/b` keep the drive letter.
 
+## `structuredClone()` <Badge type="warning" text="unreleased"/>
+
+`structuredClone()` follows the
+[HTML Standard](https://html.spec.whatwg.org/multipage/structured-data.html#dom-structuredclone).
+It differs in two places:
+
+- A view that tracks the length of a resizable `ArrayBuffer` becomes a view of a fixed length when
+  it is cloned.
+- A `SharedArrayBuffer` and a view over one throw a `DataCloneError`.
+
 ## `performance`
 
 - `now()` counts milliseconds from the start of the app, and a reload of the

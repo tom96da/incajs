@@ -10,6 +10,28 @@ use rquickjs::{Error, Exception, Result, Value, qjs};
 /// The kind that [`typed_array_kind`] reports for a `Uint8Array`.
 pub(crate) const UINT8: i32 = qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8.cast_signed();
 
+/// The names of the typed array constructors, by the `JS_TYPED_ARRAY_*` kind of the engine.
+pub(crate) const TYPED_ARRAY_NAMES: [&str; 12] = [
+    "Uint8ClampedArray",
+    "Int8Array",
+    "Uint8Array",
+    "Int16Array",
+    "Uint16Array",
+    "Int32Array",
+    "Uint32Array",
+    "BigInt64Array",
+    "BigUint64Array",
+    "Float16Array",
+    "Float32Array",
+    "Float64Array",
+];
+
+/// The name of the constructor of the typed array `value`, or `None` for any other value.
+pub(crate) fn typed_array_name(value: &Value<'_>) -> Option<&'static str> {
+    let kind = usize::try_from(typed_array_kind(value)?).ok()?;
+    TYPED_ARRAY_NAMES.get(kind).copied()
+}
+
 /// Whether the typed array `kind`, as `JS_TYPED_ARRAY_*` counts it, holds integers. The integer
 /// kinds come first, and the float kinds follow.
 pub(crate) fn is_integer_kind(kind: i32) -> bool {

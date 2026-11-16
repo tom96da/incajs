@@ -1532,13 +1532,13 @@ A fixed entry is deleted and its ID is never reused.
   becomes a plain attribute and no child is created, although elements now have `innerHTML`. Fix:
   set the `innerHTML` prop as a property in `patchProp`, as the `value` prop is.
 
-- **B-295 `structuredClone` is missing**
-  `Units: jsenv · Size: L · Impact: Medium`
+- **B-295 The detail of a performance entry is the object that was passed**
+  `Units: jsenv · Size: S · Impact: Low`
 
-  The global `structuredClone()` does not exist, so libraries that copy a value with it fail, and
-  `detail` of `performance.mark()` and `performance.measure()` is stored as the passed object. Fix:
-  implement it in Rust over the QuickJS value serializer, then copy `detail` through it and drop
-  the line about `detail` from the `performance` section of `built-ins.md`.
+  `detail` of `performance.mark()` and `performance.measure()` is stored as the passed object, so
+  a later change of the object changes the entry. Fix: copy `detail` through `structuredClone` when
+  the entry is made, then drop the line about `detail` from the `performance` section of
+  `built-ins.md`.
 
 - **B-296 `performance` lacks the observer, the navigation parts and the event target**
   `Units: jsenv · Size: M · Impact: Low`
@@ -1868,6 +1868,40 @@ A fixed entry is deleted and its ID is never reused.
   `documentNodeId()` does for the document, and let the wrapper of the host calls hand it to
   both places.
 
+- **B-345 `structuredClone` clones a view that tracks the length of a resizable buffer with a fixed length**
+  `Units: jsenv · Size: M · Impact: Low`
+
+  The view of a clone does not follow its buffer when the buffer resizes, because the engine does
+  not expose whether a view tracks. Fix: add a wrapper for the tracking flag when the engine offers
+  one, then build the view without a length.
+
+- **B-347 `structuredClone` runs `Error.prepareStackTrace` while it builds the clone**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  A script that sets `Error.prepareStackTrace` and then clones an `Error` runs the hook once while
+  the clone is built. In Chromium 153 a hook that throws surfaces from `structuredClone(new
+  Error("x"))`. WebKit has no hook. The engine swallows the exception that the hook throws while it
+  builds the clone, and a host cannot surface it. The hook receives the unfinished clone as its
+  first argument, so a script can keep it or freeze it, and a frozen clone makes `structuredClone`
+  throw a `TypeError` instead of returning. Fix: unknown. The engine drops the hook's exception
+  inside `build_backtrace`, and no binding in `rquickjs` reads that exception.
+
+- **B-348 `structuredClone` refuses a `SharedArrayBuffer`**
+  `Units: jsenv · Size: M · Impact: Low`
+
+  Browsers on an isolated page clone it over the same memory. The engine shares memory between two
+  buffer objects only through reference-counting hooks that the host does not set. Fix: set the
+  hooks, then clone the buffer with the shared data and the same `maxByteLength`.
+
+- **B-350 `register_uncloneable` and the TypeScript logic that fills its map are to be removed**
+  `Units: jsenv,core · Size: M · Impact: Low`
+
+  A handle of a node, the document or the window is an ordinary JS object, so `inca-jsenv` cannot
+  tell it from plain data. `register_uncloneable` lets the layer above hand it a `WeakMap` of such
+  objects, and `structuredClone` refuses an object that is a key of one. The function and the
+  TypeScript logic that fills the map are a bridge. Fix: when handles become Rust classes, the walk
+  refuses them as an unknown class, and the function and the logic that fills the map are removed.
+
 - **B-351 The quota error of `getRandomValues()` is a `DOMException`, where Chromium throws a `QuotaExceededError` class**
   `Units: jsenv · Size: S · Impact: Low`
 
@@ -1876,3 +1910,14 @@ A fixed entry is deleted and its ID is never reused.
   throws an instance of it, with `quota` and `requested` unset. WebKit 26.6 throws a plain
   `DOMException`, as the host does. `err instanceof QuotaExceededError` is a `ReferenceError` in the
   host. Fix: add the global class when an API needs it.
+
+- **B-352 `structuredClone` throws a `RangeError` for a view of a buffer that grew after it was cloned**
+  `Units: jsenv · Size: S · Impact: Low`
+
+  In `const x = { a: rab, get g() { rab.resize(16); x.v = new Uint8Array(rab, 0, 16); return 1; },
+  v: null }` with a resizable `rab` of 8 bytes, `structuredClone(x)` clones `a` at 8 bytes before
+  the getter runs, and the view needs 16. Chromium 153 returns `null`, WebKit 26.6 throws a
+  `TypeError` ("Unable to deserialize data."), and the host throws a `RangeError`. With
+  `{ transfer: [rab] }` the browsers and the host return a clone whose buffer and view have 16
+  bytes. Fix: grow the clone of the buffer to the end of the view before the view is built, as the
+  transfer case does, or leave it, since the browsers disagree.

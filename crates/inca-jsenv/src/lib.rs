@@ -25,9 +25,9 @@
 //! needs the name and as `Ctx<'_>` otherwise. Its doc has an `# Errors` section.
 //!
 //! [`Engine`] installs `Performance`, `PerformanceEntry`, `PerformanceMark`, `PerformanceMeasure`,
-//! `performance`, `Crypto`, `SubtleCrypto`, `crypto`, `TextEncoder`, `TextDecoder`, `URL` and
-//! `URLSearchParams`. The decoder reads every encoding of the Encoding Standard. The caller
-//! installs `console`, the timers and the frame callbacks.
+//! `performance`, `Crypto`, `SubtleCrypto`, `crypto`, `TextEncoder`, `TextDecoder`, `URL`,
+//! `URLSearchParams` and `structuredClone`. The decoder reads every encoding of the Encoding
+//! Standard. The caller installs `console`, the timers and the frame callbacks.
 //!
 //! [`Limits`] bounds the memory, the stack and the time a script may use.
 //!
@@ -50,6 +50,7 @@ mod loader;
 mod paint;
 mod quickjs;
 mod sourcemap;
+mod structured_clone;
 #[cfg(test)]
 mod tests;
 mod time;
@@ -67,6 +68,7 @@ pub use frames::{Frames, run_frames};
 pub use limits::Limits;
 pub use quickjs::FunctionAccessor;
 pub use sourcemap::StackPaths;
+pub use structured_clone::register_uncloneable;
 pub use time::now;
 pub use timers::{Clock, Timers, run_timers, system_clock};
 pub use vault::{required_prototype, store_prototype, stored_prototype, vault};

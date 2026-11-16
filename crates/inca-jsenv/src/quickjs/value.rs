@@ -166,6 +166,13 @@ impl<'js> ValueExt<'js> for Value<'js> {
     }
 }
 
+/// The class id of the object `value` is, as `JS_CLASS_*` counts it, or 0 for a primitive. A
+/// class check: it reads the id and runs no script code.
+pub(crate) fn class_id(value: &Value<'_>) -> u32 {
+    // SAFETY: the call reads the class id of the value and leaves the reference count alone.
+    unsafe { qjs::JS_GetClassID(value.as_raw()) }
+}
+
 fn has_class(value: &Value<'_>, check: unsafe extern "C" fn(qjs::JSValue) -> bool) -> bool {
     // SAFETY: each `JS_Is*` class check takes the value without changing its
     // reference count, cannot throw, and only reads the object's class id.
