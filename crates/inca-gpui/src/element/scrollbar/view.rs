@@ -204,14 +204,14 @@ pub(in crate::element) fn scrollbar<E: EventSink + Clone + 'static>(
                 hitboxes,
                 sink,
             });
-            if ctx.sink.is_some() {
-                sync_over_bar(&ctx, Some(window.mouse_position()), window, cx);
-            }
             Frame { plan, ctx }
         },
-        move |_, frame, window, _| {
+        move |_, frame, window, cx| {
             for (bounds, colour) in frame.plan {
                 window.paint_quad(fill(bounds, colour));
+            }
+            if frame.ctx.sink.is_some() {
+                sync_over_bar(&frame.ctx, Some(window.mouse_position()), window, cx);
             }
             if !inert {
                 listen(window, frame.ctx);
