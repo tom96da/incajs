@@ -57,14 +57,14 @@ The host keeps a retained tree of nodes. JS names each node by a `u32` id.
   checks read a node's style props after the matching rules apply, and the style props win over
   every rule. The host prints each dropped rule, at-rule and declaration through `warn` as `<style>:
   <line>`.
-- `appendChild`, `insertBefore` and `replaceChild` detach the node first, so
-  they also move a node. A `#fragment` moves its children in order and stays
-  empty. Each call returns the position of the first inserted node among the
+- `appendChild`, `insertBefore`, `replaceChild` and `insertNodes` detach each node first, so they
+  also move a node. A `#fragment` moves its children in order and stays empty. `appendChild`,
+  `insertBefore` and `replaceChild` return the position of the first inserted node among the
   children of `parentId`.
 - Detaching, moving, replacing or destroying a node drops the focus its subtree
   holds at the call. Detaching, moving or replacing a node sets the scroll offsets of its subtree
   to 0.
-- `removeChild` and `replaceChild` keep the listeners of the node they detach.
+- `removeChild`, `replaceChild` and `insertNodes` keep the listeners of the nodes they detach.
 - `setInnerHtml` and `setOuterHtml` fire `blur` and then `focusout` at the focused node, before
   the tree changes, when it sits in the subtrees they remove. The other calls that drop focus
   fire nothing.
@@ -173,6 +173,7 @@ be passed, and `undefined` there counts as `null`.
 | `insertBefore` | `(parentId: number, nodeId: number, refId: number \| null) => number` | Attach a node before `refId`, or at the end if `null` or `undefined`. Returns the position of the first inserted node. |
 | `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Throws `NotFoundError` for a known node that is not a child. Freed at the next frame unless re-inserted or held, see [Retained virtual tree](#retained-virtual-tree). |
 | `replaceChild` | `(parentId: number, nodeId: number, childId: number) => number` | Put a node where `childId` was and detach `childId`. Returns the position of the first inserted node. |
+| `insertNodes` | `(nodeId: number, place: "append" \| "prepend" \| "before" \| "after" \| "replaceWith" \| "replaceChildren", nodes: (number \| string)[]) => [number[], number[]] \| null` | Insert `nodes` at `place` of `nodeId`: `append` and `prepend` into `nodeId`, `before`, `after` and `replaceWith` next to it, `replaceChildren` as its only children. A number names a node, and a string makes a new `#text` node with the string as its data. `before`, `after` and `replaceWith` take the parent of `nodeId` and return `null` without a change for a node without one. Returns the ids of the new text nodes in order and the ids of the nodes it removed from the tree (a node that moves is not listed). A removed node is freed at the next frame unless re-inserted or held, see [Retained virtual tree](#retained-virtual-tree). Throws the errors of the list below the table, and a failure changes nothing and creates no node. |
 | `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next", elementOnly?: boolean) => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. With `elementOnly` true, the nearest element in that direction: the parent when it is an element, the first or last element child, the nearest element sibling. Throws a `TypeError` for an unknown node or another `link`. |
 | `childNodeIds` | `(nodeId: number, elementOnly?: boolean) => number[]` | The ids of the children of `nodeId` in order. With `elementOnly` true, only the element children. Throws a `TypeError` for an unknown node. |
 | `isConnected` | `(nodeId: number) => boolean` | Whether the root of `nodeId` is a document: the document or a copy of it. Throws a `TypeError` for an unknown node. |
@@ -269,6 +270,19 @@ the first failing check throws. A failure changes nothing.
    element.
 
 A `refId` equal to `nodeId` stands for the next sibling of `nodeId`.
+
+`insertNodes` checks the whole call before it changes anything. The first failing check throws, and
+a failure changes nothing and creates no node.
+
+- `TypeError`: a string with a lone surrogate, a value that is no number or string, a malformed id,
+  an unknown place, a `nodeId` or a node argument that names no node, and fewer free ids than
+  strings. The first four throw also for a node without a parent.
+- `HierarchyRequestError`: a document argument, a `#text` or `#comment` parent, a group that holds
+  the parent or one of its ancestors, and a document parent that would hold a text or a second
+  element. `replaceChildren` keeps every child that is no argument. With several arguments, a
+  fragment contributes its children, so a fragment that is the parent passes.
+- `NotFoundError`: for `after`, and for `replaceWith` with the target in the group, a following
+  sibling that the call moves out of the parent.
 
 ### Parsed
 

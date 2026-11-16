@@ -116,7 +116,7 @@ fn remove_node<'js>(
 }
 
 /// The array `[first, second]` of two id lists.
-fn pair<'js>(ctx: &Ctx<'js>, first: &[u32], second: &[u32]) -> JsResult<Array<'js>> {
+pub(super) fn pair<'js>(ctx: &Ctx<'js>, first: &[u32], second: &[u32]) -> JsResult<Array<'js>> {
     let array = Array::new(ctx.clone())?;
     array.set(0, first.to_vec())?;
     array.set(1, second.to_vec())?;
@@ -513,6 +513,9 @@ mod tests {
     #[case::moved("n.appendChild(q, a)")]
     #[case::replaced("n.replaceChild(p, loose, a)")]
     #[case::taken_out("n.removeNode(a)")]
+    #[case::inserted_elsewhere("n.insertNodes(q, 'append', [a])")]
+    #[case::replaced_children("n.insertNodes(p, 'replaceChildren', [])")]
+    #[case::replaced_with_nothing("n.insertNodes(a, 'replaceWith', [])")]
     fn a_scrolled_node_and_its_scrolled_descendant_read_zero(#[case] call: &str) {
         let (engine, host) = engine_with_family();
         engine
