@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import * as core from "../rendererCore.mts";
 import { createPatchProp } from "./patchProp.mts";
 
@@ -12,11 +13,11 @@ const removeStyle = vi.fn<(nodeId: number, key: string) => void>();
 const patchProp = createPatchProp(core);
 
 /** A fresh element, so that no style bookkeeping carries over between tests. */
-const makeEl = (id: number) => core.createIncaElement(id, "element", "div");
+const makeEl = (id: number) => core.createIncaElement(id, "div");
 
 beforeEach(() => {
   vi.clearAllMocks();
-  globalThis.__inca_native__ = { setAttribute, setStyle, removeStyle } as never;
+  globalThis.__inca_native__ = nativeStub({ setAttribute, setStyle, removeStyle } as never);
 });
 
 describe("patchProp on a string style", () => {

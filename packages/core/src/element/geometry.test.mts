@@ -37,8 +37,8 @@ describe("offsetOf", () => {
         2: 1,
       },
     );
-    createIncaElement(1, "element", "div");
-    const child = createIncaElement(2, "element", "div");
+    createIncaElement(1, "div");
+    const child = createIncaElement(2, "div");
 
     expect(offsetOf(child, builders)).toEqual({ left: 6, top: 6 });
   });
@@ -50,8 +50,8 @@ describe("offsetOf", () => {
       scrollOf as never,
       { 2: 1 },
     );
-    createIncaElement(1, "element", "div");
-    const child = createIncaElement(2, "element", "div");
+    createIncaElement(1, "div");
+    const child = createIncaElement(2, "div");
 
     expect(offsetOf(child, builders)).toEqual({ left: 6, top: 6 });
     expect(scrollOf).not.toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe("tabIndexOf", () => {
 describe("createIncaElement layout", () => {
   it("reads the rect from the last drawn box", () => {
     installMembersHost({ 1: [10, 20, 30, 40, 2, 0, 0, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
+    const el = createIncaElement(1, "div");
     const rect = el.getBoundingClientRect();
     expect([
       rect.x,
@@ -153,7 +153,7 @@ describe("createIncaElement layout", () => {
 
   it("gives zero members and a null offsetParent when there is no record", () => {
     installMembersHost();
-    const el = createIncaElement(1, "element", "div");
+    const el = createIncaElement(1, "div");
     expect([el.offsetWidth, el.offsetHeight, el.offsetLeft, el.offsetTop]).toEqual([0, 0, 0, 0]);
     expect([el.clientWidth, el.clientHeight, el.clientLeft, el.clientTop]).toEqual([0, 0, 0, 0]);
     expect(el.offsetParent).toBeNull();
@@ -161,7 +161,7 @@ describe("createIncaElement layout", () => {
 
   it("rounds the offset and client members", () => {
     installMembersHost({ 1: [10.4, 20.6, 30.5, 40.2, 1.6, 0, 0, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
+    const el = createIncaElement(1, "div");
     expect([el.offsetWidth, el.offsetHeight]).toEqual([31, 40]);
     expect([el.offsetLeft, el.offsetTop]).toEqual([10, 21]);
     expect([el.clientLeft, el.clientTop]).toEqual([2, 2]);
@@ -177,27 +177,27 @@ describe("createIncaElement layout", () => {
       null,
       { 2: 1 },
     );
-    createIncaElement(1, "element", "div");
-    const child = createIncaElement(2, "element", "div");
+    createIncaElement(1, "div");
+    const child = createIncaElement(2, "div");
 
     expect([child.offsetLeft, child.offsetTop]).toEqual([0, 0]);
   });
 
   it("clamps the client size at zero", () => {
     installMembersHost({ 1: [0, 0, 2, 2, 5, 0, 0, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
+    const el = createIncaElement(1, "div");
     expect([el.clientWidth, el.clientHeight]).toEqual([0, 0]);
   });
 
   it("leaves the scrollbar strips out of the client size", () => {
     installMembersHost({ 1: [0, 0, 100, 80, 2, 0, 0, 15, 12] });
-    const el = createIncaElement(1, "element", "div");
+    const el = createIncaElement(1, "div");
     expect([el.clientWidth, el.clientHeight]).toEqual([81, 64]);
   });
 
   it("clamps the client size at zero beside a scrollbar strip", () => {
     installMembersHost({ 1: [0, 0, 10, 10, 0, 0, 0, 15, 15] });
-    const el = createIncaElement(1, "element", "div");
+    const el = createIncaElement(1, "div");
     expect([el.clientWidth, el.clientHeight]).toEqual([0, 0]);
   });
 
@@ -210,8 +210,8 @@ describe("createIncaElement layout", () => {
       null,
       { 2: 1 },
     );
-    const parent = createIncaElement(1, "element", "div");
-    const child = createIncaElement(2, "element", "div");
+    const parent = createIncaElement(1, "div");
+    const child = createIncaElement(2, "div");
 
     expect(child.offsetParent).toBe(parent);
     expect([child.offsetLeft, child.offsetTop]).toEqual([10, 11]);
@@ -219,8 +219,8 @@ describe("createIncaElement layout", () => {
 
   it("gives a null offsetParent when the parent has no record", () => {
     installMembersHost({ 2: [110, 60, 20, 20, 0, 0, 0, 0, 0] }, null, { 2: 1 });
-    const child = createIncaElement(2, "element", "div");
-    createIncaElement(1, "element", "div");
+    const child = createIncaElement(2, "div");
+    createIncaElement(1, "div");
 
     expect(child.offsetParent).toBeNull();
     expect([child.offsetLeft, child.offsetTop]).toEqual([110, 60]);
@@ -228,14 +228,14 @@ describe("createIncaElement layout", () => {
 
   it("gives a null offsetParent to the root wrapper", () => {
     installMembersHost({ 1: [5.4, 6, 10, 10, 0, 0, 0, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
+    const el = createIncaElement(1, "div");
     expect(el.offsetParent).toBeNull();
     expect([el.offsetLeft, el.offsetTop]).toEqual([5, 6]);
   });
 
   it("reads zeros for a freed element", () => {
     installMembersHost({ 1: [10, 20, 30, 40, 2, 0, 0, 0, 0] });
-    const el = createIncaElement(1, "element", "div");
+    const el = createIncaElement(1, "div");
     markFreed([el.__node_id]);
     expect([
       el.getBoundingClientRect().width,

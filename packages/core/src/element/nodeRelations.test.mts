@@ -29,7 +29,7 @@ beforeEach(() => {
   globalThis.__inca_native__ = nativeStub(host as never);
 });
 
-const div = (id: number) => createIncaElement(id, "element", "div");
+const div = (id: number) => createIncaElement(id, "div");
 
 describe("contains", () => {
   it("is true for the node itself without asking the host", () => {

@@ -22,12 +22,12 @@ function buildCopy(
   index: number,
   builders: HandleBuilders,
 ): IncaNode | undefined {
-  if (entry.length === 5) return builders.element!(entry[0], "element", nameOf(entry));
+  if (entry.length === 5) return builders.element!(entry[0], nameOf(entry));
   switch (entry[1]) {
     case "#text":
       return builders.text(entry[0], entry[2] ?? "");
     case "#comment":
-      return builders.element!(entry[0], "comment");
+      return builders.comment!(entry[0]);
     case "#document":
       return builders.documentCopy(entry[0]);
     default:

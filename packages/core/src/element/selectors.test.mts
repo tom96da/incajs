@@ -24,7 +24,7 @@ describe("createIncaElement selectors", () => {
 
   /** Three elements with ids 1, 2 and 3. */
   function chain() {
-    const [outer, inner, leaf] = [1, 2, 3].map((id) => createIncaElement(id, "element", "div"));
+    const [outer, inner, leaf] = [1, 2, 3].map((id) => createIncaElement(id, "div"));
     return { outer: outer!, inner: inner!, leaf: leaf! };
   }
 

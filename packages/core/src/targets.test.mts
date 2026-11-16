@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../tests/setup.mts";
 import "./targets.mts";
 import { document } from "./document.mts";
-import { adoptTextNode } from "./element/handle.mts";
+import { adoptTextNode, createIncaComment, createIncaFragment } from "./element/handle.mts";
 import { elementOf, registerNode, markFreed } from "./element/lifecycle.mts";
 import { window } from "./window.mts";
 import type { IncaElement } from "./element/types.mts";
@@ -47,12 +47,16 @@ describe("__inca_targets__", () => {
     expect(win).toBe(window);
   });
 
-  it("returns null for a text node", () => {
-    const text = adoptTextNode(8, "t");
+  it.each([
+    ["a text node", () => adoptTextNode(8, "t")],
+    ["a comment", () => createIncaComment(8)],
+    ["a fragment", () => createIncaFragment(8)],
+  ])("resolves %s to its handle", (_kind, make) => {
+    const handle = make();
 
-    const [found] = globalThis.__inca_targets__([text.__node_id]);
+    const [found] = globalThis.__inca_targets__([handle.__node_id]);
 
-    expect(found).toBeNull();
+    expect(found).toBe(handle);
   });
 
   it("resolves registered element nodes to their handles", () => {

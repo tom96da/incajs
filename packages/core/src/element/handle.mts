@@ -46,6 +46,7 @@ import {
   isRemoved,
   left,
   nodeOf,
+  prototypeOf,
   registerNode,
   registerRoot,
   withNodeId,
@@ -66,11 +67,14 @@ import type { ElementTreeMembers } from "./elementTree.mts";
 import type { LayoutMembers } from "./geometry.mts";
 import type { StyleMembers } from "./inlineStyle.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
+import type { NonDocumentTypeChildNodeMembers } from "./nodeTypes.mts";
 import type { ScrollMembers } from "./scroll.mts";
 import type { QueryMembers, SelectorMembers } from "./selectors.mts";
 import type {
+  CharacterDataMembers,
   EventHandlers,
   HtmlMembers,
+  IncaComment,
   IncaElement,
   IncaFragment,
   IncaNode,
@@ -84,6 +88,7 @@ import type {
 const builders: HandleBuilders = {
   element: createIncaElement,
   text: (id, data) => createIncaText(id, data, builders),
+  comment: createIncaComment,
   fragment: createIncaFragment,
   document: documentHandle,
   documentCopy: (id) => createIncaDocument(id, true),
@@ -97,7 +102,6 @@ const builders: HandleBuilders = {
  * the `value` of an `input`, the `style`, the `dataset`, the `classList`, the layout members,
  * the node members and the event handler properties, all driven through the host.
  * @param id - the native node's id
- * @param kind - whether the node is an element or a comment stand-in
  * @param name - the element name, an HTML `div` when omitted. An HTML `button` or `input`
  *   defaults to tab index `0`, an HTML `input` has `value` and an HTML `template` has `content`.
  *   The handle keeps the name, so the name members read after the host frees the node.
@@ -107,7 +111,6 @@ const builders: HandleBuilders = {
  */
 export function createIncaElement(
   id: NodeId,
-  kind: IncaElement["kind"],
   name: ElementName = "div",
   passiveByDefault: readonly string[] = [],
 ): IncaElement {
@@ -144,7 +147,7 @@ export function createIncaElement(
     set id(value: string) {
       if (!isDestroyed(element)) setAttribute(id, "id", String(value));
     },
-    kind,
+    kind: "element",
     focus: (options?: { preventScroll?: boolean }) => {
       if (!isRemoved(element)) focus(id, Boolean(options?.preventScroll));
     },
@@ -195,8 +198,9 @@ export function createIncaElement(
       configurable: true,
     });
   }
-  const element: IncaElement = withEventHandlers(withNodeId(fields as IncaElement, id), () =>
-    isRemoved(element),
+  const element: IncaElement = withEventHandlers(
+    withNodeId(Object.setPrototypeOf(fields, prototypeOf("element", name)) as IncaElement, id),
+    () => isRemoved(element),
   );
   Object.defineProperties(element, Object.getOwnPropertyDescriptors(attributeMembers(id, element)));
   Object.defineProperties(
@@ -223,20 +227,14 @@ export function createIncaElement(
   ]) {
     Object.defineProperties(element, Object.getOwnPropertyDescriptors(members));
   }
-  Object.defineProperties(
-    element,
-    Object.getOwnPropertyDescriptors(
-      kind === "comment" ? characterDataMembers(element) : elementTextContent(element),
-    ),
-  );
-  if (kind !== "comment") {
-    Object.defineProperties(element, Object.getOwnPropertyDescriptors(classMembers(id, element)));
-    Object.defineProperties(
-      element,
-      Object.getOwnPropertyDescriptors(htmlMembers(element, builders)),
-    );
-    Object.defineProperties(element, Object.getOwnPropertyDescriptors(styleMembers(id)));
-    Object.defineProperties(element, Object.getOwnPropertyDescriptors(datasetMembers(id)));
+  for (const members of [
+    elementTextContent(element),
+    classMembers(id, element),
+    htmlMembers(element, builders),
+    styleMembers(id),
+    datasetMembers(id),
+  ]) {
+    Object.defineProperties(element, Object.getOwnPropertyDescriptors(members));
   }
   registerNode(element);
   if (template) attachContent(element, createIncaFragment);
@@ -267,21 +265,64 @@ function elementTextContent(element: IncaElement): TextContentMember {
  */
 export function createElementNode(tag: TagName): IncaElement {
   const id = createNode(tag);
-  return createIncaElement(id, "element", tag);
+  return createIncaElement(id, tag);
 }
 
-// inca has no comment concept. A hidden, childless container stands in for one.
+// The host has no comment node. A hidden, childless container holds the data of a comment.
 /**
- * Creates the hidden container that stands in for a comment node, such as a
- * placeholder for conditional content.
+ * Creates a comment, such as a placeholder for conditional content.
  * @param text - the data of the comment
- * @returns the new hidden element
+ * @returns the new comment
  */
-export function createCommentNode(text = ""): IncaElement {
+export function createCommentNode(text = ""): IncaComment {
   const id = createNode("#comment");
   setStyle(id, "display", "none");
   setAttribute(id, "value", text);
-  return createIncaElement(id, "comment");
+  return createIncaComment(id);
+}
+
+/**
+ * Builds the handle of a comment: the node members, the character data members, the listener
+ * methods and the sibling and parent element members.
+ * @param id - the native node's id
+ * @returns the new, parentless handle
+ */
+export function createIncaComment(id: NodeId): IncaComment {
+  const target = createEventTarget(() => id);
+  const fields: Omit<
+    IncaComment,
+    | "__node_id"
+    | keyof NodeMembers
+    | keyof CharacterDataMembers
+    | keyof NonDocumentTypeChildNodeMembers
+    | "parentElement"
+  > = {
+    kind: "comment",
+    addEventListener: (...args: Parameters<typeof target.addEventListener>) => {
+      if (!isRemoved(comment)) target.addEventListener(...args);
+    },
+    removeEventListener: (...args: Parameters<typeof target.removeEventListener>) => {
+      if (!isRemoved(comment)) target.removeEventListener(...args);
+    },
+    dispatchEvent: (event) => isDestroyed(comment) || target.dispatchEvent(event),
+  };
+  const comment = withNodeId(
+    Object.setPrototypeOf(fields, prototypeOf("comment")) as IncaComment,
+    id,
+  );
+  for (const members of [
+    nodeTreeMembers(comment, builders),
+    nodeMutationMembers(comment, builders),
+    nodeRelationMembers(comment, builders),
+    characterDataMembers(comment),
+  ]) {
+    Object.defineProperties(comment, Object.getOwnPropertyDescriptors(members));
+  }
+  const { parentElement, previousElementSibling, nextElementSibling } =
+    Object.getOwnPropertyDescriptors(elementTreeMembers(comment, builders));
+  Object.defineProperties(comment, { parentElement, previousElementSibling, nextElementSibling });
+  registerNode(comment);
+  return comment;
 }
 
 /**
@@ -334,7 +375,7 @@ export function rootElement(): IncaElement {
   const id = rootNodeId();
   const live = elementOf(id);
   if (live) return live;
-  const root = createIncaElement(id, "element", "div", ["wheel"]);
+  const root = createIncaElement(id, "div", ["wheel"]);
   registerRoot(root);
   return root;
 }
@@ -348,7 +389,10 @@ export function createIncaFragment(id: NodeId): IncaFragment {
   const fields: Omit<IncaFragment, "__node_id" | keyof NodeMembers | keyof TextContentMember> = {
     kind: "fragment",
   };
-  const fragment = withNodeId(fields as IncaFragment, id);
+  const fragment = withNodeId(
+    Object.setPrototypeOf(fields, prototypeOf("fragment")) as IncaFragment,
+    id,
+  );
   const textMember: TextContentMember = {
     get textContent() {
       return isDestroyed(fragment) ? "" : textContent(id);
@@ -449,13 +493,13 @@ function createIncaDocument(id: NodeId, copy: boolean): IncaDocument {
     createElement: (...args: [localName: string]) => {
       requireArguments(args, 1, "createElement");
       const entry = createHostElement(attributeText(args[0]));
-      return held(createIncaElement(entry[0], "element", nameOf(entry)));
+      return held(createIncaElement(entry[0], nameOf(entry)));
     },
     createElementNS: (...args: [namespace: string | null, qualifiedName: string]) => {
       requireArguments(args, 2, "createElementNS");
       const namespace = args[0] === null || args[0] === undefined ? null : attributeText(args[0]);
       const entry = createHostElementNS(namespace || null, attributeText(args[1]));
-      return held(createIncaElement(entry[0], "element", nameOf(entry)));
+      return held(createIncaElement(entry[0], nameOf(entry)));
     },
     createTextNode: (...args: [data: string]) => {
       requireArguments(args, 1, "createTextNode");
@@ -466,7 +510,10 @@ function createIncaDocument(id: NodeId, copy: boolean): IncaDocument {
       return held(createCommentNode(attributeText(args[0])));
     },
   };
-  const handle = withEventHandlers(withNodeId(fields as IncaDocument, id), () => false);
+  const handle = withEventHandlers(
+    withNodeId(Object.setPrototypeOf(fields, prototypeOf("document")) as IncaDocument, id),
+    () => false,
+  );
   for (const members of [
     nodeTreeMembers(handle, builders),
     nodeMutationMembers(handle, builders),
@@ -475,7 +522,6 @@ function createIncaDocument(id: NodeId, copy: boolean): IncaDocument {
   ]) {
     Object.defineProperties(handle, Object.getOwnPropertyDescriptors(members));
   }
-  Object.setPrototypeOf(handle, Document.prototype);
   registerNode(handle);
   return handle;
 }

@@ -4,6 +4,7 @@
 import type { IncaDocument, IncaEvent, IncaEventMap, IncaEventTarget, NodeId } from "../types.mts";
 import type { HANDLER_EVENTS } from "./eventHandlers.mts";
 import type { RectLike } from "./geometry.mts";
+import type { NonDocumentTypeChildNodeMembers } from "./nodeTypes.mts";
 import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
 
 /** A function an event handler property holds, called with its target as `this` and the event. */
@@ -164,17 +165,17 @@ export interface NamedNodeMap {
 /** The members every node has: what it is, its data and its place in the tree. */
 export interface NodeMembers {
   /**
-   * `1` for an element, `3` for a text node, `8` for a comment stand-in, `9` for the document and
+   * `1` for an element, `3` for a text node, `8` for a comment, `9` for the document and
    * `11` for a fragment.
    */
   readonly nodeType: 1 | 3 | 8 | 9 | 11;
   /**
    * The {@link IncaElement.tagName} of an element, `"#text"` for a text node, `"#comment"` for a
-   * comment stand-in, `"#document"` for the document and `"#document-fragment"` for a fragment.
+   * comment, `"#document"` for the document and `"#document-fragment"` for a fragment.
    */
   readonly nodeName: string;
   /**
-   * The data of a text node or a comment stand-in, and `null` for an element, the document or a
+   * The data of a text node or a comment, and `null` for an element, the document or a
    * fragment. Assigning `null` or `undefined` stores `""` and any other value stores its string.
    * Assigning to an element, the document, a fragment or a freed node does nothing.
    */
@@ -272,8 +273,8 @@ export interface NodeMembers {
 /** The `textContent` of a node. */
 export interface TextContentMember {
   /**
-   * The data of a text node or a comment stand-in, and the data of the text nodes below an
-   * element in tree order, comment stand-ins left out. Assigning `null` or `undefined` stores `""`
+   * The data of a text node or a comment, and the data of the text nodes below an
+   * element in tree order, comments left out. Assigning `null` or `undefined` stores `""`
    * and any other value stores its string. Assigning to an element replaces its children with one
    * text node, or with none for `""`. A freed node reads `""` or its last data and ignores the
    * assignment.
@@ -281,7 +282,7 @@ export interface TextContentMember {
   textContent: string;
 }
 
-/** The members of a text node and a comment stand-in that read and edit their data. */
+/** The members of a text node and a comment that read and edit their data. */
 export interface CharacterDataMembers extends TextContentMember {
   /** The data. Assigning `null` stores `""` and any other value stores its string. */
   data: string;
@@ -485,9 +486,7 @@ export interface HtmlMembers {
 }
 
 /**
- * A container node: either a real element or the hidden stand-in that
- * `createCommentNode` makes. It is the only node type that can act as a
- * parent.
+ * An element, a node with a tag, attributes and children.
  *
  * A removed node keeps its attributes and its position in its own subtree, and its members read
  * them. Its listeners are dropped. `addEventListener()` and `removeEventListener()` ignore the
@@ -495,7 +494,13 @@ export interface HtmlMembers {
  * on it.
  */
 export interface IncaElement
-  extends IncaEventTarget, EventHandlers, NodeMembers, TextContentMember, HtmlMembers {
+  extends
+    IncaEventTarget,
+    EventHandlers,
+    NodeMembers,
+    NonDocumentTypeChildNodeMembers,
+    TextContentMember,
+    HtmlMembers {
   /**
    * The node id the host knows this node by. Internal to the renderer.
    * @internal
@@ -517,11 +522,8 @@ export interface IncaElement
    */
   get classList(): DOMTokenList;
   set classList(value: string);
-  /**
-   * `"comment"` for the hidden stand-in `createCommentNode` makes;
-   * `"element"` for every other container.
-   */
-  readonly kind: "element" | "comment";
+  /** Discriminates this node within the {@link IncaNode} union. */
+  readonly kind: "element";
   /**
    * The qualified name of the element. An element of the HTML namespace reads in ASCII upper case,
    * such as `"BUTTON"`, and the mount container reads `"DIV"`.
@@ -549,10 +551,6 @@ export interface IncaElement
   readonly lastElementChild: IncaElement | null;
   /** The number of children that are elements. */
   readonly childElementCount: number;
-  /** The closest earlier sibling that is an element, or `null`. */
-  readonly previousElementSibling: IncaElement | null;
-  /** The closest later sibling that is an element, or `null`. */
-  readonly nextElementSibling: IncaElement | null;
   /**
    * Focuses this node next frame. The node needs a `tabindex` attribute. A
    * `true` `preventScroll` keeps every scroll container where it is. After
@@ -740,6 +738,23 @@ export interface IncaTemplateElement extends IncaElement {
   readonly content: IncaFragment;
 }
 
+/** A comment node. */
+export interface IncaComment
+  extends
+    IncaEventTarget,
+    NodeMembers,
+    CharacterDataMembers,
+    NonDocumentTypeChildNodeMembers,
+    Pick<IncaElement, "parentElement"> {
+  /**
+   * The node id the host knows this node by. Internal to the renderer.
+   * @internal
+   */
+  readonly __node_id: NodeId;
+  /** Discriminates this node within the {@link IncaNode} union. */
+  readonly kind: "comment";
+}
+
 /** A text leaf node. */
 export interface IncaText extends NodeMembers, CharacterDataMembers, TextMembers {
   /**
@@ -773,4 +788,4 @@ export interface IncaFragment extends NodeMembers, TextContentMember {
 export type IncaParent = IncaElement | IncaFragment | IncaDocument;
 
 /** Any node handle: an element, comment, text leaf, fragment or the document. */
-export type IncaNode = IncaElement | IncaText | IncaFragment | IncaDocument;
+export type IncaNode = IncaElement | IncaComment | IncaText | IncaFragment | IncaDocument;

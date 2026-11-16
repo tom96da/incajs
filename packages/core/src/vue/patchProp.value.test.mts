@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import * as core from "../rendererCore.mts";
 import { createPatchProp } from "./patchProp.mts";
 
@@ -13,7 +14,7 @@ const patchProp = createPatchProp(core);
 beforeEach(() => {
   setAttribute.mockClear();
   setInputValue.mockClear();
-  globalThis.__inca_native__ = { setAttribute, setInputValue } as never;
+  globalThis.__inca_native__ = nativeStub({ setAttribute, setInputValue } as never);
 });
 
 describe("patchProp on the value key", () => {
@@ -21,13 +22,13 @@ describe("patchProp on the value key", () => {
     ["a", "a"],
     [undefined, ""],
   ])("assigns value on an input (%o)", (value, expected) => {
-    patchProp(core.createIncaElement(1, "element", "input"), "value", undefined, value);
+    patchProp(core.createIncaElement(1, "input"), "value", undefined, value);
     expect(setInputValue).toHaveBeenCalledWith(1, expected);
     expect(setAttribute).not.toHaveBeenCalled();
   });
 
   it("sends value on other elements to setAttribute", () => {
-    patchProp(core.createIncaElement(1, "element", "div"), "value", undefined, "a");
+    patchProp(core.createIncaElement(1, "div"), "value", undefined, "a");
     expect(setAttribute).toHaveBeenCalledWith(1, "value", "a");
     expect(setInputValue).not.toHaveBeenCalled();
   });

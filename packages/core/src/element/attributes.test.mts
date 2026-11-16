@@ -39,7 +39,7 @@ function setup(initial: Record<string, Stored> = {}, name: ElementName = "div") 
     attributeNames: vi.fn<(nodeId: number) => string[]>(() => [...store.keys()]),
   };
   globalThis.__inca_native__ = nativeStub(host as never);
-  const el: IncaElement = createIncaElement(1, "element", name);
+  const el: IncaElement = createIncaElement(1, name);
   return { host, el, store };
 }
 

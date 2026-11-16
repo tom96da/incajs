@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentInternalInstance } from "@vue/runtime-core";
 import type { MockInstance } from "vitest";
 
+import { nativeStub } from "../../tests/setup.mts";
 import * as rendererCore from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
@@ -1168,11 +1169,14 @@ describe("errors thrown by an event handler", () => {
       hook?: () => boolean | void,
     ): () => void {
       let id = 1;
-      vi.stubGlobal("__inca_native__", {
-        createNode: () => ++id,
-        insertBefore: () => {},
-        linkedNode: () => null,
-      });
+      vi.stubGlobal(
+        "__inca_native__",
+        nativeStub({
+          createNode: () => ++id,
+          insertBefore: () => {},
+          linkedNode: () => null,
+        } as never),
+      );
       const renderer = createRenderer({ ...createNodeOps(core), patchProp });
       const Child = { render: () => h("view", { onClick }) };
       const Parent = {
@@ -1302,11 +1306,14 @@ describe("everything else", () => {
 
   it("removes an attribute that is absent from the new vnode props", async () => {
     let id = 1;
-    vi.stubGlobal("__inca_native__", {
-      createNode: () => ++id,
-      insertBefore: () => {},
-      linkedNode: () => null,
-    });
+    vi.stubGlobal(
+      "__inca_native__",
+      nativeStub({
+        createNode: () => ++id,
+        insertBefore: () => {},
+        linkedNode: () => null,
+      } as never),
+    );
     const renderer = createRenderer({ ...createNodeOps(core), patchProp });
     const shown = ref(true);
     renderer
@@ -1572,11 +1579,14 @@ describe("a listener attached while an event is handled", () => {
 
   it("is skipped by the ancestor dispatch of the event that caused the re-render", async () => {
     let id = 1;
-    vi.stubGlobal("__inca_native__", {
-      createNode: () => ++id,
-      insertBefore: () => {},
-      linkedNode: () => null,
-    });
+    vi.stubGlobal(
+      "__inca_native__",
+      nativeStub({
+        createNode: () => ++id,
+        insertBefore: () => {},
+        linkedNode: () => null,
+      } as never),
+    );
     const renderer = createRenderer({ ...createNodeOps(core), patchProp });
     const armed = ref(false);
     const onAncestor = spy();
@@ -1618,10 +1628,10 @@ describe("with the event tracker of the events layer", () => {
 
   beforeEach(() => {
     addEventListener.mockClear();
-    globalThis.__inca_native__ = {
+    globalThis.__inca_native__ = nativeStub({
       addEventListener,
       removeEventListener: vi.fn<() => boolean>(() => true),
-    } as never;
+    } as never);
   });
   afterEach(() => {
     delete (globalThis as { __inca_native__?: unknown }).__inca_native__;

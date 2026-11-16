@@ -6,9 +6,9 @@ import { htmlCollectionOf } from "./collections.mts";
 import { isDestroyed } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaElement } from "./types.mts";
+import type { IncaComment, IncaElement } from "./types.mts";
 
-/** The element members of the tree: text leaves and comment stand-ins count as none. */
+/** The element members of the tree: text leaves and comments count as none. */
 export type ElementTreeMembers = Pick<
   IncaElement,
   | "children"
@@ -28,7 +28,7 @@ export type ElementTreeMembers = Pick<
  * @returns the members, as getters
  */
 export function elementTreeMembers(
-  element: IncaElement,
+  element: IncaElement | IncaComment,
   builders: HandleBuilders,
 ): ElementTreeMembers {
   const id = element.__node_id;

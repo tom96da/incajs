@@ -165,7 +165,7 @@ be passed, and `undefined` there counts as `null`.
 | --- | --- | --- |
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
 | `documentNodeId` | `() => number` | The id of the document node. |
-| `interfacePrototypes` | `() => Record<string, object>` | A new object with no prototype at each call, holding the prototypes of the node interfaces under the keys `EventTarget`, `Node`, `CharacterData`, `Text`, `Comment`, `Element`, `HTMLElement`, `ForeignElement`, `DocumentFragment`, `Document` and `HTMLDocument`. `ForeignElement` is the prototype of an SVG or MathML element; it inherits `Element.prototype`, and no global names it. |
+| `interfacePrototypes` | `() => Record<string, object>` | A new object with no prototype at each call, holding the prototypes of the node interfaces under the keys `EventTarget`, `Node`, `CharacterData`, `Text`, `Comment`, `Element`, `HTMLElement`, `ForeignElement`, `DocumentFragment`, `Document` and `HTMLDocument`. `ForeignElement` is the prototype of an SVG or MathML element; it inherits `Element.prototype`, and no global names it. Core builds its handles on these objects and reads no global. |
 | `createNode` | `(tag: string) => number` | Allocate a node, return its id. A tag that starts with `#` makes a node of that kind and any other tag makes an element of the HTML namespace. Throws once every id has been used. Freed at the next frame unless inserted or held, see [Retained virtual tree](#retained-virtual-tree). |
 | `createElement` | `(localName: string) => [number, string]` | Allocate an element of the HTML namespace for `localName`, lowered in ASCII, and return its id and tag. Freed at the next frame unless inserted or held, see [Retained virtual tree](#retained-virtual-tree). Throws `InvalidCharacterError` for a name that is no valid element local name. |
 | `createElementNS` | `(namespace: string \| null, qualifiedName: string) => [number, string, string \| null, string \| null, string]` | Allocate an element of `namespace` for `qualifiedName` and return its id, local name, namespace, prefix and tag name. An empty or `null` namespace gives no namespace. The name keeps its case. Freed at the next frame unless inserted or held, see [Retained virtual tree](#retained-virtual-tree). Throws `InvalidCharacterError` for a bad name and `NamespaceError` for a prefix the namespace does not allow. |
@@ -365,10 +365,10 @@ keeps nothing.
 - When the global is not a function, these fields carry the ids.
 - A throw, or a result that is not an array, is reported and the walk runs no listener.
   `dispatchEvent` throws it.
-- Core gives the element handle of a node that has one, the `document` export
+- Core gives the handle of every node that has one, the `document` export
   for the document node, the `window` export for the `"$window"` tag, the
   element of the host root, which it creates on first use and `mount()`
-  reuses, and `null` for any other node.
+  reuses, and `null` for an id with no handle.
 
 #### Tagged targets
 

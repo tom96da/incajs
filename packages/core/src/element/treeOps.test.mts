@@ -225,7 +225,7 @@ describe("remove", () => {
   it.each([
     ["an element", () => div()],
     ["a text leaf", () => createTextNode("t")],
-    ["a comment stand-in", () => createCommentNode()],
+    ["a comment", () => createCommentNode()],
   ])("removes %s with no parent", (_name, create) => {
     const node = create();
 

@@ -58,7 +58,7 @@ beforeEach(() => {
 });
 
 describe("createIncaElement handler properties", () => {
-  const element = () => createIncaElement(1, "element", "div");
+  const element = () => createIncaElement(1, "div");
 
   it("has one for each event the host dispatches that has one in HTML", () => {
     const names = Object.getOwnPropertyNames(element())

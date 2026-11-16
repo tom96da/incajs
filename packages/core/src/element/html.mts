@@ -44,8 +44,8 @@ function adopt(parsed: Parsed, builders: HandleBuilders): void {
       tag === "#text"
         ? builders.text(id, row[4] ?? "")
         : tag === "#comment"
-          ? builders.element!(id, "comment")
-          : builders.element!(id, "element", nameOfRow(row));
+          ? builders.comment!(id)
+          : builders.element!(id, nameOfRow(row));
     entered(handle);
   }
 }
