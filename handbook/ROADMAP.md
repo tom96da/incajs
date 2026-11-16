@@ -233,7 +233,7 @@ workspace's when `console` landed, which is why `console` is ours.
 3. **Filesystem and paths**: reading and writing app data. A desktop app has
    no browser origin to bound it, so what it may reach is a decision this
    item records.
-4. **Encoding and crypto**: `TextEncoder`/`TextDecoder`, `crypto`'s random
+4. **Encoding and crypto** (done): `TextEncoder`/`TextDecoder`, `crypto`'s random
    values, UUIDs and `digest()`, `structuredClone`, `URL` — small, standard, and assumed present
    by ordinary npm dependencies.
 5. **Engine limits** (memory and stack done): the engine has a time limit and
