@@ -41,6 +41,7 @@ mod encoding;
 mod engine;
 pub mod frames;
 
+mod buffer_source;
 mod compile;
 mod inspect;
 mod limits;

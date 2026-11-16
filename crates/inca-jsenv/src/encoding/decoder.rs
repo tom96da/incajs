@@ -12,14 +12,10 @@ use rquickjs::JsLifetime;
 use rquickjs::function::{Opt, This};
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
-use super::{Construct, STORE, flag_of, is_detached, is_resizable, options_of, read};
+use super::{Construct, flag_of, options_of};
+use crate::buffer_source::{bytes_of, source_of, store};
 use crate::class::{define_class, define_getter, define_global, define_method, plain_class};
-use crate::quickjs::{
-    copy_range, is_array_buffer, is_data_view, typed_array_kind, typed_array_range,
-};
-use crate::vault::vault;
 
-const NOT_A_BUFFER: &str = "the input is not a buffer source. pass an ArrayBuffer or a view of one";
 const NOT_VALID: &str =
     "the data is not valid for the encoding. decode with fatal false to replace it";
 const NOT_A_DECODER: &str = "the receiver is not a TextDecoder. call the method on an instance";
@@ -88,87 +84,20 @@ fn decoder_of<'js>(ctx: &Ctx<'js>, this: &Value<'js>) -> JsResult<Class<'js, Dec
     Class::<Decoder>::from_value(this).map_err(|_| Exception::throw_type(ctx, NOT_A_DECODER))
 }
 
-/// Where the bytes of a buffer source are, found before any option is read.
-enum Source<'js> {
-    Empty,
-    /// An `ArrayBuffer` or a `SharedArrayBuffer`.
-    Whole(Value<'js>),
-    /// A typed array and its buffer.
-    Typed(Value<'js>, Value<'js>),
-    /// A `DataView` and its buffer.
-    Data(Value<'js>, Value<'js>),
-}
-
-/// Finds the buffer of `input` and checks it can be read.
-fn source_of<'js>(
-    ctx: &Ctx<'js>,
-    store: &Object<'js>,
-    input: Option<Value<'js>>,
-) -> JsResult<Source<'js>> {
-    let wrong = || Exception::throw_type(ctx, NOT_A_BUFFER);
-    let Some(input) = input.filter(|input| !input.is_undefined()) else {
-        return Ok(Source::Empty);
-    };
-    let source = if typed_array_kind(&input).is_some() {
-        let buffer = read(store, "typedBuffer", &input)?;
-        Source::Typed(input, buffer)
-    } else if is_data_view(&input) {
-        let buffer = read(store, "viewBuffer", &input)?;
-        Source::Data(input, buffer)
-    } else if is_array_buffer(&input) || is_shared_array_buffer(ctx, store, &input) {
-        Source::Whole(input)
-    } else {
-        return Err(wrong());
-    };
-    let (Source::Whole(buffer) | Source::Typed(_, buffer) | Source::Data(_, buffer)) = &source
-    else {
-        return Ok(source);
-    };
-    if is_resizable(store, buffer)? {
-        return Err(wrong());
-    }
-    Ok(source)
-}
-
-/// Whether `value` is a `SharedArrayBuffer`: the getter `growable` fails only on another class,
-/// and that failure is cleared.
-fn is_shared_array_buffer<'js>(ctx: &Ctx<'js>, store: &Object<'js>, value: &Value<'js>) -> bool {
-    let probe = read::<bool>(store, "growable", value).is_ok();
-    if !probe {
-        drop(ctx.catch());
-    }
-    probe
-}
-
-/// A copy of the bytes `source` covers.
-fn bytes_of<'js>(store: &Object<'js>, source: &Source<'js>) -> JsResult<Vec<u8>> {
-    match source {
-        Source::Empty => Ok(Vec::new()),
-        Source::Whole(buffer) if is_detached(store, buffer)? => Ok(Vec::new()),
-        Source::Whole(buffer) => copy_range(buffer, 0, usize::MAX),
-        Source::Typed(_, buffer) | Source::Data(_, buffer) if is_detached(store, buffer)? => {
-            Ok(Vec::new())
-        }
-        Source::Typed(view, buffer) => {
-            let (offset, length) = typed_array_range(view)?;
-            copy_range(buffer, offset, length)
-        }
-        Source::Data(view, buffer) => {
-            let offset: usize = read(store, "viewOffset", view)?;
-            let length: usize = read(store, "viewLength", view)?;
-            copy_range(buffer, offset, length)
-        }
-    }
-}
-
 fn decode<'js>(
     ctx: &Ctx<'js>,
     decoder: &Class<'js, Decoder>,
     input: Option<Value<'js>>,
     options: Option<Value<'js>>,
 ) -> JsResult<String> {
-    let store: Object = vault(ctx)?.get(STORE)?;
-    let source = source_of(ctx, &store, input)?;
+    let store = store(ctx)?;
+    let source = source_of(
+        ctx,
+        &store,
+        input,
+        "input",
+        "an ArrayBuffer or a view of one",
+    )?;
     let stream = flag_of(options_of(ctx, options)?.as_ref(), "stream")?;
     let bytes = bytes_of(&store, &source)?;
     let result = decoder.borrow().codec.borrow_mut().push(&bytes, stream);
@@ -405,7 +334,7 @@ mod tests {
     fn decode_rejects_input_that_is_no_buffer_source(#[case] input: &str) {
         assert_eq!(
             thrown(&format!("new TextDecoder().decode({input})")),
-            format!("TypeError: {NOT_A_BUFFER}")
+            "TypeError: the input is not a buffer source. pass an ArrayBuffer or a view of one"
         );
     }
 
@@ -416,7 +345,7 @@ mod tests {
     fn decode_rejects_an_object_without_the_brand_of_a_view(#[case] input: &str) {
         assert_eq!(
             thrown(&format!("new TextDecoder().decode({input})")),
-            format!("TypeError: {NOT_A_BUFFER}")
+            "TypeError: the input is not a buffer source. pass an ArrayBuffer or a view of one"
         );
     }
 
@@ -526,7 +455,7 @@ mod tests {
                 new TextDecoder().decode({input});
                 "
             )),
-            format!("TypeError: {NOT_A_BUFFER}")
+            "TypeError: the input is not a buffer source. pass an ArrayBuffer or a view of one"
         );
     }
 
@@ -543,7 +472,7 @@ mod tests {
                 new TextDecoder().decode({input})
                 "
             )),
-            format!("TypeError: {NOT_A_BUFFER}")
+            "TypeError: the input is not a buffer source. pass an ArrayBuffer or a view of one"
         );
     }
 
