@@ -285,7 +285,13 @@ pub(crate) fn install<'js>(ctx: &Ctx<'js>, performance_proto: &Object<'js>) -> J
     define_global(ctx, "PerformanceMeasure", measure_class)?;
 
     method(ctx, performance_proto, "mark", 1, super::record::mark)?;
-    method(ctx, performance_proto, "measure", 1, super::record::measure)?;
+    method(
+        ctx,
+        performance_proto,
+        "measure",
+        1,
+        super::measure::measure,
+    )?;
     method(ctx, performance_proto, "getEntries", 0, |ctx, _| {
         entries(ctx, |_| true)
     })?;

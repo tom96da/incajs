@@ -44,6 +44,21 @@ pub(crate) fn thrown(body: &str) -> String {
     ))
 }
 
+/// The error text of a `mark()` or `measure()` time that is not finite or is negative.
+pub(crate) const TIME: &str =
+    "TypeError: the time is not valid. pass a finite number that is not negative";
+
+/// Two marks, `s` at 10 and `e` at 20.
+pub(crate) const MARKS: &str = r"
+    performance.mark('s', { startTime: 10 });
+    performance.mark('e', { startTime: 20 });
+    ";
+
+/// What the statements `body` throw after the marks `s` and `e`.
+pub(crate) fn thrown_marked(body: &str) -> String {
+    thrown_at(&format!("{MARKS} {body}"))
+}
+
 /// An engine on a clock that `at` moves.
 pub(crate) fn engine_on_test_clock() -> (Engine, Rc<Cell<Instant>>) {
     let at = Rc::new(Cell::new(Instant::now()));
