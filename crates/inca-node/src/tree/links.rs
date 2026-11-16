@@ -97,7 +97,7 @@ impl VirtualTree {
     }
 
     /// Unlinks every node of `ids` from its parent with one pass over the children.
-    fn detach_all(&mut self, ids: &[NodeId]) {
+    pub(super) fn detach_all(&mut self, ids: &[NodeId]) {
         // Every caller passes one node or the children of one node: one shared parent.
         let first = ids.first().and_then(|id| self.nodes.get(id));
         let Some(parent_id) = first.and_then(|node| node.parent) else {

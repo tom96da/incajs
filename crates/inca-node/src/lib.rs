@@ -26,8 +26,8 @@ pub use spec::{
     declared_window_size, hidden_by_attribute, is_scroll_container, style_warning, wheel_axes,
 };
 pub use tree::{
-    AttributeValue, ClassListError, Link, NodeId, StyleMap, TreeError, VirtualNode, VirtualTree,
-    is_disabled_control, valid_attribute_name,
+    AttributeValue, ClassListError, InsertArg, Inserted, Insertion, Link, NodeId, Placement,
+    StyleMap, TreeError, VirtualNode, VirtualTree, is_disabled_control, valid_attribute_name,
 };
 
 #[cfg(test)]

@@ -36,6 +36,7 @@ use indexmap::IndexMap;
 mod class_list;
 mod computed;
 mod element;
+mod insert_nodes;
 mod insertion;
 mod lifetime;
 mod links;
@@ -47,6 +48,7 @@ mod template;
 mod text;
 
 pub use class_list::ClassListError;
+pub use insert_nodes::{InsertArg, Inserted, Insertion, Placement};
 pub use props::valid_attribute_name;
 pub use relations::Link;
 
