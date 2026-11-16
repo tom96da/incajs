@@ -15,7 +15,7 @@ use rquickjs::convert::Coerced;
 use rquickjs::function::{IntoJsFunc, ParamRequirement, Params};
 use rquickjs::{Class, Ctx, Exception, Object, Result as JsResult, Value};
 
-use crate::class::{NEEDS_NEW, new_target_prototype};
+use crate::class::{NEEDS_NEW, new_target_prototype, options_of};
 use crate::quickjs::string_wtf8;
 use crate::vault::{required_prototype, store_prototype};
 
@@ -29,8 +29,6 @@ pub(crate) use encoder::encode;
 /// The names of the prototypes in the prototype store.
 const ENCODER: &str = "TextEncoder";
 const DECODER: &str = "TextDecoder";
-
-const NOT_AN_OBJECT: &str = "the options are not an object. pass an object or leave them out";
 
 /// Defines the globals `TextEncoder` and `TextDecoder` and keeps their prototypes in the vault of
 /// `ctx`'s realm.
@@ -93,17 +91,6 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
             codec: RefCell::new(codec),
         };
         Ok(Class::instance_proto(decoder, proto)?.into_value())
-    }
-}
-
-/// The object of a dictionary argument: `None` for an absent, `undefined` or `null` value.
-fn options_of<'js>(ctx: &Ctx<'js>, value: Option<Value<'js>>) -> JsResult<Option<Object<'js>>> {
-    match value {
-        Some(value) if !value.is_undefined() && !value.is_null() => value
-            .into_object()
-            .map(Some)
-            .ok_or_else(|| Exception::throw_type(ctx, NOT_AN_OBJECT)),
-        _ => Ok(None),
     }
 }
 
