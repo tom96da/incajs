@@ -123,6 +123,18 @@ impl Timers {
         (self.wake)();
     }
 
+    /// Queues the one-shot timer `id`, due `delay` milliseconds from now, with no nesting clamp
+    /// and at level 0, whatever timer runs now. The id comes from the
+    /// [callback table](crate::callbacks).
+    pub fn start_unnested(&self, id: u32, delay: u32) {
+        let now = (self.clock)();
+        let period = Duration::from_millis(u64::from(delay));
+        self.state
+            .borrow_mut()
+            .insert(id, now + period, period, false, 0);
+        (self.wake)();
+    }
+
     /// Whether timer `id` is queued.
     pub(crate) fn contains(&self, id: u32) -> bool {
         self.state.borrow().by_id.contains_key(&id)
@@ -594,5 +606,33 @@ mod tests {
         fx.timers.start(1, 1, false);
         fx.timers.stop(1);
         assert_eq!(fx.wakes.get(), 1);
+    }
+
+    #[test]
+    fn an_unnested_timer_waits_the_given_delay_at_any_running_level() {
+        let f = fixture();
+        f.timers.state.borrow_mut().running_level = 9;
+
+        f.timers.start_unnested(2, 0);
+
+        let (due, _) = f.timers.state.borrow().by_id[&2].key;
+        assert_eq!(due, f.now.get());
+    }
+
+    #[test]
+    fn an_unnested_timer_does_not_repeat() {
+        let f = fixture();
+        f.timers.start_unnested(2, 5);
+
+        assert!(!f.timers.state.borrow().by_id[&2].repeat);
+    }
+
+    #[test]
+    fn an_unnested_timer_runs_at_level_zero() {
+        let f = fixture();
+        f.timers.state.borrow_mut().running_level = 9;
+        f.timers.start_unnested(2, 5);
+
+        assert_eq!(f.timers.state.borrow().by_id[&2].level, 0);
     }
 }

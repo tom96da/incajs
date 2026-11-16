@@ -12,6 +12,7 @@ use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
 use inca_node::scroll::{Align, scroll_chain};
 use inca_node::{NodeId, VirtualTree, is_scroll_container};
 
+use crate::abort::Signals;
 use crate::focus::FocusRegistry;
 
 use super::listeners::EventListeners;
@@ -28,6 +29,8 @@ pub struct Host {
     /// The warnings printed for each node, as the text of the line without the node prefix.
     pub(crate) style_warned: HashMap<NodeId, HashSet<String>>,
     pub listeners: EventListeners,
+    /// The state of every `AbortSignal`, by id. Plain data: the objects live in JS.
+    pub(crate) signals: Signals,
     pub focus: FocusRegistry,
     /// Last number handed out as an `eventId`. Each event takes the next one.
     pub last_event_id: u64,
@@ -112,6 +115,7 @@ impl Host {
             warn: Rc::new(|line| eprintln!("{line}")),
             style_warned: HashMap::new(),
             listeners: EventListeners::default(),
+            signals: Signals::default(),
             focus: FocusRegistry::default(),
             last_event_id: 0,
             scroll_handles: RefCell::new(HashMap::new()),

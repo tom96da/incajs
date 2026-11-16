@@ -7,7 +7,7 @@ import type { EventTargetId, HostCallback, WindowTargetId } from "./native.mts";
 
 /**
  * Registers `callback` for `event` on a target.
- * @param target - the event target (a node id or the window target)
+ * @param target - the event target (a node id, the window target or a signal object)
  * @param event - the event name
  * @param callback - what the host calls with the event object
  * @param capture - whether the listener runs while the event travels down to the target
@@ -29,7 +29,8 @@ export function addListener(
 
 /**
  * Drops one registration of {@link addListener}.
- * @param target - the event target the registration was made on
+ * @param target - the event target the registration was made on (a node id, the window target or
+ * a signal object)
  * @param event - the event name
  * @param callbackId - the callback id {@link addListener} returned
  * @returns whether the host found the registration
@@ -45,8 +46,9 @@ export function removeListener(
 /**
  * Dispatches `event` at a target along its path. Dispatching at an element
  * reaches its ancestors, `document` and `window`. Dispatching at `document`
- * reaches `window`, and dispatching at `window` reaches only `window`.
- * @param target - the target to dispatch at (a node id or the window target)
+ * reaches `window`, and dispatching at `window` reaches only `window`. Dispatching at a signal
+ * reaches only that signal.
+ * @param target - the target to dispatch at (a node id, the window target or a signal object)
  * @param event - the event to dispatch
  * @returns `false` when a listener canceled a cancelable event, else `true`
  * @throws TypeError when `target` is malformed or is an unknown target tag
@@ -67,6 +69,15 @@ let windowTarget: WindowTargetId | undefined;
  */
 export function windowTargetId(): WindowTargetId {
   return (windowTarget ??= native().windowTargetId());
+}
+
+/**
+ * The id the host gave an `AbortSignal` object.
+ * @param value - any value
+ * @returns the id, or `null` for a value that is no signal of the host
+ */
+export function signalId(value: unknown): number | null {
+  return native().signalId(value);
 }
 
 /**

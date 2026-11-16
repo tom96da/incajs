@@ -13,6 +13,7 @@ import {
 } from "./element/lifecycle.mts";
 import { addEventListener, removeEventListener } from "./events.mts";
 import { dispatchEvent } from "./ffi/index.mts";
+import { signalTargetOf } from "./signalTarget.mts";
 import type { IncaNode } from "./element/types.mts";
 import type { EventTargetId } from "./ffi/index.mts";
 import type { EventListenerOrObject, IncaEventTarget, ListenerOptions } from "./types.mts";
@@ -25,6 +26,10 @@ import type { EventListenerOrObject, IncaEventTarget, ListenerOptions } from "./
  * @throws {TypeError} when `value` is no node and no event target
  */
 export function eventTargetOf(value: unknown): EventTargetId {
+  if (stateOf(value) === undefined) {
+    const signal = signalTargetOf(value);
+    if (signal !== undefined) return signal;
+  }
   const state = receiverOf(value, EVENT_TARGET_RULE);
   if (state.kind !== "target") return (value as IncaNode).__node_id;
   return typeof state.target === "function" ? state.target() : state.target!;
@@ -38,7 +43,12 @@ export function eventTargetOf(value: unknown): EventTargetId {
  */
 function ignoresListeners(value: unknown): boolean {
   const state = stateOf(value);
-  return state?.kind !== "target" && state?.kind !== "document" && isRemoved(value as IncaNode);
+  return (
+    state !== undefined &&
+    state.kind !== "target" &&
+    state.kind !== "document" &&
+    isRemoved(value as IncaNode)
+  );
 }
 
 /**
@@ -59,7 +69,7 @@ export function eventTargetMembers(): IncaEventTarget {
         typeof options === "boolean" ? { capture: options } : (options ?? {});
       addEventListener(target, type, listener, {
         ...given,
-        passive: given.passive ?? stateOf(this)!.passive.includes(type),
+        passive: given.passive ?? stateOf(this)?.passive.includes(type) ?? false,
       });
     },
 
@@ -77,8 +87,13 @@ export function eventTargetMembers(): IncaEventTarget {
 
     dispatchEvent(event) {
       const target = eventTargetOf(this);
-      const state = stateOf(this)!;
-      if (state.kind !== "target" && state.kind !== "document" && isDestroyed(this as IncaNode)) {
+      const state = stateOf(this);
+      if (
+        state !== undefined &&
+        state.kind !== "target" &&
+        state.kind !== "document" &&
+        isDestroyed(this as IncaNode)
+      ) {
         return true;
       }
       return dispatchEvent(target, event);

@@ -33,11 +33,21 @@ pub fn receiver<'js, T: JsClass<'js>>(
 ) -> JsResult<Class<'js, T>> {
     Class::<T>::from_value(this).map_err(|_| {
         let message = format!(
-            "the receiver is not a {}. call the method on an instance",
+            "the receiver is not {} {}. call the method on an instance",
+            article(T::NAME),
             T::NAME
         );
         Exception::throw_type(ctx, &message)
     })
+}
+
+/// "an" before a name that starts with an uppercase vowel and a lowercase letter, "a" otherwise.
+fn article(name: &str) -> &'static str {
+    let mut letters = name.chars();
+    match (letters.next(), letters.next()) {
+        (Some('A' | 'E' | 'I' | 'O' | 'U'), Some(second)) if second.is_lowercase() => "an",
+        _ => "a",
+    }
 }
 
 /// The object of a dictionary argument: `None` for an absent, `undefined` or `null` value.

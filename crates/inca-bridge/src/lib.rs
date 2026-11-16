@@ -6,6 +6,7 @@
 //! renderers drive to build and mutate it, and the event dispatch that carries
 //! native input back into JS.
 
+mod abort;
 mod bindings;
 mod dispatch;
 mod event;

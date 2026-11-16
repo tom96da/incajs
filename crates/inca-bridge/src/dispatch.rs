@@ -107,6 +107,33 @@ pub(crate) struct State {
     frame_requested: Cell<bool>,
 }
 
+/// Calls the global `__inca_released__(nodeIds, callbackIds)` and files a throw in
+/// `Host::failures`. The global is looked up per call and skipped when it is not a function.
+/// Returns whether it was a function.
+pub(crate) fn notify_released(
+    ctx: &rquickjs::Ctx<'_>,
+    host: &RefCell<Host>,
+    nodes: &[NodeId],
+    callback_ids: &[u32],
+) -> bool {
+    let Ok(hook) = ctx
+        .globals()
+        .get::<_, rquickjs::Function>("__inca_released__")
+    else {
+        return false;
+    };
+    let called = crate::event::array_of(ctx, nodes.iter().copied()).and_then(|nodes| {
+        let callback_ids = crate::event::array_of(ctx, callback_ids.iter().copied())?;
+        hook.call::<_, ()>((nodes, callback_ids))
+    });
+    if let Err(err) = called {
+        host.borrow_mut()
+            .failures
+            .push(inca_jsenv::EngineError::capture(ctx, &err));
+    }
+    true
+}
+
 /// Records the node the window focuses in `host`.
 pub(crate) fn observe_focus(host: &RefCell<Host>, window: &Window, cx: &App) {
     host.borrow_mut().focus.observe(window, cx);

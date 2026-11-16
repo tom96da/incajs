@@ -49,6 +49,15 @@ export const HANDLER_EVENTS = (<const U extends readonly HandlerEvent[]>(
   "wheel",
 );
 
+/**
+ * Whether an assigned value counts as an event handler: a function or any non-null object.
+ * @param value - the assigned value
+ * @returns `true` for a handler value
+ */
+export function isHandlerValue(value: unknown): boolean {
+  return typeof value === "function" || (typeof value === "object" && value !== null);
+}
+
 /** The handler value and the listener of one event on one handle. */
 interface HandlerSlot {
   held: unknown;
@@ -92,10 +101,7 @@ export function handlerMembers(receive: (self: unknown) => NodeState): object {
         const state = receive(this);
         const slot = slotOf(state);
         if (state.kind === "element" && isRemoved(this as IncaNode)) return;
-        slot.held =
-          typeof value === "function" || (typeof value === "object" && value !== null)
-            ? value
-            : null;
+        slot.held = isHandlerValue(value) ? value : null;
         const target = this as IncaEventTarget;
         if (slot.held === null) target.removeEventListener(event, slot.listener);
         else target.addEventListener(event, slot.listener);

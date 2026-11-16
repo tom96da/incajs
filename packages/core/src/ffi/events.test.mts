@@ -11,6 +11,7 @@ import {
   focus,
   focusedNode,
   removeListener,
+  signalId,
   windowTargetId,
 } from "./events.mts";
 import type { HostCallback, WindowTargetId } from "./native.mts";
@@ -33,6 +34,7 @@ const native = {
   focusedNode: vi.fn<() => number | null>(() => null),
   click: vi.fn<(nodeId: number) => void>(),
   windowTargetId: vi.fn<() => WindowTargetId>(() => "window-target" as WindowTargetId),
+  signalId: vi.fn<(value: unknown) => number | null>(() => 7),
 };
 
 beforeEach(() => {
@@ -94,5 +96,14 @@ describe("click", () => {
   it("forwards the node id to native click", () => {
     click(7);
     expect(native.click).toHaveBeenCalledExactlyOnceWith(7);
+  });
+});
+
+describe("signalId", () => {
+  it("gives the id the host answers for a value", () => {
+    const value = {};
+
+    expect(signalId(value)).toBe(7);
+    expect(native.signalId).toHaveBeenCalledWith(value);
   });
 });

@@ -22,12 +22,13 @@ virtual tree (`inca-node`'s `VirtualTree`):
   into whichever JS callbacks are registered for it, read from the callback
   table of the engine, with one event object passed along the
   path of its target. It reads the objects that stand for the nodes of that
-  path from `globalThis.__inca_targets__`. When a frame's orphan sweep frees
-  nodes, it calls `globalThis.__inca_released__` with their ids and the ids
+  path from `globalThis.__inca_targets__`. When a frame's orphan sweep frees nodes, and when a
+  signal aborts or is collected, it calls `globalThis.__inca_released__` with their ids and the ids
   of their callbacks. It implements `inca-gpui`'s `EventSink` trait so the
   render layer never has to depend on `QuickJS` itself. A window calls
   `EventDispatcher::begin_frame` first in its render and
   `EventDispatcher::window_activated` when it gains or loses focus.
+- `install` also defines `AbortController` and `AbortSignal`.
 - `install` also defines the timer functions and `requestAnimationFrame` of
   the global object, over the timers and frame callbacks of the `Host`.
   `EventDispatcher::start_timers` runs the due timers in a foreground task per

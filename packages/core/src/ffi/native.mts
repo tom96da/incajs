@@ -105,8 +105,14 @@ export type Parsed = [position: number, entries: ParsedEntry[]];
 /** The target that names `window`, as the host gives it. */
 export type WindowTargetId = string & { readonly __windowTarget: unique symbol };
 
-/** What a listener or a dispatch names: a node id, or the target of `window`. */
-export type EventTargetId = NodeId | WindowTargetId;
+/** An `AbortSignal` object that names itself as a target. */
+export type SignalTarget = object & { readonly __signalTarget: unique symbol };
+
+/** What a listener or a dispatch names: a node id, the target of `window`, or a signal. */
+export type EventTargetId = NodeId | WindowTargetId | SignalTarget;
+
+/** What `__inca_targets__` takes: the targets that have no signal. */
+export type HookTarget = NodeId | WindowTargetId;
 
 /**
  * The prototypes of the node interfaces that the host holds, by name. `ForeignElement` is the
@@ -206,6 +212,7 @@ interface IncaNative {
   scrollIntoViewNode(nodeId: NodeId, block: ScrollAlignment, inline: ScrollAlignment): void;
   dispatchEvent(target: EventTargetId, event: EventLike): boolean;
   windowTargetId(): WindowTargetId;
+  signalId(value: unknown): number | null;
   click(nodeId: NodeId): void;
   setPointerCapture(nodeId: NodeId, pointerId: number): void;
   releasePointerCapture(nodeId: NodeId, pointerId: number): void;
@@ -221,7 +228,7 @@ declare global {
   // eslint-disable-next-line no-var
   var __inca_released__: (nodeIds: NodeId[], callbackIds: CallbackId[]) => void;
   // eslint-disable-next-line no-var
-  var __inca_targets__: (targets: EventTargetId[]) => unknown[];
+  var __inca_targets__: (targets: HookTarget[]) => unknown[];
 }
 
 export function native(): IncaNative {

@@ -241,3 +241,26 @@ describe("the listener methods of the nodes", () => {
     expect(native.dispatchEvent).toHaveBeenCalledOnce();
   });
 });
+
+describe("a signal as the receiver", () => {
+  it("registers, removes and dispatches on the signal itself", () => {
+    const signal = new AbortSignal();
+    const listener = vi.fn<() => void>();
+    const event = { type: "abort" } as unknown as EventLike;
+
+    signal.addEventListener("abort", listener);
+    signal.dispatchEvent(event as never);
+    signal.removeEventListener("abort", listener);
+
+    expect(native.addEventListener.mock.calls[0]!.slice(0, 2)).toEqual([signal, "abort"]);
+    expect(native.addEventListener.mock.calls[0]!.slice(3)).toEqual([false, false]);
+    expect(native.dispatchEvent).toHaveBeenCalledWith(signal, event);
+    expect(native.removeEventListener.mock.calls[0]!.slice(0, 2)).toEqual([signal, "abort"]);
+  });
+
+  it("throws a TypeError for a plain object", () => {
+    const call = () => document.addEventListener.call({}, "abort", () => undefined);
+
+    expect(call).toThrow(TypeError);
+  });
+});

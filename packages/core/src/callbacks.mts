@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { markFreed } from "./element/lifecycle.mts";
+import { signalId } from "./ffi/index.mts";
 import { createIdTable } from "./idTable.mts";
 import type { EventTargetId } from "./ffi/index.mts";
 import type { CallbackId, EventListenerOrObject } from "./types.mts";
@@ -62,7 +63,8 @@ export function releaseCallback(callbackId: CallbackId): void {
 
 /**
  * Drops the JS half of every registration in `callbackIds`. The native half is already gone by
- * the time this runs: `removeNode` and the sweep take both.
+ * the time this runs: `removeNode` and the sweep take both, and a signal abort or collection
+ * reports its ids.
  * @param callbackIds - ids the host reported as released
  * @internal
  */
@@ -73,7 +75,7 @@ export function releaseCallbacks(callbackIds: readonly CallbackId[]): void {
 /**
  * The capture flag is part of the identity: the same target, event and
  * function can listen in both phases side by side.
- * @param target - the event target (a node id or the window target)
+ * @param target - the event target (a node id, the window target or a signal object)
  * @param event - the event name
  * @param capture - the capture flag of the registration
  * @returns the target, event and capture flag as one string
@@ -82,7 +84,11 @@ export const groupOf = (
   target: EventTargetId,
   event: string,
   capture: boolean | undefined,
-): string => `${target}:${event}:${capture === true}`;
+): string => `${targetKey(target)}:${event}:${capture === true}`;
+
+/** A node id or the window target as it is, and a signal as `signal:` and its id. */
+const targetKey = (target: EventTargetId): string | number =>
+  typeof target === "object" ? `signal:${signalId(target)}` : target;
 
 /**
  * @returns how many `(target, event, capture)` groups hold a registration
@@ -93,9 +99,9 @@ export function registeredGroupCount(): number {
 }
 
 /**
- * The host calls this at the start of a frame, after it freed nodes that had
- * no parent. Core defines it read-only on each load, so the latest copy of
- * core answers.
+ * The host calls this at the start of a frame, after it freed nodes that had no parent. It also
+ * calls it when a signal aborts or is collected, with an empty `nodeIds`. Core defines it read-only
+ * on each load, so the latest copy of core answers.
  */
 const released: typeof globalThis.__inca_released__ = (nodeIds, callbackIds) => {
   releaseCallbacks(callbackIds);

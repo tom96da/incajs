@@ -15,10 +15,12 @@ use crate::EventTargetId;
 use crate::bindings::Host;
 use listeners::deliver;
 
+mod abort;
 mod listeners;
 mod script;
 mod targets;
 
+pub(crate) use abort::fire_abort;
 pub(crate) use script::{click, dispatch_event, lose_focus};
 pub(super) use targets::targets_of;
 
@@ -45,8 +47,11 @@ pub(crate) struct Outcome {
 
 /// The targets an event fired at `target` travels through, nearest first: the
 /// nodes from `target` up to the document, then window. A node outside the
-/// document never reaches window.
+/// document never reaches window. A signal is a path of its own.
 pub(crate) fn path_from(host: &Host, target: EventTargetId) -> Vec<EventTargetId> {
+    if let EventTargetId::Signal(_) = target {
+        return vec![target];
+    }
     let mut path = Vec::new();
     if let EventTargetId::Node(node) = target {
         let ancestors: Vec<_> = host.tree.ancestors(node).collect();
@@ -74,6 +79,7 @@ fn is_cut(target: EventTargetId, cut: &[NodeId]) -> bool {
     match target {
         EventTargetId::Node(node) => cut.contains(&node),
         EventTargetId::Window => !cut.is_empty(),
+        EventTargetId::Signal(_) => false,
     }
 }
 
@@ -497,5 +503,27 @@ mod tests {
         );
 
         assert_eq!(got, serde_json::json!(false));
+    }
+
+    #[rstest::rstest]
+    #[case::bubbling(true)]
+    #[case::not_bubbling(false)]
+    fn the_path_of_a_signal_is_the_signal_alone(#[case] bubbles: bool) {
+        let host = Host::default();
+        let flags = Flags {
+            bubbles,
+            cancelable: false,
+            composed: false,
+        };
+
+        let path = path_from(&host, EventTargetId::Signal(5));
+
+        assert_eq!(path, [EventTargetId::Signal(5)]);
+        assert_eq!(bubble_targets(flags, &path), [EventTargetId::Signal(5)]);
+    }
+
+    #[test]
+    fn a_signal_is_never_cut() {
+        assert!(!is_cut(EventTargetId::Signal(5), &[1, 2]));
     }
 }

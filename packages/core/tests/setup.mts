@@ -58,6 +58,40 @@ for (const [name] of NODE_INTERFACES) {
   });
 }
 
+const SIGNAL_KEY = Symbol.for("incajs.test.abortSignal");
+
+/** The stand-in `AbortSignal` and the ids of its instances. */
+interface SignalKit {
+  AbortSignal: new () => object;
+  ids: WeakMap<object, number>;
+}
+
+/**
+ * The stand-in for the `AbortSignal` of the host: a class over the `EventTarget` stand-in whose
+ * instances have ids, made once per realm. An object made with `Object.create` has none.
+ */
+function signalKit(): SignalKit {
+  const shared = globalThis as { [SIGNAL_KEY]?: SignalKit };
+  if (shared[SIGNAL_KEY]) return shared[SIGNAL_KEY];
+  const ids = new WeakMap<object, number>();
+  let issued = 0;
+  const AbortSignal = function (this: object) {
+    ids.set(this, ++issued);
+  } as unknown as new () => object;
+  AbortSignal.prototype = Object.create(interfaceChain().EventTarget);
+  Object.defineProperty(AbortSignal.prototype, Symbol.toStringTag, {
+    value: "AbortSignal",
+    configurable: true,
+  });
+  return (shared[SIGNAL_KEY] = { AbortSignal, ids });
+}
+
+Object.defineProperty(globalThis, "AbortSignal", {
+  value: signalKit().AbortSignal,
+  writable: true,
+  configurable: true,
+});
+
 /** The host object core calls. */
 type Native = typeof globalThis.__inca_native__;
 
@@ -74,6 +108,7 @@ export function nativeStub(extra: Partial<Native> = {}): Native {
     releaseNode: () => undefined,
     registerUncloneable: () => undefined,
     windowTargetId: () => "window-target",
+    signalId: (value) => signalKit().ids.get(value as object) ?? null,
     interfacePrototypes: () => Object.assign(Object.create(null), interfaceChain()),
     ...extra,
   } as Native;

@@ -312,3 +312,31 @@ describe("the modern mutation members", () => {
     expectTypeOf<IncaComment>().not.toHaveProperty("append");
   });
 });
+
+describe("the abort globals", () => {
+  it("type a controller and its signal", () => {
+    expectTypeOf<AbortController["signal"]>().toEqualTypeOf<AbortSignal>();
+    expectTypeOf<AbortController["abort"]>().parameters.toEqualTypeOf<[reason?: any]>();
+  });
+
+  it("type the members of a signal and its static methods", () => {
+    expectTypeOf<AbortSignal["aborted"]>().toEqualTypeOf<boolean>();
+    expectTypeOf<AbortSignal["reason"]>().toBeAny();
+    expectTypeOf<AbortSignal["throwIfAborted"]>().returns.toBeVoid();
+    expectTypeOf<typeof AbortSignal.timeout>().parameters.toEqualTypeOf<[milliseconds: number]>();
+    expectTypeOf<typeof AbortSignal.any>().parameters.toEqualTypeOf<[signals: AbortSignal[]]>();
+    expectTypeOf<typeof AbortSignal.abort>().returns.toEqualTypeOf<AbortSignal>();
+  });
+
+  it("type onabort with the signal as this and the base event", () => {
+    expectTypeOf<AbortSignal["onabort"]>().toEqualTypeOf<
+      ((this: AbortSignal, ev: IncaEvent) => any) | null
+    >();
+  });
+
+  it("infer the base event of an abort listener", () => {
+    const listen = (signal: AbortSignal) =>
+      signal.addEventListener("abort", (event) => expectTypeOf(event).toEqualTypeOf<IncaEvent>());
+    expectTypeOf(listen).returns.toBeVoid();
+  });
+});

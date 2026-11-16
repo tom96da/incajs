@@ -13,6 +13,8 @@ use super::Natives;
 use super::convert::{Flag, JsCallbackId, JsEventTargetId, JsNodeId, existing_node};
 use super::host::Host;
 use crate::EventTargetId;
+use crate::abort::{Table, after_removal};
+use crate::event_target::HookTarget;
 
 /// One registration: the callback id, the phase it listens in and whether it
 /// is passive.
@@ -43,7 +45,7 @@ pub struct EventListeners {
 impl EventListeners {
     /// Adds `callback_id` to `(target, event)` with the given phase and
     /// passivity.
-    fn insert(
+    pub(crate) fn insert(
         &mut self,
         target: EventTargetId,
         event: impl Into<String>,
@@ -89,10 +91,22 @@ impl EventListeners {
     /// that were there, in no particular order. The JS side needs them to
     /// drop the functions they name.
     pub fn release(&mut self, node_id: NodeId) -> Vec<u32> {
+        self.release_target(EventTargetId::Node(node_id))
+    }
+
+    /// Drops every registration on `target` and returns the callback ids that were there, in no
+    /// particular order.
+    pub(crate) fn release_target(&mut self, target: EventTargetId) -> Vec<u32> {
         self.by_target
-            .remove(&EventTargetId::Node(node_id))
+            .remove(&target)
             .map(|events| events.into_values().flatten().map(|l| l.callback).collect())
             .unwrap_or_default()
+    }
+
+    /// Whether `target` has a registration for `event`.
+    #[must_use]
+    pub(crate) fn has_listener(&self, target: EventTargetId, event: &str) -> bool {
+        !self.listeners_for(target, event).is_empty()
     }
 
     /// Whether nothing is registered anywhere.
@@ -122,8 +136,8 @@ pub(super) fn install_events(n: &Natives<'_, '_>) -> JsResult<()> {
 }
 
 /// The target that names the window in the listener and dispatch calls.
-fn window_target_id(_host: Rc<RefCell<Host>>) -> impl Fn() -> EventTargetId {
-    || EventTargetId::Window
+fn window_target_id(_host: Rc<RefCell<Host>>) -> impl Fn() -> HookTarget {
+    || HookTarget::Window
 }
 
 fn add_event_listener<'js>(
@@ -142,6 +156,7 @@ fn add_event_listener<'js>(
         }
         let id = callbacks::store(&ctx, callback)?
             .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))?;
+        let pins = matches!(target, EventTargetId::Signal(signal) if event == "abort" && host.signals.pins(signal));
         host.listeners.insert(
             target,
             event,
@@ -149,6 +164,11 @@ fn add_event_listener<'js>(
             capture.0.flatten().unwrap_or(false),
             passive.0.flatten().unwrap_or(false),
         );
+        if let EventTargetId::Signal(signal) = target
+            && pins
+        {
+            Table::open(&ctx)?.pin(signal)?;
+        }
         Ok(id)
     }
 }
@@ -163,6 +183,9 @@ fn remove_event_listener<'js>(
             .remove(target, &event, callback_id);
         if removed {
             callbacks::release(&ctx, &[callback_id])?;
+            if let EventTargetId::Signal(signal) = target {
+                after_removal(&host.borrow(), &Table::open(&ctx)?, signal)?;
+            }
         }
         Ok(removed)
     }
@@ -612,5 +635,58 @@ mod tests {
             .unwrap();
 
         assert!(!removed);
+    }
+
+    #[test]
+    fn dispatching_at_a_signal_needs_no_node() {
+        let (engine, _host) = engine_with_bindings();
+
+        let dispatched: bool = engine
+            .eval(
+                r"
+                const s = new AbortController().signal;
+                __inca_native__.dispatchEvent(s, new Event('abort'));
+                ",
+            )
+            .unwrap();
+
+        assert!(dispatched);
+    }
+
+    #[test]
+    fn releasing_a_node_leaves_the_signals_alone() {
+        let mut listeners = EventListeners::default();
+        listeners.insert(EventTargetId::Node(1), "click", 7, false, false);
+        listeners.insert(EventTargetId::Signal(2), "abort", 8, false, false);
+
+        assert_eq!(listeners.release(1), [7]);
+        assert_eq!(
+            callback_ids(&listeners, EventTargetId::Signal(2), "abort"),
+            [8]
+        );
+    }
+
+    #[test]
+    fn releasing_a_target_gives_its_callback_ids() {
+        let mut listeners = EventListeners::default();
+        listeners.insert(EventTargetId::Signal(2), "abort", 8, false, false);
+
+        assert_eq!(listeners.release_target(EventTargetId::Signal(2)), [8]);
+        assert!(listeners.is_empty());
+    }
+
+    #[rstest]
+    #[case::same(EventTargetId::Signal(2), "abort", true)]
+    #[case::other_event(EventTargetId::Signal(2), "click", false)]
+    #[case::other_target(EventTargetId::Signal(3), "abort", false)]
+    fn a_listener_is_found_by_target_and_event(
+        #[case] target: EventTargetId,
+        #[case] event: &str,
+        #[case] found: bool,
+    ) {
+        let mut listeners = EventListeners::default();
+        listeners.insert(EventTargetId::Signal(2), "abort", 8, false, false);
+
+        assert_eq!(listeners.has_listener(target, event), found);
     }
 }

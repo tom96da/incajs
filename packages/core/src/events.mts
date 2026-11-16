@@ -3,7 +3,8 @@
 
 import { addCallback, callbackIdFor, groupOf, releaseCallback } from "./callbacks.mts";
 import { addListener, removeListener } from "./ffi/index.mts";
-import type { EventTargetId, HostCallback } from "./ffi/index.mts";
+import { signalTargetOf } from "./signalTarget.mts";
+import type { EventTargetId, HostCallback, SignalTarget } from "./ffi/index.mts";
 import type { EventListenerOrObject, ListenerOptions } from "./types.mts";
 
 let latestId = 0;
@@ -34,7 +35,7 @@ function tracking(listener: HostCallback): HostCallback {
  *
  * Any event name is accepted, and it fires when the host dispatches that name.
  * `IncaEventMap` gives the event type of each name the host dispatches.
- * @param target - the event target (a node id or the window target)
+ * @param target - the event target (a node id, the window target or a signal object)
  * @param event - the event name (e.g. `"click"`)
  * @param listener - a function, called with the event's `currentTarget` as
  * `this`, or an object whose `handleEvent` method is called with the object
@@ -63,9 +64,12 @@ export function addEventListener(
           args,
         )
       : (listener.handleEvent as HostCallback).apply(listener, args);
+  // A signal is read from `currentTarget` when the listener runs, so the callback table holds none.
+  const kept = typeof target === "object" ? undefined : target;
   const run: HostCallback = options.once
     ? (...args) => {
-        removeEventListener(target, event, listener, options);
+        const self = kept ?? (args[0] as { currentTarget: SignalTarget }).currentTarget;
+        removeEventListener(self, event, listener, options);
         return call(...args);
       }
     : call;
@@ -82,7 +86,7 @@ export function addEventListener(
 /**
  * Drops the registration {@link addEventListener} made for `listener` on
  * the target with the same `event` and `capture`. A no-op if there is none.
- * @param target - the event target (node or window)
+ * @param target - the event target (a node id, the window target or a signal object)
  * @param event - the event name
  * @param listener - the listener that was registered
  * @param options - `capture` of the registration to drop

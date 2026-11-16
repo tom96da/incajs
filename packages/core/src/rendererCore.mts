@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import "./abortSignal.mts";
 import "./targets.mts";
 
 export { createEventTarget } from "./eventTarget.mts";
