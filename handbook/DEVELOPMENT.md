@@ -20,6 +20,11 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### Recently done
 
+- **Node interfaces**: nodes have interface objects, so `instanceof` works, and the members that
+  insert, replace and remove nodes in one call are there.
+- **Built-ins**: `crypto`, `structuredClone` and `AbortController`.
+- **Scrollbars**: the thumb follows the platform setting and can be dragged.
+- **Test channel**: a development build that a test can click, snapshot and wait on from outside.
 - **Node tree**: the host tree is the only tree. Every link and every read of the tree comes from the
   host, and the calls into the host sit in one directory. `document.cloneNode()` copies the
   document.
@@ -30,18 +35,10 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 - **CLI output**: warnings go to stderr and information to stdout.
 - **Host bundle**: the host takes the location of `bundle.js` from its launcher when none sits beside
   it.
-- **Element members**: `className`, `classList`, `style` and `dataset`. A string bound to `:style`
-  applies as the whole inline style.
-- **Namespaces**: `document.createElementNS()` creates elements with a namespace, and an element
-  reports its namespace and prefix. `innerHTML` keeps svg and math content in its namespace.
 
 ### In progress
 
-- **Node interfaces**: the interface objects of nodes, so `instanceof` works, and each member defined once.
-- **Modern mutation**: the members that insert, replace and remove nodes in one call.
-- **Built-ins**: `crypto`, `structuredClone` and `AbortController`.
-- **Scrollbars**: a thumb that follows the platform setting, with dragging.
-- **Test channel**: a development build that a test can click, snapshot and wait on from outside.
+None at the moment.
 
 ### Not started
 

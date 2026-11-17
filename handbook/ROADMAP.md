@@ -174,8 +174,8 @@ send.
    selection, the clipboard, IME composition and `v-model` is done. `textarea`,
    word-wise editing, undo and redo, and the selection API are not started.
 4. **Scrolling**: `overflow`, `overflow_x` and `overflow_y` (`visible`,
-   `hidden`, `scroll`, `auto`) and wheel scrolling. Nested containers scroll
-   innermost first.
+   `hidden`, `scroll`, `auto`), wheel scrolling and a draggable scrollbar thumb. Nested
+   containers scroll innermost first.
 5. **Interactive visual state**: hover, active and focus styling mapped onto
    GPUI's own element states, instead of re-derived in JS. Phase 12's
    `hover:` and `focus:` Tailwind variants build on this.
@@ -234,8 +234,8 @@ workspace's when `console` landed, which is why `console` is ours.
    no browser origin to bound it, so what it may reach is a decision this
    item records.
 4. **Encoding and crypto** (done): `TextEncoder`/`TextDecoder`, `crypto`'s random
-   values, UUIDs and `digest()`, `structuredClone`, `URL` — small, standard, and assumed present
-   by ordinary npm dependencies.
+   values, UUIDs and `digest()`, `structuredClone`, `AbortController`, `URL` — small, standard,
+   and assumed present by ordinary npm dependencies.
 5. **Engine limits** (memory and stack done): the engine has a time limit and
    the host sets none. The recovery after a stop is in
    [BACKLOG.md](./BACKLOG.md).
