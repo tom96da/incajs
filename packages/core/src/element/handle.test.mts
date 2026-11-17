@@ -104,11 +104,11 @@ describe("createElement", () => {
 });
 
 describe("createComment", () => {
-  it("creates a hidden container in place of a comment", () => {
+  it("creates a comment without a style", () => {
     const host = installCreationHost();
     const node = createCommentNode();
     expect(host.createNode).toHaveBeenCalledWith("#comment");
-    expect(host.setStyle).toHaveBeenCalledWith(1, "display", "none");
+    expect(host.setStyle).not.toHaveBeenCalled();
     expect(node.kind).toBe("comment");
   });
 

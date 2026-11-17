@@ -10,7 +10,6 @@ import {
   rootNodeId,
   setCharacterData,
   setInputValue,
-  setStyle,
   windowTargetId,
 } from "../ffi/index.mts";
 import { installInterfaces, defineMembers, windowHandlerMembers } from "./interfaces.mts";
@@ -141,7 +140,6 @@ export function createElementNode(tag: TagName): HTMLElement {
  */
 export function createCommentNode(text = ""): Comment {
   const id = createNode("#comment");
-  setStyle(id, "display", "none");
   setCharacterData(id, text);
   return createIncaComment(id);
 }
