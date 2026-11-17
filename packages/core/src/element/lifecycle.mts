@@ -28,7 +28,7 @@ import type {
 /**
  * The functions that build and find the handles of native nodes. Every handle passes `text`,
  * `document` and `node`. A member that builds a node also passes `element`, `comment`,
- * `fragment`, `createText` and `createComment`: the first three build the handle of a host node
+ * `fragment`, `createText` and `createComment`. The first three build the handle of a host node
  * that exists, and the last two create a new host node and build its handle.
  */
 export interface HandleBuilders {

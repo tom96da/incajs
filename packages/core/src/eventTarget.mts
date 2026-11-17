@@ -36,7 +36,7 @@ export function eventTargetOf(value: unknown): EventTargetId {
 }
 
 /**
- * Whether the listener methods ignore `value`: a node that left the tree for good ignores
+ * Whether the listener methods ignore `value`. A node that left the tree for good ignores
  * `addEventListener` and `removeEventListener`.
  * @param value - the receiver
  * @returns `true` for a removed element, text node, comment or fragment

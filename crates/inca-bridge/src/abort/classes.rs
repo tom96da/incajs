@@ -70,9 +70,9 @@ impl<'js> IncaSignal<'js> {
 }
 
 impl<'js> Trace<'js> for IncaSignal<'js> {
-    // Runs inside a GC callback of QuickJS: it must not panic.
+    // Runs inside a GC callback of QuickJS, so it must not panic.
     fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
-        // No `..` here: a new field must fail to compile until it is traced.
+        // No `..` here, so a new field must fail to compile until it is traced.
         let IncaSignal { id: _, reason } = self;
         if let Ok(reason) = reason.try_borrow() {
             reason.trace(tracer);
@@ -81,7 +81,7 @@ impl<'js> Trace<'js> for IncaSignal<'js> {
 }
 
 impl<'js> Trace<'js> for IncaController<'js> {
-    // Runs inside a GC callback of QuickJS: it must not panic.
+    // Runs inside a GC callback of QuickJS, so it must not panic.
     fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
         let IncaController { signal } = self;
         signal.trace(tracer);
