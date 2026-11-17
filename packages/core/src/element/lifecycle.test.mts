@@ -129,6 +129,7 @@ describe("the prototype of a handle", () => {
     createElement: vi.fn<() => [number, string]>(() => [41, "div"]),
     createElementNS: vi.fn<() => ElementEntry>(),
     setAttribute: vi.fn<() => void>(),
+    setCharacterData: vi.fn<() => void>(),
     setStyle: vi.fn<() => void>(),
     holdNode: vi.fn<() => void>(),
     rootNodeId: vi.fn<() => number>(() => 2),

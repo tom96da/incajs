@@ -137,9 +137,7 @@ mod tests {
             let root = host.root();
             let style = host.tree.create_node("style").unwrap();
             let text = host.tree.create_node("#text").unwrap();
-            host.tree
-                .set_attribute(text, "value", ".a { bogus: 1 }")
-                .unwrap();
+            host.tree.set_data(text, ".a { bogus: 1 }").unwrap();
             host.tree.append_child(style, text).unwrap();
             host.tree.append_child(root, style).unwrap();
         }

@@ -135,7 +135,7 @@ mod tests {
             n.setStyle(box, 'height', 50);
             n.appendChild(n.rootNodeId(), box);
             const label = n.createNode('#text');
-            n.setAttribute(label, 'value', 'hi');
+            n.setCharacterData(label, 'hi');
             n.appendChild(box, label);
             globalThis.clicks = 0;
             n.addEventListener(box, 'click', () => {
@@ -325,7 +325,7 @@ mod tests {
                 r"
                 {HOVERABLE}
                 const label = n.createNode('#text');
-                n.setAttribute(label, 'value', 'hi');
+                n.setCharacterData(label, 'hi');
                 n.appendChild(box, label);
                 "
             ),

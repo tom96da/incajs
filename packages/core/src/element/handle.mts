@@ -8,7 +8,7 @@ import {
   documentNodeId,
   inputValue,
   rootNodeId,
-  setAttribute,
+  setCharacterData,
   setInputValue,
   setStyle,
   windowTargetId,
@@ -134,7 +134,6 @@ export function createElementNode(tag: TagName): HTMLElement {
   return createIncaElement(id, tag);
 }
 
-// The host has no comment node. A hidden, childless container holds the data of a comment.
 /**
  * Creates a comment, such as a placeholder for conditional content.
  * @param text - the data of the comment
@@ -143,7 +142,7 @@ export function createElementNode(tag: TagName): HTMLElement {
 export function createCommentNode(text = ""): Comment {
   const id = createNode("#comment");
   setStyle(id, "display", "none");
-  setAttribute(id, "value", text);
+  setCharacterData(id, text);
   return createIncaComment(id);
 }
 
@@ -170,7 +169,7 @@ export function createIncaComment(id: NodeId): Comment {
  */
 export function createTextNode(text: string): Text {
   const id = createNode("#text");
-  setAttribute(id, "value", text);
+  setCharacterData(id, text);
   return createIncaText(id, text);
 }
 

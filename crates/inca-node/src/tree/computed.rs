@@ -389,7 +389,7 @@ mod tests {
         let mut f = Fixture::new();
         let style = f.tree.create_element_ns(Some(SVG), None, "style").unwrap();
         let css = f.tree.create_node("#text").unwrap();
-        f.attr(css, "value", ".a { width: 40px }");
+        f.tree.set_data(css, ".a { width: 40px }").unwrap();
         f.tree.append_child(style, css).unwrap();
         f.tree.append_child(f.root, style).unwrap();
         let a = f.boxed("a");
@@ -416,7 +416,7 @@ mod tests {
         let (_, text_node) = f.sheet(".a { width: 1px }");
         let a = f.boxed("a");
         let before = f.computed(a, "width");
-        f.attr(text_node, "value", ".a { width: 2px }");
+        f.tree.set_data(text_node, ".a { width: 2px }").unwrap();
 
         assert_eq!(before, Some(text("1px")));
         assert_eq!(f.computed(a, "width"), Some(text("2px")));
@@ -457,7 +457,7 @@ mod tests {
         let mut f = Fixture::new();
         let style = f.add(f.root, "STYLE", "sheet");
         let text_node = f.tree.create_node(TEXT_TAG).unwrap();
-        f.attr(text_node, "value", ".a { width: 1px }");
+        f.tree.set_data(text_node, ".a { width: 1px }").unwrap();
         f.tree.append_child(style, text_node).unwrap();
         let a = f.boxed("a");
 
@@ -469,7 +469,7 @@ mod tests {
         let mut f = Fixture::new();
         let (style, _) = f.sheet(".a { height: 2px }");
         let comment = f.tree.create_node("#comment").unwrap();
-        f.attr(comment, "value", ".a { width: 9px }");
+        f.tree.set_data(comment, ".a { width: 9px }").unwrap();
         f.tree.append_child(style, comment).unwrap();
         let a = f.boxed("a");
 
@@ -483,7 +483,7 @@ mod tests {
         let (outer, _) = f.sheet("");
         let inner = f.tree.create_node("style").unwrap();
         let text_node = f.tree.create_node(TEXT_TAG).unwrap();
-        f.attr(text_node, "value", ".a { width: 1px }");
+        f.tree.set_data(text_node, ".a { width: 1px }").unwrap();
         f.tree.append_child(inner, text_node).unwrap();
         f.tree.append_child(outer, inner).unwrap();
         let a = f.boxed("a");

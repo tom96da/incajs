@@ -190,7 +190,7 @@ mod tests {
         let content = f.tree.template_content(template).unwrap();
         let style = node(&mut f.tree, "style");
         let rules = node(&mut f.tree, "#text");
-        f.attr(rules, "value", "div { width: 9px }");
+        f.tree.set_data(rules, "div { width: 9px }").unwrap();
         f.tree.append_child(style, rules).unwrap();
         f.tree.append_child(content, style).unwrap();
         let target = f.boxed("target");
@@ -204,7 +204,7 @@ mod tests {
         let template = f.add(f.root, "template", "template");
         let style = f.add(template, "style", "sheet");
         let rules = node(&mut f.tree, "#text");
-        f.attr(rules, "value", "div { width: 9px }");
+        f.tree.set_data(rules, "div { width: 9px }").unwrap();
         f.tree.append_child(style, rules).unwrap();
         let target = f.boxed("target");
 

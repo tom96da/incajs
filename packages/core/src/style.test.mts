@@ -55,7 +55,7 @@ function styles(): [unknown, string][] {
       fake.nodes.get(id)!.attrs.get("data-inca-style"),
       fake.nodes
         .get(id)!
-        .children.map((child) => fake.nodes.get(child)!.attrs.get("value"))
+        .children.map((child) => fake.nodes.get(child)!.data)
         .join(""),
     ]);
 }
@@ -65,7 +65,7 @@ function leftStyle(key: string, text: string, parent = fake.ROOT): number {
   const id = fake.create("style");
   fake.nodes.get(id)!.attrs.set("data-inca-style", key);
   const textId = fake.create("#text");
-  fake.natives.setAttribute!(textId, "value", text);
+  fake.natives.setCharacterData!(textId, text);
   fake.natives.appendChild!(id, textId);
   fake.natives.appendChild!(parent, id);
   return id;

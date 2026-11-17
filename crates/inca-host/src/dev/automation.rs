@@ -226,7 +226,7 @@ mod tests {
             r"
             {SCENE}
             const label = n.createNode('#text');
-            n.setAttribute(label, 'value', 'hi');
+            n.setCharacterData(label, 'hi');
             n.appendChild(box, label);
             globalThis.label = label;
             "
@@ -511,7 +511,7 @@ mod tests {
             n.setAttribute(box, 'class', 'box');
             n.appendChild(n.rootNodeId(), box);
             const label = n.createNode('#text');
-            n.setAttribute(label, 'value', 'hi');
+            n.setCharacterData(label, 'hi');
             n.appendChild(box, label);
             const style = n.createNode('style');
             n.appendChild(n.rootNodeId(), style);
@@ -519,7 +519,7 @@ mod tests {
             n.appendChild(n.rootNodeId(), template);
             n.appendChild(template, n.createNode('div'));
             const comment = n.createNode('#comment');
-            n.setAttribute(comment, 'value', 'note');
+            n.setCharacterData(comment, 'note');
             n.setStyle(comment, 'display', 'none');
             n.appendChild(n.rootNodeId(), comment);
             globalThis.root = n.rootNodeId();
@@ -559,16 +559,11 @@ mod tests {
                 &text["attributes"],
                 &text["bounds"]
             ),
-            (
-                &json!("#text"),
-                &json!("hi"),
-                &json!({ "value": "hi" }),
-                &Value::Null
-            )
+            (&json!("#text"), &json!("hi"), &json!({}), &Value::Null)
         );
         assert_eq!(comment["tag"], "#comment");
         assert_eq!(comment["text"], Value::Null);
-        assert_eq!(comment["attributes"], json!({ "value": "note" }));
+        assert_eq!(comment["attributes"], json!({}));
         assert_eq!(comment["bounds"], Value::Null);
     }
 

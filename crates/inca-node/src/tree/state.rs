@@ -279,7 +279,9 @@ mod tests {
         let mut s = scene();
         let (_, text_node) = s.f.sheet(".a { width: 1px }");
         let before = s.f.tree.uses_focus_state();
-        s.f.attr(text_node, "value", ":focus { width: 1px }");
+        s.f.tree
+            .set_data(text_node, ":focus { width: 1px }")
+            .unwrap();
 
         assert!(!before);
         assert!(s.f.tree.uses_focus_state());

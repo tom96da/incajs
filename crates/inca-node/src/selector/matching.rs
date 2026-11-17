@@ -27,12 +27,9 @@ impl fmt::Debug for Node<'_> {
     }
 }
 
-/// Whether the `"value"` of `node` is not empty.
+/// Whether the data of `node` is not empty.
 fn has_text(node: &VirtualNode) -> bool {
-    matches!(
-        node.attributes().get("value"),
-        Some(value) if !value.text().is_empty()
-    )
+    !node.data().is_empty()
 }
 
 impl<'t> Node<'t> {
@@ -465,7 +462,7 @@ mod tests {
         let mut f = Fixture::new();
         let holder = f.add(f.root, "div", "holder");
         let leaf = f.add(holder, "#text", "l");
-        f.attr(leaf, "value", "x");
+        f.tree.set_data(leaf, "x").unwrap();
 
         assert!(!f.matches(holder, ":empty"));
     }
@@ -514,11 +511,11 @@ mod tests {
     }
 
     #[test]
-    fn empty_ignores_a_text_leaf_with_no_value() {
+    fn empty_ignores_a_text_leaf_with_empty_data() {
         let mut f = Fixture::new();
         let holder = f.add(f.root, "div", "holder");
         let leaf = f.add(holder, "#text", "l");
-        f.attr(leaf, "value", "");
+        f.tree.set_data(leaf, "").unwrap();
 
         assert!(f.matches(holder, ":empty"));
     }

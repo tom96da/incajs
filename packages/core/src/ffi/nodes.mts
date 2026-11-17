@@ -384,6 +384,16 @@ export function textContent(nodeId: NodeId): string {
 }
 
 /**
+ * Replaces the data of a text node or a comment in the host tree.
+ * @param nodeId - the text node or comment
+ * @param data - the new data
+ * @throws {TypeError} when `nodeId` names no node or a node that holds no data
+ */
+export function setCharacterData(nodeId: NodeId, data: string): void {
+  native().setCharacterData(nodeId, data);
+}
+
+/**
  * Reads the data of a text node and of the text siblings that touch it.
  * @param nodeId - the text node
  * @returns the joined data in order

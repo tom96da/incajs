@@ -22,17 +22,15 @@ const DOCUMENT = 1;
 let links: Record<number, Partial<Record<NodeLink, number>>> = {};
 /** The children of each node. */
 let children: Record<number, number[]> = {};
-/** The data of each text node or comment stand-in. */
+/** The data of each text node or comment. */
 let data: Record<number, string> = {};
 let nextId = 100;
 
 const host = {
   rootNodeId: vi.fn<() => number>(() => 0),
   createNode: vi.fn<(tag: string) => number>(() => nextId++),
-  setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
-  getAttribute: vi.fn<(nodeId: number, key: string) => string | null>(
-    (nodeId) => data[nodeId] ?? null,
-  ),
+  setCharacterData: vi.fn<(nodeId: number, data: string) => void>(),
+  textContent: vi.fn<(nodeId: number) => string>((nodeId) => data[nodeId] ?? ""),
   setStyle: vi.fn<() => void>(),
   linkedNode: vi.fn<(nodeId: number, link: NodeLink) => number | null>(
     (nodeId, link) => links[nodeId]?.[link] ?? null,
@@ -86,7 +84,7 @@ describe("nodeValue", () => {
   it("sends nothing to the host for an assignment to an element", () => {
     createElementNode("div").nodeValue = "x";
 
-    expect(host.setAttribute).not.toHaveBeenCalled();
+    expect(host.setCharacterData).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -105,11 +103,11 @@ describe("nodeValue", () => {
     ["x", "x"],
   ] as const)("sends %s to the host as %j for a text node", (value, stored) => {
     const text = createTextNode("first");
-    host.setAttribute.mockClear();
+    host.setCharacterData.mockClear();
 
     text.nodeValue = value as string | null;
 
-    expect(host.setAttribute).toHaveBeenCalledWith(text.__node_id, "value", stored);
+    expect(host.setCharacterData).toHaveBeenCalledWith(text.__node_id, stored);
   });
 
   it.each([
@@ -127,7 +125,7 @@ describe("nodeValue", () => {
   it("sends the text of a new comment to the host", () => {
     const comment = createCommentNode("x");
 
-    expect(host.setAttribute).toHaveBeenCalledWith(comment.__node_id, "value", "x");
+    expect(host.setCharacterData).toHaveBeenCalledWith(comment.__node_id, "x");
   });
 
   it("sends an assignment to a comment to the host", () => {
@@ -135,7 +133,7 @@ describe("nodeValue", () => {
 
     comment.nodeValue = "note";
 
-    expect(host.setAttribute).toHaveBeenCalledWith(comment.__node_id, "value", "note");
+    expect(host.setCharacterData).toHaveBeenCalledWith(comment.__node_id, "note");
   });
 });
 
@@ -365,11 +363,11 @@ describe("a freed node", () => {
   it("ignores an assignment to nodeValue", () => {
     const text = createTextNode("kept");
     markFreed([text.__node_id]);
-    host.setAttribute.mockClear();
+    host.setCharacterData.mockClear();
 
     text.nodeValue = "changed";
 
-    expect(host.setAttribute).not.toHaveBeenCalled();
+    expect(host.setCharacterData).not.toHaveBeenCalled();
   });
 });
 

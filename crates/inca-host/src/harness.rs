@@ -180,7 +180,7 @@ mod tests {
             n.setStyle(c, 'overflow_x', 'scroll');
             n.appendChild(n.rootNodeId(), c);
             const label = n.createNode('#text');
-            n.setAttribute(label, 'value', 'hi');
+            n.setCharacterData(label, 'hi');
             n.appendChild(c, label);
             const inner = n.createNode('div');
             n.setStyle(inner, 'width', 300);

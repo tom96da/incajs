@@ -35,6 +35,7 @@ export {
   replaceData,
   rootNodeId,
   rootOf,
+  setCharacterData,
   setInnerHtml,
   setOuterHtml,
   splitText,

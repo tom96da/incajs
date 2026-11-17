@@ -17,6 +17,7 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  setCharacterData: vi.fn<(nodeId: number, data: string) => void>(),
   setStyle: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
 };
 
@@ -31,7 +32,7 @@ describe("createNodeOps comment", () => {
   it("keeps the text of a comment", () => {
     const comment = nodeOps.createComment("note");
 
-    expect(native.setAttribute).toHaveBeenCalledWith(comment.__node_id, "value", "note");
+    expect(native.setCharacterData).toHaveBeenCalledWith(comment.__node_id, "note");
   });
 });
 
@@ -41,7 +42,7 @@ describe("createNodeOps text", () => {
 
     nodeOps.setText(text, "b");
 
-    expect(native.setAttribute).toHaveBeenLastCalledWith(text.__node_id, "value", "b");
+    expect(native.setCharacterData).toHaveBeenLastCalledWith(text.__node_id, "b");
   });
 });
 

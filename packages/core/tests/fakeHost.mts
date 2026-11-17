@@ -18,7 +18,7 @@ interface FakeNode {
   listeners: number[];
   /** The content fragment of a template. */
   content: number | null;
-  /** The `value` attribute: the text of a text node or a comment. */
+  /** The data of a text node or a comment. */
   data: string | null;
   /** The attributes by name. */
   attrs: Map<string, unknown>;
@@ -305,12 +305,11 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
     focusedNode: () => null,
     layoutOf: () => null,
     scrollOf: () => null,
-    getAttribute: (id, key) =>
-      (key === "value" ? nodeOf(id).data : (nodeOf(id).attrs.get(key) ?? null)) as never,
-    setAttribute(id, key, value) {
-      const node = nodeOf(id);
-      node.attrs.set(key, value);
-      if (key === "value") node.data = String(value);
+    getAttribute: (id, key) => (nodeOf(id).attrs.get(key) ?? null) as never,
+    setAttribute: (id, key, value) => void nodeOf(id).attrs.set(key, value),
+    textContent: (id) => nodeOf(id).data ?? "",
+    setCharacterData(id, data) {
+      nodeOf(id).data = data;
     },
     removeAttribute: (id) => void nodeOf(id),
     setStyle: (id) => void nodeOf(id),

@@ -239,7 +239,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
         let label = tree.create_node("#text").unwrap();
-        tree.set_attribute(label, "value", "hello").unwrap();
+        tree.set_data(label, "hello").unwrap();
         tree.append_child(root, label).unwrap();
         let probe = probe();
         draw(cx.add_empty_window(), &tree, &probe);

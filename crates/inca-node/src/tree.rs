@@ -200,6 +200,8 @@ pub struct VirtualNode {
     id: NodeId,
     kind: NodeKind,
     tag_name: String,
+    /// The character data of a text node or a comment, empty for any other node.
+    data: String,
     /// The namespace of an element. `None` for a node that is no element and for an element made
     /// without one.
     namespace: Option<Namespace>,
@@ -226,6 +228,7 @@ impl VirtualNode {
             id,
             kind,
             tag_name,
+            data: String::new(),
             namespace,
             prefix,
             style_props: StyleMap::new(),
@@ -296,6 +299,10 @@ pub enum TreeError {
     DocumentParent(NodeId),
     /// A tag that starts with `#` and names no kind of node.
     UnknownTag,
+    /// A call that reads or writes data, given a node that is no text node and no comment.
+    NotCharacterData(NodeId),
+    /// A call that works on text, given a node that is no text node.
+    NotText(NodeId),
 }
 
 impl fmt::Display for TreeError {
@@ -335,6 +342,10 @@ impl fmt::Display for TreeError {
                 f,
                 "the tag starts with # but names no kind of node. use #text, #comment, #document or #fragment"
             ),
+            TreeError::NotCharacterData(id) => {
+                write!(f, "node {id} holds no data. pass a text node or a comment")
+            }
+            TreeError::NotText(id) => write!(f, "node {id} is no text node. pass a text node"),
         }
     }
 }
@@ -474,12 +485,18 @@ mod tests {
     use crate::tests::{Fixture, node};
     use rstest::rstest;
 
-    #[test]
-    fn unknown_tag_has_a_message() {
-        assert_eq!(
-            TreeError::UnknownTag.to_string(),
-            "the tag starts with # but names no kind of node. use #text, #comment, #document or #fragment"
-        );
+    #[rstest]
+    #[case::unknown_tag(
+        TreeError::UnknownTag,
+        "the tag starts with # but names no kind of node. use #text, #comment, #document or #fragment"
+    )]
+    #[case::not_character_data(
+        TreeError::NotCharacterData(7),
+        "node 7 holds no data. pass a text node or a comment"
+    )]
+    #[case::not_text(TreeError::NotText(7), "node 7 is no text node. pass a text node")]
+    fn a_data_error_has_a_message(#[case] error: TreeError, #[case] message: &str) {
+        assert_eq!(error.to_string(), message);
     }
 
     #[test]

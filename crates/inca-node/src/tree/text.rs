@@ -1,17 +1,15 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The character data of text and comment nodes, kept in the `"value"` attribute.
+//! The character data of text and comment nodes, kept in the data field of the node.
 
-use super::{AttributeValue, NodeId, NodeKind, TEXT_TAG, TreeError, VirtualNode, VirtualTree};
+use super::{NodeId, NodeKind, TEXT_TAG, TreeError, VirtualNode, VirtualTree};
 
 impl VirtualNode {
-    /// The `"value"` attribute as text: empty when it is missing or not a string.
-    pub(crate) fn data(&self) -> &str {
-        self.attributes()
-            .get("value")
-            .and_then(AttributeValue::as_str)
-            .unwrap_or_default()
+    /// The character data of a text node or a comment, empty for any other node.
+    #[must_use]
+    pub fn data(&self) -> &str {
+        &self.data
     }
 }
 
@@ -26,22 +24,51 @@ fn text_of(units: &[u16]) -> String {
 }
 
 impl VirtualTree {
+    /// The data of the text node or comment `id`.
     fn data_of(&self, id: NodeId) -> Result<&str, TreeError> {
-        self.get(id)
-            .map(VirtualNode::data)
-            .ok_or(TreeError::NodeNotFound(id))
+        let node = self.get(id).ok_or(TreeError::NodeNotFound(id))?;
+        if node.is_character_data() {
+            Ok(node.data())
+        } else {
+            Err(TreeError::NotCharacterData(id))
+        }
+    }
+
+    /// The data of the text node `id`.
+    fn text_data_of(&self, id: NodeId) -> Result<&str, TreeError> {
+        let node = self.get(id).ok_or(TreeError::NodeNotFound(id))?;
+        if node.kind() == NodeKind::Text {
+            Ok(node.data())
+        } else {
+            Err(TreeError::NotText(id))
+        }
+    }
+
+    /// Replaces the data of the text node or comment `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `id` names no node and
+    /// [`TreeError::NotCharacterData`] if it is no text node and no comment.
+    pub fn set_data(&mut self, id: NodeId, data: impl Into<String>) -> Result<(), TreeError> {
+        self.data_of(id)?;
+        self.node_mut(id)?.data = data.into();
+        Ok(())
     }
 
     /// Appends `text` to the data of the text node `id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `id` names no node and
+    /// [`TreeError::NotCharacterData`] if it is no text node.
     pub(crate) fn append_text(&mut self, id: NodeId, text: &str) -> Result<(), TreeError> {
-        let node = self.node_mut(id)?;
-        match node.attributes.get_mut("value") {
-            Some(AttributeValue::String(data)) => data.push_str(text),
-            _ => {
-                node.attributes
-                    .insert("value".to_owned(), AttributeValue::String(text.to_owned()));
-            }
+        match self.get(id).map(VirtualNode::kind) {
+            Some(NodeKind::Text) => {}
+            Some(_) => return Err(TreeError::NotCharacterData(id)),
+            None => return Err(TreeError::NodeNotFound(id)),
         }
+        self.node_mut(id)?.data.push_str(text);
         Ok(())
     }
 
@@ -72,9 +99,10 @@ impl VirtualTree {
     ///
     /// # Errors
     ///
-    /// Returns [`TreeError::NodeNotFound`] if `id` names no node.
+    /// Returns [`TreeError::NodeNotFound`] if `id` names no node and [`TreeError::NotText`] if it
+    /// is no text node.
     pub fn whole_text(&self, id: NodeId) -> Result<String, TreeError> {
-        let own = self.data_of(id)?;
+        let own = self.text_data_of(id)?;
         let is_text = |id: &NodeId| self.get(*id).is_some_and(|n| n.kind() == NodeKind::Text);
         let mut before = Vec::new();
         let mut at = id;
@@ -100,8 +128,9 @@ impl VirtualTree {
     ///
     /// # Errors
     ///
-    /// Returns [`TreeError::NodeNotFound`] if `id` names no node and [`TreeError::IndexSize`] if
-    /// `offset` is beyond the length.
+    /// Returns [`TreeError::NodeNotFound`] if `id` names no node, [`TreeError::NotCharacterData`]
+    /// if it is no text node and no comment and [`TreeError::IndexSize`] if `offset` is beyond the
+    /// length.
     pub fn substring_data(&self, id: NodeId, offset: u32, count: u32) -> Result<String, TreeError> {
         let data = units(self.data_of(id)?);
         let (start, end) = span(data.len(), offset, count)?;
@@ -113,8 +142,9 @@ impl VirtualTree {
     ///
     /// # Errors
     ///
-    /// Returns [`TreeError::NodeNotFound`] if `id` names no node and [`TreeError::IndexSize`] if
-    /// `offset` is beyond the length.
+    /// Returns [`TreeError::NodeNotFound`] if `id` names no node, [`TreeError::NotCharacterData`]
+    /// if it is no text node and no comment and [`TreeError::IndexSize`] if `offset` is beyond the
+    /// length.
     pub fn replace_data(
         &mut self,
         id: NodeId,
@@ -127,7 +157,7 @@ impl VirtualTree {
         let mut result = data[..start].to_vec();
         result.extend(replacement.encode_utf16());
         result.extend_from_slice(&data[end..]);
-        self.set_attribute(id, "value", text_of(&result))
+        self.set_data(id, text_of(&result))
     }
 
     /// Cuts the data of `id` at `offset`: `id` keeps the head and a new text node holds the tail.
@@ -135,14 +165,14 @@ impl VirtualTree {
     ///
     /// # Errors
     ///
-    /// Returns [`TreeError::NodeNotFound`] if `id` names no node and [`TreeError::IndexSize`] if
-    /// `offset` is beyond the length.
+    /// Returns [`TreeError::NodeNotFound`] if `id` names no node, [`TreeError::NotText`] if it is
+    /// no text node and [`TreeError::IndexSize`] if `offset` is beyond the length.
     pub fn split_text(&mut self, id: NodeId, offset: u32) -> Result<NodeId, TreeError> {
-        let data = units(self.data_of(id)?);
+        let data = units(self.text_data_of(id)?);
         let (cut, _) = span(data.len(), offset, 0)?;
         let tail = self.create_node(TEXT_TAG)?;
-        self.set_attribute(tail, "value", text_of(&data[cut..]))?;
-        self.set_attribute(id, "value", text_of(&data[..cut]))?;
+        self.set_data(tail, text_of(&data[cut..]))?;
+        self.set_data(id, text_of(&data[..cut]))?;
         if let Some(parent) = self.get(id).and_then(VirtualNode::parent) {
             let anchor = self.next_sibling(id);
             self.insert_before(parent, tail, anchor)?;
@@ -196,9 +226,116 @@ mod tests {
         );
     }
 
+    #[rstest]
+    #[case::text(TEXT_TAG)]
+    #[case::comment("#comment")]
+    fn set_data_replaces_the_data(#[case] tag: &str) {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node(tag).unwrap();
+
+        tree.set_data(id, "note").unwrap();
+
+        assert_eq!(tree.get(id).unwrap().data(), "note");
+    }
+
+    #[rstest]
+    #[case::text(TEXT_TAG)]
+    #[case::comment("#comment")]
+    fn a_new_character_node_has_empty_data(#[case] tag: &str) {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node(tag).unwrap();
+
+        assert_eq!(tree.get(id).unwrap().data(), "");
+    }
+
+    #[test]
+    fn the_data_of_an_element_is_empty() {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("div").unwrap();
+
+        assert_eq!(tree.get(id).unwrap().data(), "");
+    }
+
+    #[test]
+    fn set_attribute_value_on_a_comment_leaves_the_data_empty() {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("#comment").unwrap();
+
+        tree.set_attribute(id, "value", "x").unwrap();
+
+        assert_eq!(tree.get(id).unwrap().data(), "");
+    }
+
+    #[test]
+    fn set_data_of_an_unknown_node_errors() {
+        assert_eq!(
+            VirtualTree::new().set_data(4, "x"),
+            Err(TreeError::NodeNotFound(4))
+        );
+    }
+
+    #[rstest]
+    #[case::set_data(|tree: &mut VirtualTree, id: NodeId| tree.set_data(id, "x").unwrap_err())]
+    #[case::substring_data(|tree: &mut VirtualTree, id: NodeId| tree.substring_data(id, 0, 1).unwrap_err())]
+    #[case::replace_data(|tree: &mut VirtualTree, id: NodeId| tree.replace_data(id, 0, 0, "x").unwrap_err())]
+    #[case::append_text(|tree: &mut VirtualTree, id: NodeId| tree.append_text(id, "x").unwrap_err())]
+    fn a_data_call_on_a_node_without_data_is_not_character_data(
+        #[case] call: fn(&mut VirtualTree, NodeId) -> TreeError,
+    ) {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("div").unwrap();
+
+        assert_eq!(call(&mut tree, id), TreeError::NotCharacterData(id));
+    }
+
+    #[test]
+    fn append_text_to_a_comment_is_not_character_data() {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("#comment").unwrap();
+
+        assert_eq!(
+            tree.append_text(id, "x"),
+            Err(TreeError::NotCharacterData(id))
+        );
+    }
+
+    #[rstest]
+    #[case::whole_text(|tree: &mut VirtualTree, id: NodeId| tree.whole_text(id).unwrap_err())]
+    #[case::split_text(|tree: &mut VirtualTree, id: NodeId| tree.split_text(id, 0).unwrap_err())]
+    fn a_text_call_on_a_comment_is_not_text(
+        #[case] call: fn(&mut VirtualTree, NodeId) -> TreeError,
+    ) {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_node("#comment").unwrap();
+
+        assert_eq!(call(&mut tree, id), TreeError::NotText(id));
+    }
+
+    #[rstest]
+    #[case::text(TEXT_TAG)]
+    #[case::comment("#comment")]
+    fn substring_data_reads_character_data(#[case] tag: &str) {
+        let mut tree = VirtualTree::new();
+        let id = leaf(&mut tree, tag, "abc");
+
+        assert_eq!(tree.substring_data(id, 1, 1).unwrap(), "b");
+    }
+
+    #[rstest]
+    #[case::text(TEXT_TAG)]
+    #[case::comment("#comment")]
+    fn replace_data_edits_character_data(#[case] tag: &str) {
+        let mut tree = VirtualTree::new();
+        let id = leaf(&mut tree, tag, "abc");
+
+        tree.replace_data(id, 1, 1, "X").unwrap();
+
+        assert_eq!(tree.get(id).unwrap().data(), "aXc");
+    }
+
     fn leaf(tree: &mut VirtualTree, tag: &str, data: &str) -> NodeId {
         let id = tree.create_node(tag).unwrap();
-        tree.set_attribute(id, "value", data).unwrap();
+        tree.set_data(id, data).unwrap();
         id
     }
 
@@ -357,6 +494,17 @@ mod tests {
         let (tree, b) = walled();
 
         assert_eq!(tree.whole_text(b).unwrap(), "abc");
+    }
+
+    #[test]
+    fn whole_text_stops_at_a_comment() {
+        let (mut tree, b) = walled();
+        let comment = leaf(&mut tree, "#comment", "k");
+        let parent = tree.get(b).unwrap().parent().unwrap();
+        let c = tree.next_sibling(b).unwrap();
+        tree.insert_before(parent, comment, Some(c)).unwrap();
+
+        assert_eq!(tree.whole_text(b).unwrap(), "ab");
     }
 
     #[test]

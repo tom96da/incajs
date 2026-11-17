@@ -95,9 +95,8 @@ feature, a notification with one of these names runs the request and is not rela
 
 A node is `{"id": number, "tag": string, "text": string | null, "attributes": object, "bounds":
 {"x", "y", "width", "height"} | null, "children": [node]}`. `text` is the content of a `#text`
-node and `null` for every other node. A `#text` node keeps its content in `attributes.value`
-too. `bounds` is the border box in window coordinates, in logical pixels, and `null` for a text
-node and for a node the last frame did not draw.
+node and `null` for every other node. `bounds` is the border box in window coordinates, in logical
+pixels, and `null` for a text node and for a node the last frame did not draw.
 
 ### From the host
 

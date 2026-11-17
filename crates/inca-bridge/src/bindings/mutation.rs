@@ -11,8 +11,7 @@ use rquickjs::convert::Coerced;
 use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 
 use inca_jsenv::callbacks;
-use inca_node::NodeId;
-use inca_node::tree::TEXT_TAG;
+use inca_node::{NodeId, NodeKind};
 
 use super::Natives;
 use super::convert::{JsNodeId, or_null, throw_tree_error};
@@ -154,10 +153,7 @@ fn clone_node<'js>(
                 let entry = Array::new(ctx.clone())?;
                 entry.set(0, copy)?;
                 entry.set(1, node.tag_name())?;
-                let data = (node.tag_name() == TEXT_TAG)
-                    .then(|| host.tree.text_content(copy))
-                    .transpose()
-                    .map_err(|err| throw_tree_error(&ctx, err))?;
+                let data = (node.kind() == NodeKind::Text).then(|| node.data());
                 entry.set(2, or_null(&ctx, data)?)?;
                 entries.push(entry);
             }
@@ -395,7 +391,7 @@ mod tests {
         let got: String = engine
             .eval(
                 r"
-                n.setAttribute(t, 'value', 'abc');
+                n.setCharacterData(t, 'abc');
                 n.appendChild(a, t);
                 n.appendChild(a, c);
                 JSON.stringify(n.cloneNode(a, true).map((e) => e.slice(1)));

@@ -178,6 +178,7 @@ interface NativeBindings {
   childNodeIds(nodeId: NodeId, elementOnly?: boolean): NodeId[];
   isConnected(nodeId: NodeId): boolean;
   textContent(nodeId: NodeId): string;
+  setCharacterData(nodeId: NodeId, data: string): void;
   wholeText(nodeId: NodeId): string;
   substringData(nodeId: NodeId, offset: number, count: number): string;
   replaceData(nodeId: NodeId, offset: number, count: number, data: string): void;

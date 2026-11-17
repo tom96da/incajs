@@ -12,7 +12,14 @@ import {
 } from "./element/handle.mts";
 import { entered, nodeOf } from "./element/lifecycle.mts";
 import { insert, remove } from "./element/treeOps.mts";
-import { childNodeIds, getAttribute, queryNodes, rootNodeId, setAttribute } from "./ffi/index.mts";
+import {
+  childNodeIds,
+  getAttribute,
+  queryNodes,
+  rootNodeId,
+  setAttribute,
+  textContent,
+} from "./ffi/index.mts";
 import type { Element } from "./element/types.mts";
 import type { NodeId } from "./types.mts";
 
@@ -25,7 +32,7 @@ let scanned = false;
 function adopt(id: NodeId): Element {
   const el = createIncaElement(id, "style");
   for (const child of childNodeIds(id)) {
-    entered(adoptTextNode(child, String(getAttribute(child, "value") ?? "")));
+    entered(adoptTextNode(child, textContent(child)));
   }
   entered(el);
   return el;
