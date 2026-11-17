@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.0.34] - 2026-11-17
+
 ### Added
 
 - `crypto.getRandomValues()` and `crypto.randomUUID()` are available ([5152e892](https://github.com/tom96da/incajs/commit/5152e892))
@@ -687,7 +689,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - prebuilt `inca-host` binaries for linux-x64, linux-arm64, and darwin-arm64, resolved automatically per platform
 - click event dispatch from the native tree back into JS
 
-[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.33...HEAD
+[Unreleased]: https://github.com/tom96da/incajs/compare/v0.0.34...HEAD
+[0.0.34]: https://github.com/tom96da/incajs/releases/tag/v0.0.34
 [0.0.33]: https://github.com/tom96da/incajs/releases/tag/v0.0.33
 [0.0.32]: https://github.com/tom96da/incajs/releases/tag/v0.0.32
 [0.0.31]: https://github.com/tom96da/incajs/releases/tag/v0.0.31

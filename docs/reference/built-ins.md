@@ -71,7 +71,7 @@ These results for `file:` URLs differ from the ones of browsers:
 - The host `localhost` is dropped, also by the `hostname` setter.
 - `file:///c:/../x` and `/x` against `file:///C:/a/b` keep the drive letter.
 
-## `structuredClone()` <Badge type="warning" text="unreleased"/>
+## `structuredClone()`
 
 `structuredClone()` follows the
 [HTML Standard](https://html.spec.whatwg.org/multipage/structured-data.html#dom-structuredclone).
@@ -103,7 +103,7 @@ It differs in two places:
   - `setResourceTimingBufferSize()`
   - `onresourcetimingbufferfull`
 
-## `crypto` <Badge type="warning" text="unreleased"/>
+## `crypto`
 
 This follows the [Web Cryptography API](https://www.w3.org/TR/WebCryptoAPI/).
 
@@ -120,7 +120,7 @@ This follows the [Web Cryptography API](https://www.w3.org/TR/WebCryptoAPI/).
   - `wrapKey()`
   - `unwrapKey()`
 
-## `AbortController` and `AbortSignal` <Badge type="warning" text="unreleased"/>
+## `AbortController` and `AbortSignal`
 
 - `AbortSignal.timeout()` waits at most 4294967295 milliseconds.
 - A signal that one of its own listeners refers to stays in memory until it aborts.

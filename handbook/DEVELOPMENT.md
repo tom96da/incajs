@@ -49,7 +49,7 @@ None at the moment.
 
 ### Foundation
 
-- **Release**: `v0.0.33`.
+- **Release**: `v0.0.34`.
 - **Node.js**: 22.18 or newer.
 - **Toolchain**: zed `v1.24.3` for `gpui`, rquickjs `0.14.0`.
 - **QuickJS test run**: `vitest-pool-quickjs` `^0.2.2`.

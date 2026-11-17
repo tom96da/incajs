@@ -2754,7 +2754,7 @@ checksum = "6e44b0a4eaa4c82f441d50a963f2d5f05a787240aeee097597033e72accfd22f"
 
 [[package]]
 name = "inca-bridge"
-version = "0.0.33"
+version = "0.0.34"
 dependencies = [
  "async-channel",
  "env_logger",
@@ -2772,7 +2772,7 @@ dependencies = [
 
 [[package]]
 name = "inca-gpui"
-version = "0.0.33"
+version = "0.0.34"
 dependencies = [
  "env_logger",
  "gpui",
@@ -2785,7 +2785,7 @@ dependencies = [
 
 [[package]]
 name = "inca-host"
-version = "0.0.33"
+version = "0.0.34"
 dependencies = [
  "async-channel",
  "env_logger",
@@ -2806,7 +2806,7 @@ dependencies = [
 
 [[package]]
 name = "inca-jsenv"
-version = "0.0.33"
+version = "0.0.34"
 dependencies = [
  "base64",
  "encoding_rs",
@@ -2824,7 +2824,7 @@ dependencies = [
 
 [[package]]
 name = "inca-node"
-version = "0.0.33"
+version = "0.0.34"
 dependencies = [
  "cssparser",
  "html5ever",
@@ -2836,7 +2836,7 @@ dependencies = [
 
 [[package]]
 name = "inca-test-macros"
-version = "0.0.33"
+version = "0.0.34"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2845,7 +2845,7 @@ dependencies = [
 
 [[package]]
 name = "inca-tests"
-version = "0.0.33"
+version = "0.0.34"
 dependencies = [
  "gpui",
  "inca-bridge",
