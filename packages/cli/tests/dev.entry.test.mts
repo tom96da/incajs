@@ -8,7 +8,6 @@ import { Writable } from "node:stream";
 
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { dev } from "../src/dev.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
 import {
   waitFor,
@@ -17,6 +16,7 @@ import {
   FAKE_OUTPUT,
   makeFakeBundler,
   makeSink,
+  devWithoutHmr,
 } from "./support/dev.mts";
 import { fsLag } from "./support/fsLag.mts";
 import { watches } from "./support/watches.mts";
@@ -61,7 +61,7 @@ describe("dev entry selection", () => {
     const controller = new AbortController();
     const hostLog = await useHostLog(cwd);
     onTestFinished(() => controller.abort());
-    const running = dev({
+    const running = devWithoutHmr({
       cwd,
       bundler,
       hostBin: logMockHost,

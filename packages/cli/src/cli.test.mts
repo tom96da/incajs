@@ -349,43 +349,49 @@ describe("run", () => {
     expect(written(stderr)).not.toContain("ignores");
   });
 
-  it("leaves experimentalHmr off and stays silent about it by default", async () => {
+  it("passes no hmr and stays silent about it by default", async () => {
     mockedDev.mockResolvedValueOnce(undefined);
 
     await run(["node", "inca", "dev"]);
 
-    expect(mockedDev.mock.calls[0]?.[0].experimentalHmr).toBe(false);
+    expect(mockedDev.mock.calls[0]?.[0].hmr).toBeUndefined();
     expect(written(stdout)).not.toContain("HMR");
   });
 
-  it("turns experimentalHmr on with --experimental-hmr and announces it", async () => {
+  it("passes hmr true with --experimental-hmr and announces it", async () => {
     mockedDev.mockResolvedValueOnce(undefined);
 
     await run(["node", "inca", "dev", "--experimental-hmr"]);
 
-    expect(mockedDev.mock.calls[0]?.[0].experimentalHmr).toBe(true);
+    expect(mockedDev.mock.calls[0]?.[0].hmr).toBe(true);
     // The clock follows the runner's locale, so only the shape is asserted.
     expect(written(stdout)).toMatch(/^\d.* \[inca\] experimental HMR active\n/);
   });
 
-  it("turns experimentalHmr on with INCA_EXPERIMENTAL_HMR too", async () => {
+  it("passes hmr false with --no-experimental-hmr", async () => {
+    mockedDev.mockResolvedValueOnce(undefined);
+
+    await run(["node", "inca", "dev", "--no-experimental-hmr"]);
+
+    expect(mockedDev.mock.calls[0]?.[0].hmr).toBe(false);
+    expect(written(stdout)).not.toContain("HMR");
+  });
+
+  it("passes hmr true with INCA_EXPERIMENTAL_HMR too", async () => {
     mockedDev.mockResolvedValueOnce(undefined);
     vi.stubEnv("INCA_EXPERIMENTAL_HMR", "1");
 
     await run(["node", "inca", "dev"]);
 
-    expect(mockedDev.mock.calls[0]?.[0].experimentalHmr).toBe(true);
+    expect(mockedDev.mock.calls[0]?.[0].hmr).toBe(true);
   });
 
-  it.each(["0", "false"])(
-    "leaves experimentalHmr off when INCA_EXPERIMENTAL_HMR=%s",
-    async (value) => {
-      mockedDev.mockResolvedValueOnce(undefined);
-      vi.stubEnv("INCA_EXPERIMENTAL_HMR", value);
+  it.each(["0", "false"])("passes hmr false when INCA_EXPERIMENTAL_HMR=%s", async (value) => {
+    mockedDev.mockResolvedValueOnce(undefined);
+    vi.stubEnv("INCA_EXPERIMENTAL_HMR", value);
 
-      await run(["node", "inca", "dev"]);
+    await run(["node", "inca", "dev"]);
 
-      expect(mockedDev.mock.calls[0]?.[0].experimentalHmr).toBe(false);
-    },
-  );
+    expect(mockedDev.mock.calls[0]?.[0].hmr).toBe(false);
+  });
 });

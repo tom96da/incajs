@@ -42,11 +42,11 @@ export interface DevOptions {
   /** Overrides the frontend. Defaults to {@link defaultFrontend}. */
   frontend?: Frontend;
   /**
-   * Delivers module-granular updates instead of a full reload on every
-   * change, over `bundler.hmr`. A bundler without `hmr` reloads the whole
-   * app on every change and prints one warning. See `--experimental-hmr`.
+   * Overrides `dev.hmr`. `true` delivers module-granular updates over `bundler.hmr`; `false`
+   * reloads the whole app on every change. A bundler without `hmr` reloads the whole app on every
+   * change and prints one warning.
    */
-  experimentalHmr?: boolean;
+  hmr?: boolean;
   /**
    * Overrides host binary resolution. On macOS this is the binary the
    * app bundle wraps; elsewhere it is launched directly.
@@ -177,7 +177,7 @@ interface Session {
 
 /**
  * Builds the app, starts the host once the first build lands (at once under
- * `experimentalHmr`), and reloads it on every rebuild until `options.signal`
+ * HMR), and reloads it on every rebuild until `options.signal`
  * aborts or the host exits on its own.
  *
  * A config or entry that can't be used before the first build is printed as
@@ -223,7 +223,6 @@ export async function dev(options: DevOptions): Promise<void> {
     const bundler: Bundler = options.bundler ?? defaultBundler;
     const frontend: Frontend = options.frontend ?? defaultFrontend;
 
-    const hmr = options.experimentalHmr ? bundler.hmr?.bind(bundler) : undefined;
     const resolved = await retryOnEdit({
       cwd,
       signal: options.signal,
@@ -242,12 +241,14 @@ export async function dev(options: DevOptions): Promise<void> {
           ? runtimeConfigOf(metadata, { dev: true })
           : await resolveRuntimeConfig(cwd, { dev: true });
         if (stopping) return undefined;
-        return { entry, automaticEntry, metadata, runtimeConfig };
+        return { entry, automaticEntry, metadata, runtimeConfig, wantsHmr: config.dev.hmr };
       },
     });
     if (!resolved) return;
-    const { entry, automaticEntry, metadata, runtimeConfig } = resolved;
-    if (options.experimentalHmr && !hmr) {
+    const { entry, automaticEntry, metadata, runtimeConfig, wantsHmr } = resolved;
+    const wanted = options.hmr ?? wantsHmr;
+    const hmr = wanted ? bundler.hmr?.bind(bundler) : undefined;
+    if (wanted && !hmr) {
       warn(stderr, "the bundler has no HMR support. every edit reloads the whole app", STAMPED);
     }
     const devDir = devDirOf(cwd);

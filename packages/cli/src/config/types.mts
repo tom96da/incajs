@@ -55,6 +55,12 @@ export interface DevConfig {
    * @default "relative"
    */
   stackPaths?: "relative" | "absolute";
+  /**
+   * Whether `inca dev` applies an edit by replacing the module that changed. `false` reloads the
+   * whole app on every edit.
+   * @default true
+   */
+  hmr?: boolean;
 }
 
 /** What an app declares about its window. See {@link IncaConfig.window}. */

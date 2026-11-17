@@ -34,7 +34,7 @@ const CONFIG_LOOKUP = {
 /** The script extensions c12 imports for `inca.config`. */
 const CONFIG_EXTENSIONS = [".js", ".ts", ".mjs", ".cjs", ".mts", ".cts"];
 
-/** `entry`/`outDir` only: what `build()`/`dev()` need, with no `package.json` requirement. */
+/** `entry`/`outDir` only: what `build()` needs, with no `package.json` requirement. */
 export interface ResolvedBuildConfig {
   /** Absolute path, if `inca.config.ts` set one. */
   entry?: string;
@@ -44,8 +44,14 @@ export interface ResolvedBuildConfig {
   sourcemap: boolean;
 }
 
+/** What `dev()` needs: {@link ResolvedBuildConfig} and the `dev.hmr` setting. */
+export interface ResolvedDevConfig extends ResolvedBuildConfig {
+  /** What only `inca dev` applies. */
+  dev: Pick<Required<DevConfig>, "hmr">;
+}
+
 /** An app's full config, as `inca package` needs it. */
-export interface ResolvedAppConfig extends ResolvedBuildConfig {
+export interface ResolvedAppConfig extends ResolvedDevConfig {
   productName: string;
   identifier: string;
   /** True when `identifier` was generated rather than set explicitly. */
@@ -71,7 +77,7 @@ export interface RuntimeConfig {
   identifier?: string;
   window?: WindowConfig;
   /** What only `inca dev` writes. */
-  dev?: DevConfig;
+  dev?: Pick<DevConfig, "stackPaths">;
   /** The app's root, relative to the directory of the `inca.json` it is written to. */
   root?: string;
 }
@@ -215,6 +221,37 @@ function withoutJitiHint(error: unknown): unknown {
   return new Error(error.message.replace(JITI_HINT, ""), { cause: error.cause });
 }
 
+/**
+ * Formats a config value for a message.
+ *
+ * @param value - the value to show
+ * @returns its JSON text, or `String(value)` when JSON has none
+ */
+function display(value: unknown): string {
+  return JSON.stringify(value) ?? String(value);
+}
+
+/**
+ * Refuses a `dev` that is not an object and a `dev.hmr` that is not a boolean.
+ *
+ * @param config - the merged config
+ * @throws `ERR_INCA_CONFIG_INVALID` for either
+ */
+function assertDev({ dev }: IncaConfig): void {
+  if (dev === undefined) return;
+  const invalid = (setting: string, value: unknown, must: string): IncaError =>
+    new IncaError(
+      "ERR_INCA_CONFIG_INVALID",
+      `${setting} in inca.config.ts is ${display(value)}. it must be ${must}`,
+    );
+  if (typeof dev !== "object" || Array.isArray(dev)) {
+    throw invalid("dev", dev, "an object");
+  }
+  if (dev.hmr !== undefined && typeof dev.hmr !== "boolean") {
+    throw invalid("dev.hmr", dev.hmr, "true or false");
+  }
+}
+
 /** Loads `inca.config.ts`, and reports whether `package.json`'s `"inca"` key supplied anything. */
 async function loadIncaConfig(
   cwd: string,
@@ -230,18 +267,20 @@ async function loadIncaConfig(
     throw withoutJitiHint(error);
   }
   const { config, layers } = loaded;
+  assertDev(config);
   const pkgJsonLayer = layers?.find((layer) => layer.configFile === "package.json");
   return { config, usedPackageJsonKey: Object.keys(pkgJsonLayer?.config ?? {}).length > 0 };
 }
 
 /**
- * Loads just `entry`/`outDir` from `inca.config.ts`, with derived defaults.
- * Never touches `package.json`.
+ * Loads just `entry`, `outDir`, `sourcemap` and `dev.hmr` from `inca.config.ts`, with derived
+ * defaults. Never touches `package.json`.
  *
  * @param cwd - the app's root directory
- * @returns `entry`/`outDir`, resolved to absolute paths
+ * @returns those settings, with the paths resolved to absolute paths
+ * @throws `ERR_INCA_CONFIG_INVALID` if `dev` is not an object or `dev.hmr` is not a boolean
  */
-export async function resolveBuildConfig(cwd: string): Promise<ResolvedBuildConfig> {
+export async function resolveBuildConfig(cwd: string): Promise<ResolvedDevConfig> {
   const { config } = await loadIncaConfig(cwd);
 
   const entry = config.entry ? path.resolve(cwd, config.entry) : undefined;
@@ -249,7 +288,13 @@ export async function resolveBuildConfig(cwd: string): Promise<ResolvedBuildConf
     entry,
     outDir: resolveOutDir(cwd, config.outDir, entry),
     sourcemap: config.sourcemap ?? defaultConfig.sourcemap,
+    dev: { hmr: hmrOf(config) },
   };
+}
+
+/** The `dev.hmr` setting of `config`, resolved. */
+function hmrOf(config: IncaConfig): Required<DevConfig>["hmr"] {
+  return config.dev?.hmr ?? defaultConfig.dev.hmr;
 }
 
 /** The `dev.stackPaths` setting of `config`, resolved. */
@@ -313,7 +358,7 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
     version,
     icon,
     window: config.window,
-    dev: { stackPaths: stackPathsOf(config) },
+    dev: { stackPaths: stackPathsOf(config), hmr: hmrOf(config) },
     entry,
     outDir,
     sourcemap: config.sourcemap ?? defaultConfig.sourcemap,

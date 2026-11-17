@@ -158,3 +158,11 @@ line of every frame below it by one.
 How an error's stack names a source file. `"relative"` gives the path from
 the app's root, `"absolute"` the full path. Only `inca dev` applies it. Built
 and packaged apps always use `"relative"`.
+
+### dev.hmr <Badge type="warning" text="unreleased"/>
+
+- Type: `boolean`
+- Default: `true`
+
+Whether `inca dev` replaces the module you edited. `false` reloads the whole app. See
+[Hot Module Replacement](../guide/hmr). Only `inca dev` applies it.

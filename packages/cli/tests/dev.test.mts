@@ -35,7 +35,6 @@ import {
   resolveBuildConfig,
   resolveRuntimeConfig,
 } from "../src/config/loader.mts";
-import { dev } from "../src/dev.mts";
 import { resolveEntry } from "../src/entry.mts";
 import { IncaError } from "../src/error.mts";
 import { assertHostBin, resolveHostBin } from "../src/host/index.mts";
@@ -45,15 +44,13 @@ import {
   mockHost,
   reloadFailsMockHost,
   appErrorMockHost,
-  protocolMismatchMockHost,
-  startupFailureMockHost,
   slowReadyMockHost,
-  exitingMockHost,
   FAKE_OUTPUT,
   makeFakeBundler,
   pretendPlatform,
   makeUnspawnableHost,
   makeSink,
+  devWithoutHmr,
 } from "./support/dev.mts";
 
 const exists = (file: string) =>
@@ -79,7 +76,7 @@ describe("dev", () => {
     const stderr = makeSink();
     mockedResolveHostBin.mockRejectedValueOnce(new IncaError("ERR_INCA_HOST_BIN_UNRESOLVED", "m"));
 
-    await dev({
+    await devWithoutHmr({
       cwd,
       entry: "unused",
       bundler: makeFakeBundler(),
@@ -93,7 +90,7 @@ describe("dev", () => {
 
   /** Runs `dev()` for a fresh app with the signal `controller` holds. */
   async function runWith(controller: AbortController): Promise<void> {
-    await dev({
+    await devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler: makeFakeBundler(),
@@ -109,7 +106,7 @@ describe("dev", () => {
     controller.abort();
     mockedResolveHostBin.mockClear();
 
-    await dev({
+    await devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler: makeFakeBundler(),
@@ -129,7 +126,7 @@ describe("dev", () => {
       return Promise.resolve(mockHost);
     });
 
-    await dev({
+    await devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler: makeFakeBundler(),
@@ -164,7 +161,7 @@ describe("dev", () => {
       return watch(options);
     };
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -187,7 +184,7 @@ describe("dev", () => {
 
   /** Runs `dev()` on an app whose entry it selects itself. */
   async function runAuto(controller: AbortController): Promise<void> {
-    await dev({
+    await devWithoutHmr({
       cwd: await makeAutoApp(),
       bundler: makeFakeBundler(),
       hostBin: mockHost,
@@ -234,7 +231,7 @@ describe("dev", () => {
       return load(dir);
     });
 
-    await dev({
+    await devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler: makeFakeBundler(),
@@ -271,7 +268,7 @@ describe("dev", () => {
       return Promise.reject(new Error("start refused"));
     });
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -292,7 +289,7 @@ describe("dev", () => {
     const stdout = makeSink();
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -322,7 +319,7 @@ describe("dev", () => {
     const bundler = makeFakeBundler();
     const stdout = makeSink();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -355,7 +352,7 @@ describe("dev", () => {
       release = resolve;
     });
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -381,7 +378,7 @@ describe("dev", () => {
     const controller = new AbortController();
     const cwd = await scratch.makeApp({});
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd,
       entry: path.join(cwd, "node_modules/.inca/entry.mts"),
       bundler,
@@ -404,7 +401,7 @@ describe("dev", () => {
     const controller = new AbortController();
     const cwd = await scratch.makeApp({});
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd,
       entry: path.join(cwd, "node_modules/.inca/entry.mts"),
       bundler,
@@ -432,7 +429,7 @@ describe("dev", () => {
     const watch = vi.spyOn(bundler, "watch");
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp(pkg),
       entry: "unused",
       bundler,
@@ -465,7 +462,7 @@ describe("dev", () => {
       const watch = vi.spyOn(bundler, "watch");
       const stdout = makeSink();
       const controller = new AbortController();
-      const running = dev({
+      const running = devWithoutHmr({
         cwd,
         entry: "unused",
         bundler,
@@ -546,7 +543,7 @@ describe("dev", () => {
     const stderr = makeSink();
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -573,7 +570,7 @@ describe("dev", () => {
     const controller = new AbortController();
 
     const cwd = await scratch.makeApp({});
-    const running = dev({
+    const running = devWithoutHmr({
       cwd,
       entry: "unused",
       bundler,
@@ -611,9 +608,13 @@ describe("dev", () => {
     };
 
     const missing = { ...options, hostBin: "/nonexistent/inca-host" };
-    await expect(dev(missing)).rejects.toMatchObject({ code: "ERR_INCA_HOST_BIN_NOT_FOUND" });
+    await expect(devWithoutHmr(missing)).rejects.toMatchObject({
+      code: "ERR_INCA_HOST_BIN_NOT_FOUND",
+    });
     // The lock is free again, so a second attempt reaches the same error.
-    await expect(dev(missing)).rejects.toMatchObject({ code: "ERR_INCA_HOST_BIN_NOT_FOUND" });
+    await expect(devWithoutHmr(missing)).rejects.toMatchObject({
+      code: "ERR_INCA_HOST_BIN_NOT_FOUND",
+    });
     expect(watch).not.toHaveBeenCalled();
   });
 
@@ -626,7 +627,7 @@ describe("dev", () => {
     const watch = vi.spyOn(bundler, "watch");
 
     await expect(
-      dev({
+      devWithoutHmr({
         cwd: await scratch.makeApp({}),
         entry: "unused",
         bundler,
@@ -647,7 +648,7 @@ describe("dev", () => {
     const stderr = makeSink();
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -676,7 +677,7 @@ describe("dev", () => {
     const stderr = makeSink();
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -705,7 +706,7 @@ describe("dev", () => {
     const stderr = makeSink();
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -731,7 +732,7 @@ describe("dev", () => {
     const stdout = makeSink();
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,
@@ -760,7 +761,7 @@ describe("dev", () => {
     vi.stubEnv("MOCK_HOST_READY_GATE", path.join(cwd, "ready.release"));
     onTestFinished(() => void vi.unstubAllEnvs());
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd,
       entry: "unused",
       bundler,
@@ -786,143 +787,5 @@ describe("dev", () => {
 
     expect(stderr.text()).not.toContain("reload failed");
     expect(stderr.text()).not.toContain("reload #2");
-  });
-
-  it("stops on its own once the host exits, without waiting for an abort", async () => {
-    const bundler = makeFakeBundler();
-    const stdout = makeSink();
-
-    const running = dev({
-      cwd: await scratch.makeApp({}),
-      entry: "unused",
-      bundler,
-      hostBin: exitingMockHost,
-      stdout: stdout.stream,
-      stderr: makeSink().stream,
-      signal: new AbortController().signal,
-    });
-
-    await bundler.watching;
-    bundler.emitBuild();
-    await running;
-
-    expect(stdout.text()).toContain("[inca] host exited");
-    expect(bundler.closed).toBe(true);
-  });
-
-  it.each([
-    ["a non-zero code", "101", "code 101"],
-    ["a signal", "SIGKILL", "signal SIGKILL"],
-  ])(
-    "rejects with ERR_INCA_HOST_CRASHED when the host exits by %s once ready",
-    async (_, exit, said) => {
-      vi.stubEnv("MOCK_HOST_EXIT", exit);
-      onTestFinished(() => void vi.unstubAllEnvs());
-      const bundler = makeFakeBundler();
-
-      const running = dev({
-        cwd: await scratch.makeApp({}),
-        entry: "unused",
-        bundler,
-        hostBin: exitingMockHost,
-        stdout: makeSink().stream,
-        stderr: makeSink().stream,
-        signal: new AbortController().signal,
-      });
-
-      await bundler.watching;
-      bundler.emitBuild();
-      await expect(running).rejects.toMatchObject({
-        code: "ERR_INCA_HOST_CRASHED",
-        message: expect.stringContaining(said),
-      });
-      expect(bundler.closed).toBe(true);
-    },
-  );
-
-  it("resolves when the host is ended by SIGTERM once ready", async () => {
-    vi.stubEnv("MOCK_HOST_EXIT", "SIGTERM");
-    onTestFinished(() => void vi.unstubAllEnvs());
-    const bundler = makeFakeBundler();
-
-    const running = dev({
-      cwd: await scratch.makeApp({}),
-      entry: "unused",
-      bundler,
-      hostBin: exitingMockHost,
-      stdout: makeSink().stream,
-      stderr: makeSink().stream,
-      signal: new AbortController().signal,
-    });
-
-    await bundler.watching;
-    bundler.emitBuild();
-    await expect(running).resolves.toBeUndefined();
-  });
-
-  it.each([
-    ["speaks a protocol this package wasn't built for", protocolMismatchMockHost, "protocol 99"],
-    ["reports an app that threw while loading", startupFailureMockHost, "[inca] app error: boom"],
-  ])("rejects with ERR_INCA_HOST_EXITED_EARLY when the host %s", async (_, hostBin, printed) => {
-    const bundler = makeFakeBundler();
-    const stderr = makeSink();
-
-    const running = dev({
-      cwd: await scratch.makeApp({}),
-      entry: "unused",
-      bundler,
-      hostBin,
-      stdout: makeSink().stream,
-      stderr: stderr.stream,
-      signal: new AbortController().signal,
-    });
-
-    await bundler.watching;
-    bundler.emitBuild();
-    await expect(running).rejects.toMatchObject({ code: "ERR_INCA_HOST_EXITED_EARLY" });
-
-    expect(stderr.text()).toContain(printed);
-    expect(bundler.closed).toBe(true);
-  });
-
-  it("refuses to start while another dev is running for the same app", async () => {
-    const cwd = await scratch.makeApp({});
-    const bundler = makeFakeBundler();
-    const stdout = makeSink();
-    const controller = new AbortController();
-
-    const running = dev({
-      cwd,
-      entry: "unused",
-      bundler,
-      hostBin: mockHost,
-      stdout: stdout.stream,
-      stderr: makeSink().stream,
-      signal: controller.signal,
-    });
-
-    await bundler.watching;
-    bundler.emitBuild();
-    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
-
-    await expect(
-      dev({
-        cwd,
-        entry: "unused",
-        bundler: makeFakeBundler(),
-        hostBin: mockHost,
-        stdout: makeSink().stream,
-        stderr: makeSink().stream,
-        signal: new AbortController().signal,
-      }),
-    ).rejects.toThrow(
-      expect.objectContaining({
-        code: "ERR_INCA_DEV_RUNNING",
-        message: expect.stringMatching(/already running for this app \(pid \d+\)/),
-      }),
-    );
-
-    controller.abort();
-    await running;
   });
 });

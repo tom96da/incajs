@@ -3,9 +3,8 @@
 
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { dev } from "../src/dev.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
-import { waitFor, envMockHost, makeFakeBundler, makeSink } from "./support/dev.mts";
+import { waitFor, envMockHost, makeFakeBundler, makeSink, devWithoutHmr } from "./support/dev.mts";
 
 describe("the host's color environment", () => {
   const scratch = scratchConfigApp("dev-color");
@@ -18,7 +17,7 @@ describe("the host's color environment", () => {
     const stdout = makeSink();
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd: await scratch.makeApp({}),
       entry: "unused",
       bundler,

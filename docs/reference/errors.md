@@ -85,7 +85,7 @@ write. Set it to a directory the build owns, such as `"dist"`.
 
 ## `ERR_INCA_CONFIG_INVALID`
 
-The host cannot use the value of one setting in the app's config. The
+The CLI or the host cannot use the value of one setting in the app's config. The
 message names the setting, its value and the kind of value it must be:
 
 ```

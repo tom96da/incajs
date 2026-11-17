@@ -145,7 +145,7 @@ export interface Bundler {
   /** One-shot production build, used by `inca build`. Rejects on failure. */
   build(options: BuildOptions): Promise<BuildOutput>;
   /**
-   * Module-granular dev updates, used by `inca dev --experimental-hmr`.
+   * Module-granular dev updates, used by `inca dev` unless `dev.hmr` is false.
    * Optional: omit it when the adapter has no HMR support.
    */
   hmr?(options: HmrOptions): Promise<HmrChannel>;

@@ -18,10 +18,11 @@ import {
   useHostLog,
   makeUnspawnableHost,
   makeSink,
+  makeFakeBundler,
   makeFakeHmrBundler,
 } from "./support/dev.mts";
 
-describe("dev with --experimental-hmr", () => {
+describe("dev with HMR", () => {
   const scratch = scratchConfigApp("dev-hmr");
   beforeAll(scratch.setUp);
   afterAll(scratch.tearDown);
@@ -36,7 +37,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: hmrMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: makeSink().stream,
       signal: controller.signal,
@@ -48,6 +48,84 @@ describe("dev with --experimental-hmr", () => {
     await waitFor(() =>
       expect(bundler.dispatched).toEqual([{ type: "custom", event: "greet", data: { hi: 1 } }]),
     );
+
+    controller.abort();
+    await running;
+  });
+
+  it("opens the HMR channel when nothing sets the mode", async () => {
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stdout = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd: await scratch.makeApp({}),
+      entry: "unused",
+      bundler,
+      hostBin: hmrMockHost,
+      stdout: stdout.stream,
+      stderr: makeSink().stream,
+      signal: controller.signal,
+    });
+
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    expect(bundler.channels).toHaveLength(1);
+
+    controller.abort();
+    await running;
+  });
+
+  it("opens no channel when the app sets dev.hmr to false", async () => {
+    const hmrBundler = makeFakeHmrBundler("/unused/entry.js");
+    const watcher = makeFakeBundler();
+    const bundler = { ...hmrBundler, watch: watcher.watch.bind(watcher) };
+    const stderr = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd: await scratch.makeApp({ name: "no-hmr", inca: { dev: { hmr: false } } }),
+      entry: "unused",
+      bundler,
+      hostBin: hmrMockHost,
+      stdout: makeSink().stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    await watcher.watching;
+    controller.abort();
+    await running;
+
+    expect(hmrBundler.channels).toHaveLength(0);
+    expect(stderr.text()).not.toContain("no HMR support");
+  });
+
+  it("retries with the fixed dev.hmr after an edit of the config", async () => {
+    const cwd = await scratch.makeApp({});
+    const config = path.join(cwd, "inca.config.ts");
+    await writeFile(config, 'export default { dev: { hmr: "no" } };\n');
+    const bundler = makeFakeHmrBundler("/unused/entry.js");
+    const stdout = makeSink();
+    const stderr = makeSink();
+    const controller = new AbortController();
+
+    const running = dev({
+      cwd,
+      entry: "unused",
+      bundler,
+      hostBin: hmrMockHost,
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      signal: controller.signal,
+    });
+
+    await waitFor(() => expect(stdout.text()).toContain("waiting for a change to retry"));
+    expect(stderr.text()).toContain("[inca] build failed (ERR_INCA_CONFIG_INVALID)");
+    expect(bundler.channels).toHaveLength(0);
+
+    await writeFile(config, "export default {};\n");
+    await waitFor(() => expect(stdout.text()).toContain("[inca] ready"));
+    expect(bundler.channels).toHaveLength(1);
 
     controller.abort();
     await running;
@@ -69,7 +147,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: logMockHost,
-      experimentalHmr: true,
       stdout: makeSink().stream,
       stderr: makeSink().stream,
       signal: controller.signal,
@@ -88,7 +165,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: hmrMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: makeSink().stream,
       signal: controller.signal,
@@ -114,7 +190,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -143,7 +218,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -172,7 +246,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: reloadFailsMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -200,7 +273,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -228,7 +300,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: mockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -258,7 +329,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: makeSink().stream,
       signal: controller.signal,
@@ -291,7 +361,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -322,7 +391,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -354,7 +422,6 @@ describe("dev with --experimental-hmr", () => {
       entry: "unused",
       bundler,
       hostBin,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -380,7 +447,6 @@ describe("dev with --experimental-hmr", () => {
       entry: path.join(cwd, "node_modules/.inca/entry.mts"),
       bundler,
       hostBin: hmrMockHost,
-      experimentalHmr: true,
       stdout: makeSink().stream,
       stderr: makeSink().stream,
       signal: controller.signal,
@@ -404,7 +470,6 @@ describe("dev with --experimental-hmr", () => {
       entry: path.join(cwd, "node_modules/.inca/entry.mts"),
       bundler,
       hostBin: hmrMockHost,
-      experimentalHmr: true,
       stdout: makeSink().stream,
       stderr: makeSink().stream,
       signal: controller.signal,
@@ -451,7 +516,6 @@ describe("dev with --experimental-hmr", () => {
       cwd,
       bundler,
       hostBin,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -511,7 +575,6 @@ describe("dev with --experimental-hmr", () => {
       cwd,
       bundler,
       hostBin: slowReadyMockHost,
-      experimentalHmr: true,
       stdout: stdout.stream,
       stderr: stderr.stream,
       signal: controller.signal,
@@ -645,7 +708,6 @@ describe("dev with --experimental-hmr", () => {
       cwd,
       bundler,
       hostBin: slowReadyMockHost,
-      experimentalHmr: true,
       stdout: makeSink().stream,
       stderr: stderr.stream,
       signal: controller.signal,

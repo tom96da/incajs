@@ -13,9 +13,9 @@ describe("defineConfig", () => {
 });
 
 describe("defaultConfig", () => {
-  it("defaults to dist, no source map, version 0.0.0 and relative stack paths", () => {
+  it("defaults to dist, no source map, version 0.0.0, relative stack paths and HMR on", () => {
     expect(defaultConfig).toEqual({
-      dev: { stackPaths: "relative" },
+      dev: { stackPaths: "relative", hmr: true },
       outDir: "dist",
       sourcemap: false,
       version: "0.0.0",
