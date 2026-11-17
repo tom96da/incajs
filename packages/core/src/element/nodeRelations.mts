@@ -8,12 +8,11 @@ import { compareNodePosition, isEqualNode, rootOf } from "../ffi/index.mts";
 import { nodeArgument, requireArguments } from "./arguments.mts";
 import { isDestroyed, NODE_RULE, receiverNode } from "./lifecycle.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { NodeMembers } from "./nodeTypes.mts";
-import type { IncaNode } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
 
 /** The members {@link nodeRelationMembers} builds. */
 export type NodeRelationMembers = Pick<
-  NodeMembers,
+  Node,
   "contains" | "getRootNode" | "compareDocumentPosition" | "isSameNode" | "isEqualNode"
 >;
 
@@ -31,7 +30,7 @@ const FOLLOWING = 4;
  * @returns the members
  */
 export function nodeRelationMembers(builders: HandleBuilders): NodeRelationMembers {
-  const nullable = (value: unknown): IncaNode | null =>
+  const nullable = (value: unknown): Node | null =>
     value === null || value === undefined ? null : nodeArgument(value, 1);
   return {
     contains(other: unknown) {
@@ -46,7 +45,7 @@ export function nodeRelationMembers(builders: HandleBuilders): NodeRelationMembe
       const node = receiverNode(this, NODE_RULE);
       return isDestroyed(node) ? node : (builders.node(rootOf(node.__node_id)) ?? node);
     },
-    compareDocumentPosition(other: IncaNode) {
+    compareDocumentPosition(other: Node) {
       const node = receiverNode(this, NODE_RULE);
       requireArguments(arguments, 1, "compareDocumentPosition");
       const found = nodeArgument(other, 1);

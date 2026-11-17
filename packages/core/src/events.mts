@@ -5,7 +5,7 @@ import { addCallback, callbackIdFor, groupOf, releaseCallback } from "./callback
 import { addListener, removeListener } from "./ffi/index.mts";
 import { signalTargetOf } from "./signalTarget.mts";
 import type { EventTargetId, HostCallback, SignalTarget } from "./ffi/index.mts";
-import type { EventListenerOrObject, ListenerOptions } from "./types.mts";
+import type { EventListenerOrEventListenerObject, AddEventListenerOptions } from "./types.mts";
 
 let latestId = 0;
 
@@ -34,7 +34,7 @@ function tracking(listener: HostCallback): HostCallback {
  * A `null` listener is ignored.
  *
  * Any event name is accepted, and it fires when the host dispatches that name.
- * `IncaEventMap` gives the event type of each name the host dispatches.
+ * `GlobalEventHandlersEventMap` gives the event type of each name the host dispatches.
  * @param target - the event target (a node id, the window target or a signal object)
  * @param event - the event name (e.g. `"click"`)
  * @param listener - a function, called with the event's `currentTarget` as
@@ -52,8 +52,8 @@ function tracking(listener: HostCallback): HostCallback {
 export function addEventListener(
   target: EventTargetId,
   event: string,
-  listener: EventListenerOrObject<never, never> | null,
-  options: ListenerOptions = {},
+  listener: EventListenerOrEventListenerObject<never, never> | null,
+  options: AddEventListenerOptions = {},
 ): void {
   const signal = options.signal;
   if (signal !== undefined && signalTargetOf(signal) === undefined) {
@@ -93,7 +93,7 @@ export function addEventListener(
 function onceOf(
   target: EventTargetId,
   event: string,
-  listener: EventListenerOrObject<never, never>,
+  listener: EventListenerOrEventListenerObject<never, never>,
   capture: boolean | undefined,
   call: HostCallback,
 ): HostCallback {
@@ -116,8 +116,8 @@ function onceOf(
 export function removeEventListener(
   target: EventTargetId,
   event: string,
-  listener: EventListenerOrObject<never, never> | null,
-  options: Pick<ListenerOptions, "capture"> = {},
+  listener: EventListenerOrEventListenerObject<never, never> | null,
+  options: Pick<AddEventListenerOptions, "capture"> = {},
 ): void {
   if (listener === null || listener === undefined) return;
   const callbackId = callbackIdFor(groupOf(target, event, options.capture), listener);

@@ -4,7 +4,7 @@
 import { scrollIntoViewNode, scrollNode, scrollOf } from "../ffi/index.mts";
 import { isRemoved, ELEMENT_RULE, receiverNode } from "./lifecycle.mts";
 import type { ScrollAlignment } from "../types.mts";
-import type { IncaElement } from "./types.mts";
+import type { Element } from "./types.mts";
 
 /** The options form of `scrollTo()` and `scrollBy()`. `behavior` is accepted and ignored. */
 export interface ScrollOptions {
@@ -26,7 +26,7 @@ export type ScrollArgs = [left?: number, top?: number] | [options?: ScrollOption
  * @param args - `(left, top)` or `{ left, top }`
  * @param relative - `true` adds the values to the current offset
  */
-export function scrollPosition(el: IncaElement, args: ScrollArgs, relative: boolean): void {
+export function scrollPosition(el: Element, args: ScrollArgs, relative: boolean): void {
   if (isRemoved(el)) return;
 
   const [first, second] = args;
@@ -75,7 +75,7 @@ export function scrollIntoViewArgs(arg?: boolean | ScrollIntoViewOptions): {
 
 /** The members {@link scrollMembers} builds. */
 export type ScrollMembers = Pick<
-  IncaElement,
+  Element,
   | "scrollLeft"
   | "scrollTop"
   | "scrollWidth"
@@ -90,9 +90,8 @@ export type ScrollMembers = Pick<
  * @returns the members
  */
 export function scrollMembers(): ScrollMembers {
-  const elementOf = (self: unknown): IncaElement => receiverNode<IncaElement>(self, ELEMENT_RULE);
-  const scroll = (element: IncaElement) =>
-    isRemoved(element) ? null : scrollOf(element.__node_id);
+  const elementOf = (self: unknown): Element => receiverNode<Element>(self, ELEMENT_RULE);
+  const scroll = (element: Element) => (isRemoved(element) ? null : scrollOf(element.__node_id));
   return {
     get scrollLeft() {
       return scroll(elementOf(this))?.[0] ?? 0;

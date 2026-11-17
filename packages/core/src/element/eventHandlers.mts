@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { isRemoved } from "./lifecycle.mts";
-import type { IncaEventMap, IncaEventTarget } from "../types.mts";
+import type { GlobalEventHandlersEventMap, EventTarget } from "../types.mts";
 import type { NodeState } from "./lifecycle.mts";
-import type { IncaNode } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
 
 /** Every event name but the ones that have no handler property. */
 type HandlerEvent = Exclude<
-  keyof IncaEventMap,
+  keyof GlobalEventHandlersEventMap,
   "focusin" | "focusout" | "compositionstart" | "compositionupdate" | "compositionend"
 >;
 
@@ -100,9 +100,9 @@ export function handlerMembers(receive: (self: unknown) => NodeState): object {
       set(value: unknown) {
         const state = receive(this);
         const slot = slotOf(state);
-        if (state.kind === "element" && isRemoved(this as IncaNode)) return;
+        if (state.kind === "element" && isRemoved(this as Node)) return;
         slot.held = isHandlerValue(value) ? value : null;
-        const target = this as IncaEventTarget;
+        const target = this as EventTarget;
         if (slot.held === null) target.removeEventListener(event, slot.listener);
         else target.addEventListener(event, slot.listener);
       },

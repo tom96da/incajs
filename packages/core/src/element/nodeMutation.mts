@@ -8,13 +8,13 @@ import { appendChild, insertBefore, removeChild, replaceChild } from "../ffi/ind
 import { nodeArgument, requireArguments } from "./arguments.mts";
 import { cloneNode } from "./clone.mts";
 import { entered, isDestroyed, left, NODE_RULE, receiverNode } from "./lifecycle.mts";
+import type { HandleNode } from "./handleNode.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { NodeMembers } from "./nodeTypes.mts";
-import type { IncaNode } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
 
 /** The members {@link nodeMutationMembers} builds. */
 export type NodeMutationMembers = Pick<
-  NodeMembers,
+  Node,
   "appendChild" | "insertBefore" | "removeChild" | "replaceChild" | "cloneNode"
 >;
 
@@ -35,13 +35,13 @@ export function notFound(): Error {
  * @returns the members
  */
 export function nodeMutationMembers(builders: HandleBuilders): NodeMutationMembers {
-  const nodeOf = (self: unknown): IncaNode => receiverNode(self, NODE_RULE);
+  const nodeOf = (self: unknown): HandleNode => receiverNode(self, NODE_RULE);
   /** Makes the handle of an inserted node strong. The children of a fragment are strong already. */
-  const enter = (child: IncaNode): void => {
+  const enter = (child: HandleNode): void => {
     if (child.kind !== "fragment") entered(child);
   };
   return {
-    appendChild(node: IncaNode) {
+    appendChild(node: HandleNode) {
       const self = nodeOf(this);
       requireArguments(arguments, 1, "appendChild");
       const child = nodeArgument(node, 1);
@@ -49,7 +49,7 @@ export function nodeMutationMembers(builders: HandleBuilders): NodeMutationMembe
       enter(child);
       return child;
     },
-    insertBefore(node: IncaNode, child: IncaNode | null | undefined) {
+    insertBefore(node: HandleNode, child: HandleNode | null | undefined) {
       const self = nodeOf(this);
       requireArguments(arguments, 2, "insertBefore");
       const inserted = nodeArgument(node, 1);
@@ -59,7 +59,7 @@ export function nodeMutationMembers(builders: HandleBuilders): NodeMutationMembe
       enter(inserted);
       return inserted;
     },
-    removeChild(child: IncaNode) {
+    removeChild(child: HandleNode) {
       const self = nodeOf(this);
       requireArguments(arguments, 1, "removeChild");
       const removed = nodeArgument(child, 1);
@@ -68,7 +68,7 @@ export function nodeMutationMembers(builders: HandleBuilders): NodeMutationMembe
       left(removed);
       return removed;
     },
-    replaceChild(node: IncaNode, child: IncaNode) {
+    replaceChild(node: HandleNode, child: HandleNode) {
       const self = nodeOf(this);
       requireArguments(arguments, 2, "replaceChild");
       const inserted = nodeArgument(node, 1);

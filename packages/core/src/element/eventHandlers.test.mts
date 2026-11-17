@@ -7,7 +7,7 @@ import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markFreed, prototypes } from "./lifecycle.mts";
 import type { HostCallback } from "../ffi/index.mts";
-import type { IncaElement } from "./types.mts";
+import type { Element } from "./types.mts";
 
 let registrations: { event: string; id: number; callback: HostCallback }[] = [];
 let nextId = 1;
@@ -43,7 +43,7 @@ function installNative() {
 let native = installNative();
 
 /** Runs the registrations of `event` in order, as the host does, and returns the payload. */
-function fire(el: IncaElement, event = "click") {
+function fire(el: Element, event = "click") {
   const payload = { type: event, currentTarget: el, preventDefault: vi.fn<() => void>() };
   for (const registration of registrations) {
     if (registration.event === event) registration.callback(payload);

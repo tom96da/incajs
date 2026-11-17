@@ -4,10 +4,10 @@
 import { classList as listOf, getAttribute, setAttribute } from "../ffi/index.mts";
 import { attributeText } from "./arguments.mts";
 import { isDestroyed, receiverOf, receiverNode, ELEMENT_RULE } from "./lifecycle.mts";
-import type { DOMTokenList, IncaElement } from "./types.mts";
+import type { DOMTokenList, Element } from "./types.mts";
 
 /** The members {@link classMembers} builds. */
-export type ClassMembers = Pick<IncaElement, "className" | "classList">;
+export type ClassMembers = Pick<Element, "className" | "classList">;
 
 /**
  * Builds `className` and `classList` of `Element`. The list is created on the first read and is
@@ -27,11 +27,11 @@ export function classMembers(): ClassMembers {
     },
     get classList(): DOMTokenList {
       const state = receiverOf(this, ELEMENT_RULE);
-      return (state.classList ??= listOf((this as unknown as IncaElement).__node_id));
+      return (state.classList ??= listOf((this as unknown as Element).__node_id));
     },
     set classList(value: string) {
       const state = receiverOf(this, ELEMENT_RULE);
-      (state.classList ??= listOf((this as unknown as IncaElement).__node_id)).value = value;
+      (state.classList ??= listOf((this as unknown as Element).__node_id)).value = value;
     },
   };
   // The setter takes text and the getter returns the list, which a single property type cannot say.

@@ -25,7 +25,7 @@ export type AttributeValue = string | number | boolean;
 /** Where `scrollIntoView` aligns a node on one axis. */
 export type ScrollAlignment = "start" | "center" | "end" | "nearest";
 
-/** How {@link IncaNative.linkedNode} names the node to reach from a node. */
+/** How {@link NativeBindings.linkedNode} names the node to reach from a node. */
 export type NodeLink = "parent" | "first" | "last" | "previous" | "next";
 
 /** Where `insertNodes` puts its nodes: into the node or next to it. */
@@ -136,7 +136,7 @@ export interface InterfacePrototypes {
  * The host-injected object every wrapper in this package forwards to. Not part of the public
  * surface.
  */
-interface IncaNative {
+interface NativeBindings {
   rootNodeId(): NodeId;
   documentNodeId(): NodeId;
   interfacePrototypes(): InterfacePrototypes;
@@ -225,13 +225,13 @@ export type HostCallback = (...args: unknown[]) => void;
 
 declare global {
   // eslint-disable-next-line no-var
-  var __inca_native__: IncaNative;
+  var __inca_native__: NativeBindings;
   // eslint-disable-next-line no-var
   var __inca_released__: (nodeIds: NodeId[], callbackIds: CallbackId[]) => void;
   // eslint-disable-next-line no-var
   var __inca_targets__: (targets: HookTarget[]) => unknown[];
 }
 
-export function native(): IncaNative {
+export function native(): NativeBindings {
   return globalThis.__inca_native__;
 }

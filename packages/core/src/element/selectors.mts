@@ -9,13 +9,13 @@ import { nodeListOf } from "./collections.mts";
 import { isDestroyed, ELEMENT_RULE, PARENT_NODE_RULE, receiverNode } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaElement } from "./types.mts";
+import type { Element } from "./types.mts";
 
 /** The members `querySelector()` and `querySelectorAll()` of an element and of the document. */
-export type QueryMembers = Pick<IncaElement, "querySelector" | "querySelectorAll">;
+export type QueryMembers = Pick<Element, "querySelector" | "querySelectorAll">;
 
 /** The members {@link selectorMembers} builds. */
-export type SelectorMembers = Pick<IncaElement, "matches" | "closest">;
+export type SelectorMembers = Pick<Element, "matches" | "closest">;
 
 /**
  * Checks the argument count of a selector method and converts the selector to text.
@@ -35,8 +35,8 @@ function selectorText(args: ArrayLike<unknown>, method: string, selectors: unkno
  * @param builders - the lookup of a handle by node id
  * @returns the handle, or `undefined` when the node has none
  */
-function elementHandle(id: NodeId, builders: HandleBuilders): IncaElement | undefined {
-  return builders.node(id) as IncaElement | undefined;
+function elementHandle(id: NodeId, builders: HandleBuilders): Element | undefined {
+  return builders.node(id) as Element | undefined;
 }
 
 /**

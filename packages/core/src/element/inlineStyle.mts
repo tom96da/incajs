@@ -4,10 +4,10 @@
 import { styleOf } from "../ffi/index.mts";
 import { attributeText } from "./arguments.mts";
 import { HTML_OR_SVG_RULE, receiverOf } from "./lifecycle.mts";
-import type { CSSStyleDeclaration, IncaHTMLElement } from "./types.mts";
+import type { CSSStyleDeclaration, HTMLElement } from "./types.mts";
 
 /** The member {@link styleMembers} builds. */
-export type StyleMembers = Pick<IncaHTMLElement, "style">;
+export type StyleMembers = Pick<HTMLElement, "style">;
 
 /**
  * Builds the `style` member of the shared element members. The block is created on the first read
@@ -18,7 +18,7 @@ export type StyleMembers = Pick<IncaHTMLElement, "style">;
 export function styleMembers(): StyleMembers {
   const read = (self: unknown): CSSStyleDeclaration => {
     const state = receiverOf(self, HTML_OR_SVG_RULE);
-    return (state.style ??= styleOf((self as IncaHTMLElement).__node_id));
+    return (state.style ??= styleOf((self as HTMLElement).__node_id));
   };
   const members = {
     get style(): CSSStyleDeclaration {

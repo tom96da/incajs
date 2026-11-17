@@ -11,12 +11,13 @@ import { markFreed, nodeOf } from "./lifecycle.mts";
 import { insert } from "./treeOps.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
 import type { Parsed, ParsedEntry } from "../ffi/index.mts";
-import type { IncaElement, IncaNode, IncaTemplateElement, IncaText } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { Element, HTMLTemplateElement, Text } from "./types.mts";
 
 let fake: FakeHost;
 
 /** The children of `node` as the host lists them. */
-const kids = (node: IncaNode): IncaNode[] => Array.from(node.childNodes);
+const kids = (node: Node): Node[] => Array.from(node.childNodes);
 
 /** Puts the roots of `entries` into `container` at `at` and returns the parse result. */
 function parsed(container: number, at: number, entries: ParsedEntry[]): Parsed {
@@ -66,7 +67,7 @@ const willParseInner = (entries: ParsedEntry[]): void =>
     return parsed(containerOf(id), 0, entries);
   });
 
-const withChild = (): [IncaElement, IncaElement] => {
+const withChild = (): [Element, Element] => {
   const parent = createElementNode("div");
   const child = createElementNode("span");
   insert(child, parent);
@@ -248,9 +249,9 @@ describe("adopt", () => {
 
     el.innerHTML = "<p><b>t</b></p>";
 
-    const p = kids(el)[0] as IncaElement;
-    const b = kids(p)[0] as IncaElement;
-    expect([kids(el).length, b.tagName, (kids(b)[0] as IncaText).text]).toEqual([1, "B", "t"]);
+    const p = kids(el)[0] as Element;
+    const b = kids(p)[0] as Element;
+    expect([kids(el).length, b.tagName, (kids(b)[0] as Text).text]).toEqual([1, "B", "t"]);
   });
 
   it("reaches the content of a parsed template", () => {
@@ -268,7 +269,7 @@ describe("adopt", () => {
 
     el.innerHTML = "<template><p></p></template>";
 
-    const made = kids(el)[0] as IncaTemplateElement;
+    const made = kids(el)[0] as HTMLTemplateElement;
     expect([kids(made).length, kids(made.content)[0]?.__node_id]).toEqual([0, child[0]]);
   });
 
@@ -278,7 +279,7 @@ describe("adopt", () => {
 
     el.innerHTML = "<b></b>";
 
-    const made = kids(el)[0] as IncaElement;
+    const made = kids(el)[0] as Element;
     expect([made.tagName, made.localName, made.namespaceURI, made.prefix]).toEqual([
       "B",
       "b",
@@ -293,7 +294,7 @@ describe("adopt", () => {
 
     el.innerHTML = "<svg><foreignObject></foreignObject></svg>";
 
-    const made = kids(el)[0] as IncaElement;
+    const made = kids(el)[0] as Element;
     expect([made.tagName, made.localName, made.namespaceURI, made.prefix]).toEqual([
       "foreignObject",
       "foreignObject",
@@ -332,19 +333,11 @@ describe("a freed element", () => {
   });
 
   it.each([
-    [
-      "innerHTML",
-      (el: IncaElement): void => void (el.innerHTML = "<b></b>"),
-      () => host.setInnerHtml,
-    ],
-    [
-      "outerHTML",
-      (el: IncaElement): void => void (el.outerHTML = "<b></b>"),
-      () => host.setOuterHtml,
-    ],
+    ["innerHTML", (el: Element): void => void (el.innerHTML = "<b></b>"), () => host.setInnerHtml],
+    ["outerHTML", (el: Element): void => void (el.outerHTML = "<b></b>"), () => host.setOuterHtml],
     [
       "insertAdjacentHTML",
-      (el: IncaElement) => el.insertAdjacentHTML("beforeend", "<b></b>"),
+      (el: Element) => el.insertAdjacentHTML("beforeend", "<b></b>"),
       () => host.insertAdjacentHtml,
     ],
   ] as const)("ignores the assignment of %s", (_member, assign, call) => {
@@ -359,7 +352,7 @@ describe("a freed element", () => {
 
 describe("the handles after a markup member", () => {
   /** Makes the next `outerHTML` assignment replace the node by `entries` at `at` of `parent`. */
-  const willParseOuter = (parent: IncaElement, entries: ParsedEntry[]): void =>
+  const willParseOuter = (parent: Element, entries: ParsedEntry[]): void =>
     void host.setOuterHtml.mockImplementationOnce((id) => {
       fake.natives.removeChild!(parent.__node_id, id);
       return parsed(parent.__node_id, 0, entries);

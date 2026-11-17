@@ -27,18 +27,19 @@ import {
 } from "./lifecycle.mts";
 import { readData, writeData } from "./nodeTree.mts";
 import type { NodeId } from "../types.mts";
-import type { CharacterDataMembers, TextMembers } from "./nodeTypes.mts";
-import type { IncaNode, IncaText } from "./types.mts";
+import type { HandleNode } from "./handleNode.mts";
+import type { CharacterData, Node, TextMembers } from "./nodeTypes.mts";
+import type { Text } from "./types.mts";
 
 /**
  * Builds the members of `CharacterData`, which read and edit the data of a text node or a
  * comment.
  * @returns the members
  */
-export function characterDataMembers(): CharacterDataMembers {
-  const nodeOf = (self: unknown): IncaNode => receiverNode(self, CHARACTER_DATA_RULE);
+export function characterDataMembers(): Omit<CharacterData, keyof Node> {
+  const nodeOf = (self: unknown): HandleNode => receiverNode(self, CHARACTER_DATA_RULE);
   /** Replaces a range of the data. A freed node ignores the call. */
-  const edit = (node: IncaNode, offset: number, count: number, data: string): void => {
+  const edit = (node: HandleNode, offset: number, count: number, data: string): void => {
     if (isDestroyed(node)) return;
     replaceData(node.__node_id, offset, count, data);
     if (node.kind === "text") node.text = readData(node);
@@ -90,11 +91,11 @@ export function characterDataMembers(): CharacterDataMembers {
 export function textMembers(): TextMembers {
   return {
     get wholeText() {
-      const node = receiverNode<IncaText>(this, TEXT_RULE);
+      const node = receiverNode<Text>(this, TEXT_RULE);
       return isDestroyed(node) ? node.text : wholeText(node.__node_id);
     },
     splitText(offset: number) {
-      const node = receiverNode<IncaText>(this, TEXT_RULE);
+      const node = receiverNode<Text>(this, TEXT_RULE);
       requireArguments(arguments, 1, "splitText");
       if (isDestroyed(node)) throw new TypeError("the text node was freed. create a new one");
       const tailId = splitText(node.__node_id, offset);
@@ -112,7 +113,7 @@ export function textMembers(): TextMembers {
  * @param node - the text leaf to update
  * @param text - the new text content
  */
-export function setText(node: IncaText, text: string): void {
+export function setText(node: Text, text: string): void {
   setAttribute(node.__node_id, "value", text);
   node.text = text;
 }
@@ -123,8 +124,8 @@ export function setText(node: IncaText, text: string): void {
  * @param text - the data the node holds
  * @returns the new, parentless handle
  */
-export function createIncaText(id: NodeId, text: string): IncaText {
-  const handle = Object.create(prototypeOf("text")) as IncaText;
+export function createIncaText(id: NodeId, text: string): Text {
+  const handle = Object.create(prototypeOf("text")) as Text;
   withState(handle, id, "text", NO_EVENTS);
   handle.text = text;
   registerNode(handle);

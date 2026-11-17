@@ -7,7 +7,7 @@ import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import { createElementNode } from "./handle.mts";
 import { markFreed } from "./lifecycle.mts";
-import type { IncaTemplateElement } from "./types.mts";
+import type { HTMLTemplateElement } from "./types.mts";
 
 let nextId = 1;
 /** The ids of the templates in the fake host. Each content takes the id after its template. */
@@ -38,7 +38,7 @@ beforeEach(() => {
   vi.stubGlobal("__inca_native__", nativeStub(host as never));
 });
 
-const template = () => createElementNode("template") as IncaTemplateElement;
+const template = () => createElementNode("template") as HTMLTemplateElement;
 
 describe("template.content", () => {
   it("is a fragment with the id the host holds as the content", () => {

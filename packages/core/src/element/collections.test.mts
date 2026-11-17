@@ -4,12 +4,12 @@
 import { describe, expect, it } from "vitest";
 
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
-import type { IncaElement } from "./types.mts";
+import type { Element } from "./types.mts";
 
 type Loose = Record<PropertyKey, unknown>;
 
 /** A stand-in element that reads `id` and the `name` attribute from a mutable record. */
-function fake(attrs: { id?: string; name?: string } = {}): IncaElement {
+function fake(attrs: { id?: string; name?: string } = {}): Element {
   return {
     get id() {
       return attrs.id ?? "";
@@ -18,11 +18,11 @@ function fake(attrs: { id?: string; name?: string } = {}): IncaElement {
       attrs.id = value;
     },
     getAttribute: (name: string) => (name === "name" ? (attrs.name ?? null) : null),
-  } as unknown as IncaElement;
+  } as unknown as Element;
 }
 
 /** A collection over a mutable source array, with a loosely typed view of the same object. */
-function make(...source: IncaElement[]) {
+function make(...source: Element[]) {
   const c = htmlCollectionOf(() => source);
   return { source, c, loose: c as unknown as Loose };
 }
@@ -80,17 +80,17 @@ describe("a collection", () => {
   });
 
   it.each([
-    ["spread", (c: Iterable<IncaElement>) => [...c]],
-    ["Array.from", (c: Iterable<IncaElement>) => Array.from(c)],
+    ["spread", (c: Iterable<Element>) => [...c]],
+    ["Array.from", (c: Iterable<Element>) => Array.from(c)],
     [
       "for...of",
-      (c: Iterable<IncaElement>) => {
-        const looped: IncaElement[] = [];
+      (c: Iterable<Element>) => {
+        const looped: Element[] = [];
         for (const el of c) looped.push(el);
         return looped;
       },
     ],
-    ["Array.prototype.map", (c: Iterable<IncaElement>) => Array.prototype.map.call(c, (el) => el)],
+    ["Array.prototype.map", (c: Iterable<Element>) => Array.prototype.map.call(c, (el) => el)],
   ])("is iterable by %s", (_, read) => {
     const items = [fake(), fake()];
 
@@ -515,7 +515,7 @@ describe("a NodeList", () => {
   /** A list over `items` with a loosely typed view of the same object. */
   type List = ReturnType<typeof nodeListOf>;
 
-  function list(...items: IncaElement[]) {
+  function list(...items: Element[]) {
     const l = nodeListOf(() => items);
     return { l, loose: l as unknown as Loose };
   }
@@ -569,11 +569,11 @@ describe("a NodeList", () => {
 
   it.each([
     ["the indices from keys", (l: List) => [...l.keys()], () => [0, 1]],
-    ["the items from values", (l: List) => [...l.values()], (e: IncaElement[]) => e],
+    ["the items from values", (l: List) => [...l.values()], (e: Element[]) => e],
     [
       "the pairs from entries",
       (l: List) => [...l.entries()],
-      (e: IncaElement[]) => e.map((el, i) => [i, el]),
+      (e: Element[]) => e.map((el, i) => [i, el]),
     ],
   ])("lists %s", (_, read, expected) => {
     const items = [fake(), fake()];

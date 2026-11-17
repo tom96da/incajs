@@ -13,13 +13,13 @@ import {
 } from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./arguments.mts";
 import { elementOf, hold, receiverOf, DOCUMENT_RULE } from "./lifecycle.mts";
-import type { IncaDocument } from "../types.mts";
+import type { Document } from "../types.mts";
+import type { HandleNode } from "./handleNode.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaNode } from "./types.mts";
 
 /** The members {@link documentMembers} builds. */
 export type DocumentMembers = Pick<
-  IncaDocument,
+  Document,
   | "activeElement"
   | "createDocumentFragment"
   | "createElement"
@@ -33,7 +33,7 @@ export type DocumentMembers = Pick<
  * @param handle - the new, parentless handle
  * @returns `handle`
  */
-function held<T extends IncaNode>(handle: T): T {
+function held<T extends HandleNode>(handle: T): T {
   hold(handle);
   return handle;
 }
@@ -48,7 +48,7 @@ export function documentMembers(builders: HandleBuilders): DocumentMembers {
   return {
     get activeElement() {
       const state = receiverOf(this, DOCUMENT_RULE);
-      const node = this as unknown as IncaNode;
+      const node = this as unknown as HandleNode;
       const focused = state.copy ? null : focusedNode();
       if (focused !== null) return elementOf(focused) ?? null;
       const first = linkedNode(node.__node_id, "first", true);

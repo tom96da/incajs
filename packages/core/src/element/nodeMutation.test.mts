@@ -10,7 +10,8 @@ import { createElementNode, createIncaElement, createIncaFragment } from "./hand
 import { isHeld, isRemoved, markFreed, nodeOf } from "./lifecycle.mts";
 import { remove } from "./treeOps.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
-import type { IncaFragment, IncaNode, IncaTemplateElement } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { DocumentFragment, HTMLTemplateElement } from "./types.mts";
 
 let host: FakeHost;
 
@@ -20,11 +21,11 @@ beforeEach(() => {
 });
 
 const div = () => createElementNode("div");
-const fragment = (): IncaFragment => createIncaFragment(host.create("#fragment"));
+const fragment = (): DocumentFragment => createIncaFragment(host.create("#fragment"));
 /** The children of `node` as the host lists them. */
-const kids = (node: IncaNode): IncaNode[] => Array.from(node.childNodes);
+const kids = (node: Node): Node[] => Array.from(node.childNodes);
 /** The ids of the children of `node`, after checking that the host lists the same. */
-const idsOf = (node: IncaNode): number[] => {
+const idsOf = (node: Node): number[] => {
   const ids = kids(node).map((child) => child.__node_id);
   expect(host.nodes.get(node.__node_id)!.children).toEqual(ids);
   return ids;
@@ -376,22 +377,22 @@ describe("arguments", () => {
   it("insertBefore throws a TypeError without a reference argument", () => {
     const parent = div();
 
-    expect(() => (parent.insertBefore as (node: IncaNode) => void)(div())).toThrow(TypeError);
+    expect(() => (parent.insertBefore as (node: Node) => void)(div())).toThrow(TypeError);
   });
 
   it("replaceChild throws a TypeError without a child argument", () => {
     const parent = div();
 
-    expect(() => (parent.replaceChild as (node: IncaNode) => void)(div())).toThrow(TypeError);
+    expect(() => (parent.replaceChild as (node: Node) => void)(div())).toThrow(TypeError);
   });
 
   it.each([
-    ["appendChild", (p: IncaNode) => p.appendChild({} as IncaNode)],
-    ["insertBefore node", (p: IncaNode) => p.insertBefore({} as IncaNode, null)],
-    ["insertBefore reference", (p: IncaNode) => p.insertBefore(div(), {} as IncaNode)],
-    ["removeChild", (p: IncaNode) => p.removeChild({} as IncaNode)],
-    ["replaceChild node", (p: IncaNode) => p.replaceChild({} as IncaNode, div())],
-    ["replaceChild child", (p: IncaNode) => p.replaceChild(div(), {} as IncaNode)],
+    ["appendChild", (p: Node) => p.appendChild({} as Node)],
+    ["insertBefore node", (p: Node) => p.insertBefore({} as Node, null)],
+    ["insertBefore reference", (p: Node) => p.insertBefore(div(), {} as Node)],
+    ["removeChild", (p: Node) => p.removeChild({} as Node)],
+    ["replaceChild node", (p: Node) => p.replaceChild({} as Node, div())],
+    ["replaceChild child", (p: Node) => p.replaceChild(div(), {} as Node)],
   ])("%s throws a TypeError for an argument that is not a node", (_, call) => {
     expect(() => call(div())).toThrow(TypeError);
   });
@@ -471,8 +472,8 @@ describe("arguments", () => {
   });
 
   it.each([
-    ["an element", (children: IncaNode[]) => children[0]!],
-    ["a fragment", (_children: IncaNode[], group: IncaNode) => group],
+    ["an element", (children: Node[]) => children[0]!],
+    ["a fragment", (_children: Node[], group: Node) => group],
   ])("changes no list when insertBefore of %s gets a stray reference", (_name, pick) => {
     const { parent: first, children } = family(2);
     const { parent: second, children: others } = family(1);
@@ -499,7 +500,7 @@ describe("arguments", () => {
 });
 
 describe("a template", () => {
-  const template = () => createElementNode("template") as IncaTemplateElement;
+  const template = () => createElementNode("template") as HTMLTemplateElement;
 
   it("takes an appended node as its own child and not as content", () => {
     const owner = template();
@@ -545,7 +546,7 @@ describe("a template", () => {
     const owner = template();
     owner.content.appendChild(div());
 
-    const copy = owner.cloneNode(false) as IncaTemplateElement;
+    const copy = owner.cloneNode(false) as HTMLTemplateElement;
 
     expect([copy.content.__node_id, kids(copy.content)]).toEqual([copy.__node_id + 1, []]);
   });
@@ -557,7 +558,7 @@ describe("a template", () => {
     owner.content.appendChild(inside);
     owner.appendChild(own);
 
-    const copy = owner.cloneNode(true) as IncaTemplateElement;
+    const copy = owner.cloneNode(true) as HTMLTemplateElement;
 
     const pairs = host.spies.cloneNode.mock.results[0]!.value as unknown[][];
     expect([
@@ -570,8 +571,8 @@ describe("a template", () => {
 
 describe("the handles after a mutation member", () => {
   it.each([
-    ["appendChild", (parent: IncaNode, child: IncaNode) => parent.appendChild(child)],
-    ["insertBefore", (parent: IncaNode, child: IncaNode) => parent.insertBefore(child, null)],
+    ["appendChild", (parent: Node, child: Node) => parent.appendChild(child)],
+    ["insertBefore", (parent: Node, child: Node) => parent.insertBefore(child, null)],
   ] as const)(
     "%s keeps the handle of the inserted node after a collection",
     async (_member, call) => {

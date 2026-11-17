@@ -10,7 +10,7 @@ import { adoptTextNode, createIncaComment, createIncaFragment } from "./element/
 import { elementOf, registerNode, markFreed } from "./element/lifecycle.mts";
 import { windowTargetId } from "./ffi/index.mts";
 import { window } from "./window.mts";
-import type { IncaElement } from "./element/types.mts";
+import type { Element } from "./element/types.mts";
 
 /** The id `nativeStub` gives the document. */
 const DOCUMENT = 1;
@@ -64,7 +64,7 @@ describe("__inca_targets__", () => {
   });
 
   it("resolves registered element nodes to their handles", () => {
-    const handle = { __node_id: 5, kind: "element" } as unknown as IncaElement;
+    const handle = { __node_id: 5, kind: "element" } as unknown as Element;
     registerNode(handle);
 
     const [found] = globalThis.__inca_targets__([5]);
@@ -79,7 +79,7 @@ describe("__inca_targets__", () => {
   });
 
   it("creates the element of the host root on first use", () => {
-    const [root] = globalThis.__inca_targets__([ROOT]) as [IncaElement];
+    const [root] = globalThis.__inca_targets__([ROOT]) as [Element];
 
     expect(root.__node_id).toBe(ROOT);
     expect(elementOf(ROOT)).toBe(root);

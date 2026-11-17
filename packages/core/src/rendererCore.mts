@@ -41,6 +41,7 @@ export { releaseWhenCollected } from "./element/lifecycle.mts";
 export { insert, nextSibling, parentNode, remove } from "./element/treeOps.mts";
 export { setText } from "./element/text.mts";
 export type * from "./types.mts";
+export type { HandleNode } from "./element/handleNode.mts";
 export type * from "./element/types.mts";
 export type * from "./element/nodeTypes.mts";
 
@@ -48,4 +49,4 @@ export type * from "./element/nodeTypes.mts";
  * What a custom renderer (`incajs/vue`) drives the host through: the tree and
  * event calls, the element handles and the tree operations.
  */
-export type IncaCore = typeof import("./rendererCore.mts");
+export type RendererCore = typeof import("./rendererCore.mts");

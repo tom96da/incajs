@@ -25,14 +25,15 @@ import {
   receiverNode,
 } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
-import type { IncaDocument } from "../types.mts";
+import type { Document } from "../types.mts";
+import type { HandleNode } from "./handleNode.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { NodeMembers } from "./nodeTypes.mts";
-import type { IncaElement, IncaFragment, IncaNode } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { Element, DocumentFragment } from "./types.mts";
 
 /** The members {@link nodeTreeMembers} builds. */
 export type NodeTreeMembers = { textContent: string | null } & Pick<
-  NodeMembers,
+  Node,
   | "nodeType"
   | "nodeName"
   | "nodeValue"
@@ -56,7 +57,7 @@ const NODE_TYPES = { element: 1, text: 3, comment: 8, document: 9, fragment: 11 
  * @param node - the text node or comment
  * @returns the data
  */
-export function readData(node: IncaNode): string {
+export function readData(node: HandleNode): string {
   if (isDestroyed(node)) return node.kind === "text" ? node.text : "";
   return String(getAttribute(node.__node_id, "value") ?? "");
 }
@@ -67,7 +68,7 @@ export function readData(node: IncaNode): string {
  * @param node - the text node or comment
  * @param data - the new data
  */
-export function writeData(node: IncaNode, data: string): void {
+export function writeData(node: HandleNode, data: string): void {
   if (node.kind === "element" || node.kind === "fragment" || node.kind === "document") return;
   if (isDestroyed(node)) return;
   setAttribute(node.__node_id, "value", data);
@@ -82,7 +83,7 @@ export function writeData(node: IncaNode, data: string): void {
  * @param text - the new text content
  * @param builders - the functions that build the handles
  */
-export function replaceWithText(parent: IncaNode, text: string, builders: HandleBuilders): void {
+export function replaceWithText(parent: Node, text: string, builders: HandleBuilders): void {
   const textNode = text ? builders.createText!(text) : undefined;
   for (const childId of childNodeIds(parent.__node_id)) {
     removeChild(parent.__node_id, childId);
@@ -101,13 +102,13 @@ export function replaceWithText(parent: IncaNode, text: string, builders: Handle
  * @returns the members, as getters
  */
 export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
-  const reach = (self: unknown, link: NodeLink, elementOnly = false): IncaNode | null => {
+  const reach = (self: unknown, link: NodeLink, elementOnly = false): HandleNode | null => {
     const node = receiverNode(self, NODE_RULE);
     if (isDestroyed(node)) return null;
     const found = linkedNode(node.__node_id, link, elementOnly);
     return found === null ? null : (builders.node(found) ?? null);
   };
-  const liveChildren = (node: IncaNode): IncaNode[] =>
+  const liveChildren = (node: HandleNode): HandleNode[] =>
     isDestroyed(node)
       ? []
       : childNodeIds(node.__node_id).flatMap((child) => builders.node(child) ?? []);
@@ -162,10 +163,10 @@ export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
       return receiverNode(this, NODE_RULE).kind === "document" ? null : builders.document();
     },
     get parentNode() {
-      return reach(this, "parent") as IncaElement | IncaFragment | IncaDocument | null;
+      return reach(this, "parent") as Element | DocumentFragment | Document | null;
     },
     get parentElement() {
-      return reach(this, "parent", true) as IncaElement | null;
+      return reach(this, "parent", true) as Element | null;
     },
     get firstChild() {
       return reach(this, "first");
@@ -181,7 +182,7 @@ export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
     },
     get childNodes() {
       const state = receiverOf(this, NODE_RULE);
-      const node = this as unknown as IncaNode;
+      const node = this as unknown as HandleNode;
       return (state.childNodes ??= nodeListOf(() => liveChildren(node)));
     },
     hasChildNodes() {

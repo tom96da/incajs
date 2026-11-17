@@ -13,16 +13,16 @@ import {
 import { entered, nodeOf } from "./element/lifecycle.mts";
 import { insert, remove } from "./element/treeOps.mts";
 import { childNodeIds, getAttribute, queryNodes, rootNodeId, setAttribute } from "./ffi/index.mts";
-import type { IncaElement } from "./element/types.mts";
+import type { Element } from "./element/types.mts";
 import type { NodeId } from "./types.mts";
 
 const KEY_ATTRIBUTE = "data-inca-style";
 
-const elements = new Map<string, IncaElement>();
+const elements = new Map<string, Element>();
 let scanned = false;
 
 /** Gives a style element an earlier evaluation left a handle, and makes it strong with its text. */
-function adopt(id: NodeId): IncaElement {
+function adopt(id: NodeId): Element {
   const el = createIncaElement(id, "style");
   for (const child of childNodeIds(id)) {
     entered(adoptTextNode(child, String(getAttribute(child, "value") ?? "")));
@@ -41,7 +41,7 @@ function scan(): void {
 }
 
 /** Replaces the children of `el` with one text node holding `css`. */
-function writeText(el: IncaElement, css: string): void {
+function writeText(el: Element, css: string): void {
   const old = childNodeIds(el.__node_id);
   if (css) insert(createTextNode(css), el);
   for (const child of old) {

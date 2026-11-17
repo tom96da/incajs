@@ -24,7 +24,7 @@ import {
   receiverNode,
 } from "./lifecycle.mts";
 import type { Receiver } from "./lifecycle.mts";
-import type { IncaElement, IncaHTMLElement } from "./types.mts";
+import type { Element, HTMLElement } from "./types.mts";
 
 /**
  * Reads the receiver of an element member.
@@ -32,13 +32,13 @@ import type { IncaElement, IncaHTMLElement } from "./types.mts";
  * @param rule - the receiver rule of the member
  * @returns the element
  */
-function elementReceiver(self: unknown, rule: Receiver): IncaElement {
-  return receiverNode<IncaElement>(self, rule);
+function elementReceiver(self: unknown, rule: Receiver): Element {
+  return receiverNode<Element>(self, rule);
 }
 
 /** The members {@link pointerCaptureMembers} builds. */
 export type PointerCaptureMembers = Pick<
-  IncaElement,
+  Element,
   "setPointerCapture" | "releasePointerCapture" | "hasPointerCapture"
 >;
 
@@ -61,7 +61,7 @@ export function pointerCaptureMembers(): PointerCaptureMembers {
 }
 
 /** The members {@link focusMembers} builds. */
-export type FocusMembers = Pick<IncaHTMLElement, "focus" | "blur" | "tabIndex">;
+export type FocusMembers = Pick<HTMLElement, "focus" | "blur" | "tabIndex">;
 
 /**
  * Builds `focus()`, `blur()` and `tabIndex` of the shared element members.
@@ -94,7 +94,7 @@ export function focusMembers(): FocusMembers {
  * Builds `click()` of `HTMLElement`.
  * @returns the members
  */
-export function clickMembers(): Pick<IncaHTMLElement, "click"> {
+export function clickMembers(): Pick<HTMLElement, "click"> {
   return {
     click() {
       const element = elementReceiver(this, HTML_ELEMENT_RULE);

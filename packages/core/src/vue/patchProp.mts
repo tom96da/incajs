@@ -4,7 +4,12 @@
 import { callWithAsyncErrorHandling, ErrorCodes, warn } from "@vue/runtime-core";
 import type { ComponentInternalInstance, RendererOptions } from "@vue/runtime-core";
 
-import type { EventListener, IncaCore, IncaElement, ListenerOptions } from "../rendererCore.mts";
+import type {
+  EventListener,
+  RendererCore,
+  Element,
+  AddEventListenerOptions,
+} from "../rendererCore.mts";
 
 /** Whether a prop names an event listener (Vue's `isOn`). */
 const isOn = (key: string): boolean => /^on[^a-z]/.test(key);
@@ -26,7 +31,7 @@ const bareModifierRE = /^on:?(?:Once|Passive|Capture)$/;
 /** Same as `@vue/shared`'s `hyphenate`; core does not depend on `vue`. */
 const hyphenate = (str: string): string => str.replace(/\B([A-Z])/g, "-$1").toLowerCase();
 
-interface ParsedEventKey extends ListenerOptions {
+interface ParsedEventKey extends AddEventListenerOptions {
   event: string;
   once: boolean;
 }
@@ -59,12 +64,12 @@ const isSendable = (value: unknown): value is string | number =>
 // What native holds per element, keyed by style key. Vue can pass the same
 // object as both the previous and next value after an in-place mutation, so
 // the diff runs against this snapshot instead of the previous value.
-const sentStyles = new WeakMap<IncaElement, Map<string, string | number>>();
+const sentStyles = new WeakMap<Element, Map<string, string | number>>();
 
 // The elements whose inline style was last set from a string.
-const styleTexts = new WeakSet<IncaElement>();
+const styleTexts = new WeakSet<Element>();
 
-function patchStyle(core: IncaCore, el: IncaElement, nextValue: unknown): void {
+function patchStyle(core: RendererCore, el: Element, nextValue: unknown): void {
   let sent = sentStyles.get(el);
   if (!sent) sentStyles.set(el, (sent = new Map()));
   if (typeof nextValue === "string") {
@@ -161,13 +166,13 @@ interface Slot {
  */
 interface Entry {
   event: string;
-  options: ListenerOptions;
+  options: AddEventListenerOptions;
   slots: Map<string, Slot>;
   registered: boolean;
   dispatcher: EventListener;
 }
 
-const entriesByEl = new WeakMap<IncaElement, Map<string, Entry>>();
+const entriesByEl = new WeakMap<Element, Map<string, Entry>>();
 
 const entryKeyOf = ({ event, capture, passive }: ParsedEventKey): string =>
   `${event}:${capture === true}:${passive === true}`;
@@ -175,7 +180,7 @@ const entryKeyOf = ({ event, capture, passive }: ParsedEventKey): string =>
 /**
  * Brings the host registration in line with whether a live slot exists.
  */
-function sync(core: IncaCore, el: IncaElement, entryKey: string, entry: Entry): void {
+function sync(core: RendererCore, el: Element, entryKey: string, entry: Entry): void {
   const live = Array.from(entry.slots.values()).some((slot) => !slot.fired);
   if (live && !entry.registered && !core.isRemoved(el)) {
     core.addEventListener(el.__node_id, entry.event, entry.dispatcher, entry.options);
@@ -188,8 +193,8 @@ function sync(core: IncaCore, el: IncaElement, entryKey: string, entry: Entry): 
 }
 
 function createEntry(
-  core: IncaCore,
-  el: IncaElement,
+  core: RendererCore,
+  el: Element,
   entryKey: string,
   { event, capture, passive }: ParsedEventKey,
 ): Entry {
@@ -239,7 +244,7 @@ function createEntry(
   return entry;
 }
 
-function removeSlot(core: IncaCore, el: IncaElement, parsed: ParsedEventKey, rawKey: string): void {
+function removeSlot(core: RendererCore, el: Element, parsed: ParsedEventKey, rawKey: string): void {
   const entryKey = entryKeyOf(parsed);
   const entry = entriesByEl.get(el)?.get(entryKey);
   if (!entry?.slots.delete(rawKey)) return;
@@ -247,8 +252,8 @@ function removeSlot(core: IncaCore, el: IncaElement, parsed: ParsedEventKey, raw
 }
 
 function patchEvent(
-  core: IncaCore,
-  el: IncaElement,
+  core: RendererCore,
+  el: Element,
   rawKey: string,
   nextValue: unknown,
   instance: ComponentInternalInstance | null,
@@ -351,7 +356,7 @@ const BOOLEAN_ATTRIBUTES = new Set([
  * - Event names: `onXxx` listens for the hyphenated name (`onMyEvent` listens
  *   for `my-event`), and `on:xxx` listens for the name after the colon as
  *   written (`on:myEvent` listens for `myEvent`). The listener runs when the
- *   host dispatches that name. `IncaEventMap` gives the event type of each
+ *   host dispatches that name. `GlobalEventHandlersEventMap` gives the event type of each
  *   name the host dispatches.
  * - Errors: an error a handler throws, or a rejection of an async handler,
  *   goes to the `onErrorCaptured` hooks and the app's `errorHandler`. Every
@@ -387,10 +392,10 @@ const BOOLEAN_ATTRIBUTES = new Set([
  * @param core - the incajs bindings to drive the native tree through
  */
 export function createPatchProp(
-  core: IncaCore,
-): RendererOptions<unknown, IncaElement>["patchProp"] {
+  core: RendererCore,
+): RendererOptions<unknown, Element>["patchProp"] {
   return (
-    el: IncaElement,
+    el: Element,
     key: string,
     _prevValue: unknown,
     nextValue: unknown,

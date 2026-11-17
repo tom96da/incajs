@@ -8,7 +8,7 @@ import { nativeStub } from "../../tests/setup.mts";
 import * as rendererCore from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaCore, IncaElement } from "../rendererCore.mts";
+import type { RendererCore, Element } from "../rendererCore.mts";
 
 /** What the host calls: it passes the event object first. */
 type Callback = (...args: unknown[]) => void;
@@ -17,10 +17,10 @@ type Callback = (...args: unknown[]) => void;
 const listenerOf = (call: readonly unknown[]): ((...args: unknown[]) => void) =>
   call[2] as (...args: unknown[]) => void;
 
-const core: IncaCore = {
+const core: RendererCore = {
   ...rendererCore,
-  addEventListener: vi.fn<IncaCore["addEventListener"]>(),
-  removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
+  addEventListener: vi.fn<RendererCore["addEventListener"]>(),
+  removeEventListener: vi.fn<RendererCore["removeEventListener"]>(),
   latestEventId: vi.fn<() => number>(() => 0),
   isRemoved: () => false,
 };
@@ -30,7 +30,7 @@ const patchProp = createPatchProp(core);
 const BUBBLE = { capture: false, passive: false };
 
 /** An element holds the id of its node, which is all that patchProp reads. */
-const makeEl = (): IncaElement => ({ __node_id: 1 }) as unknown as IncaElement;
+const makeEl = (): Element => ({ __node_id: 1 }) as unknown as Element;
 
 let el = makeEl();
 

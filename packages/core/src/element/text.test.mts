@@ -12,15 +12,16 @@ import { elementOf, markFreed, nodeOf } from "./lifecycle.mts";
 import { setText } from "./text.mts";
 import { insert } from "./treeOps.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
-import type { IncaNode, IncaText } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { Text } from "./types.mts";
 
 let fake: FakeHost;
 
 /** The data of a text node or comment stand-in in the host. */
-const dataOf = (node: IncaNode): string | null => fake.nodes.get(node.__node_id)!.data;
+const dataOf = (node: Node): string | null => fake.nodes.get(node.__node_id)!.data;
 
 /** The children of `node` as the host lists them. */
-const kids = (node: IncaNode): IncaNode[] => Array.from(node.childNodes);
+const kids = (node: Node): Node[] => Array.from(node.childNodes);
 
 const host = {
   createNode: vi.fn<(tag: string) => number>(),
@@ -113,10 +114,10 @@ describe("substringData", () => {
 
 describe("the editing methods", () => {
   it.each([
-    ["appendData", (text: IncaText) => text.appendData("X"), [3, 0, "X"]],
-    ["insertData", (text: IncaText) => text.insertData(1, "X"), [1, 0, "X"]],
-    ["deleteData", (text: IncaText) => text.deleteData(1, 2), [1, 2, ""]],
-    ["replaceData", (text: IncaText) => text.replaceData(1, 2, "X"), [1, 2, "X"]],
+    ["appendData", (text: Text) => text.appendData("X"), [3, 0, "X"]],
+    ["insertData", (text: Text) => text.insertData(1, "X"), [1, 0, "X"]],
+    ["deleteData", (text: Text) => text.deleteData(1, 2), [1, 2, ""]],
+    ["replaceData", (text: Text) => text.replaceData(1, 2, "X"), [1, 2, "X"]],
   ] as const)("%s sends one replacement to the host", (_, call, args) => {
     const text = createTextNode("abc");
 
@@ -256,7 +257,7 @@ describe("textContent of an element", () => {
 
     el.textContent = "new";
 
-    expect(kids(el).map((child) => (child as IncaText).text)).toEqual(["new"]);
+    expect(kids(el).map((child) => (child as Text).text)).toEqual(["new"]);
   });
 
   it.each([null, undefined, ""] as const)("removes the children for %j", (value) => {
@@ -301,7 +302,7 @@ describe("createText", () => {
 
 describe("setText", () => {
   it("forwards the new value and updates the node", () => {
-    const node = createTextNode("old") as IncaText;
+    const node = createTextNode("old") as Text;
     setText(node, "new");
     expect(host.setAttribute).toHaveBeenCalledWith(node.__node_id, "value", "new");
     expect(node.text).toBe("new");
@@ -322,7 +323,7 @@ describe("setElementText", () => {
     expect(kids(el)[0]).toMatchObject({ kind: "text", text: "hello" });
   });
 
-  it.each<[string, (el: IncaNode) => void]>([
+  it.each<[string, (el: Node) => void]>([
     [
       "an assignment to textContent",
       (el) => {

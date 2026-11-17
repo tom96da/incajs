@@ -7,7 +7,7 @@ import { cloneNode as cloneHostNode, nameOf } from "../ffi/index.mts";
 import { entered, hold } from "./lifecycle.mts";
 import type { ElementEntry, NodeEntry } from "../ffi/index.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { IncaNode } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
 
 /**
  * Builds the handle of one copied node.
@@ -21,7 +21,7 @@ function buildCopy(
   entry: NodeEntry | ElementEntry,
   index: number,
   builders: HandleBuilders,
-): IncaNode | undefined {
+): Node | undefined {
   if (entry.length === 5) return builders.element!(entry[0], nameOf(entry));
   switch (entry[1]) {
     case "#text":
@@ -42,7 +42,7 @@ function buildCopy(
  * @param builders - the functions that build the handles
  * @returns the held, parentless copy
  */
-export function cloneNode<T extends IncaNode>(node: T, deep: boolean, builders: HandleBuilders): T {
+export function cloneNode<T extends Node>(node: T, deep: boolean, builders: HandleBuilders): T {
   const entries = cloneHostNode(node.__node_id, deep);
   const copy = buildCopy(entries[0]!, 0, builders)!;
   for (const [index, entry] of entries.entries()) {

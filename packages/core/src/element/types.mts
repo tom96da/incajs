@@ -1,28 +1,27 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaDocument, IncaEvent, IncaEventMap, IncaEventTarget, NodeId } from "../types.mts";
+import type { Event, GlobalEventHandlersEventMap } from "../types.mts";
 import type { HANDLER_EVENTS } from "./eventHandlers.mts";
-import type { RectLike } from "./geometry.mts";
+import type { DOMRect } from "./geometry.mts";
 import type {
-  CharacterDataMembers,
-  ChildNodeMembers,
-  NodeMembers,
-  NonDocumentTypeChildNodeMembers,
-  ParentNodeMembers,
-  TextContentMember,
+  CharacterData,
+  ChildNode,
+  Node,
+  NonDocumentTypeChildNode,
+  ParentNode,
   TextMembers,
 } from "./nodeTypes.mts";
 import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
 
 /** A function an event handler property holds, called with its target as `this` and the event. */
-export type EventHandler<E = IncaEvent, T = IncaElement> = (this: T, event: E) => unknown;
+export type EventHandler<E = Event, T = Element> = (this: T, event: E) => unknown;
 
 /**
  * The event handler properties, such as `onclick`, of the events the host dispatches, `focusin` and
  * `focusout` excepted.
  */
-export type EventHandlers<T = IncaElement> = {
+export type EventHandlers<T = Element> = {
   /**
    * The handler of the event: a function, an object kept as assigned, or `null`. Assigning a
    * function or an object sets it, and any other value sets `null`. A value assigned while the
@@ -31,13 +30,13 @@ export type EventHandlers<T = IncaElement> = {
    * cancels the event. On an element, assigning does nothing after the node is removed.
    */
   [K in (typeof HANDLER_EVENTS)[number] as `on${K}`]:
-    | EventHandler<IncaEventMap[K], T>
+    | EventHandler<GlobalEventHandlersEventMap[K], T>
     | object
     | null;
 };
 
 /** A live, read-only list of elements. */
-export interface HTMLCollectionOf<T extends IncaElement> {
+export interface HTMLCollectionOf<T extends Element> {
   readonly [index: number]: T;
   /** The number of elements in the list. */
   readonly length: number;
@@ -62,7 +61,7 @@ export interface HTMLCollectionOf<T extends IncaElement> {
  * A read-only list of nodes. The list of `childNodes` follows later changes. The list of
  * `querySelectorAll()` holds the elements found when it was made.
  */
-export interface NodeListOf<T extends IncaNode> {
+export interface NodeListOf<T extends Node> {
   readonly [index: number]: T;
   /** The number of nodes in the list. */
   readonly length: number;
@@ -111,7 +110,7 @@ export interface Attr {
   /** Always `true`. */
   readonly specified: true;
   /** The element that holds the attribute, or `null` once the attribute is removed. */
-  readonly ownerElement: IncaElement | null;
+  readonly ownerElement: Element | null;
 }
 
 /**
@@ -324,20 +323,8 @@ export interface HtmlMembers {
  * call, an assignment to a handler property does nothing, and `dispatchEvent()` runs no listener
  * on it.
  */
-export interface IncaElement
-  extends
-    IncaEventTarget,
-    NodeMembers,
-    ParentNodeMembers,
-    ChildNodeMembers,
-    NonDocumentTypeChildNodeMembers,
-    TextContentMember,
-    HtmlMembers {
-  /**
-   * The node id the host knows this node by. Internal to the renderer.
-   * @internal
-   */
-  readonly __node_id: NodeId;
+export interface Element extends ParentNode, ChildNode, NonDocumentTypeChildNode, HtmlMembers {
+  readonly nodeType: 1;
   /**
    * The `id` attribute, or an empty string when it is unset. Assigning sets
    * the attribute to the value as a string.
@@ -354,7 +341,7 @@ export interface IncaElement
    */
   get classList(): DOMTokenList;
   set classList(value: string);
-  /** Discriminates this node within the {@link IncaNode} union. */
+  /** @internal */
   readonly kind: "element";
   /**
    * The qualified name of the element. An element of the HTML namespace reads in ASCII upper case,
@@ -434,12 +421,12 @@ export interface IncaElement
    * @param selectors - A selector list.
    * @returns The matching element, or `null` when none matches.
    */
-  closest(selectors: string): IncaElement | null;
+  closest(selectors: string): Element | null;
   /**
    * The box this node was drawn at in the last frame, in window logical
    * pixels. A node created in the same task reads all zeros.
    */
-  getBoundingClientRect(): RectLike;
+  getBoundingClientRect(): DOMRect;
   /** The box width less both borders, rounded, at least `0`. */
   readonly clientWidth: number;
   /** The box height less both borders, rounded, at least `0`. */
@@ -476,7 +463,7 @@ export interface IncaElement
  * An element of the HTML namespace: an element with the members of HTML elements, the shared
  * element members, `click()` and the offset members.
  */
-export interface IncaHTMLElement extends IncaElement, EventHandlers<IncaHTMLElement> {
+export interface HTMLElement extends Element, EventHandlers<HTMLElement> {
   /**
    * Focuses this node next frame. The node needs a `tabindex` attribute. A
    * `true` `preventScroll` keeps every scroll container where it is. After
@@ -523,11 +510,11 @@ export interface IncaHTMLElement extends IncaElement, EventHandlers<IncaHTMLElem
    * The parent, when this node and the parent both have a box from the last frame.
    * `null` when either lacks a box or there is no parent.
    */
-  readonly offsetParent: IncaElement | null;
+  readonly offsetParent: Element | null;
 }
 
 /** The handle of an `<input>`. */
-export interface IncaInputElement extends IncaHTMLElement {
+export interface HTMLInputElement extends HTMLElement {
   /**
    * The text of the input. Assigning sets the value as a string, and `null` as `""`; line breaks
    * are dropped and a changed text puts the caret at its end.
@@ -536,45 +523,22 @@ export interface IncaInputElement extends IncaHTMLElement {
 }
 
 /** The handle of a `<template>`. */
-export interface IncaTemplateElement extends IncaHTMLElement {
+export interface HTMLTemplateElement extends HTMLElement {
   /** The fragment that holds the markup of the template. It is never drawn or connected. */
-  readonly content: IncaFragment;
+  readonly content: DocumentFragment;
 }
 
 /** A comment node. */
-export interface IncaComment
-  extends
-    IncaEventTarget,
-    NodeMembers,
-    TextContentMember,
-    CharacterDataMembers,
-    ChildNodeMembers,
-    NonDocumentTypeChildNodeMembers {
-  /**
-   * The node id the host knows this node by. Internal to the renderer.
-   * @internal
-   */
-  readonly __node_id: NodeId;
-  /** Discriminates this node within the {@link IncaNode} union. */
+export interface Comment extends CharacterData, ChildNode, NonDocumentTypeChildNode {
+  readonly nodeType: 8;
+  /** @internal */
   readonly kind: "comment";
 }
 
 /** A text leaf node. */
-export interface IncaText
-  extends
-    IncaEventTarget,
-    NodeMembers,
-    TextContentMember,
-    CharacterDataMembers,
-    ChildNodeMembers,
-    NonDocumentTypeChildNodeMembers,
-    TextMembers {
-  /**
-   * The node id the host knows this node by. Internal to the renderer.
-   * @internal
-   */
-  readonly __node_id: NodeId;
-  /** Discriminates this node within the {@link IncaNode} union. */
+export interface Text extends CharacterData, ChildNode, NonDocumentTypeChildNode, TextMembers {
+  readonly nodeType: 3;
+  /** @internal */
   readonly kind: "text";
   /**
    * The text content, mirroring the value pushed to the native node.
@@ -586,19 +550,8 @@ export interface IncaText
  * The node `document.createDocumentFragment()` returns: a parentless container whose children move
  * into the node it is inserted into.
  */
-export interface IncaFragment
-  extends IncaEventTarget, NodeMembers, ParentNodeMembers, TextContentMember {
-  /**
-   * The node id the host knows this node by. Internal to the renderer.
-   * @internal
-   */
-  readonly __node_id: NodeId;
-  /** Discriminates this node within the {@link IncaNode} union. */
+export interface DocumentFragment extends ParentNode {
+  readonly nodeType: 11;
+  /** @internal */
   readonly kind: "fragment";
 }
-
-/** A node that can have children. */
-export type IncaParent = IncaElement | IncaFragment | IncaDocument;
-
-/** Any node handle: an element, comment, text leaf, fragment or the document. */
-export type IncaNode = IncaElement | IncaComment | IncaText | IncaFragment | IncaDocument;

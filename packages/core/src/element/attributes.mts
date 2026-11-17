@@ -12,11 +12,11 @@ import { requireArguments, attributeText } from "./arguments.mts";
 import { namedNodeMapOf } from "./collections.mts";
 import { isDestroyed, partsOf, receiverNode, receiverOf, ELEMENT_RULE } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
-import type { Attr, IncaElement, NamedNodeMap } from "./types.mts";
+import type { Attr, Element, NamedNodeMap } from "./types.mts";
 
 /** The members {@link attributeMembers} builds. */
 export type AttributeMembers = Pick<
-  IncaElement,
+  Element,
   | "getAttribute"
   | "setAttribute"
   | "hasAttribute"
@@ -33,14 +33,14 @@ class AttributeNode implements Attr {
   readonly #name: string;
   readonly #id: NodeId;
   readonly #forget: (attr: AttributeNode) => void;
-  #owner: IncaElement | null;
+  #owner: Element | null;
   #value: string;
 
   constructor(
     name: string,
     value: string,
     id: NodeId,
-    owner: IncaElement,
+    owner: Element,
     forget: (attr: AttributeNode) => void,
   ) {
     this.#name = name;
@@ -99,7 +99,7 @@ class AttributeNode implements Attr {
     return true;
   }
 
-  get ownerElement(): IncaElement | null {
+  get ownerElement(): Element | null {
     this.#attached();
     return this.#owner;
   }
@@ -122,7 +122,7 @@ interface AttributeStore {
  * @param element - the handle
  * @returns the store
  */
-function storeOf(element: IncaElement): AttributeStore {
+function storeOf(element: Element): AttributeStore {
   const id = element.__node_id;
   const read = (name: string): string | null => {
     const value = readAttribute(id, name);
@@ -166,9 +166,9 @@ function storeOf(element: IncaElement): AttributeStore {
  * @param self - `this` of the member
  * @returns the element and its store
  */
-function attributesOf(self: unknown): { element: IncaElement; store: AttributeStore } {
+function attributesOf(self: unknown): { element: Element; store: AttributeStore } {
   const state = receiverOf(self, ELEMENT_RULE);
-  const element = self as IncaElement;
+  const element = self as Element;
   return { element, store: (state.attributes ??= storeOf(element)) as AttributeStore };
 }
 
@@ -177,7 +177,7 @@ function attributesOf(self: unknown): { element: IncaElement; store: AttributeSt
  * ignores writes.
  * @returns the members, with `attributes` and `id` as accessors
  */
-export function attributeMembers(): AttributeMembers & Pick<IncaElement, "id"> {
+export function attributeMembers(): AttributeMembers & Pick<Element, "id"> {
   return {
     get id() {
       const node = receiverNode(this, ELEMENT_RULE);
@@ -220,7 +220,7 @@ export function attributeMembers(): AttributeMembers & Pick<IncaElement, "id"> {
 }
 
 /** The four name members of an element. */
-type NameMembers = Pick<IncaElement, "tagName" | "localName" | "namespaceURI" | "prefix">;
+type NameMembers = Pick<Element, "tagName" | "localName" | "namespaceURI" | "prefix">;
 
 /**
  * Builds the name members of `Element`, read from the parts the record computed once.

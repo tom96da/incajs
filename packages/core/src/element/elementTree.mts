@@ -11,18 +11,20 @@ import {
   receiverNode,
 } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
+import type { HandleNode } from "./handleNode.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
 import type {
-  NonDocumentTypeChildNodeMembers,
-  ParentNodeMembers,
+  Node,
+  NonDocumentTypeChildNode,
+  ParentNode,
   ParentNodeMutationMembers,
 } from "./nodeTypes.mts";
-import type { IncaElement, IncaNode } from "./types.mts";
+import type { Element } from "./types.mts";
 
 /** The ParentNode members the tree gives, the queries excepted. Comments count as no element. */
 export type ElementTreeMembers = Omit<
-  ParentNodeMembers,
-  keyof ParentNodeMutationMembers | "querySelector" | "querySelectorAll"
+  ParentNode,
+  keyof Node | keyof ParentNodeMutationMembers | "querySelector" | "querySelectorAll"
 >;
 
 /**
@@ -31,8 +33,8 @@ export type ElementTreeMembers = Omit<
  * @param id - the native node's id
  * @returns the handle, or `undefined` when the node has none
  */
-function elementHandle(builders: HandleBuilders, id: number): IncaElement | undefined {
-  return builders.node(id) as IncaElement | undefined;
+function elementHandle(builders: HandleBuilders, id: number): Element | undefined {
+  return builders.node(id) as Element | undefined;
 }
 
 /**
@@ -42,20 +44,20 @@ function elementHandle(builders: HandleBuilders, id: number): IncaElement | unde
  * @returns the members, as getters
  */
 export function parentNodeMembers(builders: HandleBuilders): ElementTreeMembers {
-  const reach = (self: unknown, link: NodeLink): IncaElement | null => {
+  const reach = (self: unknown, link: NodeLink): Element | null => {
     const node = receiverNode(self, PARENT_NODE_RULE);
     if (isDestroyed(node)) return null;
     const found = linkedNode(node.__node_id, link, true);
     return found === null ? null : (elementHandle(builders, found) ?? null);
   };
-  const liveChildren = (node: IncaNode): IncaElement[] =>
+  const liveChildren = (node: HandleNode): Element[] =>
     isDestroyed(node)
       ? []
       : childNodeIds(node.__node_id, true).flatMap((child) => elementHandle(builders, child) ?? []);
   return {
     get children() {
       const state = receiverOf(this, PARENT_NODE_RULE);
-      const node = this as unknown as IncaNode;
+      const node = this as unknown as HandleNode;
       return (state.children ??= htmlCollectionOf(() => liveChildren(node)));
     },
     get firstElementChild() {
@@ -77,8 +79,8 @@ export function parentNodeMembers(builders: HandleBuilders): ElementTreeMembers 
  */
 export function nonDocumentTypeChildNodeMembers(
   builders: HandleBuilders,
-): NonDocumentTypeChildNodeMembers {
-  const reach = (self: unknown, link: NodeLink): IncaElement | null => {
+): Omit<NonDocumentTypeChildNode, keyof Node> {
+  const reach = (self: unknown, link: NodeLink): Element | null => {
     const node = receiverNode(self, NON_DOCUMENT_CHILD_RULE);
     if (isDestroyed(node)) return null;
     const found = linkedNode(node.__node_id, link, true);

@@ -13,7 +13,9 @@ import {
 } from "./handle.mts";
 import { isHeld, nodeOf } from "./lifecycle.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
-import type { IncaElement, IncaFragment, IncaNode } from "./types.mts";
+import type { HandleNode } from "./handleNode.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { Element, DocumentFragment } from "./types.mts";
 
 let host: FakeHost;
 
@@ -23,11 +25,11 @@ beforeEach(() => {
 });
 
 const div = () => createElementNode("div");
-const fragment = (): IncaFragment => createIncaFragment(host.create("#fragment"));
+const fragment = (): DocumentFragment => createIncaFragment(host.create("#fragment"));
 /** The children of `node` as the host lists them. */
-const kids = (node: IncaNode): IncaNode[] => Array.from(node.childNodes);
+const kids = (node: Node): Node[] => Array.from(node.childNodes);
 /** The ids of the children of `node`, after checking that the host lists the same. */
-const idsOf = (node: IncaNode): number[] => {
+const idsOf = (node: Node): number[] => {
   const ids = kids(node).map((child) => child.__node_id);
   expect(host.nodes.get(node.__node_id)!.children).toEqual(ids);
   return ids;
@@ -50,7 +52,7 @@ describe("cloneNode", () => {
     children[0]!.appendChild(comment);
     return { parent, inner: children[0]!, text, comment };
   };
-  const kinds = (nodes: readonly IncaNode[]) => nodes.map((node) => node.kind);
+  const kinds = (nodes: readonly Node[]) => nodes.map((node) => (node as HandleNode).kind);
 
   it.each([
     ["undefined", undefined, false],
@@ -76,7 +78,7 @@ describe("cloneNode", () => {
       [host.create("div"), "Y", "urn:x", "x", "X:Y"],
     ]);
 
-    const copy = original.cloneNode() as IncaElement;
+    const copy = original.cloneNode() as Element;
 
     expect([copy.tagName, copy.localName, copy.namespaceURI, copy.prefix]).toEqual([
       "X:Y",
@@ -99,8 +101,8 @@ describe("cloneNode", () => {
   });
 
   it("reuses the content handle that the copy of a template made", () => {
-    const copy = createElementNode("template").cloneNode(true) as unknown as IncaElement & {
-      content: IncaNode;
+    const copy = createElementNode("template").cloneNode(true) as unknown as Element & {
+      content: Node;
     };
 
     expect(nodeOf(copy.content.__node_id)).toBe(copy.content);
@@ -147,7 +149,7 @@ describe("cloneNode", () => {
     const { parent } = tree();
 
     const copy = parent.cloneNode(true);
-    const [inner, text] = kids(copy) as [typeof parent, IncaNode];
+    const [inner, text] = kids(copy) as [typeof parent, Node];
 
     expect([inner.__node_id, kids(inner)[0]!.__node_id, text.__node_id]).toEqual([
       copy.__node_id + 1,

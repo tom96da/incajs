@@ -18,7 +18,7 @@ import { createElementNode, createTextNode } from "../src/element/handle.mts";
 import { elementOf, isDestroyed } from "../src/element/lifecycle.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import { installFakeHost } from "./fakeHost.mts";
-import type { IncaElement } from "../src/index.mts";
+import type { Element } from "../src/index.mts";
 import type { FakeHost } from "./fakeHost.mts";
 
 /** Node's timers, put back after a test loads core over the fake host. */
@@ -111,8 +111,8 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
 
   it("keeps a removed element in the host across frames while its handle lives", async () => {
     const show = ref(true);
-    const button = ref<IncaElement | null>(null);
-    let kept: IncaElement | null = null;
+    const button = ref<Element | null>(null);
+    let kept: Element | null = null;
     const App = {
       render: () => h("div", [show.value ? h("button", { ref: button }) : null]),
     };
@@ -131,8 +131,8 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
 
   it("keeps the Teleport anchors of a null target until the target is set", async () => {
     // The children are empty because Vue cannot patch the children of a Teleport mounted with a null target.
-    const target = ref<IncaElement | null>(null);
-    const box = ref<IncaElement | null>(null);
+    const target = ref<Element | null>(null);
+    const box = ref<Element | null>(null);
     const App = {
       render: () => h("div", [h("div", { ref: box }), h(Teleport, { to: target.value }, [])]),
     };

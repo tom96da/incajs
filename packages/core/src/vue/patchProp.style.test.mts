@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import * as rendererCore from "../rendererCore.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaCore, IncaElement } from "../rendererCore.mts";
+import type { RendererCore, Element } from "../rendererCore.mts";
 
 const core = {
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
@@ -14,10 +14,10 @@ const core = {
   removeStyle: vi.fn<(nodeId: number, key: string) => void>(),
 };
 
-const patchProp = createPatchProp(core as unknown as IncaCore);
+const patchProp = createPatchProp(core as unknown as RendererCore);
 
 /** An element holds the id of its node, which is all that patchProp reads. */
-const makeEl = (): IncaElement => ({ __node_id: 1 }) as unknown as IncaElement;
+const makeEl = (): Element => ({ __node_id: 1 }) as unknown as Element;
 
 let el = makeEl();
 

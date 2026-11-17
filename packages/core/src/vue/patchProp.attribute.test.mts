@@ -8,9 +8,9 @@ import { nativeStub } from "../../tests/setup.mts";
 import * as rendererCore from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaCore, IncaElement } from "../rendererCore.mts";
+import type { RendererCore, Element } from "../rendererCore.mts";
 
-const core: IncaCore = {
+const core: RendererCore = {
   ...rendererCore,
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
@@ -19,7 +19,7 @@ const core: IncaCore = {
 const patchProp = createPatchProp(core);
 
 /** An element holds the id of its node, which is all that patchProp reads. */
-const makeEl = (): IncaElement => ({ __node_id: 1 }) as unknown as IncaElement;
+const makeEl = (): Element => ({ __node_id: 1 }) as unknown as Element;
 
 let el = makeEl();
 
@@ -215,7 +215,7 @@ describe("patchProp on a handler property key", () => {
   const patchProp = createPatchProp(core);
 
   /** Runs the registrations of `event` in order, as the host does. */
-  function fire(el: IncaElement, event = "click"): void {
+  function fire(el: Element, event = "click"): void {
     const payload = { type: event, currentTarget: el, eventId: 1, preventDefault() {} };
     for (const registration of registrations) {
       if (registration.event === event) registration.callback(payload);
