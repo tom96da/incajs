@@ -712,14 +712,15 @@ for every registration of a context. Ids start at 1 and are never reused. A scri
 the table nor the allocator.
 
 - `AbortSignal.timeout()` starts a timer of this queue with one callback id, so the id `RangeError`
-  applies to it. The nesting clamp does not.
+  applies to it. The nesting clamp does not, and the clear functions do not stop it.
 - `setTimeout` and `setInterval` refuse a non-function handler with a
   `TypeError`, read `delay` as a 32-bit integer raised to 0 and throw the
   `RangeError` "timer ids are exhausted. restart the app" after the id
   `2^31 - 1`. The timer id is the table id.
 - The clear functions are one function. They read the id as a 32-bit integer
-  and release the table entry and the queue entry only for an id the queue
-  holds, so the id of another kind of registration stays.
+  and release the table entry and the queue entry only for an id of a timer a
+  script started, so the id of another kind of registration and of a timer
+  without a handle stays.
 - A due timer calls its handler with `globalThis` as `this` and the stored
   arguments. A one-shot entry leaves the table before the handler runs.
 - A timer started in a callback has the callback's nesting level plus 1. A

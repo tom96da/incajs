@@ -107,7 +107,7 @@ fn timeout<'js>(
         .ok_or_else(|| Exception::throw_range(ctx, "timer ids are exhausted. restart the app"))?;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let wait = delay.min(MAX_DELAY) as u32;
-    host.borrow().timers.start_unnested(id, wait);
+    host.borrow().timers.start_without_handle(id, wait);
     Ok(signal)
 }
 
@@ -316,23 +316,24 @@ mod tests {
     }
 
     #[test]
-    fn clearing_the_timer_id_stops_the_timeout() {
+    fn clearing_the_timer_id_leaves_the_timeout_running() {
         let f = fixture();
         f.engine
             .eval::<()>("globalThis.s = AbortSignal.timeout(5); clearTimeout(1);")
             .unwrap();
 
-        f.advance(10);
+        f.advance(5);
 
-        assert_eq!(f.json("s.aborted"), json!(false));
+        assert_eq!(f.json("s.aborted"), json!(true));
     }
 
     #[test]
-    fn a_cleared_timeout_signal_is_collected() {
+    fn a_fired_timeout_signal_is_collected() {
         let f = fixture();
         f.engine
-            .eval::<()>("globalThis.w = new WeakRef(AbortSignal.timeout(5)); clearTimeout(1);")
+            .eval::<()>("globalThis.w = new WeakRef(AbortSignal.timeout(5));")
             .unwrap();
+        f.advance(5);
 
         f.engine.with(|ctx| ctx.run_gc());
         drop(f.engine.run_jobs());

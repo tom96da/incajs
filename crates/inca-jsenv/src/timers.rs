@@ -49,6 +49,8 @@ struct Entry {
     period: Duration,
     repeat: bool,
     level: u32,
+    /// Whether a script holds the id, so the clear functions can stop it.
+    has_handle: bool,
 }
 
 #[derive(Default)]
@@ -66,7 +68,13 @@ impl State {
         }
     }
 
-    fn insert(&mut self, id: u32, due: Instant, period: Duration, repeat: bool, level: u32) {
+    fn insert(
+        &mut self,
+        id: u32,
+        due: Instant,
+        period: Duration,
+        (repeat, level, has_handle): (bool, u32, bool),
+    ) {
         let key = (due, self.next_seq);
         self.next_seq += 1;
         self.queue.insert(key, id);
@@ -77,6 +85,7 @@ impl State {
                 period,
                 repeat,
                 level,
+                has_handle,
             },
         );
     }
@@ -118,26 +127,30 @@ impl Timers {
             let mut state = self.state.borrow_mut();
             let level = state.running_level + 1;
             let period = nested(level, Duration::from_millis(u64::from(delay)));
-            state.insert(id, now + period, period, repeat, level);
+            state.insert(id, now + period, period, (repeat, level, true));
         }
         (self.wake)();
     }
 
-    /// Queues the one-shot timer `id`, due `delay` milliseconds from now, with no nesting clamp
-    /// and at level 0, whatever timer runs now. The id comes from the
-    /// [callback table](crate::callbacks).
-    pub fn start_unnested(&self, id: u32, delay: u32) {
+    /// Queues the one-shot timer `id`, which no script holds a handle to, due `delay` milliseconds
+    /// from now, with no nesting clamp and at level 0, whatever timer runs now. The clear
+    /// functions do not stop it. The id comes from the [callback table](crate::callbacks).
+    pub fn start_without_handle(&self, id: u32, delay: u32) {
         let now = (self.clock)();
         let period = Duration::from_millis(u64::from(delay));
         self.state
             .borrow_mut()
-            .insert(id, now + period, period, false, 0);
+            .insert(id, now + period, period, (false, 0, false));
         (self.wake)();
     }
 
-    /// Whether timer `id` is queued.
+    /// Whether a timer a script started is queued under `id`.
     pub(crate) fn contains(&self, id: u32) -> bool {
-        self.state.borrow().by_id.contains_key(&id)
+        self.state
+            .borrow()
+            .by_id
+            .get(&id)
+            .is_some_and(|entry| entry.has_handle)
     }
 
     /// Removes timer `id`. An id that is not queued does nothing.
@@ -171,7 +184,7 @@ impl Timers {
             let level = entry.level + 1;
             let period = nested(level, entry.period);
             let due = next_on_grid(entry.key.0, period, now);
-            state.insert(id, due, period, true, level);
+            state.insert(id, due, period, (true, level, entry.has_handle));
         } else {
             state.by_id.remove(&id);
         }
@@ -609,29 +622,29 @@ mod tests {
     }
 
     #[test]
-    fn an_unnested_timer_waits_the_given_delay_at_any_running_level() {
+    fn a_timer_without_a_handle_waits_the_given_delay_at_any_running_level() {
         let f = fixture();
         f.timers.state.borrow_mut().running_level = 9;
 
-        f.timers.start_unnested(2, 0);
+        f.timers.start_without_handle(2, 0);
 
         let (due, _) = f.timers.state.borrow().by_id[&2].key;
         assert_eq!(due, f.now.get());
     }
 
     #[test]
-    fn an_unnested_timer_does_not_repeat() {
+    fn a_timer_without_a_handle_does_not_repeat() {
         let f = fixture();
-        f.timers.start_unnested(2, 5);
+        f.timers.start_without_handle(2, 5);
 
         assert!(!f.timers.state.borrow().by_id[&2].repeat);
     }
 
     #[test]
-    fn an_unnested_timer_runs_at_level_zero() {
+    fn a_timer_without_a_handle_runs_at_level_zero() {
         let f = fixture();
         f.timers.state.borrow_mut().running_level = 9;
-        f.timers.start_unnested(2, 5);
+        f.timers.start_without_handle(2, 5);
 
         assert_eq!(f.timers.state.borrow().by_id[&2].level, 0);
     }
