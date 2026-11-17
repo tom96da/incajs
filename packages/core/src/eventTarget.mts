@@ -67,9 +67,16 @@ export function eventTargetMembers(): IncaEventTarget {
       const options = rest[0];
       const given: ListenerOptions =
         typeof options === "boolean" ? { capture: options } : (options ?? {});
+      // Each member is read once, in the order of the dictionary, and an inherited member counts.
+      const capture = given.capture;
+      const once = given.once;
+      const passive = given.passive;
+      const signal = given.signal;
       addEventListener(target, type, listener, {
-        ...given,
-        passive: given.passive ?? stateOf(this)?.passive.includes(type) ?? false,
+        capture,
+        once,
+        passive: passive ?? stateOf(this)?.passive.includes(type) ?? false,
+        signal,
       });
     },
 

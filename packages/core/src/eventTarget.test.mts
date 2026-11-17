@@ -25,7 +25,8 @@ const native = {
       callback: HostCallback,
       capture?: boolean,
       passive?: boolean,
-    ) => number
+      signal?: unknown,
+    ) => number | null
   >(() => nextCallbackId++),
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
@@ -262,5 +263,63 @@ describe("a signal as the receiver", () => {
     const call = () => document.addEventListener.call({}, "abort", () => undefined);
 
     expect(call).toThrow(TypeError);
+  });
+});
+
+describe("addEventListener reads its options as properties", () => {
+  const target = (): IncaEventTarget => createEventTarget(5);
+
+  it("takes the signal of a class instance with a getter", () => {
+    const signal = new AbortSignal();
+    class Options {
+      get signal() {
+        return signal;
+      }
+    }
+
+    target().addEventListener("click", () => undefined, new Options() as never);
+
+    expect(native.addEventListener.mock.calls[0]![5]).toBe(signal);
+  });
+
+  it("throws a TypeError for an inherited signal that is no signal", () => {
+    const options = Object.create({ signal: {} }) as never;
+
+    expect(() => target().addEventListener("click", () => undefined, options)).toThrow(TypeError);
+  });
+
+  it("reads capture, once, passive and signal once each, in that order", () => {
+    const reads: string[] = [];
+    const options = {};
+    for (const name of ["signal", "passive", "once", "capture"]) {
+      Object.defineProperty(options, name, {
+        get() {
+          reads.push(name);
+          return undefined;
+        },
+        enumerable: true,
+      });
+    }
+
+    target().addEventListener("click", () => undefined, options as never);
+
+    expect(reads).toEqual(["capture", "once", "passive", "signal"]);
+  });
+
+  it("takes an inherited capture", () => {
+    const options = Object.create({ capture: true }) as never;
+
+    target().addEventListener("click", () => undefined, options);
+
+    expect(native.addEventListener.mock.calls[0]![3]).toBe(true);
+  });
+
+  it("takes an inherited once", () => {
+    const options = Object.create({ once: true }) as never;
+    target().addEventListener("click", () => undefined, options);
+
+    native.addEventListener.mock.calls[0]![2]({});
+
+    expect(native.removeEventListener).toHaveBeenCalledTimes(1);
   });
 });
