@@ -16,7 +16,7 @@ function installHost(scroll: readonly [number, number, number, number] | null = 
     getAttribute: vi.fn<() => null>(() => null),
     layoutOf: vi.fn<() => null>(() => null),
   };
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
   return host;
 }
 

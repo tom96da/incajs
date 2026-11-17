@@ -93,7 +93,7 @@ const native = {
 beforeEach(() => {
   vi.clearAllMocks();
   nextCallbackId = 0;
-  globalThis.__inca_native__ = nativeStub(native);
+  vi.stubGlobal("__inca_native__", nativeStub(native));
 });
 
 /** The function the host received for the registration at `index`. */
@@ -517,14 +517,9 @@ describe("the signal option", () => {
   });
 
   it("is not changed by a script that replaces the global AbortSignal", () => {
-    const original = globalThis.AbortSignal;
     const signal = new AbortSignal();
-    globalThis.AbortSignal = class {} as never;
-    try {
-      addEventListener(1, "click", listener(), { signal });
-    } finally {
-      globalThis.AbortSignal = original;
-    }
+    vi.stubGlobal("AbortSignal", class {});
+    addEventListener(1, "click", listener(), { signal });
 
     expect(native.addEventListener).toHaveBeenCalledTimes(1);
   });

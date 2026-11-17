@@ -19,7 +19,7 @@ describe("createIncaElement selectors", () => {
       querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
       querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
     };
-    globalThis.__inca_native__ = nativeStub(host as never);
+    vi.stubGlobal("__inca_native__", nativeStub(host as never));
     return host;
   }
 
@@ -76,7 +76,7 @@ describe("createIncaElement selectors", () => {
 
   it("closest resolves the mount container before any handle of it exists", () => {
     const host = installSelectors(91);
-    globalThis.__inca_native__ = nativeStub({ ...host, rootNodeId: () => 91 } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ ...host, rootNodeId: () => 91 } as never));
     const { leaf } = chain();
 
     expect(leaf.closest("div")).toBe(rootElement());

@@ -146,7 +146,7 @@ describe("patchProp on a string style", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    globalThis.__inca_native__ = nativeStub({ setAttribute, setStyle, removeStyle } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ setAttribute, setStyle, removeStyle } as never));
   });
 
   it("applies the string as the style attribute", () => {

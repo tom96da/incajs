@@ -379,7 +379,7 @@ describe("the receiver check", () => {
     ],
   ])("runs focus on %s", (_row, make) => {
     const focus = vi.fn<(id: number, preventScroll: boolean) => void>();
-    globalThis.__inca_native__ = nativeStub({ focusNode: focus } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ focusNode: focus } as never));
     const element = make();
 
     call(all.HTMLElement, "focus", element);

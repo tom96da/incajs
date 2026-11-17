@@ -42,8 +42,6 @@ beforeEach(() => {
   el = makeEl();
 });
 
-afterEach(() => vi.unstubAllGlobals());
-
 describe("plain and .once listeners on one element", () => {
   const set = (key: string, value: unknown, target = el): void =>
     patchProp(target, key, null, value, undefined, null);

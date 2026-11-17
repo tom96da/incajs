@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { createRenderer, h, nextTick, ref } from "@vue/runtime-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
 import * as rendererCore from "../rendererCore.mts";
@@ -27,8 +27,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   el = makeEl();
 });
-
-afterEach(() => vi.unstubAllGlobals());
 
 describe("everything else", () => {
   it.each([
@@ -156,7 +154,7 @@ describe("patchProp on the value key", () => {
   beforeEach(() => {
     setAttribute.mockClear();
     setInputValue.mockClear();
-    globalThis.__inca_native__ = nativeStub({ setAttribute, setInputValue } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ setAttribute, setInputValue } as never));
   });
 
   it.each<[unknown, string]>([
@@ -209,7 +207,7 @@ describe("patchProp on a handler property key", () => {
       removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
       getAttribute: vi.fn<() => null>(() => null),
     };
-    globalThis.__inca_native__ = nativeStub(native as never);
+    vi.stubGlobal("__inca_native__", nativeStub(native as never));
     return native;
   }
 

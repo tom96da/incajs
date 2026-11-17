@@ -27,7 +27,7 @@ function setup(initial: Record<string, Stored> = {}) {
       return list;
     }),
   };
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
   const el: IncaElement = createIncaElement(1, "div");
   return { host, el, store, lists };
 }

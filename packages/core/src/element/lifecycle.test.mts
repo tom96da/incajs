@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
@@ -85,7 +85,7 @@ describe("a template", () => {
   };
 
   const template = () => {
-    globalThis.__inca_native__ = nativeStub(host as never);
+    vi.stubGlobal("__inca_native__", nativeStub(host as never));
     const owner = createElementNode("template") as IncaTemplateElement;
     return { owner, content: owner.content };
   };
@@ -109,7 +109,7 @@ describe("a template", () => {
 
 describe("the name members of a freed element", () => {
   it("keep their values", () => {
-    globalThis.__inca_native__ = nativeStub({ releaseNode: () => {} } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ releaseNode: () => {} } as never));
     const el = createIncaElement(1, ["Y", "urn:x", "x", "X:Y"]);
 
     markFreed([el.__node_id]);
@@ -142,11 +142,7 @@ describe("the prototype of a handle", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    globalThis.__inca_native__ = nativeStub(host as never);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.stubGlobal("__inca_native__", nativeStub(host as never));
   });
 
   /** Makes an element of the namespace with `createElementNS`. */
@@ -209,7 +205,7 @@ describe("the prototype of a handle", () => {
     const interfacePrototypes = vi.fn<() => InterfacePrototypes>(() =>
       nativeStub().interfacePrototypes(),
     );
-    globalThis.__inca_native__ = nativeStub({ interfacePrototypes } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ interfacePrototypes } as never));
     vi.resetModules();
     const lifecycle = await import("./lifecycle.mts");
 
@@ -244,11 +240,7 @@ describe("the release of a template", () => {
         }
       },
     );
-    globalThis.__inca_native__ = nativeStub(host as never);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.stubGlobal("__inca_native__", nativeStub(host as never));
   });
 
   it("releases the node of a collected template handle once, with its id", async () => {
@@ -274,7 +266,7 @@ describe("the release of a removed node", () => {
       },
     );
     vi.resetModules();
-    globalThis.__inca_native__ = nativeStub({ releaseNode: () => {} } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ releaseNode: () => {} } as never));
     const { createIncaElement } = await import("./handle.mts");
     const { leftHeld, releaseWhenCollected } = await import("./lifecycle.mts");
     const el = createIncaElement(50, "div");
@@ -283,6 +275,5 @@ describe("the release of a removed node", () => {
     leftHeld(el, [el.__node_id]);
 
     expect(registered.get(el)).toBe(1);
-    vi.unstubAllGlobals();
   });
 });

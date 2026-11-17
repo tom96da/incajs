@@ -37,7 +37,7 @@ const native = {
 beforeEach(() => {
   vi.clearAllMocks();
   registrations = [];
-  globalThis.__inca_native__ = nativeStub(native as never);
+  vi.stubGlobal("__inca_native__", nativeStub(native as never));
 });
 
 /** Runs the listeners of `signal` for `abort`, as the host walk does. */
@@ -175,10 +175,8 @@ describe("onabort", () => {
     const Real = (new AbortController().signal as unknown as { constructor: typeof AbortSignal })
       .constructor;
     const before = Object.getOwnPropertyDescriptor(Real.prototype, "onabort");
-    const stand = globalThis.AbortSignal;
-    const host = globalThis.__inca_native__;
-    globalThis.AbortSignal = Real;
-    delete (globalThis as { __inca_native__?: unknown }).__inca_native__;
+    vi.stubGlobal("AbortSignal", Real);
+    vi.stubGlobal("__inca_native__", undefined);
     vi.doMock("./element/eventHandlers.mts", () => ({ isHandlerValue: () => true }));
     vi.doMock("./ffi/index.mts", () => ({ signalId: () => null }));
     vi.doMock("./events.mts", () => ({
@@ -193,8 +191,6 @@ describe("onabort", () => {
       vi.doUnmock("./ffi/index.mts");
       vi.doUnmock("./events.mts");
       vi.resetModules();
-      globalThis.AbortSignal = stand;
-      globalThis.__inca_native__ = host;
     }
 
     const accessors = (d?: PropertyDescriptor) => d as { get?: unknown; set?: unknown } | undefined;
@@ -245,10 +241,13 @@ describe("a once listener on a signal", () => {
 describe("the collection of a signal", () => {
   it("frees a signal with a once listener and an onabort that nothing refers to", async () => {
     let next = 0;
-    globalThis.__inca_native__ = nativeStub({
-      addEventListener: () => ++next,
-      removeEventListener: () => true,
-    } as never);
+    vi.stubGlobal(
+      "__inca_native__",
+      nativeStub({
+        addEventListener: () => ++next,
+        removeEventListener: () => true,
+      } as never),
+    );
     let ref: WeakRef<object>;
     (() => {
       const signal = new AbortSignal();
@@ -266,10 +265,13 @@ describe("the collection of a signal", () => {
 describe("the collection of a signal with a once listener registered with the signal option", () => {
   it("frees the signal when nothing refers to it", async () => {
     let next = 0;
-    globalThis.__inca_native__ = nativeStub({
-      addEventListener: () => ++next,
-      removeEventListener: () => true,
-    } as never);
+    vi.stubGlobal(
+      "__inca_native__",
+      nativeStub({
+        addEventListener: () => ++next,
+        removeEventListener: () => true,
+      } as never),
+    );
     let ref: WeakRef<object>;
     (() => {
       const signal = new AbortSignal();

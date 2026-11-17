@@ -137,6 +137,6 @@ export function installMembersHost(
     scrollOf: vi.fn<() => readonly [number, number, number, number] | null>(() => scroll),
     scrollNode: vi.fn<(nodeId: number, left: number | null, top: number | null) => void>(),
   };
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
   return host;
 }

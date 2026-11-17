@@ -329,7 +329,7 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
     releaseNode: spies.releaseNode,
     insertBefore: spies.insertBefore,
   };
-  globalThis.__inca_native__ = nativeStub({ ...natives, ...extra });
+  vi.stubGlobal("__inca_native__", nativeStub({ ...natives, ...extra }));
 
   return {
     DOCUMENT,

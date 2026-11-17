@@ -25,7 +25,7 @@ function setup() {
     ]),
     holdNode: vi.fn<(nodeId: number) => void>(),
   };
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
   block.cssText = "keep";
   return { host, el: createIncaElement(1, "div") };
 }

@@ -39,8 +39,6 @@ beforeEach(() => {
   el = makeEl();
 });
 
-afterEach(() => vi.unstubAllGlobals());
-
 describe("a listener attached while an event is handled", () => {
   let latest = 0;
   const set = (key: string, value: unknown, target = el): void =>
@@ -209,13 +207,13 @@ describe("with the event tracker of the events layer", () => {
 
   beforeEach(() => {
     addEventListener.mockClear();
-    globalThis.__inca_native__ = nativeStub({
-      addEventListener,
-      removeEventListener: vi.fn<() => boolean>(() => true),
-    } as never);
-  });
-  afterEach(() => {
-    delete (globalThis as { __inca_native__?: unknown }).__inca_native__;
+    vi.stubGlobal(
+      "__inca_native__",
+      nativeStub({
+        addEventListener,
+        removeEventListener: vi.fn<() => boolean>(() => true),
+      } as never),
+    );
   });
 
   // Delivers event `eventId` to the newest registration for `nodeId`.

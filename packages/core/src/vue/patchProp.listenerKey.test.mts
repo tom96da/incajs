@@ -329,20 +329,23 @@ describe("patchProp on a removed element", () => {
 
   it("adds a listener slot without reaching the host", () => {
     const released = new Set<number>();
-    globalThis.__inca_native__ = nativeStub({
-      createNode: vi.fn<() => number>(() => 2),
-      holdNode: vi.fn<() => void>(),
-      releaseNode: vi.fn<() => void>(),
-      removeNode: vi.fn<(id: number) => [number[], number[]]>((id) => {
-        released.add(id);
-        return [[], [id]];
-      }),
-      addEventListener: vi.fn<(id: number) => number>((id) => {
-        if (released.has(id)) throw new TypeError(`node ${id} is not live`);
-        return 0;
-      }),
-      removeEventListener: vi.fn<() => boolean>(() => true),
-    } as never);
+    vi.stubGlobal(
+      "__inca_native__",
+      nativeStub({
+        createNode: vi.fn<() => number>(() => 2),
+        holdNode: vi.fn<() => void>(),
+        releaseNode: vi.fn<() => void>(),
+        removeNode: vi.fn<(id: number) => [number[], number[]]>((id) => {
+          released.add(id);
+          return [[], [id]];
+        }),
+        addEventListener: vi.fn<(id: number) => number>((id) => {
+          if (released.has(id)) throw new TypeError(`node ${id} is not live`);
+          return 0;
+        }),
+        removeEventListener: vi.fn<() => boolean>(() => true),
+      } as never),
+    );
     const ops = createNodeOps(core);
     const el = ops.createElement("view") as IncaElement;
     ops.remove(el);

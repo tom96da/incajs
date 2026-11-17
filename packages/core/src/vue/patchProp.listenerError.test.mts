@@ -38,8 +38,6 @@ beforeEach(() => {
   el = makeEl();
 });
 
-afterEach(() => vi.unstubAllGlobals());
-
 describe("errors thrown by an event handler", () => {
   const boom = new Error("boom");
   const throwing = (): void => {

@@ -17,7 +17,10 @@ const DOCUMENT = 1;
 const ROOT = 77;
 
 beforeEach(() => {
-  globalThis.__inca_native__ = nativeStub({ rootNodeId: vi.fn<() => number>(() => ROOT) } as never);
+  vi.stubGlobal(
+    "__inca_native__",
+    nativeStub({ rootNodeId: vi.fn<() => number>(() => ROOT) } as never),
+  );
 });
 
 describe("globals", () => {

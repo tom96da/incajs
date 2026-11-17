@@ -62,6 +62,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const app of mountedApps.splice(0)) app.unmount();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 /**
@@ -268,7 +269,6 @@ describe("__inca_released__", () => {
 
 describe("the hold registry", () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.resetModules();
     Object.assign(globalThis, nodeTimers);
   });

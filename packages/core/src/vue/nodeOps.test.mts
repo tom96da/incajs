@@ -24,7 +24,7 @@ const nodeOps = createNodeOps(core);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  globalThis.__inca_native__ = nativeStub(native as never);
+  vi.stubGlobal("__inca_native__", nativeStub(native as never));
 });
 
 describe("createNodeOps comment", () => {

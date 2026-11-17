@@ -105,7 +105,7 @@ beforeEach(() => {
   lastElements = new Map();
   firstChildren = new Map();
   childrenOf = new Map();
-  globalThis.__inca_native__ = nativeStub(native as never);
+  vi.stubGlobal("__inca_native__", nativeStub(native as never));
 });
 
 afterEach(() => {

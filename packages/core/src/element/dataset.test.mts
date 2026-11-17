@@ -34,7 +34,7 @@ function setup(initial: Record<string, string> = {}) {
     datasetKeys: vi.fn<(nodeId: number) => string[]>(() => [...store.keys()]),
     datasetTarget: vi.fn<() => object>(() => new FakeDOMStringMap()),
   };
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
   const el = createIncaElement(1, "div");
   const dataset: DOMStringMap = el.dataset;
   return { host, el, dataset, store };

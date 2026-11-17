@@ -47,7 +47,7 @@ beforeEach(() => {
   children = {};
   data = {};
   nextId = 100;
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
 });
 
 describe("nodeType", () => {

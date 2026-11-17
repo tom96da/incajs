@@ -58,7 +58,7 @@ function installHost(
     removeEventListener: vi.fn<() => boolean>(() => true),
     dispatchEvent: vi.fn<(nodeId: number, event: unknown) => boolean>(() => true),
   };
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
   return host;
 }
 
@@ -87,7 +87,7 @@ function installCreationHost() {
     removeEventListener: vi.fn<(nodeId: number) => boolean>(() => true),
     dispatchEvent: vi.fn<(nodeId: number, event: unknown) => boolean>(() => true),
   };
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
   return host;
 }
 
@@ -182,13 +182,13 @@ describe("createIncaElement tagName", () => {
   });
 
   it("reads DIV for the mount container", () => {
-    globalThis.__inca_native__ = nativeStub({ rootNodeId: () => 90 } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ rootNodeId: () => 90 } as never));
 
     expect(rootElement().tagName).toBe("DIV");
   });
 
   it("finds the mount container by its id before any handle of it exists", () => {
-    globalThis.__inca_native__ = nativeStub({ rootNodeId: () => 91 } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ rootNodeId: () => 91 } as never));
 
     expect(handleOf(91)).toBe(rootElement());
   });
@@ -297,7 +297,7 @@ describe("createIncaElement value", () => {
       inputValue: vi.fn<(nodeId: number) => string>(() => text),
       setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
     };
-    globalThis.__inca_native__ = nativeStub(host as never);
+    vi.stubGlobal("__inca_native__", nativeStub(host as never));
     return host;
   }
 
@@ -363,7 +363,7 @@ describe("createIncaElement after the node is removed", () => {
       inputValue: vi.fn<(nodeId: number) => string>(() => "abc"),
       setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
     };
-    globalThis.__inca_native__ = nativeStub(host as never);
+    vi.stubGlobal("__inca_native__", nativeStub(host as never));
     const el = createIncaElement(1, "input");
     markRemoved([el.__node_id]);
 
@@ -383,7 +383,7 @@ describe("createIncaElement after the node is removed", () => {
 
   it("writes the text of an input through the host", () => {
     const host = { setInputValue: vi.fn<(nodeId: number, value: string) => void>() };
-    globalThis.__inca_native__ = nativeStub(host as never);
+    vi.stubGlobal("__inca_native__", nativeStub(host as never));
     const el = createIncaElement(1, "input");
     markRemoved([el.__node_id]);
 
@@ -653,13 +653,13 @@ describe("rootElement wheel listeners", () => {
   /** The `passive` argument that `element` registers a `wheel` listener with. */
   function registeredPassive(element: IncaElement, options?: { passive: boolean }) {
     const addEventListener = vi.fn<(...args: unknown[]) => number>(() => 0);
-    globalThis.__inca_native__ = nativeStub({ addEventListener } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ addEventListener } as never));
     element.addEventListener("wheel", () => {}, options);
     return addEventListener.mock.calls[0]![4];
   }
 
   function root(id: number): IncaElement {
-    globalThis.__inca_native__ = nativeStub({ rootNodeId: () => id } as never);
+    vi.stubGlobal("__inca_native__", nativeStub({ rootNodeId: () => id } as never));
     return rootElement();
   }
 

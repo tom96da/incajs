@@ -35,7 +35,7 @@ beforeEach(() => {
   host.templateContent.mockImplementation((id) => (templates.has(id) ? id + 1 : null));
   nextId = 1;
   templates = new Set();
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
 });
 
 const template = () => createElementNode("template") as IncaTemplateElement;

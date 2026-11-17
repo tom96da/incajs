@@ -19,7 +19,7 @@ const native = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  globalThis.__inca_native__ = nativeStub(native);
+  vi.stubGlobal("__inca_native__", nativeStub(native));
 });
 
 describe("wrapper functions forward to __inca_native__", () => {

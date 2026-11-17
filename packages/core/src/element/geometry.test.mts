@@ -21,12 +21,15 @@ function installHost(
   scrollOf = vi.fn<() => null>(() => null),
   parents: Record<number, number> = {},
 ): void {
-  globalThis.__inca_native__ = nativeStub({
-    linkedNode: (nodeId: number, link: string) =>
-      link === "parent" ? (parents[nodeId] ?? null) : null,
-    layoutOf: vi.fn<(nodeId: number) => Box | null>((nodeId) => boxes[nodeId] ?? null),
-    scrollOf,
-  } as never);
+  vi.stubGlobal(
+    "__inca_native__",
+    nativeStub({
+      linkedNode: (nodeId: number, link: string) =>
+        link === "parent" ? (parents[nodeId] ?? null) : null,
+      layoutOf: vi.fn<(nodeId: number) => Box | null>((nodeId) => boxes[nodeId] ?? null),
+      scrollOf,
+    } as never),
+  );
 }
 
 describe("offsetOf", () => {

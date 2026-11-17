@@ -36,7 +36,7 @@ function installNative() {
     ),
     getAttribute: vi.fn<() => null>(() => null),
   };
-  globalThis.__inca_native__ = nativeStub(native as never);
+  vi.stubGlobal("__inca_native__", nativeStub(native as never));
   return native;
 }
 

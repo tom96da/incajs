@@ -40,7 +40,7 @@ beforeEach(() => {
   host.setAttribute.mockImplementation(fake.natives.setAttribute!);
   host.getAttribute.mockImplementation(fake.natives.getAttribute! as never);
   host.splitText.mockImplementation(fake.natives.splitText!);
-  globalThis.__inca_native__ = nativeStub({ ...fake.natives, ...host } as never);
+  vi.stubGlobal("__inca_native__", nativeStub({ ...fake.natives, ...host } as never));
 });
 
 describe("data", () => {

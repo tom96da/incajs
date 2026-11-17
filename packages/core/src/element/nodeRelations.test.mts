@@ -26,7 +26,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mask = 0;
   top = DOCUMENT;
-  globalThis.__inca_native__ = nativeStub(host as never);
+  vi.stubGlobal("__inca_native__", nativeStub(host as never));
 });
 
 const div = (id: number) => createIncaElement(id, "div");

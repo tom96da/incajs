@@ -20,6 +20,7 @@ export default defineConfig({
     // the context has no file system to read the cache of Vitest from
     fsModuleCache: false,
     setupFiles: ["./tests/setup.mts"],
+    unstubGlobals: true,
     include: ["src/**/*.test.mts", "tests/*.test.mts"],
   },
 });

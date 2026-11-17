@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { h, nextTick, reactive, ref } from "@vue/runtime-core";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Ref } from "@vue/runtime-core";
 
 import { document } from "../src/document.mts";
@@ -106,179 +106,186 @@ function installFakeNative(): Map<NodeId, FakeNode> {
   requireNode(rootId).parent = documentId;
   requireNode(documentId).children.push(rootId);
 
-  globalThis.__inca_native__ = nativeStub({
-    rootNodeId(): NodeId {
-      return rootId;
-    },
-    documentNodeId(): NodeId {
-      return documentId;
-    },
-    createNode: allocate,
-    appendChild(parentId: NodeId, childId: NodeId): number {
-      return globalThis.__inca_native__.insertBefore(parentId, childId, null);
-    },
-    insertBefore(parentId: NodeId, childId: NodeId, refId: NodeId | null): number {
-      const parent = requireNode(parentId);
-      const child = requireNode(childId);
-      const anchorIndex = refId === null ? -1 : parent.children.indexOf(refId);
-      if (refId !== null && anchorIndex === -1) {
-        throw new DOMException("not a child", "NotFoundError");
-      }
-      detach(childId);
-      const at = refId === null ? -1 : parent.children.indexOf(refId);
-      if (at === -1) {
-        parent.children.push(childId);
-      } else {
-        parent.children.splice(at, 0, childId);
-      }
-      child.parent = parentId;
-      return parent.children.indexOf(childId);
-    },
-    replaceChild(): number {
-      throw new Error("not used here");
-    },
-    cloneNode(): [NodeId, string, null][] {
-      throw new Error("not used here");
-    },
-    rootOf(id: NodeId): NodeId {
-      let top = id;
-      while (requireNode(top).parent !== null) top = requireNode(top).parent!;
-      return top;
-    },
-    compareNodePosition(): number {
-      throw new Error("not used here");
-    },
-    isEqualNode(): boolean {
-      throw new Error("not used here");
-    },
-    removeChild(parentId: NodeId, childId: NodeId): void {
-      requireNode(parentId);
-      if (!nodes.has(childId)) return;
-      if (nodes.get(childId)?.parent !== parentId) {
-        throw new DOMException("not a child", "NotFoundError");
-      }
-      detach(childId);
-    },
-    setAttribute(nodeId: NodeId, key: string, value: unknown): void {
-      requireNode(nodeId).attributes.set(key, value);
-    },
-    getAttribute(nodeId: NodeId, key: string): string | number | boolean | null {
-      return (requireNode(nodeId).attributes.get(key) ?? null) as string | number | boolean | null;
-    },
-    layoutOf(
-      _nodeId: NodeId,
-    ): readonly [number, number, number, number, number, number, number, number, number] | null {
-      return null;
-    },
-    scrollOf(_nodeId: NodeId): readonly [number, number, number, number] | null {
-      return null;
-    },
-    scrollNode(_nodeId: NodeId, _left: number | null, _top: number | null): void {},
-    scrollIntoViewNode(_nodeId: NodeId, _block: string, _inline: string): void {},
-    removeAttribute(nodeId: NodeId, key: string): void {
-      requireNode(nodeId).attributes.delete(key);
-    },
-    linkedNode(nodeId: NodeId, link: "parent" | "first" | "last" | "previous" | "next") {
-      const node = requireNode(nodeId);
-      if (link === "parent") return node.parent;
-      if (link === "first") return node.children[0] ?? null;
-      if (link === "last") return node.children.at(-1) ?? null;
-      const siblings = node.parent === null ? [] : requireNode(node.parent).children;
-      return siblings[siblings.indexOf(nodeId) + (link === "next" ? 1 : -1)] ?? null;
-    },
-    childNodeIds: (nodeId: NodeId) => [...requireNode(nodeId).children],
-    isConnected(nodeId: NodeId): boolean {
-      let at: NodeId | null = nodeId;
-      while (at !== null && at !== documentId) at = requireNode(at).parent;
-      return at === documentId;
-    },
-    textContent: () => "",
-    wholeText: () => "",
-    substringData: () => "",
-    replaceData() {},
-    splitText: () => 0,
-    matches: () => false,
-    closest: () => null,
-    checkSelector: () => {},
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    attributeNames(nodeId: NodeId): string[] {
-      return [...requireNode(nodeId).attributes.keys()];
-    },
-    setStyle(nodeId: NodeId, key: string, value: unknown): void {
-      requireNode(nodeId).style[key] = value;
-    },
-    removeStyle(nodeId: NodeId, key: string): void {
-      delete requireNode(nodeId).style[key];
-    },
-    inputValue(nodeId: NodeId): string {
-      requireNode(nodeId);
-      return inputValues.get(nodeId) ?? "";
-    },
-    setInputValue(nodeId: NodeId, value: string): void {
-      requireNode(nodeId);
-      inputValues.set(nodeId, value);
-    },
-    addEventListener(
-      nodeId: NodeId,
-      event: string,
-      callback: HostCallback,
-      capture = false,
-      passive = false,
-    ): number {
-      const callbacks = (requireNode(nodeId).listeners[event] ??= []);
-      const callbackId = nextCallbackId++;
-      callbacks.push(callbackId);
-      phases.set(callbackId, { capture, passive });
-      hostCallbacks.set(callbackId, callback);
-      return callbackId;
-    },
-    removeEventListener(nodeId: NodeId, event: string, callbackId: number): boolean {
-      const callbacks = nodes.get(nodeId)?.listeners[event];
-      if (!callbacks) return false;
-      const index = callbacks.indexOf(callbackId);
-      if (index === -1) return false;
-      callbacks.splice(index, 1);
-      hostCallbacks.delete(callbackId);
-      return true;
-    },
-    removeNode(nodeId: NodeId): [number[], number[]] {
-      if (!nodes.has(nodeId)) return [[], []];
-      detach(nodeId);
-      const released: number[] = [];
-      const ids: NodeId[] = [];
-      const visit = (id: NodeId): void => {
-        const node = requireNode(id);
-        ids.push(id);
-        released.push(...Object.values(node.listeners).flat());
-        node.listeners = {};
-        for (const child of node.children) visit(child);
-      };
-      visit(nodeId);
-      for (const callbackId of released) hostCallbacks.delete(callbackId);
-      return [released, ids];
-    },
-    templateContent: () => null,
-    innerHtml: () => "",
-    outerHtml: () => "",
-    setInnerHtml: () => [0, []],
-    setOuterHtml: () => null,
-    insertAdjacentHtml: () => [0, []],
-    holdNode(): void {},
-    releaseNode(): void {},
-    focusNode(): void {},
-    blurNode(_nodeId: number): void {},
-    focusedNode(): NodeId | null {
-      return focused;
-    },
-    dispatchEvent(): boolean {
-      return true;
-    },
-    click(): void {},
-    setPointerCapture(): void {},
-    releasePointerCapture(): void {},
-    hasPointerCapture: () => false,
-  });
+  vi.stubGlobal(
+    "__inca_native__",
+    nativeStub({
+      rootNodeId(): NodeId {
+        return rootId;
+      },
+      documentNodeId(): NodeId {
+        return documentId;
+      },
+      createNode: allocate,
+      appendChild(parentId: NodeId, childId: NodeId): number {
+        return globalThis.__inca_native__.insertBefore(parentId, childId, null);
+      },
+      insertBefore(parentId: NodeId, childId: NodeId, refId: NodeId | null): number {
+        const parent = requireNode(parentId);
+        const child = requireNode(childId);
+        const anchorIndex = refId === null ? -1 : parent.children.indexOf(refId);
+        if (refId !== null && anchorIndex === -1) {
+          throw new DOMException("not a child", "NotFoundError");
+        }
+        detach(childId);
+        const at = refId === null ? -1 : parent.children.indexOf(refId);
+        if (at === -1) {
+          parent.children.push(childId);
+        } else {
+          parent.children.splice(at, 0, childId);
+        }
+        child.parent = parentId;
+        return parent.children.indexOf(childId);
+      },
+      replaceChild(): number {
+        throw new Error("not used here");
+      },
+      cloneNode(): [NodeId, string, null][] {
+        throw new Error("not used here");
+      },
+      rootOf(id: NodeId): NodeId {
+        let top = id;
+        while (requireNode(top).parent !== null) top = requireNode(top).parent!;
+        return top;
+      },
+      compareNodePosition(): number {
+        throw new Error("not used here");
+      },
+      isEqualNode(): boolean {
+        throw new Error("not used here");
+      },
+      removeChild(parentId: NodeId, childId: NodeId): void {
+        requireNode(parentId);
+        if (!nodes.has(childId)) return;
+        if (nodes.get(childId)?.parent !== parentId) {
+          throw new DOMException("not a child", "NotFoundError");
+        }
+        detach(childId);
+      },
+      setAttribute(nodeId: NodeId, key: string, value: unknown): void {
+        requireNode(nodeId).attributes.set(key, value);
+      },
+      getAttribute(nodeId: NodeId, key: string): string | number | boolean | null {
+        return (requireNode(nodeId).attributes.get(key) ?? null) as
+          | string
+          | number
+          | boolean
+          | null;
+      },
+      layoutOf(
+        _nodeId: NodeId,
+      ): readonly [number, number, number, number, number, number, number, number, number] | null {
+        return null;
+      },
+      scrollOf(_nodeId: NodeId): readonly [number, number, number, number] | null {
+        return null;
+      },
+      scrollNode(_nodeId: NodeId, _left: number | null, _top: number | null): void {},
+      scrollIntoViewNode(_nodeId: NodeId, _block: string, _inline: string): void {},
+      removeAttribute(nodeId: NodeId, key: string): void {
+        requireNode(nodeId).attributes.delete(key);
+      },
+      linkedNode(nodeId: NodeId, link: "parent" | "first" | "last" | "previous" | "next") {
+        const node = requireNode(nodeId);
+        if (link === "parent") return node.parent;
+        if (link === "first") return node.children[0] ?? null;
+        if (link === "last") return node.children.at(-1) ?? null;
+        const siblings = node.parent === null ? [] : requireNode(node.parent).children;
+        return siblings[siblings.indexOf(nodeId) + (link === "next" ? 1 : -1)] ?? null;
+      },
+      childNodeIds: (nodeId: NodeId) => [...requireNode(nodeId).children],
+      isConnected(nodeId: NodeId): boolean {
+        let at: NodeId | null = nodeId;
+        while (at !== null && at !== documentId) at = requireNode(at).parent;
+        return at === documentId;
+      },
+      textContent: () => "",
+      wholeText: () => "",
+      substringData: () => "",
+      replaceData() {},
+      splitText: () => 0,
+      matches: () => false,
+      closest: () => null,
+      checkSelector: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      attributeNames(nodeId: NodeId): string[] {
+        return [...requireNode(nodeId).attributes.keys()];
+      },
+      setStyle(nodeId: NodeId, key: string, value: unknown): void {
+        requireNode(nodeId).style[key] = value;
+      },
+      removeStyle(nodeId: NodeId, key: string): void {
+        delete requireNode(nodeId).style[key];
+      },
+      inputValue(nodeId: NodeId): string {
+        requireNode(nodeId);
+        return inputValues.get(nodeId) ?? "";
+      },
+      setInputValue(nodeId: NodeId, value: string): void {
+        requireNode(nodeId);
+        inputValues.set(nodeId, value);
+      },
+      addEventListener(
+        nodeId: NodeId,
+        event: string,
+        callback: HostCallback,
+        capture = false,
+        passive = false,
+      ): number {
+        const callbacks = (requireNode(nodeId).listeners[event] ??= []);
+        const callbackId = nextCallbackId++;
+        callbacks.push(callbackId);
+        phases.set(callbackId, { capture, passive });
+        hostCallbacks.set(callbackId, callback);
+        return callbackId;
+      },
+      removeEventListener(nodeId: NodeId, event: string, callbackId: number): boolean {
+        const callbacks = nodes.get(nodeId)?.listeners[event];
+        if (!callbacks) return false;
+        const index = callbacks.indexOf(callbackId);
+        if (index === -1) return false;
+        callbacks.splice(index, 1);
+        hostCallbacks.delete(callbackId);
+        return true;
+      },
+      removeNode(nodeId: NodeId): [number[], number[]] {
+        if (!nodes.has(nodeId)) return [[], []];
+        detach(nodeId);
+        const released: number[] = [];
+        const ids: NodeId[] = [];
+        const visit = (id: NodeId): void => {
+          const node = requireNode(id);
+          ids.push(id);
+          released.push(...Object.values(node.listeners).flat());
+          node.listeners = {};
+          for (const child of node.children) visit(child);
+        };
+        visit(nodeId);
+        for (const callbackId of released) hostCallbacks.delete(callbackId);
+        return [released, ids];
+      },
+      templateContent: () => null,
+      innerHtml: () => "",
+      outerHtml: () => "",
+      setInnerHtml: () => [0, []],
+      setOuterHtml: () => null,
+      insertAdjacentHtml: () => [0, []],
+      holdNode(): void {},
+      releaseNode(): void {},
+      focusNode(): void {},
+      blurNode(_nodeId: number): void {},
+      focusedNode(): NodeId | null {
+        return focused;
+      },
+      dispatchEvent(): boolean {
+        return true;
+      },
+      click(): void {},
+      setPointerCapture(): void {},
+      releasePointerCapture(): void {},
+      hasPointerCapture: () => false,
+    }),
+  );
 
   return nodes;
 }
