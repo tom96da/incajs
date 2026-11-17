@@ -25,11 +25,17 @@ vi.mock("../src/entry.mts", async (importOriginal) => {
 });
 
 import { runtimeConfigOf } from "../src/config/loader.mts";
-import { dev } from "../src/dev.mts";
 import { resolveEntry } from "../src/entry.mts";
 import { writeMacosApp } from "../src/macosApp.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
-import { waitFor, mockHost, makeFakeBundler, pretendPlatform, makeSink } from "./support/dev.mts";
+import {
+  waitFor,
+  mockHost,
+  makeFakeBundler,
+  pretendPlatform,
+  makeSink,
+  devWithoutHmr,
+} from "./support/dev.mts";
 
 describe("dev on macOS", () => {
   const scratch = scratchConfigApp("dev-macos");
@@ -47,7 +53,7 @@ describe("dev on macOS", () => {
     const bundler = makeFakeBundler();
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd,
       entry: "unused",
       bundler,
@@ -79,7 +85,7 @@ describe("dev on macOS", () => {
     const stdout = makeSink();
 
     await expect(
-      dev({
+      devWithoutHmr({
         cwd,
         entry: "unused",
         bundler: makeFakeBundler(),
@@ -101,7 +107,7 @@ describe("dev on macOS", () => {
     const stderr = makeSink();
     const controller = new AbortController();
 
-    const running = dev({
+    const running = devWithoutHmr({
       cwd,
       entry: "unused",
       bundler,
@@ -134,7 +140,7 @@ describe("dev on macOS", () => {
       return derive(config, mode);
     });
 
-    await dev({
+    await devWithoutHmr({
       cwd,
       entry: "unused",
       bundler: makeFakeBundler(),
@@ -157,7 +163,7 @@ describe("dev on macOS", () => {
       return Promise.reject(new Error("no space"));
     });
 
-    await dev({
+    await devWithoutHmr({
       cwd,
       entry: "unused",
       bundler: makeFakeBundler(),
@@ -183,7 +189,7 @@ describe("dev on macOS", () => {
       return assemble(options);
     });
 
-    await dev({
+    await devWithoutHmr({
       cwd,
       bundler: makeFakeBundler(),
       hostBin: mockHost,

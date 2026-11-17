@@ -7,7 +7,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolveAppConfig } from "./loader.mts";
+import { resolveAppConfig, resolveBuildConfig, resolveRuntimeConfig } from "./loader.mts";
 
 let cwd: string | undefined;
 
@@ -205,6 +205,61 @@ describe("resolveAppConfig", () => {
       );
 
       expect(error).toMatchObject({ message: "boom", code: "E_BOOM" });
+    });
+  });
+});
+
+describe("dev.hmr", () => {
+  it("is on for an app that declares no dev", async () => {
+    const app = await makeApp({ name: "click_counter" });
+
+    await expect(resolveBuildConfig(app)).resolves.toMatchObject({ dev: { hmr: true } });
+  });
+
+  it("is what the app declared, for a build config and an app config", async () => {
+    const app = await makeApp({ name: "click_counter", version: "0.0.0-0" });
+    await writeConfig(app, `export default { dev: { hmr: false } };\n`);
+
+    await expect(resolveBuildConfig(app)).resolves.toMatchObject({ dev: { hmr: false } });
+    await expect(resolveAppConfig(app)).resolves.toMatchObject({ dev: { hmr: false } });
+  });
+
+  describe.each([
+    ["resolveBuildConfig", resolveBuildConfig],
+    ["resolveRuntimeConfig", resolveRuntimeConfig],
+  ])("%s refuses", (_, resolve) => {
+    it.each([
+      [`"false"`, `"false"`],
+      ["0", "0"],
+      [`"yes"`, `"yes"`],
+      ["null", "null"],
+      ["() => 1", "() => 1"],
+    ])("a dev.hmr of %s", async (value, shown) => {
+      const app = await makeApp({ name: "click_counter" });
+      await writeConfig(app, `export default { dev: { hmr: ${value} } };\n`);
+
+      await expect(resolve(app)).rejects.toThrow(
+        expect.objectContaining({
+          code: "ERR_INCA_CONFIG_INVALID",
+          message: expect.stringContaining(
+            `dev.hmr in inca.config.ts is ${shown}. it must be true or false`,
+          ),
+        }),
+      );
+    });
+
+    it.each([`"x"`, "[]"])("a dev of %s", async (value) => {
+      const app = await makeApp({ name: "click_counter" });
+      await writeConfig(app, `export default { dev: ${value} };\n`);
+
+      await expect(resolve(app)).rejects.toThrow(
+        expect.objectContaining({
+          code: "ERR_INCA_CONFIG_INVALID",
+          message: expect.stringContaining(
+            `dev in inca.config.ts is ${value}. it must be an object`,
+          ),
+        }),
+      );
     });
   });
 });

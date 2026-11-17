@@ -21,7 +21,7 @@ import type { DevConfig, IncaConfig } from "./types.mts";
 export const defaultConfig: Required<Pick<IncaConfig, "outDir" | "sourcemap" | "version">> & {
   dev: Required<DevConfig>;
 } = {
-  dev: { stackPaths: "relative" },
+  dev: { stackPaths: "relative", hmr: true },
   outDir: "dist",
   sourcemap: false,
   version: "0.0.0",

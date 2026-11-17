@@ -13,7 +13,7 @@ import { IncaError } from "./error.mts";
 import { assertHostBin, resolveHostBin } from "./host/index.mts";
 import { warn } from "./log.mts";
 import type { RuntimeConfig } from "./config/loader.mts";
-import type { DevConfig, WindowConfig } from "./config/types.mts";
+import type { WindowConfig } from "./config/types.mts";
 
 export interface PrintConfigOptions {
   /** The app's root directory. Defaults to `process.cwd()`. */
@@ -43,7 +43,9 @@ type Kinds = {
 } & {
   [K in keyof WindowConfig as `window.${K}`]-?: Kind<NonNullable<WindowConfig[K]>>;
 } & {
-  [K in keyof DevConfig as `dev.${K}`]-?: Kind<NonNullable<DevConfig[K]>>;
+  [K in keyof NonNullable<RuntimeConfig["dev"]> as `dev.${K}`]-?: Kind<
+    NonNullable<NonNullable<RuntimeConfig["dev"]>[K]>
+  >;
 };
 
 /** The kind each setting must have. The type checker holds each word to the setting's type. */

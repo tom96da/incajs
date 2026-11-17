@@ -7,6 +7,8 @@ import { Writable } from "node:stream";
 
 import { onTestFinished, vi } from "vitest";
 
+import { dev } from "../../src/dev.mts";
+import type { DevOptions } from "../../src/dev.mts";
 import type {
   Bundler,
   BundlerOptions,
@@ -246,3 +248,7 @@ export function makeFakeHmrBundler(entryFile: string): FakeHmrBundler {
   };
   return fake;
 }
+
+/** Runs `dev()` in the full reload mode, which the fake bundlers without `hmr` need. */
+export const devWithoutHmr = (options: DevOptions): Promise<void> =>
+  dev({ hmr: false, ...options });

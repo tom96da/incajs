@@ -6,10 +6,9 @@ import path from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { dev } from "../src/dev.mts";
 import { acquireDevLock } from "../src/devLock.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
-import { makeFakeBundler, makeSink, mockHost, waitFor } from "./support/dev.mts";
+import { makeFakeBundler, makeSink, mockHost, waitFor, devWithoutHmr } from "./support/dev.mts";
 import { fsLag } from "./support/fsLag.mts";
 
 describe("a failure before the first build", () => {
@@ -18,13 +17,13 @@ describe("a failure before the first build", () => {
   afterAll(scratch.tearDown);
 
   /** Starts `dev()` on `cwd` with sinks the test reads back. */
-  function startDev(cwd: string, overrides: Partial<Parameters<typeof dev>[0]> = {}) {
+  function startDev(cwd: string, overrides: Partial<Parameters<typeof devWithoutHmr>[0]> = {}) {
     const bundler = makeFakeBundler();
     const watch = vi.spyOn(bundler, "watch");
     const stdout = makeSink();
     const stderr = makeSink();
     const controller = new AbortController();
-    const running = dev({
+    const running = devWithoutHmr({
       cwd,
       bundler,
       hostBin: mockHost,
@@ -216,7 +215,7 @@ describe("a failure before the first build", () => {
   it("reports a broken config as build failed on a bundler without hmr", async () => {
     const cwd = await makeAppWithEntry();
     await writeFile(path.join(cwd, "inca.config.ts"), 'throw new Error("config exploded");\n');
-    const { stderr, stdout, watch } = startDev(cwd, { experimentalHmr: true });
+    const { stderr, stdout, watch } = startDev(cwd, { hmr: true });
 
     await waitFor(() => expect(stderr.text()).toContain("[inca] build failed"));
 
@@ -227,7 +226,7 @@ describe("a failure before the first build", () => {
 
   it("falls back to the watcher with one warning on a bundler without hmr", async () => {
     const cwd = await makeAppWithEntry();
-    const { bundler, stderr, controller, running } = startDev(cwd, { experimentalHmr: true });
+    const { bundler, stderr, controller, running } = startDev(cwd, { hmr: true });
 
     await bundler.watching;
     controller.abort();
@@ -240,7 +239,7 @@ describe("a failure before the first build", () => {
 
   it("prints no warning on a bundler without hmr when hmr is off", async () => {
     const cwd = await makeAppWithEntry();
-    const { bundler, stderr, controller, running } = startDev(cwd, { experimentalHmr: false });
+    const { bundler, stderr, controller, running } = startDev(cwd, { hmr: false });
 
     await bundler.watching;
     controller.abort();

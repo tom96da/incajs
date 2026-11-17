@@ -264,6 +264,14 @@ describe("resolveRuntimeConfig", () => {
     });
   });
 
+  it("leaves dev.hmr out of what the host reads", async () => {
+    const app = await makeApp({ inca: { dev: { stackPaths: "absolute", hmr: false } } });
+
+    await expect(resolveRuntimeConfig(app, { dev: true })).resolves.toEqual({
+      dev: { stackPaths: "absolute" },
+    });
+  });
+
   it("carries the stack path style an app declared with dev", async () => {
     const app = await makeApp({ inca: { dev: { stackPaths: "absolute" } } });
 
