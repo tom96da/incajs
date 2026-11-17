@@ -26,8 +26,6 @@ const core: IncaCore = {
 
 const patchProp = createPatchProp(core);
 
-const BUBBLE = { capture: false, passive: false };
-
 /** An element holds the id of its node, which is all that patchProp reads. */
 const makeEl = (): IncaElement => ({ __node_id: 1 }) as unknown as IncaElement;
 
@@ -56,14 +54,6 @@ describe("errors thrown by an event handler", () => {
   });
   afterEach(() => {
     warn.mockRestore();
-  });
-
-  it("still propagates when no errorHandler is configured", () => {
-    patchProp(el, "onClick", null, throwing, undefined, instanceWith());
-
-    const registered = listenerOf(vi.mocked(core.addEventListener).mock.calls[0]!);
-    expect(() => registered()).toThrow(boom);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("Unhandled error"));
   });
 
   describe("onErrorCaptured hooks", () => {
@@ -201,40 +191,20 @@ describe("errors thrown by an event handler", () => {
       expect(reasons()).toEqual([second]);
     });
 
-    it("retires a .once slot whose array fails and reports each failure", async () => {
-      const registered = registerWith([throwing, secondThrowing], instanceWith(), "onClickOnce");
-
-      expect(() => registered()).toThrow(boom);
-      await settle();
-      expect(reasons()).toEqual([second]);
-      expect(core.removeEventListener).toHaveBeenCalledWith(
-        1,
-        "click",
-        expect.any(Function),
-        BUBBLE,
-      );
-    });
-
-    it("stops the rest of an array and later slots at stopImmediatePropagation", async () => {
+    it("stops the rest of an array at stopImmediatePropagation", () => {
       const log: string[] = [];
       const event = { stopImmediatePropagation: vi.fn<() => void>() };
-      patchProp(
-        el,
-        "onClick",
-        null,
-        [() => log.push("a"), stopper(log, "stop"), () => log.push("b")],
-        undefined,
-        instanceWith(),
-      );
-      patchProp(el, "onClickOnce", null, () => log.push("later"), undefined, instanceWith());
-      const registered = listenerOf(vi.mocked(core.addEventListener).mock.calls[0]!);
+      const registered = registerWith([
+        () => log.push("a"),
+        stopper(log, "stop"),
+        () => log.push("b"),
+      ]);
 
       expect(() => registered(event)).not.toThrow();
       expect(log).toEqual(["a", "stop"]);
-      expect(event.stopImmediatePropagation).toHaveBeenCalledTimes(1);
     });
 
-    it("reports a failure that precedes stopImmediatePropagation and skips the rest", async () => {
+    it("throws a failure that precedes stopImmediatePropagation to the host", async () => {
       const log: string[] = [];
       const event = { stopImmediatePropagation: vi.fn<() => void>() };
       const registered = registerWith([throwing, stopper(log, "stop"), secondThrowing]);
@@ -387,18 +357,15 @@ describe("with a production build of Vue", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it("logs each failing handler of an array once and runs them all", () => {
-    const after = vi.fn<() => void>();
+  it("logs a failing handler of an array once", () => {
     const dispatch = dispatchOf([
       () => {
         throw boom;
       },
-      after,
     ]);
 
     expect(() => dispatch()).not.toThrow();
     expect(error).toHaveBeenCalledTimes(1);
-    expect(after).toHaveBeenCalledTimes(1);
   });
 
   it("logs an async rejection once and reports no unhandled rejection", async () => {

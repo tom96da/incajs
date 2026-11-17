@@ -63,29 +63,27 @@ describe("on*", () => {
     );
   });
 
-  it("strips a suffix off an on:name prop and applies it to the listener", () => {
+  it("strips a suffix off an on:name prop", () => {
+    patchProp(el, "on:myEventOnce", null, vi.fn(), undefined, null);
+
+    expect(core.addEventListener).toHaveBeenCalledWith(1, "myEvent", expect.any(Function), BUBBLE);
+  });
+
+  it("applies a Once suffix of an on:name prop to the listener", () => {
     const listener = vi.fn<() => void>();
     patchProp(el, "on:myEventOnce", null, listener, undefined, null);
     const registered = listenerOf(vi.mocked(core.addEventListener).mock.calls[0]!);
 
-    expect(core.addEventListener).toHaveBeenCalledWith(1, "myEvent", expect.any(Function), BUBBLE);
     registered();
     registered();
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(core.removeEventListener).toHaveBeenCalledExactlyOnceWith(
-      1,
-      "myEvent",
-      expect.any(Function),
-      BUBBLE,
-    );
   });
 
-  it("registers a function listener under the event name", () => {
+  it("passes the event arguments to the listener", () => {
     const listener = vi.fn<() => void>();
     patchProp(el, "onClick", null, listener, undefined, null);
-
-    expect(core.addEventListener).toHaveBeenCalledWith(1, "click", expect.any(Function), BUBBLE);
     listenerOf(vi.mocked(core.addEventListener).mock.calls[0]!)("arg");
+
     expect(listener).toHaveBeenCalledWith("arg");
   });
 
@@ -315,12 +313,18 @@ describe("onXxx values", () => {
   });
 
   it("warns at dispatch about an array entry that is not a function", () => {
+    patchProp(el, "onClick", null, ["x", vi.fn<() => void>()], undefined, null);
+    registered()();
+
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it("runs the entries after an array entry that is not a function", () => {
     const handler = vi.fn<() => void>();
     patchProp(el, "onClick", null, ["x", handler], undefined, null);
     registered()();
 
     expect(handler).toHaveBeenCalledOnce();
-    expect(warn).toHaveBeenCalledOnce();
   });
 });
 

@@ -120,7 +120,7 @@ describe("a listener attached while an event is handled", () => {
     expect(replaced).toHaveBeenCalledTimes(1);
   });
 
-  it("stays unspent when it is a .once listener, and fires once for the next event", () => {
+  it("stays unspent when it is a .once listener that skipped an event", () => {
     const once = spy();
     latest = 5;
     set("onClickOnce", once);

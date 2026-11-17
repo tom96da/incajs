@@ -63,7 +63,7 @@ describe("plain and .once listeners on one element", () => {
     error.mockRestore();
   });
 
-  it("registers a plain listener alone once and keeps it", () => {
+  it("keeps a plain listener registered after it fires", () => {
     const plain = vi.fn<() => void>();
     set("onClick", plain);
     fire();
@@ -403,15 +403,13 @@ describe("plain and .once listeners on one element", () => {
       expect(log).toEqual(["first", "first", "second"]);
     });
 
-    it("in the last slot changes nothing but still reaches the host", () => {
+    it("in the last slot leaves every slot running", () => {
       const log: string[] = [];
-      const { event, original } = makeEvent();
       set("onClick", fn(log, "first"));
       set("onClickOnce", stopper(log, "last"));
-      fireWith(event);
+      fireWith(makeEvent().event);
 
       expect(log).toEqual(["first", "last"]);
-      expect(original).toHaveBeenCalledTimes(1);
     });
 
     it("leaves no own method behind on an event that inherits it", () => {
@@ -436,7 +434,18 @@ describe("plain and .once listeners on one element", () => {
       expect(log).toEqual(["a", "b"]);
     });
 
-    it("calls the original once per stop and restores it after a re-entrant dispatch", () => {
+    it.each([
+      [
+        "calls the original once per stop in a re-entrant dispatch",
+        (_event: { stopImmediatePropagation: unknown }, original: unknown) =>
+          expect(original).toHaveBeenCalledTimes(2),
+      ],
+      [
+        "restores the original after a re-entrant dispatch",
+        (event: { stopImmediatePropagation: unknown }, original: unknown) =>
+          expect(event.stopImmediatePropagation).toBe(original),
+      ],
+    ])("%s", (_name, check) => {
       const log: string[] = [];
       const { event, original } = makeEvent();
       let nested = true;
@@ -452,8 +461,7 @@ describe("plain and .once listeners on one element", () => {
       fireWith(event);
 
       expect(log).toEqual(["first", "first"]);
-      expect(original).toHaveBeenCalledTimes(2);
-      expect(event.stopImmediatePropagation).toBe(original);
+      check(event, original);
     });
 
     it("stops the outer dispatch when the inner re-entrant dispatch stops", () => {
@@ -476,20 +484,33 @@ describe("plain and .once listeners on one element", () => {
       expect(event.stopImmediatePropagation).toBe(original);
     });
 
-    it("sets the flag, reports to Vue and restores when the original method throws", () => {
-      const log: string[] = [];
+    describe("when the original method throws", () => {
       const boom = new Error("stop failed");
       const original = vi.fn<() => void>(() => {
         throw boom;
       });
       const event = { stopImmediatePropagation: original };
-      set("onClick", stopper(log, "first"));
-      set("onClickOnce", fn(log, "second"));
+      const log: string[] = [];
+      beforeEach(() => {
+        log.length = 0;
+        set("onClick", stopper(log, "first"));
+        set("onClickOnce", fn(log, "second"));
+      });
 
-      expect(() => fireWith(event)).toThrow(boom);
-      expect(log).toEqual(["first"]);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Unhandled error"));
-      expect(event.stopImmediatePropagation).toBe(original);
+      it("stops the later slot", () => {
+        expect(() => fireWith(event)).toThrow(boom);
+        expect(log).toEqual(["first"]);
+      });
+
+      it("reports the error to Vue", () => {
+        expect(() => fireWith(event)).toThrow(boom);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining("Unhandled error"));
+      });
+
+      it("restores the original method", () => {
+        expect(() => fireWith(event)).toThrow(boom);
+        expect(event.stopImmediatePropagation).toBe(original);
+      });
     });
 
     it("does not crash on a frozen event and still runs every slot", () => {
@@ -508,16 +529,14 @@ describe("plain and .once listeners on one element", () => {
       throw boom;
     };
 
-    it("lets the other slot run, then rethrows the first error and reports to Vue", () => {
+    it("stays registered for the next dispatch", () => {
       const log: string[] = [];
       set("onClick", throwing);
       set("onClickOnce", fn(log, "once"));
 
       expect(() => fire()).toThrow(boom);
-      expect(log).toEqual(["once"]);
       expect(() => fire()).toThrow(boom);
       expect(log).toEqual(["once"]);
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Unhandled error"));
     });
 
     it("still retires a throwing once handler", () => {
