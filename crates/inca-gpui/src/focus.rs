@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use gpui::{App, FocusHandle, Window};
 
 use crate::{EventPayload, EventSink};
-use inca_node::tree::{TEXT_TAG, js_number_text};
+use inca_node::tree::js_number_text;
 use inca_node::{AttributeValue, NodeId, VirtualTree, hidden_by_attribute, is_disabled_control};
 
 mod requests;

@@ -3,9 +3,7 @@
 
 //! The rules for putting a node under a parent.
 
-use super::{
-    COMMENT_TAG, DOCUMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree,
-};
+use super::{NodeId, NodeKind, TreeError, VirtualNode, VirtualTree};
 
 impl VirtualTree {
     /// The checks of an insertion in DOM order:
@@ -37,7 +35,7 @@ impl VirtualTree {
         {
             return Err(TreeError::NodeNotFound(reference_id));
         }
-        if matches!(parent.tag_name(), TEXT_TAG | COMMENT_TAG) {
+        if parent.is_character_data() {
             return Err(TreeError::LeafParent(parent_id));
         }
         if self.is_self_or_ancestor(node_id, parent_id) {
@@ -58,38 +56,38 @@ impl VirtualTree {
         {
             return Err(TreeError::DocumentInserted(node_id));
         }
-        if parent.tag_name() == DOCUMENT_TAG {
-            let tags = self
+        if parent.is_document() {
+            let kinds = self
                 .nodes_to_move(node_id)
                 .into_iter()
-                .map(|id| self.nodes.get(&id).map(VirtualNode::tag_name));
-            self.check_document_child(parent, tags, |id| Some(id) != replaced, node_id)?;
+                .map(|id| self.nodes.get(&id).map(VirtualNode::kind));
+            self.check_document_child(parent, kinds, |id| Some(id) != replaced, node_id)?;
         }
         Ok(())
     }
 
-    /// The rules of a document parent: no text, at most one element in all. `tags` are the tags of
+    /// The rules of a document parent: no text, at most one element in all. `kinds` are the kinds of
     /// the nodes that go in, with `None` for an unknown node. `stays` tells which children of the
     /// parent are still there after the insertion. `node_id` is the id of the error.
-    pub(super) fn check_document_child<'a>(
+    pub(super) fn check_document_child(
         &self,
         parent: &VirtualNode,
-        tags: impl IntoIterator<Item = Option<&'a str>>,
+        kinds: impl IntoIterator<Item = Option<NodeKind>>,
         stays: impl Fn(NodeId) -> bool,
         node_id: NodeId,
     ) -> Result<(), TreeError> {
         let (mut texts, mut elements) = (0, 0);
-        for tag in tags {
-            match tag {
-                Some(TEXT_TAG) => texts += 1,
-                Some(COMMENT_TAG) | None => {}
+        for kind in kinds {
+            match kind {
+                Some(NodeKind::Text) => texts += 1,
+                Some(NodeKind::Comment) | None => {}
                 Some(_) => elements += 1,
             }
         }
         let held = parent.children.iter().filter(|&&id| stays(id)).any(|id| {
             self.nodes
                 .get(id)
-                .is_some_and(|n| n.tag_name() != COMMENT_TAG)
+                .is_some_and(|n| n.kind() != NodeKind::Comment)
         });
         if texts > 0 || elements > 1 || (elements == 1 && held) {
             return Err(TreeError::DocumentChild(node_id));
@@ -102,7 +100,7 @@ impl VirtualTree {
     #[must_use]
     pub fn nodes_to_move(&self, node_id: NodeId) -> Vec<NodeId> {
         match self.nodes.get(&node_id) {
-            Some(node) if node.tag_name() == FRAGMENT_TAG => node.children.clone(),
+            Some(node) if node.kind() == NodeKind::Fragment => node.children.clone(),
             _ => vec![node_id],
         }
     }
@@ -132,6 +130,7 @@ mod tests {
 
     use super::*;
     use crate::tests::{Fixture, children, family, node, not_a_child};
+    use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, TEXT_TAG};
 
     #[rstest]
     #[case::parent(|_: NodeId, child: NodeId| (999, child, None))]

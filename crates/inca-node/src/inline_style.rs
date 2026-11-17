@@ -6,9 +6,7 @@
 use crate::spec::{
     STYLE_KEYS, css_declaration, css_name, style_key, style_warning, unknown_key_warning,
 };
-use crate::tree::{
-    AttributeValue, COMMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree,
-};
+use crate::tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree};
 
 /// The style props of `node` that have a canonical text, in prop order, with that text. A stored
 /// unknown key and a value without a text are no declaration.
@@ -71,7 +69,7 @@ pub fn style_length(node: &VirtualNode) -> usize {
 /// Stores `css_text` as the `style` attribute of `node`: an existing entry keeps its place, and a
 /// missing one is created last when `create` is set. A text node and a comment never get one.
 pub(crate) fn sync_style_entry(node: &mut VirtualNode, create: bool) {
-    if matches!(node.tag_name(), TEXT_TAG | COMMENT_TAG) {
+    if node.is_character_data() {
         return;
     }
     if create || node.attributes.contains_key("style") {

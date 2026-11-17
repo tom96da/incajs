@@ -9,7 +9,7 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::{AttributeValue, NodeId, StyleMap, TEXT_TAG, VirtualNode, VirtualTree};
+use super::{AttributeValue, NodeId, NodeKind, StyleMap, VirtualNode, VirtualTree};
 use crate::selector::StateFlags;
 use crate::stylesheet::{Rule, StyleSheet};
 
@@ -109,7 +109,7 @@ impl VirtualTree {
             .into_iter()
             .flat_map(VirtualNode::children)
             .filter_map(|&child| self.get(child))
-            .filter(|child| child.tag_name() == TEXT_TAG)
+            .filter(|child| child.kind() == NodeKind::Text)
             .map(VirtualNode::data)
             .collect()
     }
@@ -215,6 +215,7 @@ mod tests {
     use super::*;
     use crate::build_spec;
     use crate::tests::{Fixture, SVG, num, text};
+    use crate::tree::TEXT_TAG;
 
     fn padding_top(f: &Fixture, node: NodeId) -> Option<f64> {
         build_spec(&f.tree, node).unwrap().style.padding.top

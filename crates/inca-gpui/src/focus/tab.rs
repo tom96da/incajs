@@ -4,7 +4,7 @@
 //! Tab order and tab-index reads.
 
 use super::{
-    App, AttributeValue, FocusRegistry, NodeId, PendingFocus, Start, TEXT_TAG, VirtualTree, Window,
+    App, AttributeValue, FocusRegistry, NodeId, PendingFocus, Start, VirtualTree, Window,
     hidden_by_attribute, is_disabled_control, js_number_text,
 };
 
@@ -223,7 +223,7 @@ impl FocusRegistry {
             })
         });
         let by_default = node.is_focusable_by_default();
-        if node.tag_name() == TEXT_TAG || hidden || is_disabled_control(node) {
+        if !node.is_element() || hidden || is_disabled_control(node) {
             return None;
         }
         let explicit = match node.attributes().get("tabindex") {
@@ -337,6 +337,12 @@ mod tests {
         assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
         tree.set_style(id, "display", "flex").unwrap();
         assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+    }
+
+    #[test]
+    fn a_comment_with_a_tabindex_has_no_tab_index() {
+        let (tree, id) = tree_with("#comment", Some(AttributeValue::from("0")));
+        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
     }
 
     #[test]

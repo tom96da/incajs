@@ -34,6 +34,7 @@ use html5ever::Namespace;
 use indexmap::IndexMap;
 
 mod class_list;
+mod clone;
 mod computed;
 mod element;
 mod insert_nodes;
@@ -49,10 +50,11 @@ mod text;
 
 pub use class_list::ClassListError;
 pub use insert_nodes::{InsertArg, Inserted, Insertion, Placement};
+pub use name::NodeKind;
 pub use props::valid_attribute_name;
 pub use relations::Link;
 
-/// The tag of a node that stands in for a comment.
+/// The tag of a comment.
 pub(crate) const COMMENT_TAG: &str = "#comment";
 
 /// The tag of a text content node.
@@ -196,6 +198,7 @@ pub type StyleMap = IndexMap<String, AttributeValue>;
 #[derive(Debug, Clone)]
 pub struct VirtualNode {
     id: NodeId,
+    kind: NodeKind,
     tag_name: String,
     /// The namespace of an element. `None` for a node that is no element and for an element made
     /// without one.
@@ -214,12 +217,14 @@ pub struct VirtualNode {
 impl VirtualNode {
     fn new(
         id: NodeId,
+        kind: NodeKind,
         tag_name: String,
         namespace: Option<Namespace>,
         prefix: Option<String>,
     ) -> Self {
         Self {
             id,
+            kind,
             tag_name,
             namespace,
             prefix,
@@ -289,6 +294,8 @@ pub enum TreeError {
     NoParent(NodeId),
     /// A call that writes into the parent of a node whose parent is the document.
     DocumentParent(NodeId),
+    /// A tag that starts with `#` and names no kind of node.
+    UnknownTag,
 }
 
 impl fmt::Display for TreeError {
@@ -323,6 +330,10 @@ impl fmt::Display for TreeError {
             TreeError::DocumentParent(id) => write!(
                 f,
                 "node {id} is the element of the document. replace it through the document"
+            ),
+            TreeError::UnknownTag => write!(
+                f,
+                "the tag starts with # but names no kind of node. use #text, #comment, #document or #fragment"
             ),
         }
     }
@@ -387,10 +398,7 @@ impl VirtualTree {
             .children()
             .iter()
             .copied()
-            .find(|&id| {
-                self.get(id)
-                    .is_some_and(|node| node.tag_name() != COMMENT_TAG)
-            })
+            .find(|&id| self.get(id).is_some_and(VirtualNode::is_element))
     }
 
     #[must_use]
@@ -465,6 +473,14 @@ mod tests {
     use super::*;
     use crate::tests::{Fixture, node};
     use rstest::rstest;
+
+    #[test]
+    fn unknown_tag_has_a_message() {
+        assert_eq!(
+            TreeError::UnknownTag.to_string(),
+            "the tag starts with # but names no kind of node. use #text, #comment, #document or #fragment"
+        );
+    }
 
     #[test]
     fn ids_exhausted_has_a_message() {

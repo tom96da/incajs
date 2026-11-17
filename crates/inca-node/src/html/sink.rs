@@ -20,7 +20,7 @@ use html5ever::tokenizer::{
 use html5ever::tree_builder::{TreeBuilder, TreeBuilderOpts};
 use html5ever::{Attribute, LocalName, Namespace, QualName, TokenizerResult, local_name, ns};
 
-use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG};
+use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, NodeId, NodeKind, TEXT_TAG};
 use crate::tree::{TreeError, VirtualNode, VirtualTree};
 
 /// The element a fragment parse takes as its context.
@@ -216,7 +216,10 @@ impl<'a> HtmlSink<'a> {
                         Some(sibling) => tree.previous_sibling(sibling),
                         None => tree.last_child(parent_id),
                     }
-                    .filter(|&id| tree.get(id).is_some_and(|node| node.tag_name() == TEXT_TAG)))
+                    .filter(|&id| {
+                        tree.get(id)
+                            .is_some_and(|node| node.kind() == NodeKind::Text)
+                    }))
                 });
                 if let Some(id) = touching.flatten() {
                     self.change(|tree| tree.append_text(id, &text));

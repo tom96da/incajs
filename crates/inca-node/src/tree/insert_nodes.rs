@@ -5,9 +5,7 @@
 
 use std::collections::HashSet;
 
-use super::{
-    COMMENT_TAG, DOCUMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree,
-};
+use super::{NodeId, NodeKind, TEXT_TAG, TreeError, VirtualNode, VirtualTree};
 
 /// One argument of an insertion: a node of the tree, or a string that becomes a new text node.
 pub enum InsertArg {
@@ -155,7 +153,7 @@ impl VirtualTree {
             .nodes
             .get(&parent_id)
             .ok_or(TreeError::NodeNotFound(parent_id))?;
-        if matches!(parent.tag_name(), TEXT_TAG | COMMENT_TAG) {
+        if parent.is_character_data() {
             return Err(TreeError::LeafParent(parent_id));
         }
         self.check_no_cycle(nodes, parent_id, &in_group)?;
@@ -172,14 +170,14 @@ impl VirtualTree {
         {
             return Err(TreeError::DocumentInserted(*id));
         }
-        if parent.tag_name() == DOCUMENT_TAG {
-            let tags = group.iter().map(|planned| match planned {
-                Planned::Node(id) => self.nodes.get(id).map(VirtualNode::tag_name),
-                Planned::Text(_) => Some(TEXT_TAG),
+        if parent.is_document() {
+            let kinds = group.iter().map(|planned| match planned {
+                Planned::Node(id) => self.nodes.get(id).map(VirtualNode::kind),
+                Planned::Text(_) => Some(NodeKind::Text),
             });
             let replaced = (placement == Placement::ReplaceWith).then_some(target);
             let stays = |id: NodeId| !(moves && in_group.contains(&id)) && Some(id) != replaced;
-            self.check_document_child(parent, tags, stays, target)?;
+            self.check_document_child(parent, kinds, stays, target)?;
         }
         Ok(Some(Insertion {
             parent: parent_id,
@@ -244,7 +242,7 @@ impl VirtualTree {
             if node.is_document() {
                 return Err(TreeError::DocumentInserted(*id));
             }
-            if node.tag_name() == FRAGMENT_TAG {
+            if node.kind() == NodeKind::Fragment {
                 for &child in node.children() {
                     if members.insert(child) {
                         group.push(Planned::Node(child));
@@ -365,6 +363,7 @@ mod tests {
 
     use super::*;
     use crate::tests::{Fixture, children, not_a_child};
+    use crate::tree::{COMMENT_TAG, DOCUMENT_TAG, FRAGMENT_TAG};
 
     /// `p` holds `a, b, c, d` and `x` holds `y`, both under the root. The other nodes have no
     /// parent, and `doc` holds `r`. `id` finds a node by its name.
@@ -461,7 +460,7 @@ mod tests {
 
     fn label(tree: &VirtualTree, id: NodeId) -> String {
         let node = tree.get(id).unwrap();
-        if node.tag_name() == TEXT_TAG {
+        if node.kind() == NodeKind::Text {
             format!("#t:{}", node.attributes()["value"].text())
         } else {
             node.attributes()["id"].text()
@@ -620,6 +619,7 @@ mod tests {
     #[case::document_after_a_node_of_another_parent(|s: &Scene| (s.id("x"), Placement::Append, vec![arg(s, "a"), arg(s, "doc")], TreeError::DocumentInserted(s.id("doc"))))]
     #[case::document_into_a_parentless_element(|s: &Scene| (s.id("e"), Placement::Append, vec![arg(s, "doc")], TreeError::DocumentInserted(s.id("doc"))))]
     #[case::text_parent(|s: &Scene| (s.id("txt"), Placement::Append, vec![arg(s, "a")], TreeError::LeafParent(s.id("txt"))))]
+    #[case::comment_parent(|s: &Scene| (s.id("k"), Placement::Append, vec![arg(s, "a")], TreeError::LeafParent(s.id("k"))))]
     #[case::ancestor_after_a_node_of_another_parent(|s: &Scene| (s.id("a"), Placement::Append, vec![arg(s, "x"), arg(s, "p")], TreeError::WouldCycle(s.id("p"))))]
     #[case::ancestor_of_the_parent_beside_a_target(|s: &Scene| (s.id("a"), Placement::Before, vec![arg(s, "x"), arg(s, "p")], TreeError::WouldCycle(s.id("p"))))]
     #[case::the_parent_as_the_one_argument(|s: &Scene| (s.id("p"), Placement::Append, vec![arg(s, "p")], TreeError::WouldCycle(s.id("p"))))]

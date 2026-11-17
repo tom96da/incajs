@@ -18,7 +18,7 @@ mod depth;
 mod serialize;
 mod sink;
 
-use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualTree};
+use crate::tree::{FRAGMENT_TAG, NodeId, NodeKind, TreeError, VirtualTree};
 pub use serialize::HtmlScope;
 use sink::{Context, HtmlSink, node_of, parse_fragment};
 
@@ -73,9 +73,9 @@ impl VirtualTree {
             None => Context::body(),
             Some(id) => {
                 let node = self.get(id).ok_or(TreeError::NodeNotFound(id))?;
-                match node.tag_name() {
-                    TEXT_TAG | COMMENT_TAG => return Err(TreeError::LeafParent(id)),
-                    FRAGMENT_TAG => Context::body(),
+                match node.kind() {
+                    NodeKind::Text | NodeKind::Comment => return Err(TreeError::LeafParent(id)),
+                    NodeKind::Fragment => Context::body(),
                     _ => Context::of(node),
                 }
             }
@@ -136,13 +136,12 @@ impl VirtualTree {
             let Some(node) = self.get(id) else { continue };
             pending.extend(node.children().iter().rev().map(|&child| (child, id)));
             pending.extend(self.template_content(id).map(|content| (content, id)));
-            let is_leaf = matches!(node.tag_name(), TEXT_TAG | COMMENT_TAG);
             entries.push(ParsedNode {
                 id,
                 tag: node.tag_name().to_owned(),
                 namespace: node.namespace_uri().map(str::to_owned),
                 parent: Some(parent),
-                data: is_leaf.then(|| node.data().to_owned()),
+                data: node.is_character_data().then(|| node.data().to_owned()),
             });
         }
         entries
@@ -155,12 +154,12 @@ impl VirtualTree {
 #[allow(clippy::unwrap_used, clippy::format_push_string)]
 fn shape(tree: &VirtualTree, id: NodeId) -> String {
     let node = tree.get(id).unwrap();
-    match node.tag_name() {
-        TEXT_TAG => return format!("{:?}", node.data()),
-        COMMENT_TAG => return format!("<!--{}-->", node.data()),
+    match node.kind() {
+        NodeKind::Text => return format!("{:?}", node.data()),
+        NodeKind::Comment => return format!("<!--{}-->", node.data()),
         _ => {}
     }
-    let mut text = if node.tag_name() == FRAGMENT_TAG {
+    let mut text = if node.kind() == NodeKind::Fragment {
         String::new()
     } else {
         node.tag_name().to_owned()

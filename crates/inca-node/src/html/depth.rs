@@ -144,7 +144,7 @@ mod tests {
     use crate::html::tests::parsed;
     use crate::html::{ParsedHtml, ParsedNode};
     use crate::tests::node;
-    use crate::tree::{COMMENT_TAG, NodeId, TEXT_TAG, VirtualTree};
+    use crate::tree::{COMMENT_TAG, NodeId, NodeKind, TEXT_TAG, VirtualTree};
 
     /// The number of ancestors of `id` below `fragment`, counting `id` itself.
     fn level(tree: &VirtualTree, fragment: NodeId, id: NodeId) -> usize {
@@ -162,7 +162,10 @@ mod tests {
         let mut depth = 0;
         let mut current = fragment;
         while let Some(child) = tree.first_child(current) {
-            if matches!(tree.get(child).unwrap().tag_name(), TEXT_TAG | COMMENT_TAG) {
+            if matches!(
+                tree.get(child).unwrap().kind(),
+                NodeKind::Text | NodeKind::Comment
+            ) {
                 break;
             }
             depth += 1;
