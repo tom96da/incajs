@@ -80,7 +80,7 @@ A fixed entry is deleted and its ID is never reused.
   stderr nothing reads. Where that output could go per platform and whether an
   app can opt out are undecided.
 
-- **B-036 Reverting a script edit under `--experimental-hmr` sometimes applies nothing**
+- **B-036 Reverting a script edit under HMR sometimes applies nothing**
   `Units: cli · Size: M · Impact: Medium · Status: needs repro`
 
   Editing `onClick` in `examples/click_counter` from `clicks.value += 1` to
@@ -371,7 +371,7 @@ A fixed entry is deleted and its ID is never reused.
 - **B-074 The development window and a production build differ in the `define` globals**
   `Units: cli · Size: S · Impact: Low`
 
-  With `--experimental-hmr` the runtime installs, on the app's `globalThis`,
+  Under HMR the runtime installs, on the app's `globalThis`,
   each `define` value whose key is a plain identifier and whose code is a JSON
   literal. A production build inlines the `define` values and has no such
   globals, so the development window and a production build differ. Apply
@@ -709,7 +709,7 @@ A fixed entry is deleted and its ID is never reused.
   first step is to route the bridge's style warnings through the console
   output, because `inca-bridge` already depends on `inca-jsenv`.
 
-- **B-163 `--experimental-hmr` starts the host before the app's modules are transformed**
+- **B-163 HMR starts the host before the app's modules are transformed**
   `Units: cli · Size: S–M · Impact: Low`
 
   The development server creates the Vite server and starts the host at once.

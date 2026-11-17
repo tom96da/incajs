@@ -61,7 +61,7 @@ const clicks = ref(0);
 </template>
 ```
 
-Run `inca dev` for a live-reloading window. Run `inca build` for a
+Run `inca dev` for a development window that applies each edit. Run `inca build` for a
 one-off bundle, or `inca package` for a distributable app.
 
 ## Host binary

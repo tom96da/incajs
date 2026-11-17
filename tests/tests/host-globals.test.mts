@@ -1,11 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// Runs one app under the real `inca-host` binary twice, as `inca dev
-// --experimental-hmr` serves it and as a production build, and compares what
-// the app prints about its timer, frame, encoding and URL globals. It also
-// checks that `incajs/globals` declares the members the host defines and that
-// a script using them compiles against the declared types.
+// Runs one app under the real `inca-host` binary twice, as `inca dev`
+// serves it and as a production build, and compares what the app prints about
+// its timer, frame, encoding and URL globals. It also checks that
+// `incajs/globals` declares the members the host defines and that a script
+// using them compiles against the declared types.
 
 import { spawn } from "node:child_process";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";

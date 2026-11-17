@@ -61,12 +61,11 @@ dev protocol, HMR delivery included.
 The development window draws the application you wrote. `inca dev` opens it
 with the prebuilt host.
 
-- **Automatic reload**: the window reloads the application by itself each
-  time a source file changes.
+- **Automatic update**: the window applies each edit by itself.
 - **Output**: what the application prints reaches the terminal that ran
   `inca dev`.
 
-With `inca dev --experimental-hmr`, an edit of a `.vue` file updates the running window in place.
+With `inca dev`, an edit of a `.vue` file updates the running window in place.
 A template-only edit and an edit of a style block keep the state of the components. A script edit
 remounts the component. HMR runs on Vite's Runtime API and reuses Vite's module graph invalidation
 and its accept and dispose boundaries. [PROTOCOL.md](./PROTOCOL.md#hmr-delivery) describes how the

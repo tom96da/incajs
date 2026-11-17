@@ -28,7 +28,7 @@ inca dev, inca build, and inca package, with per-platform prebuilt host binaries
 ::::
 
 :::: in-progress Phase 3.4: HMR
-Functional behind an opt-in flag (--experimental-hmr / INCA_EXPERIMENTAL_HMR). Plain inca dev still does a full reload.
+Functional. inca dev applies edits without a reload unless dev.hmr is false.
 
 [HMR guide](/guide/hmr)
 ::::

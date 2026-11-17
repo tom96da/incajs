@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 // Drives the real `inca-host` binary and a real Vite dev server through an
-// HMR update. This is the one piece of experimental HMR that spans Rust and
+// HMR update. This is the one piece of HMR that spans Rust and
 // TypeScript.
 //
 // It clicks the counter and reads its label through the automation requests.

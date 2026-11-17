@@ -118,7 +118,7 @@ Add an npm script like the following to `package.json`.
 }
 ```
 
-The `dev` script watches your app and opens a live-reloading window.
+The `dev` script watches your app and opens a development window that applies each edit.
 
 ::: code-group
 
