@@ -120,6 +120,11 @@ impl<'js> Walk<'js> {
                 self.remember(&value, &copy)?;
                 Ok(copy)
             }
+            Kind::Rect => {
+                let copy = self.clone_rect(&value)?;
+                self.remember(&value, &copy)?;
+                Ok(copy)
+            }
             Kind::Error => self.clone_error(&object),
             Kind::Buffer => {
                 let copy = self.clone_buffer(&value)?;

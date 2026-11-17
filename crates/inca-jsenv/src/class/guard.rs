@@ -31,14 +31,29 @@ pub fn receiver<'js, T: JsClass<'js>>(
     ctx: &Ctx<'js>,
     this: &Value<'js>,
 ) -> JsResult<Class<'js, T>> {
-    Class::<T>::from_value(this).map_err(|_| {
-        let message = format!(
-            "the receiver is not {} {}. call the method on an instance",
-            article(T::NAME),
-            T::NAME
-        );
-        Exception::throw_type(ctx, &message)
-    })
+    receiver_named(ctx, this, T::NAME)
+}
+
+/// The class instance `this` is, or a `TypeError` that names the interface `name`.
+///
+/// # Errors
+///
+/// Returns a `TypeError` if `this` is not an instance of `T`.
+pub fn receiver_named<'js, T: JsClass<'js>>(
+    ctx: &Ctx<'js>,
+    this: &Value<'js>,
+    name: &str,
+) -> JsResult<Class<'js, T>> {
+    Class::<T>::from_value(this).map_err(|_| not_a(ctx, name))
+}
+
+/// The `TypeError` of a receiver that is no instance of the interface `name`.
+pub(crate) fn not_a(ctx: &Ctx<'_>, name: &str) -> rquickjs::Error {
+    let message = format!(
+        "the receiver is not {} {name}. call the method on an instance",
+        article(name)
+    );
+    Exception::throw_type(ctx, &message)
 }
 
 /// "an" before a name that starts with an uppercase vowel and a lowercase letter, "a" otherwise.

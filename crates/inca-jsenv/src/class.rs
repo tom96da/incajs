@@ -23,6 +23,6 @@ pub use define::{
 #[cfg(test)]
 pub(crate) use guard::NOT_AN_OBJECT;
 pub use guard::new_target_prototype;
-pub(crate) use guard::{NEEDS_NEW, given, illegal_constructor, options_of};
-pub use guard::{receiver, require, text};
+pub(crate) use guard::{NEEDS_NEW, given, illegal_constructor, not_a, options_of};
+pub use guard::{receiver, receiver_named, require, text};
 pub use iterate::{Method, iterate, method_of};

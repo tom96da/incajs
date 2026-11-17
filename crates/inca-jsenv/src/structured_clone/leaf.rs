@@ -16,6 +16,11 @@ mod error;
 const FLAGS: [&str; 8] = ["d", "g", "i", "m", "s", "u", "v", "y"];
 
 impl<'js> Walk<'js> {
+    /// The clone of a `DOMRect` or a `DOMRectReadOnly`, an instance of the same interface.
+    pub(super) fn clone_rect(&self, value: &Value<'js>) -> JsResult<Value<'js>> {
+        crate::geometry::copy(&self.ctx, value)
+    }
+
     /// The clone of a boxed primitive, a `Date` or a `RegExp`.
     pub(super) fn clone_leaf(&self, kind: Kind, value: &Value<'js>) -> JsResult<Value<'js>> {
         match kind {
@@ -69,6 +74,36 @@ mod tests {
                 "
             )),
             format!("{expected}:object:true")
+        );
+    }
+
+    #[rstest]
+    #[case::writable("DOMRect", "DOMRect")]
+    #[case::read_only("DOMRectReadOnly", "DOMRectReadOnly")]
+    fn a_rect_gives_a_new_rect_of_the_same_interface(#[case] class: &str, #[case] expected: &str) {
+        assert_eq!(
+            run(&format!(
+                r"
+                const source = new {class}(1, 2, 3, 4);
+                const c = structuredClone(source);
+                const same = Object.getPrototypeOf(c) === {class}.prototype;
+                const values = [c.x, c.y, c.width, c.height].join();
+                `${{same}}:${{c !== source}}:${{values}}:${{c[Symbol.toStringTag]}}`;
+                "
+            )),
+            format!("true:true:1,2,3,4:{expected}")
+        );
+    }
+
+    #[test]
+    fn a_rect_referenced_twice_is_cloned_once() {
+        assert_eq!(
+            run(r"
+                const r = new DOMRect(1, 2, 3, 4);
+                const c = structuredClone([r, r]);
+                `${c[0] === c[1]}${c[0] !== r}`;
+                "),
+            "truetrue"
         );
     }
 
