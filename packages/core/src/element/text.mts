@@ -4,12 +4,12 @@
 // The text handle, and the members of character data and of text nodes.
 
 import {
-  getAttribute,
   linkedNode,
   replaceData,
-  setAttribute,
+  setCharacterData,
   splitText,
   substringData,
+  textContent,
   wholeText,
 } from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./arguments.mts";
@@ -99,7 +99,7 @@ export function textMembers(): TextMembers {
       requireArguments(arguments, 1, "splitText");
       if (isDestroyed(node)) throw new TypeError("the text node was freed. create a new one");
       const tailId = splitText(node.__node_id, offset);
-      const tail = createIncaText(tailId, String(getAttribute(tailId, "value") ?? ""));
+      const tail = createIncaText(tailId, textContent(tailId));
       node.text = readData(node);
       if (linkedNode(tailId, "parent") === null) hold(tail);
       else entered(tail);
@@ -114,7 +114,7 @@ export function textMembers(): TextMembers {
  * @param text - the new text content
  */
 export function setText(node: Text, text: string): void {
-  setAttribute(node.__node_id, "value", text);
+  setCharacterData(node.__node_id, text);
   node.text = text;
 }
 

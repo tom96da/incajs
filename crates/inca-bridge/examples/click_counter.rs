@@ -4,7 +4,7 @@
 //! Manual example for the full JS → native tree → GPUI element round trip:
 //! a real `QuickJS` engine drives a `VirtualTree` through `__inca_native__`,
 //! and clicking the box calls a real JS callback that updates the label
-//! through `__inca_native__.setAttribute`. Needs a human to look at it:
+//! through `__inca_native__.setCharacterData`. Needs a human to look at it:
 //! click the box and the label should count up.
 
 #![allow(clippy::unwrap_used)]
@@ -55,7 +55,7 @@ fn build_tree(tree: &mut VirtualTree) -> (NodeId, NodeId) {
     tree.set_style(outer, "text_size", 20.0).unwrap();
 
     let label = tree.create_node("#text").unwrap();
-    tree.set_attribute(label, "value", "Click me!").unwrap();
+    tree.set_data(label, "Click me!").unwrap();
     tree.append_child(outer, label).unwrap();
 
     (outer, label)
@@ -70,9 +70,8 @@ fn install_click_handler(engine: &Engine, outer: NodeId, label: NodeId) {
             globalThis.__inca_clicks__ = 0;
             __inca_native__.addEventListener({outer}, 'click', function () {{
                 globalThis.__inca_clicks__ += 1;
-                __inca_native__.setAttribute(
+                __inca_native__.setCharacterData(
                     {label},
-                    'value',
                     'Clicked ' + globalThis.__inca_clicks__ + ' time(s)'
                 );
             }});

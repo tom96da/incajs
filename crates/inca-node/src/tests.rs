@@ -48,7 +48,7 @@ impl Fixture {
     pub(crate) fn sheet(&mut self, css: &str) -> (NodeId, NodeId) {
         let style = self.add(self.root, "style", "sheet");
         let text_node = self.tree.create_node("#text").unwrap();
-        self.attr(text_node, "value", css);
+        self.tree.set_data(text_node, css).unwrap();
         self.tree.append_child(style, text_node).unwrap();
         (style, text_node)
     }
@@ -130,7 +130,7 @@ pub(crate) fn mixed() -> Mixed {
     let parent = f.add(f.root, "div", "parent");
     let comment = f.add(parent, "#comment", "comment");
     let text_node = f.add(parent, "#text", "te");
-    f.attr(text_node, "value", "t");
+    f.tree.set_data(text_node, "t").unwrap();
     let a = f.add(parent, "span", "a");
     let b = f.add(parent, "span", "b");
     Mixed {
@@ -232,9 +232,9 @@ pub(crate) fn sample(tree: &mut VirtualTree, tag: &str) -> NodeId {
     tree.set_style(root, "width", 4.0).unwrap();
     let span = node(tree, "span");
     let inner = node(tree, TEXT_TAG);
-    tree.set_attribute(inner, "value", "hi").unwrap();
+    tree.set_data(inner, "hi").unwrap();
     let tail = node(tree, TEXT_TAG);
-    tree.set_attribute(tail, "value", "t").unwrap();
+    tree.set_data(tail, "t").unwrap();
     tree.append_child(root, span).unwrap();
     tree.append_child(span, inner).unwrap();
     tree.append_child(root, tail).unwrap();

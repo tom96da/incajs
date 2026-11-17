@@ -174,7 +174,7 @@ mod tests {
 
     fn text_node(tree: &mut VirtualTree, data: &str) -> NodeId {
         let id = node(tree, TEXT_TAG);
-        tree.set_attribute(id, "value", data).unwrap();
+        tree.set_data(id, data).unwrap();
         id
     }
 
@@ -302,7 +302,7 @@ mod tests {
     fn sample(tree: &mut VirtualTree) -> NodeId {
         let div = node(tree, "div");
         let comment = node(tree, COMMENT_TAG);
-        tree.set_attribute(comment, "value", "c").unwrap();
+        tree.set_data(comment, "c").unwrap();
         let text = text_node(tree, "t");
         tree.append_child(div, text).unwrap();
         tree.append_child(div, comment).unwrap();
@@ -349,7 +349,7 @@ mod tests {
     ) {
         let mut tree = VirtualTree::new();
         let leaf = node(&mut tree, tag);
-        tree.set_attribute(leaf, "value", "a&b").unwrap();
+        tree.set_data(leaf, "a&b").unwrap();
 
         assert_eq!(tree.serialize_html(leaf, scope).unwrap(), expected);
     }

@@ -36,8 +36,7 @@ use crate::tree::{AttributeValue, NodeId, NodeKind, StyleMap, VirtualNode, Virtu
 pub enum ElementTag {
     /// Any tag name other than `"#text"` and `"input"`: a generic styled box.
     Container,
-    /// A `"#text"` tag: its `"value"` attribute (missing or non-string →
-    /// empty). Its children are not rendered.
+    /// A `"#text"` tag: its data. Its children are not rendered.
     Text(String),
     /// An `"input"` tag: one line of text the host holds per node, drawn
     /// over the box. `placeholder` is its `placeholder` attribute without CR
@@ -634,27 +633,17 @@ mod tests {
     }
 
     #[test]
-    fn a_text_node_renders_its_value_attribute() {
+    fn a_text_node_renders_its_data() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("#text").unwrap();
-        tree.set_attribute(id, "value", "hello").unwrap();
+        tree.set_data(id, "hello").unwrap();
 
         let spec = build_spec(&tree, id).unwrap();
         assert_eq!(spec.tag, ElementTag::Text("hello".into()));
     }
 
     #[test]
-    fn a_text_node_counts_a_non_string_value_as_empty() {
-        let mut tree = VirtualTree::new();
-        let id = tree.create_node("#text").unwrap();
-        tree.set_attribute(id, "value", 1.0).unwrap();
-
-        let spec = build_spec(&tree, id).unwrap();
-        assert_eq!(spec.tag, ElementTag::Text(String::new()));
-    }
-
-    #[test]
-    fn a_text_node_without_a_value_renders_empty() {
+    fn a_text_node_without_data_renders_empty() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("#text").unwrap();
 

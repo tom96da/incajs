@@ -387,8 +387,7 @@ mod tests {
         let style = tree.create_node("style").unwrap();
         tree.append_child(ROOT, style).unwrap();
         let css = tree.create_node("#text").unwrap();
-        tree.set_attribute(css, "value", ".h { display: none }")
-            .unwrap();
+        tree.set_data(css, ".h { display: none }").unwrap();
         tree.append_child(style, css).unwrap();
     }
 

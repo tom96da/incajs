@@ -176,11 +176,11 @@ impl<'a> HtmlSink<'a> {
         }
     }
 
-    /// Creates a node of `tag` with `data` as its `value` attribute.
+    /// Creates a node of `tag` with `data` as its data.
     fn leaf(&self, tag: &str, data: &str) -> Handle {
         let created = self.change(|tree| {
             let id = tree.create_node(tag)?;
-            tree.set_attribute(id, "value", data)?;
+            tree.set_data(id, data)?;
             Ok(id)
         });
         if let Some(id) = created {

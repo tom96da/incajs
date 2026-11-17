@@ -363,7 +363,7 @@ mod tests {
     fn text_leaf_renders_without_panicking(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = tree.create_node("#text").unwrap();
-        tree.set_attribute(root, "value", "hello").unwrap();
+        tree.set_data(root, "hello").unwrap();
 
         let cx = cx.add_empty_window();
         cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {

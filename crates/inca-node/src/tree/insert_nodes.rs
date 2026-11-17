@@ -318,7 +318,7 @@ impl VirtualTree {
         let mut text_ids = Vec::with_capacity(texts.len());
         for text in texts {
             let id = self.create_node(TEXT_TAG)?;
-            self.set_attribute(id, "value", text)?;
+            self.set_data(id, text)?;
             text_ids.push(id);
         }
         self.detach_all(&removed);
@@ -417,7 +417,7 @@ mod tests {
         ] {
             ids.insert(name, named(&mut tree, tag, name));
         }
-        tree.set_attribute(ids["txt"], "value", "t").unwrap();
+        tree.set_data(ids["txt"], "t").unwrap();
         tree.append_child(ids["doc"], ids["r"]).unwrap();
         Scene { tree, ids }
     }
@@ -461,7 +461,7 @@ mod tests {
     fn label(tree: &VirtualTree, id: NodeId) -> String {
         let node = tree.get(id).unwrap();
         if node.kind() == NodeKind::Text {
-            format!("#t:{}", node.attributes()["value"].text())
+            format!("#t:{}", node.data())
         } else {
             node.attributes()["id"].text()
         }

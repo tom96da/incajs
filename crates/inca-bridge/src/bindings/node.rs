@@ -16,8 +16,8 @@ use super::convert::{Flag, JsNodeId, existing_node, or_null, throw_tree_error, u
 use super::host::Host;
 
 /// `linkedNode`, `childNodeIds`, `isConnected`, the relation natives `rootOf`,
-/// `compareNodePosition` and `isEqualNode`, and the text natives `textContent`, `wholeText`,
-/// `substringData`, `replaceData` and `splitText`.
+/// `compareNodePosition` and `isEqualNode`, and the text natives `textContent`, `setCharacterData`,
+/// `wholeText`, `substringData`, `replaceData` and `splitText`.
 pub(super) fn install_node(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("linkedNode", linked_node)?;
     n.set("childNodeIds", child_node_ids)?;
@@ -26,6 +26,7 @@ pub(super) fn install_node(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("compareNodePosition", compare_node_position)?;
     n.set("isEqualNode", is_equal_node)?;
     n.set("textContent", text_content)?;
+    n.set("setCharacterData", set_character_data)?;
     n.set("wholeText", whole_text)?;
     n.set("substringData", substring_data)?;
     n.set("replaceData", replace_data)?;
@@ -125,6 +126,19 @@ fn text_content<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
     }
 }
 
+/// Replaces the data of the text node or comment `id`. A node that holds no data throws a
+/// `TypeError`.
+fn set_character_data<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
+    move |ctx, JsNodeId(node_id), data| {
+        host.borrow_mut()
+            .tree
+            .set_data(node_id, data)
+            .map_err(|err| throw_tree_error(&ctx, err))
+    }
+}
+
 fn whole_text<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<String> {
     move |ctx, JsNodeId(node_id)| {
         let host = host.borrow();
@@ -197,6 +211,7 @@ mod tests {
     #[case::child_node_ids_of_elements("childNodeIds(999, true)")]
     #[case::is_connected("isConnected(999)")]
     #[case::text_content("textContent(999)")]
+    #[case::set_character_data("setCharacterData(999, '')")]
     #[case::whole_text("wholeText(999)")]
     #[case::substring_data("substringData(999, 0, 0)")]
     #[case::replace_data("replaceData(999, 0, 0, '')")]
@@ -464,7 +479,7 @@ mod tests {
                 r"
                 const n = __inca_native__;
                 const t = n.createNode('#text');
-                n.setAttribute(t, 'value', 'abc');
+                n.setCharacterData(t, 'abc');
                 n.{call};
                 "
             ),
@@ -477,8 +492,8 @@ mod tests {
     #[case::text_content("n.textContent(parent)", "abcd")]
     #[case::whole_text("n.wholeText(t)", "abcd")]
     #[case::substring_data("n.substringData(t, 1, 2)", "bc")]
-    #[case::replace_data("n.replaceData(t, 1, 2, 'XY'); n.getAttribute(t, 'value')", "aXYd")]
-    #[case::split_text("n.getAttribute(n.splitText(t, 3), 'value')", "d")]
+    #[case::replace_data("n.replaceData(t, 1, 2, 'XY'); n.textContent(t)", "aXYd")]
+    #[case::split_text("n.textContent(n.splitText(t, 3))", "d")]
     fn a_text_native_reads_or_edits_the_data(#[case] call: &str, #[case] want: &str) {
         let (engine, _host) = engine_with_bindings();
 
@@ -488,7 +503,7 @@ mod tests {
                 const n = __inca_native__;
                 const parent = n.createNode('div');
                 const t = n.createNode('#text');
-                n.setAttribute(t, 'value', 'abcd');
+                n.setCharacterData(t, 'abcd');
                 n.appendChild(parent, t);
                 {call};
                 "
@@ -496,6 +511,82 @@ mod tests {
             .unwrap();
 
         assert_eq!(got, want);
+    }
+
+    #[rstest]
+    #[case::text("#text")]
+    #[case::comment("#comment")]
+    fn set_character_data_writes_the_data(#[case] tag: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let read: String = engine
+            .eval(&format!(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('{tag}');
+                n.setCharacterData(node, 'note');
+                n.textContent(node);
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(read, "note");
+    }
+
+    #[test]
+    fn set_character_data_throws_type_error_for_an_element() {
+        let (engine, _host) = engine_with_bindings();
+
+        let name = error_name(
+            &engine,
+            "__inca_native__.setCharacterData(__inca_native__.createNode('div'), 'x')",
+        );
+
+        assert_eq!(name, "TypeError");
+    }
+
+    #[test]
+    fn set_character_data_keeps_the_data_when_it_is_given_a_non_string() {
+        let (engine, _host) = engine_with_bindings();
+
+        let got: String = engine
+            .eval(
+                r"
+                const n = __inca_native__;
+                const node = n.createNode('#text');
+                n.setCharacterData(node, 'a');
+                let name = '';
+                try {
+                    n.setCharacterData(node, 1);
+                } catch (error) {
+                    name = error.name;
+                }
+                [name, n.textContent(node)].join(',');
+                ",
+            )
+            .unwrap();
+
+        assert_eq!(got, "TypeError,a");
+    }
+
+    #[rstest]
+    #[case::whole_text("wholeText(c)")]
+    #[case::split_text("splitText(c, 0)")]
+    fn a_text_native_throws_type_error_for_a_comment(#[case] call: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let name = error_name(
+            &engine,
+            &format!(
+                r"
+                const n = __inca_native__;
+                const c = n.createNode('#comment');
+                n.{call};
+                "
+            ),
+        );
+
+        assert_eq!(name, "TypeError");
     }
 
     #[test]
@@ -508,7 +599,7 @@ mod tests {
                 const n = __inca_native__;
                 const parent = n.createNode('div');
                 const t = n.createNode('#text');
-                n.setAttribute(t, 'value', 'abcd');
+                n.setCharacterData(t, 'abcd');
                 n.appendChild(parent, t);
                 const tail = n.splitText(t, 2);
                 n.linkedNode(t, 'next') === tail;
@@ -528,7 +619,7 @@ mod tests {
                 r"
                 const n = __inca_native__;
                 const t = n.createNode('#text');
-                n.setAttribute(t, 'value', 'abc');
+                n.setCharacterData(t, 'abc');
                 n.substringData(t, 2 ** 32 + 1, 1);
                 ",
             )

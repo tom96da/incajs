@@ -23,8 +23,8 @@ const DOCUMENT = 1;
 let nextCallbackId = 0;
 let nextId = 100;
 let focused: number | null = null;
-/** The data of each text node or comment stand-in. */
-let data: Record<number, unknown> = {};
+/** The data of each text node or comment. */
+let data: Record<number, string> = {};
 /** The parent each node reaches through `linkedNode`. */
 let parents = new Map<number, number>();
 let found: number | null = null;
@@ -62,18 +62,17 @@ const native = {
   createElementNS: vi.fn<(namespace: string | null, qualifiedName: string) => ElementEntry>(
     (namespace, qualifiedName) => [nextId++, qualifiedName, namespace, null, qualifiedName],
   ),
-  setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(
-    (nodeId, _key, value) => {
-      data[nodeId] = value;
-    },
-  ),
-  getAttribute: vi.fn<(nodeId: number, key: string) => unknown>((nodeId) => data[nodeId] ?? null),
+  setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
+  getAttribute: vi.fn<(nodeId: number, key: string) => unknown>(() => null),
+  setCharacterData: vi.fn<(nodeId: number, text: string) => void>((nodeId, text) => {
+    data[nodeId] = text;
+  }),
   setStyle: vi.fn<() => void>(),
   appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
-  textContent: vi.fn<(nodeId: number) => string>(() => "joined"),
+  textContent: vi.fn<(nodeId: number) => string>((nodeId) => data[nodeId] ?? "joined"),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => false),
   layoutOf: vi.fn<() => null>(() => null),
   cloneNode: vi.fn<(nodeId: number, deep: boolean) => (NodeEntry | ElementEntry)[]>(),

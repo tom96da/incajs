@@ -21,7 +21,7 @@ export interface SnapshotNode {
   tag: string;
   /** The content of a text node, `null` for every other node. */
   text: string | null;
-  /** The node's attributes. A text node and a comment hold their data in `value`. */
+  /** The node's attributes. */
   attributes: Record<string, string | number | boolean>;
   /**
    * The border box of the last drawn frame in window coordinates, `null` for a text node and for

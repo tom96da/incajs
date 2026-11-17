@@ -6,7 +6,7 @@
 use super::{NodeId, NodeKind, TreeError, VirtualTree};
 
 impl VirtualTree {
-    /// Copies `id` with its kind, name, namespace, prefix, attributes and style props, and
+    /// Copies `id` with its kind, name, namespace, prefix, data, attributes and style props, and
     /// with its descendants when `deep`. Returns the original and the copy of each node in
     /// pre-order, the copy of `id` first. Only that copy has no parent. The copy of a template
     /// comes with a fresh content that follows it in the list, with the content descendants when
@@ -37,7 +37,8 @@ impl VirtualTree {
                         node.namespace.clone(),
                         node.prefix.clone(),
                     );
-                    let (attributes, style_props) = (
+                    let (data, attributes, style_props) = (
+                        node.data.clone(),
                         node.attributes.clone(),
                         node.style_props.clone(),
                     );
@@ -47,6 +48,7 @@ impl VirtualTree {
                         self.allocate(kind, tag, namespace, prefix)?
                     };
                     let target = self.node_mut(copy)?;
+                    target.data = data;
                     target.attributes = attributes;
                     target.style_props = style_props;
                     if let Some(parent) = parent {
@@ -201,6 +203,19 @@ mod tests {
 
         let keys: Vec<_> = tree.get(made[0].1).unwrap().attributes().keys().collect();
         assert_eq!(keys, ["c", "a", "b"]);
+    }
+
+    #[rstest]
+    #[case::text("#text")]
+    #[case::comment("#comment")]
+    fn a_clone_copies_the_data_of_the_node(#[case] tag: &str) {
+        let mut tree = VirtualTree::new();
+        let original = node(&mut tree, tag);
+        tree.set_data(original, "note").unwrap();
+
+        let made = tree.clone_subtree(original, false).unwrap();
+
+        assert_eq!(tree.get(made[0].1).unwrap().data(), "note");
     }
 
     #[test]

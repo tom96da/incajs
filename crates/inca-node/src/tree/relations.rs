@@ -165,8 +165,8 @@ impl VirtualTree {
         })
     }
 
-    /// Whether the subtrees of `a` and `b` are equal: the same kinds, tags, namespaces, prefixes,
-    /// attributes (compared by text form, the derived `style` text included) and children,
+    /// Whether the subtrees of `a` and `b` are equal: the same kinds, tags, data, namespaces,
+    /// prefixes, attributes (compared by text form, the derived `style` text included) and children,
     /// pairwise in order.
     ///
     /// # Errors
@@ -179,6 +179,7 @@ impl VirtualTree {
             let ny = self.get(y).ok_or(missing(y))?;
             if nx.kind != ny.kind
                 || nx.tag_name != ny.tag_name
+                || nx.data != ny.data
                 || nx.namespace != ny.namespace
                 || nx.prefix != ny.prefix
                 || !same_attributes(nx, ny)
@@ -521,7 +522,7 @@ mod tests {
         "div",
         |t: &mut VirtualTree, r: NodeId| {
             let inner = t.first_child(t.first_child(r).unwrap()).unwrap();
-            t.set_attribute(inner, "value", "yo").unwrap();
+            t.set_data(inner, "yo").unwrap();
         },
         false
     )]
@@ -529,7 +530,7 @@ mod tests {
         "div",
         |t: &mut VirtualTree, r: NodeId| {
             let tail = t.last_child(r).unwrap();
-            t.set_attribute(tail, "value", "u").unwrap();
+            t.set_data(tail, "u").unwrap();
         },
         false
     )]
@@ -542,6 +543,28 @@ mod tests {
         let first = sample(&mut tree, "div");
         let second = sample(&mut tree, second_tag);
         change(&mut tree, second);
+
+        assert_eq!(tree.is_equal(first, second), Ok(expected));
+    }
+
+    #[rstest]
+    #[case::equal_comments("#comment", "a", "#comment", "a", true)]
+    #[case::different_comments("#comment", "a", "#comment", "b", false)]
+    #[case::equal_texts("#text", "a", "#text", "a", true)]
+    #[case::different_texts("#text", "a", "#text", "b", false)]
+    #[case::a_text_and_a_comment("#text", "a", "#comment", "a", false)]
+    fn is_equal_tells_texts_and_comments_apart_by_data(
+        #[case] first_tag: &str,
+        #[case] first_data: &str,
+        #[case] second_tag: &str,
+        #[case] second_data: &str,
+        #[case] expected: bool,
+    ) {
+        let mut tree = VirtualTree::new();
+        let first = node(&mut tree, first_tag);
+        tree.set_data(first, first_data).unwrap();
+        let second = node(&mut tree, second_tag);
+        tree.set_data(second, second_data).unwrap();
 
         assert_eq!(tree.is_equal(first, second), Ok(expected));
     }

@@ -17,7 +17,7 @@ import type { Text } from "./types.mts";
 
 let fake: FakeHost;
 
-/** The data of a text node or comment stand-in in the host. */
+/** The data of a text node or comment in the host. */
 const dataOf = (node: Node): string | null => fake.nodes.get(node.__node_id)!.data;
 
 /** The children of `node` as the host lists them. */
@@ -28,6 +28,7 @@ const host = {
   setAttribute: vi.fn<(nodeId: number, key: string, value: string | number | boolean) => void>(),
   getAttribute: vi.fn<(nodeId: number, key: string) => string | null>(),
   textContent: vi.fn<(nodeId: number) => string>(() => ""),
+  setCharacterData: vi.fn<(nodeId: number, data: string) => void>(),
   wholeText: vi.fn<(nodeId: number) => string>(() => ""),
   substringData: vi.fn<(nodeId: number, offset: number, count: number) => string>(() => ""),
   replaceData: vi.fn<(nodeId: number, offset: number, count: number, data: string) => void>(),
@@ -40,6 +41,8 @@ beforeEach(() => {
   host.createNode.mockImplementation(fake.natives.createNode!);
   host.setAttribute.mockImplementation(fake.natives.setAttribute!);
   host.getAttribute.mockImplementation(fake.natives.getAttribute! as never);
+  host.textContent.mockImplementation(fake.natives.textContent!);
+  host.setCharacterData.mockImplementation(fake.natives.setCharacterData!);
   host.splitText.mockImplementation(fake.natives.splitText!);
   vi.stubGlobal("__inca_native__", nativeStub({ ...fake.natives, ...host } as never));
 });
@@ -294,7 +297,7 @@ describe("createText", () => {
   it("creates a text node and forwards the initial value", () => {
     const node = createTextNode("hello");
     expect(host.createNode).toHaveBeenCalledWith("#text");
-    expect(host.setAttribute).toHaveBeenCalledWith(node.__node_id, "value", "hello");
+    expect(host.setCharacterData).toHaveBeenCalledWith(node.__node_id, "hello");
     expect(node).toMatchObject({ kind: "text", text: "hello" });
     expect("id" in node).toBe(false);
   });
@@ -304,7 +307,7 @@ describe("setText", () => {
   it("forwards the new value and updates the node", () => {
     const node = createTextNode("old") as Text;
     setText(node, "new");
-    expect(host.setAttribute).toHaveBeenCalledWith(node.__node_id, "value", "new");
+    expect(host.setCharacterData).toHaveBeenCalledWith(node.__node_id, "new");
     expect(node.text).toBe("new");
   });
 });
@@ -335,7 +338,7 @@ describe("setElementText", () => {
     const el = createElementNode("div");
     const oldChild = createElementNode("div");
     insert(oldChild, el);
-    host.setAttribute.mockImplementationOnce(() => {
+    host.setCharacterData.mockImplementationOnce(() => {
       throw new TypeError("the text has a lone surrogate");
     });
 

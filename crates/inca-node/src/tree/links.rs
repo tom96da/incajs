@@ -480,7 +480,7 @@ mod tests {
         let fragment = node(&mut f.tree, FRAGMENT_TAG);
         let style = node(&mut f.tree, "style");
         let css = node(&mut f.tree, TEXT_TAG);
-        f.attr(css, "value", ".a { width: 1px }");
+        f.tree.set_data(css, ".a { width: 1px }").unwrap();
         f.tree.append_child(style, css).unwrap();
         f.tree.append_child(fragment, style).unwrap();
         let inside = f.tree.computed_style(a).get("width").cloned();
@@ -498,7 +498,7 @@ mod tests {
         f.attr(a, "class", "a");
         let style = node(&mut f.tree, "style");
         let css = node(&mut f.tree, TEXT_TAG);
-        f.attr(css, "value", ".a { width: 1px }");
+        f.tree.set_data(css, ".a { width: 1px }").unwrap();
         f.tree.append_child(style, css).unwrap();
         let loose = f.tree.computed_style(a).get("width").cloned();
 

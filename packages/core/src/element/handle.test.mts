@@ -68,6 +68,7 @@ function installCreationHost() {
     createNode: vi.fn<(tag: string) => number>(() => 1),
     setStyle: vi.fn<() => void>(),
     setAttribute: vi.fn<() => void>(),
+    setCharacterData: vi.fn<(nodeId: number, data: string) => void>(),
     getAttribute: vi.fn<() => null>(() => null),
     classList: vi.fn<() => object>(() => ({})),
     styleOf: vi.fn<() => object>(() => ({})),

@@ -6,11 +6,10 @@
 import {
   appendChild,
   childNodeIds,
-  getAttribute,
   isConnected,
   linkedNode,
   removeChild,
-  setAttribute,
+  setCharacterData,
   textContent,
 } from "../ffi/index.mts";
 import { nullableText } from "./arguments.mts";
@@ -59,7 +58,7 @@ const NODE_TYPES = { element: 1, text: 3, comment: 8, document: 9, fragment: 11 
  */
 export function readData(node: HandleNode): string {
   if (isDestroyed(node)) return node.kind === "text" ? node.text : "";
-  return String(getAttribute(node.__node_id, "value") ?? "");
+  return textContent(node.__node_id);
 }
 
 /**
@@ -71,7 +70,7 @@ export function readData(node: HandleNode): string {
 export function writeData(node: HandleNode, data: string): void {
   if (node.kind === "element" || node.kind === "fragment" || node.kind === "document") return;
   if (isDestroyed(node)) return;
-  setAttribute(node.__node_id, "value", data);
+  setCharacterData(node.__node_id, data);
   if (node.kind === "text") node.text = data;
 }
 

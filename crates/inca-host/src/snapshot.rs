@@ -64,7 +64,7 @@ pub struct Node {
     pub id: NodeId,
     /// The tag the app created the node with.
     pub tag: String,
-    /// The `"value"` a `"#text"` node renders. `None` for every other tag.
+    /// The data of a `"#text"` node. `None` for every other tag.
     pub text: Option<String>,
     /// The attributes the app set, keyed by name.
     pub attributes: BTreeMap<String, Value>,
@@ -197,10 +197,10 @@ mod tests {
     }
 
     #[test]
-    fn a_text_node_snapshot_carries_its_value() {
+    fn a_text_node_snapshot_carries_its_data() {
         let mut tree = VirtualTree::new();
         let text = tree.create_node("#text").unwrap();
-        tree.set_attribute(text, "value", "hi").unwrap();
+        tree.set_data(text, "hi").unwrap();
 
         let snap = snapshot(&tree, text, &mut unit).unwrap();
 
@@ -211,7 +211,7 @@ mod tests {
     fn a_text_node_snapshot_has_no_bounds() {
         let mut tree = VirtualTree::new();
         let text = tree.create_node("#text").unwrap();
-        tree.set_attribute(text, "value", "hi").unwrap();
+        tree.set_data(text, "hi").unwrap();
 
         let snap = snapshot(&tree, text, &mut unit).unwrap();
 

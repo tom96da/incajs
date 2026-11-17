@@ -194,7 +194,7 @@ pub(crate) fn state(host: &Host, node: NodeId, class: &str) -> bool {
 pub(crate) fn add_sheet(host: &RefCell<Host>, css: &str) {
     let host = &mut *host.borrow_mut();
     let [style, text] = ["style", "#text"].map(|tag| host.tree.create_node(tag).unwrap());
-    host.tree.set_attribute(text, "value", css).unwrap();
+    host.tree.set_data(text, css).unwrap();
     host.tree.append_child(style, text).unwrap();
     host.tree.append_child(host.root(), style).unwrap();
 }

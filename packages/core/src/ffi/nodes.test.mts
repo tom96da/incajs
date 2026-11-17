@@ -31,6 +31,7 @@ import {
   replaceChild,
   replaceData,
   rootOf,
+  setCharacterData,
   setInnerHtml,
   setOuterHtml,
   splitText,
@@ -92,6 +93,7 @@ const native = {
   childNodeIds: vi.fn<(nodeId: number, elementOnly?: boolean) => number[]>(() => []),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => true),
   textContent: vi.fn<(nodeId: number) => string>(() => ""),
+  setCharacterData: vi.fn<(nodeId: number, data: string) => void>(),
   wholeText: vi.fn<(nodeId: number) => string>(() => ""),
   substringData: vi.fn<(nodeId: number, offset: number, count: number) => string>(() => ""),
   replaceData: vi.fn<(nodeId: number, offset: number, count: number, data: string) => void>(),
@@ -227,6 +229,11 @@ describe("wrapper functions forward to __inca_native__", () => {
     native[name].mockReturnValueOnce(result);
     expect(call()).toBe(result);
     expect(native[name]).toHaveBeenCalledWith(...args);
+  });
+
+  it("setCharacterData", () => {
+    setCharacterData(1, "d");
+    expect(native.setCharacterData).toHaveBeenCalledWith(1, "d");
   });
 
   it("replaceData", () => {

@@ -49,6 +49,7 @@ let focused: NodeId | null = null;
 
 interface FakeNode {
   tag: string;
+  data: string;
   attributes: Map<string, unknown>;
   style: Record<string, unknown>;
   parent: NodeId | null;
@@ -79,6 +80,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     const id = nextId++;
     nodes.set(id, {
       tag,
+      data: "",
       attributes: new Map(),
       style: {},
       parent: null,
@@ -198,7 +200,10 @@ function installFakeNative(): Map<NodeId, FakeNode> {
         while (at !== null && at !== documentId) at = requireNode(at).parent;
         return at === documentId;
       },
-      textContent: () => "",
+      textContent: (nodeId: NodeId) => requireNode(nodeId).data,
+      setCharacterData(nodeId: NodeId, data: string): void {
+        requireNode(nodeId).data = data;
+      },
       wholeText: () => "",
       substringData: () => "",
       replaceData() {},
@@ -429,12 +434,12 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     expect(div.attributes.get("class")).toBe("box");
     expect(div.children).toHaveLength(1);
     const text = nodes.get(div.children[0]!)!;
-    expect(text.attributes.get("value")).toBe("count: 0");
+    expect(text.data).toBe("count: 0");
 
     dispatch(div, "click");
     await nextTick();
 
-    expect(nodes.get(div.children[0]!)!.attributes.get("value")).toBe("count: 1");
+    expect(nodes.get(div.children[0]!)!.data).toBe("count: 1");
   });
 
   it("reorders a keyed list via moves, keeping each item's node identity", async () => {
