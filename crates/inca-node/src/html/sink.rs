@@ -189,14 +189,6 @@ impl<'a> HtmlSink<'a> {
         created.map_or_else(|| self.stand_in(), Handle::from)
     }
 
-    fn comment(&self, data: &str) -> Handle {
-        let handle = self.leaf(COMMENT_TAG, data);
-        if let Some(id) = node_of(handle) {
-            self.change(|tree| tree.set_style(id, "display", "none"));
-        }
-        handle
-    }
-
     /// Puts `child` into `parent`, before `before` when it is given. Text joins the text node
     /// that touches it.
     fn insert(&self, parent: Handle, before: Option<Handle>, child: NodeOrText<Handle>) {
@@ -351,11 +343,11 @@ impl TreeSink for HtmlSink<'_> {
     }
 
     fn create_comment(&self, text: StrTendril) -> Handle {
-        self.comment(&text)
+        self.leaf(COMMENT_TAG, &text)
     }
 
     fn create_pi(&self, target: StrTendril, data: StrTendril) -> Handle {
-        self.comment(&format!("?{target} {data}"))
+        self.leaf(COMMENT_TAG, &format!("?{target} {data}"))
     }
 
     fn append(&self, parent: &Handle, child: NodeOrText<Handle>) {
@@ -616,13 +608,20 @@ mod tests {
     }
 
     #[test]
-    fn a_comment_is_a_hidden_node_with_its_text() {
+    fn a_comment_holds_its_data() {
         let (tree, html) = parse("<!--c-->");
 
         let comment = tree.get(html.nodes[0].id).unwrap();
         assert_eq!(comment.tag_name(), COMMENT_TAG);
         assert_eq!(comment.data(), "c");
-        assert_eq!(comment.style_props().get("display"), Some(&"none".into()));
+    }
+
+    #[test]
+    fn a_comment_has_no_style() {
+        let (tree, html) = parse("<!--c-->");
+
+        let comment = tree.get(html.nodes[0].id).unwrap();
+        assert!(comment.style_props().is_empty());
     }
 
     #[test]

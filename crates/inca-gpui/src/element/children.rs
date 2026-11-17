@@ -235,6 +235,33 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_comment_child_has_no_record(cx: &mut TestAppContext) {
+        let mut tree = VirtualTree::new();
+        let root = boxed(&mut tree, None, 200., 200.);
+        let comment = tree.create_node("#comment").unwrap();
+        tree.append_child(root, comment).unwrap();
+        let probe = probe();
+        draw(cx.add_empty_window(), &tree, &probe);
+        assert!(!probe.layouts.borrow().contains_key(&comment));
+    }
+
+    #[gpui::test]
+    fn a_comment_child_leaves_its_sibling_at_the_start(cx: &mut TestAppContext) {
+        let mut tree = VirtualTree::new();
+        let root = boxed(&mut tree, None, 200., 200.);
+        tree.set_style(root, "gap", 10.).unwrap();
+        let comment = tree.create_node("#comment").unwrap();
+        tree.append_child(root, comment).unwrap();
+        let shown = boxed(&mut tree, Some(root), 30., 30.);
+        let probe = probe();
+        draw(cx.add_empty_window(), &tree, &probe);
+        assert_eq!(
+            probe.layouts.borrow()[&shown].bounds,
+            rect(0., 0., 30., 30.)
+        );
+    }
+
+    #[gpui::test]
     fn a_text_child_is_recorded(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);

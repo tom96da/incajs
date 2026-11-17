@@ -38,3 +38,10 @@ fn the_nodes_are_instances_of_their_interfaces_on_the_real_host(
 ) {
     assert_eq!(probe(cx)[key], expected);
 }
+
+#[gpui::test]
+fn a_v_if_comment_is_absent_from_the_snapshot(cx: &mut TestAppContext) {
+    let snap = load(cx, "interfaces").snapshot();
+
+    assert!(snap.find(&|node| node.tag == "#comment").is_none());
+}

@@ -34,7 +34,7 @@ use crate::tree::{AttributeValue, NodeId, NodeKind, StyleMap, VirtualNode, Virtu
 /// of a container. Every rendered text run is addressable by [`NodeId`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum ElementTag {
-    /// Any tag name other than `"#text"` and `"input"`: a generic styled box.
+    /// Any element tag name other than `"input"`: a generic styled box.
     Container,
     /// A `"#text"` tag: its data. Its children are not rendered.
     Text(String),
@@ -258,9 +258,9 @@ pub struct ElementSpec {
     pub children: Vec<ElementSpec>,
 }
 
-/// Builds an [`ElementSpec`] for `root` and its whole subtree. `None` if `root`
-/// doesn't resolve, matching [`VirtualTree::get`]'s convention. The render path
-/// is fed by JS-supplied data, so it skips a child id that doesn't resolve.
+/// Builds an [`ElementSpec`] for `root` and its whole subtree. `None` if `root` doesn't resolve
+/// (the convention of [`VirtualTree::get`]) or is a comment, a `<style>` element or a template.
+/// The render path is fed by JS-supplied data, so it skips a child id that doesn't resolve.
 #[must_use]
 pub fn build_spec(tree: &VirtualTree, root: NodeId) -> Option<ElementSpec> {
     let mut inert = false;
@@ -303,9 +303,9 @@ pub fn hidden_by_attribute(tree: &VirtualTree, id: NodeId) -> bool {
 
 fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Option<ElementSpec> {
     let node = tree.get(root)?;
-    // A `<style>` element holds rules and a template holds markup. Neither takes part in the
-    // layout.
-    if node.is_style() || node.is_template() {
+    // A `<style>` element holds rules, a template holds markup and a comment holds a note. None
+    // takes part in the layout.
+    if node.is_style() || node.is_template() || node.kind() == NodeKind::Comment {
         return None;
     }
     let inert = inert_above || node.attributes().contains_key("inert");
@@ -577,6 +577,33 @@ mod tests {
         let spec = build_spec(&f.tree, f.root).unwrap();
 
         assert!(build_spec(&f.tree, style).is_none());
+        assert_eq!(
+            spec.children
+                .iter()
+                .map(|child| child.id)
+                .collect::<Vec<_>>(),
+            [other]
+        );
+    }
+
+    #[test]
+    fn a_comment_builds_no_element() {
+        let mut f = Fixture::new();
+        let comment = f.tree.create_node("#comment").unwrap();
+        f.tree.append_child(f.root, comment).unwrap();
+
+        assert!(build_spec(&f.tree, comment).is_none());
+    }
+
+    #[test]
+    fn a_comment_leaves_no_child_in_its_parent() {
+        let mut f = Fixture::new();
+        let comment = f.tree.create_node("#comment").unwrap();
+        f.tree.append_child(f.root, comment).unwrap();
+        let other = classed(&mut f, "a");
+
+        let spec = build_spec(&f.tree, f.root).unwrap();
+
         assert_eq!(
             spec.children
                 .iter()
