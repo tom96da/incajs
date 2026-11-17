@@ -197,17 +197,12 @@ const RETRY_ENTRY = dedent`
   createIncaApp(App).mount();
 `;
 
-/** Matches the `file-changed` payload of a file. */
-const isChangeOf =
-  (name: string) =>
-  (payload: unknown): boolean => {
-    const { event, data } = payload as { event?: string; data?: { file?: string } };
-    return event === "file-changed" && Boolean(data?.file?.endsWith(`/${name}`));
-  };
-
-it(
-  "keeps one style element and the new rules when the first load failed",
-  async () => {
+it.each([
+  { first: "a.css", second: "b.mts" },
+  { first: "b.mts", second: "a.css" },
+])(
+  "keeps one style element and the new rules when the first load failed ($first first)",
+  async ({ first, second }) => {
     const session = await startSession({
       "entry.mts": RETRY_ENTRY,
       "App.vue": APP.replace("__STYLE__", ""),
@@ -219,11 +214,10 @@ it(
     await vi.waitFor(() => expect(session.buildErrors).not.toHaveLength(0), {
       timeout: WAIT_TIMEOUT_MS,
     });
-    await writeFile(path.join(session.dir, "a.css"), SHEET_V2);
-    await vi.waitFor(() => expect(session.sent.some(isChangeOf("a.css"))).toBe(true), {
-      timeout: WAIT_TIMEOUT_MS,
-    });
-    await writeFile(path.join(session.dir, "b.mts"), "export const b = 1;\n");
+    const content: Record<string, string> = { "a.css": SHEET_V2, "b.mts": "export const b = 1;\n" };
+    await writeFile(path.join(session.dir, first), content[first]!);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await writeFile(path.join(session.dir, second), content[second]!);
 
     await vi.waitFor(() => expect(session.stderr()).toContain(line(SHEET_V2, 0)), {
       timeout: WAIT_TIMEOUT_MS,

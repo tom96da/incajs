@@ -29,3 +29,6 @@ interface IncaDev {
 
 // eslint-disable-next-line no-var
 declare var __inca_dev__: IncaDev | undefined;
+
+/** The host's timer, which the runtime tsconfig does not type. */
+declare function setTimeout(callback: (...args: never[]) => void, ms: number): unknown;

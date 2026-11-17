@@ -6,6 +6,9 @@ import { ModuleRunner } from "vite/module-runner";
 import { createIncaDevTransport } from "./createIncaDevTransport.mts";
 import { createIncaEvaluator } from "./createIncaEvaluator.mts";
 
+/** How long the retry waits for the files of one edit to stop arriving. */
+const SETTLE_MS = 100;
+
 /** Whether `error` came from the development server, which has already reported it. */
 function isServerFailure(error: unknown): boolean {
   return typeof error === "object" && error !== null && "runnerError" in error;
@@ -18,11 +21,10 @@ function isServerFailure(error: unknown): boolean {
  * Sets each of `globals` on `globalThis` before the first import, so the app
  * reads them while it loads.
  *
- * A failed import is retried after the next `file-changed` payload, until
- * one succeeds. A failure the development server reported stays silent. Any
- * other failure is rethrown as an unhandled rejection.
- * `__inca_dev__.setLoadFailed(true)` follows a failed attempt and
- * `setLoadFailed(false)` precedes each retry.
+ * A failed import is retried after a `SETTLE_MS` pass that saw no new `file-changed` payload,
+ * until one succeeds. A failure the development server reported stays silent. Any other failure
+ * is rethrown as an unhandled rejection. `__inca_dev__.setLoadFailed(true)` follows a failed
+ * attempt and `setLoadFailed(false)` precedes each retry.
  *
  * Every inlined module runs through `__inca_dev__.compile`; the import fails
  * when the host lacks it.
@@ -43,10 +45,17 @@ export async function start(
   globals: Record<string, unknown> = {},
 ): Promise<unknown> {
   Object.assign(globalThis, globals);
-  let edited = (): void => {};
+  let wake = (): void => {};
+  let edits = 0;
   const runner = new ModuleRunner(
     {
-      transport: { ...createIncaDevTransport(() => edited()), timeout: 0 },
+      transport: {
+        ...createIncaDevTransport(() => {
+          edits++;
+          wake();
+        }),
+        timeout: 0,
+      },
       hmr: { logger: { debug: () => {}, error: () => {} } },
       sourcemapInterceptor: false,
     },
@@ -55,7 +64,7 @@ export async function start(
   for (;;) {
     // Armed before the attempt, so an edit that lands during it is caught.
     const changed = new Promise<void>((resolve) => {
-      edited = resolve;
+      wake = resolve;
     });
     try {
       return await runner.import(entryId);
@@ -64,6 +73,10 @@ export async function start(
       globalThis.__inca_dev__?.setLoadFailed?.(true);
     }
     await changed;
+    for (let seen = -1; seen !== edits;) {
+      seen = edits;
+      await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+    }
     // Clears every cached module, so loaded dependencies evaluate again.
     runner.clearCache();
     globalThis.__inca_dev__?.setLoadFailed?.(false);
