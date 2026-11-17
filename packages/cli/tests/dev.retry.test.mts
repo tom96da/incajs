@@ -11,7 +11,6 @@ import { acquireDevLock } from "../src/devLock.mts";
 import { scratchConfigApp } from "./scratchConfigApp.mts";
 import { makeFakeBundler, makeSink, mockHost, waitFor } from "./support/dev.mts";
 import { fsLag } from "./support/fsLag.mts";
-import type { Bundler } from "../src/types.mts";
 
 describe("a failure before the first build", () => {
   const scratch = scratchConfigApp("dev-retry");
@@ -214,20 +213,40 @@ describe("a failure before the first build", () => {
     expect(stderr.text()).toBe("");
   });
 
-  it("rejects with ERR_INCA_HMR_UNSUPPORTED at once, even with a broken config", async () => {
+  it("reports a broken config as build failed on a bundler without hmr", async () => {
     const cwd = await makeAppWithEntry();
     await writeFile(path.join(cwd, "inca.config.ts"), 'throw new Error("config exploded");\n');
-    const bundler: Bundler = {
-      watch: () => Promise.reject(new Error("not used")),
-      build: () => Promise.reject(new Error("not used")),
-    };
-    const { stdout, stderr, running } = startDev(cwd, { bundler, experimentalHmr: true });
+    const { stderr, stdout, watch } = startDev(cwd, { experimentalHmr: true });
 
-    await expect(running).rejects.toMatchObject({ code: "ERR_INCA_HMR_UNSUPPORTED" });
+    await waitFor(() => expect(stderr.text()).toContain("[inca] build failed"));
+
+    expect(stderr.text()).not.toContain("no HMR support");
+    expect(stdout.text()).toContain("[inca] waiting for a change to retry");
+    expect(watch).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the watcher with one warning on a bundler without hmr", async () => {
+    const cwd = await makeAppWithEntry();
+    const { bundler, stderr, controller, running } = startDev(cwd, { experimentalHmr: true });
+
+    await bundler.watching;
+    controller.abort();
+    await running;
+
+    expect(stderr.text()).toMatch(
+      /^\d{1,2}:\d\d:\d\d.* \[inca\] the bundler has no HMR support\. every edit reloads the whole app\n$/,
+    );
+  });
+
+  it("prints no warning on a bundler without hmr when hmr is off", async () => {
+    const cwd = await makeAppWithEntry();
+    const { bundler, stderr, controller, running } = startDev(cwd, { experimentalHmr: false });
+
+    await bundler.watching;
+    controller.abort();
+    await running;
 
     expect(stderr.text()).toBe("");
-    expect(stdout.text()).toBe("");
-    await expectLockFree(cwd);
   });
 
   it("starts with an entry override inside outDir", async () => {

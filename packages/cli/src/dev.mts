@@ -43,7 +43,8 @@ export interface DevOptions {
   frontend?: Frontend;
   /**
    * Delivers module-granular updates instead of a full reload on every
-   * change, over `bundler.hmr`. See `--experimental-hmr`.
+   * change, over `bundler.hmr`. A bundler without `hmr` reloads the whole
+   * app on every change and prints one warning. See `--experimental-hmr`.
    */
   experimentalHmr?: boolean;
   /**
@@ -189,7 +190,6 @@ interface Session {
  *
  * @throws if another `inca dev` is already running for this app.
  * @throws if the host binary can't be resolved or isn't a file.
- * @throws if `experimentalHmr` is set and the bundler has no HMR support.
  * @throws if the operating system refuses a file watcher.
  * @throws if the host exits before it is ready, or exits non-zero or by a
  * signal other than SIGINT/SIGTERM afterwards.
@@ -224,13 +224,6 @@ export async function dev(options: DevOptions): Promise<void> {
     const frontend: Frontend = options.frontend ?? defaultFrontend;
 
     const hmr = options.experimentalHmr ? bundler.hmr?.bind(bundler) : undefined;
-    if (options.experimentalHmr && !hmr) {
-      throw new IncaError(
-        "ERR_INCA_HMR_UNSUPPORTED",
-        "--experimental-hmr was set, but the configured bundler has no HMR support",
-      );
-    }
-
     const resolved = await retryOnEdit({
       cwd,
       signal: options.signal,
@@ -254,6 +247,9 @@ export async function dev(options: DevOptions): Promise<void> {
     });
     if (!resolved) return;
     const { entry, automaticEntry, metadata, runtimeConfig } = resolved;
+    if (options.experimentalHmr && !hmr) {
+      warn(stderr, "the bundler has no HMR support. every edit reloads the whole app", STAMPED);
+    }
     const devDir = devDirOf(cwd);
     const hostBin = (await bundleExecutable(cwd, metadata, bin, stderr, options.signal)) ?? bin;
     if (stopping) return;

@@ -21,6 +21,9 @@ and where each is reported.
 For example, a `width` nobody set falls through to the app's root element
 and then to 800 × 600.
 
+`inca dev` with a bundler that has no HMR reloads the whole app on every edit and prints one
+warning.
+
 An integration can refuse input the engine cannot run yet. The build then
 fails and names the file.
 
