@@ -19,6 +19,7 @@ mod array;
 mod builtins;
 mod collections;
 mod object;
+mod rect;
 mod url;
 
 use array::write_array;

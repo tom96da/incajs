@@ -18,10 +18,10 @@ this crate is where they live.
 Today that is `console`, the timers, the frame callbacks, `performance`, `crypto`,
 `TextEncoder`, `TextDecoder`, `URL`, `URLSearchParams` and `structuredClone`. Every `Engine`
 installs `Performance`, `PerformanceEntry`, `PerformanceMark`, `PerformanceMeasure`,
-`performance`, `Crypto`, `SubtleCrypto`, `crypto`, `TextEncoder`, `TextDecoder`, `URL`,
-`URLSearchParams` and `structuredClone`. The caller installs `console`, the timer functions and the
-frame functions. `console` writes wherever the caller points it, because the process embedding it
-may already be using stdout for something else.
+`performance`, `DOMRectReadOnly`, `DOMRect`, `SVGRect`, `Crypto`, `SubtleCrypto`, `crypto`,
+`TextEncoder`, `TextDecoder`, `URL`, `URLSearchParams` and `structuredClone`. The caller installs
+`console`, the timer functions and the frame functions. `console` writes wherever the caller points
+it, because the process embedding it may already be using stdout for something else.
 
 `structuredClone` refuses an ordinary object that is a key of a `WeakMap` passed to
 `register_uncloneable`, unless its prototype is `Object.prototype` or `null`.

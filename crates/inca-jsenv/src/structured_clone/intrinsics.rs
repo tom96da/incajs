@@ -94,6 +94,7 @@ const INTRINSICS_JS: &str = r"
                 boolean: new Boolean(false),
                 bigint: Object(0n),
                 dom: new DOMException(),
+                rect: new DOMRect(),
                 weakMap: new WeakMap(),
             },
         };
@@ -118,6 +119,7 @@ pub(super) struct Ids {
     boolean: u32,
     bigint: u32,
     dom: u32,
+    rect: u32,
     weak_map: u32,
     shared: u32,
 }
@@ -137,6 +139,7 @@ pub(super) enum Kind {
     Set,
     Error,
     DomException,
+    Rect,
     Array,
     Ordinary,
     Refused,
@@ -160,7 +163,7 @@ pub(crate) fn install(ctx: &Ctx<'_>) -> JsResult<()> {
     let id = |key: &str| -> JsResult<u32> { Ok(class_id(&samples.get::<_, Value>(key)?)) };
     let ids = Object::new(ctx.clone())?;
     for key in [
-        "ordinary", "number", "string", "boolean", "bigint", "dom", "weakMap",
+        "ordinary", "number", "string", "boolean", "bigint", "dom", "rect", "weakMap",
     ] {
         ids.set(key, id(key)?)?;
     }
@@ -188,6 +191,7 @@ impl<'js> Toolkit<'js> {
             boolean: id("boolean")?,
             bigint: id("bigint")?,
             dom: id("dom")?,
+            rect: id("rect")?,
             weak_map: id("weakMap")?,
             shared: shared_class(&store(ctx)?)?,
         };
@@ -255,6 +259,10 @@ impl<'js> Toolkit<'js> {
         let class = class_id(value);
         if class == ids.dom {
             return Kind::DomException;
+        }
+        // The classes whose instances hold plain Rust data share one class id.
+        if class == ids.rect && crate::geometry::is_rect(value) {
+            return Kind::Rect;
         }
         if [ids.number, ids.string, ids.boolean, ids.bigint].contains(&class) {
             return Kind::Boxed;

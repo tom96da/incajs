@@ -128,6 +128,28 @@ declare global {
   interface HTMLCollectionOf<T extends Element> extends HTMLCollectionOfType<T> {}
   type HTMLDocument = Document;
 
+  /** The members `fromRect` reads from its argument. */
+  interface DOMRectInit {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+  }
+  /** The interface object of read-only rectangles. */
+  var DOMRectReadOnly: {
+    readonly prototype: DOMRectReadOnly;
+    new (x?: number, y?: number, width?: number, height?: number): DOMRectReadOnly;
+    fromRect(other?: DOMRectInit): DOMRectReadOnly;
+  };
+  /** The interface object of writable rectangles. */
+  var DOMRect: {
+    readonly prototype: DOMRect;
+    new (x?: number, y?: number, width?: number, height?: number): DOMRect;
+    fromRect(other?: DOMRectInit): DOMRect;
+  };
+  /** An alias of `DOMRect`. */
+  var SVGRect: typeof DOMRect;
+
   /** The interface object of event targets, which a script cannot construct. */
   var EventTarget: {
     readonly prototype: object;

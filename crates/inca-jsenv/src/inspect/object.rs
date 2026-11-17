@@ -9,7 +9,7 @@ use rquickjs::promise::PromiseState;
 use rquickjs::{Object, Promise, Value, object::Filter};
 
 use super::{Mode, plain, put, quote, settled, unproxied, write_value};
-use super::{builtins, url};
+use super::{builtins, rect, url};
 use crate::paint::Style;
 use crate::quickjs::ObjectExt;
 
@@ -74,7 +74,10 @@ pub(super) fn write_object(out: &mut String, value: &Value<'_>, depth: usize, mo
         put(out, mode, Style::Cyan, "[Object]");
         return;
     };
-    if builtins::write(out, object, depth, mode) || url::write(out, value, depth, mode) {
+    if builtins::write(out, object, depth, mode)
+        || url::write(out, value, depth, mode)
+        || rect::write(out, value, depth, mode)
+    {
         return;
     }
     let promise = value.as_promise();

@@ -194,6 +194,7 @@ impl Engine {
                 crate::encoding::install(&ctx)?;
                 crate::url::install(&ctx)?;
                 crate::crypto::install(&ctx)?;
+                crate::geometry::install(&ctx)?;
                 crate::structured_clone::install(&ctx)?;
                 let modules = Object::new(ctx.clone())?;
                 modules.set_prototype(None)?;
