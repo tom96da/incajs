@@ -88,7 +88,7 @@ The host knows eight kinds of node:
 | `"button"` | A styled container. The host reads its `tabindex` with a default of 0. [Elements](../docs/reference/elements.md#button) covers its key clicks. |
 | `"input"` | One line of editable text in a styled container. The host keeps its text; `inputValue` and `setInputValue` read and write it. Its children are not rendered. [Elements](../docs/reference/elements.md#input) covers the rest. |
 | `"#document"` | The top of the tree, the parent of the root container. It has no parent and holds at most one element and any number of comments. It is never laid out, painted or matched. |
-| `"#comment"` | A generic styled container that marks a comment stand-in. Selector matching treats it as no element. |
+| `"#comment"` | A node that holds data, has no children and is never laid out, painted or matched. |
 | `"#fragment"` | A node that holds children and never has a parent. It is never connected, so layout, paint and focus skip it. Selector matching treats it as no element. The content of a template is a fragment that the template owns. |
 | `"template"` | A node that is never laid out or painted, with its children. It owns a `#fragment` as its content, created with it. `templateContent` returns its id. The content has no parent and never counts as connected. |
 | anything else | A generic styled container. |

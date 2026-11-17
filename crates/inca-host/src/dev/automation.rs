@@ -520,7 +520,6 @@ mod tests {
             n.appendChild(template, n.createNode('div'));
             const comment = n.createNode('#comment');
             n.setCharacterData(comment, 'note');
-            n.setStyle(comment, 'display', 'none');
             n.appendChild(n.rootNodeId(), comment);
             globalThis.root = n.rootNodeId();
             globalThis.box = box;
@@ -541,8 +540,8 @@ mod tests {
 
         let tree = &written(&capturing)[1]["result"];
         assert_eq!(tree["id"], root);
-        let [boxed, comment] = &tree["children"].as_array().unwrap()[..] else {
-            panic!("the root has two children in the snapshot");
+        let [boxed] = &tree["children"].as_array().unwrap()[..] else {
+            panic!("the root has one child in the snapshot");
         };
         assert_eq!(boxed["id"], box_id);
         assert_eq!(boxed["tag"], "div");
@@ -561,10 +560,6 @@ mod tests {
             ),
             (&json!("#text"), &json!("hi"), &json!({}), &Value::Null)
         );
-        assert_eq!(comment["tag"], "#comment");
-        assert_eq!(comment["text"], Value::Null);
-        assert_eq!(comment["attributes"], json!({}));
-        assert_eq!(comment["bounds"], Value::Null);
     }
 
     #[gpui::test]

@@ -90,7 +90,7 @@ feature, a notification with one of these names runs the request and is not rela
 | `method` | `params` | Response | Meaning |
 | --- | --- | --- | --- |
 | `click` | `{"node": number}` | `null` | Presses and releases the primary button at the center of the node's box, after a `waitIdle` pass. A node with no box is clicked at its nearest ancestor with one. The request does not check which node receives the click. |
-| `snapshot` | none | a node | The node tree under the node the app mounts under, as it is now, with the boxes of the last drawn frame. `<style>` and `<template>` elements and their content are left out. |
+| `snapshot` | none | a node | The node tree under the node the app mounts under, as it is now, with the boxes of the last drawn frame. `<style>` and `<template>` elements, their content and comments are left out. |
 | `waitIdle` | none | `null` | Runs the queued jobs and the requested frame callbacks, then draws a frame. A timer is not waited for. |
 
 A node is `{"id": number, "tag": string, "text": string | null, "attributes": object, "bounds":

@@ -17,7 +17,7 @@ export interface SnapshotBounds {
 export interface SnapshotNode {
   /** The node's id, the one `click` takes. */
   id: number;
-  /** The tag name, `#text` for a text node and `#comment` for a comment. */
+  /** The tag name, `#text` for a text node. */
   tag: string;
   /** The content of a text node, `null` for every other node. */
   text: string | null;
