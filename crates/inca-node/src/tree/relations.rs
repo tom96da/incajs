@@ -165,7 +165,7 @@ impl VirtualTree {
         })
     }
 
-    /// Whether the subtrees of `a` and `b` are equal: the same tags, namespaces, prefixes,
+    /// Whether the subtrees of `a` and `b` are equal: the same kinds, tags, namespaces, prefixes,
     /// attributes (compared by text form, the derived `style` text included) and children,
     /// pairwise in order.
     ///
@@ -177,7 +177,8 @@ impl VirtualTree {
         while let Some((x, y)) = pending.pop() {
             let nx = self.get(x).ok_or(missing(x))?;
             let ny = self.get(y).ok_or(missing(y))?;
-            if nx.tag_name != ny.tag_name
+            if nx.kind != ny.kind
+                || nx.tag_name != ny.tag_name
                 || nx.namespace != ny.namespace
                 || nx.prefix != ny.prefix
                 || !same_attributes(nx, ny)

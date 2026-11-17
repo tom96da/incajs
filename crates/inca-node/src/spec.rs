@@ -24,11 +24,11 @@ pub use parse::declared_window_size;
 
 use self::parse::style_spec_from_props;
 use crate::input_text::sanitized;
-use crate::tree::{AttributeValue, NodeId, StyleMap, TEXT_TAG, VirtualNode, VirtualTree};
+use crate::tree::{AttributeValue, NodeId, NodeKind, StyleMap, VirtualNode, VirtualTree};
 
 /// What kind of element a [`VirtualNode`] maps to.
 ///
-/// Three kinds exist, chosen by the `"#text"` and `"input"` tag names.
+/// Three kinds exist, chosen by the node kind and the `"input"` tag name.
 ///
 /// Text is always its own node with a stable id, never a bare string child
 /// of a container. Every rendered text run is addressable by [`NodeId`].
@@ -311,8 +311,8 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
     }
     let inert = inert_above || node.attributes().contains_key("inert");
 
-    let tag = match node.tag_name() {
-        TEXT_TAG => ElementTag::Text(node.data().to_owned()),
+    let tag = match node.kind() {
+        NodeKind::Text => ElementTag::Text(node.data().to_owned()),
         _ if node.is_html("input") => {
             let attributes = node.attributes();
             ElementTag::Input {

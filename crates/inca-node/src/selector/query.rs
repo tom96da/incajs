@@ -5,8 +5,8 @@
 
 use super::matching::{Node, matching_context};
 use super::{
-    DOCUMENT_TAG, Element, FRAGMENT_TAG, NodeId, SelectorCaches, SelectorError, VirtualTree,
-    matches_selector_list, parse,
+    Element, NodeId, NodeKind, SelectorCaches, SelectorError, VirtualTree, matches_selector_list,
+    parse,
 };
 
 /// The descendants of `start`, an element, a fragment or the document, that match `selector`, in
@@ -21,7 +21,7 @@ fn search(
     let mut found = Vec::new();
     let Some(start) = tree.get(start).filter(|node| {
         Node::of(tree, node.id()).is_some()
-            || matches!(node.tag_name(), DOCUMENT_TAG | FRAGMENT_TAG)
+            || matches!(node.kind(), NodeKind::Document | NodeKind::Fragment)
     }) else {
         return Ok(found);
     };
@@ -47,8 +47,8 @@ fn search(
 /// The first descendant of `node` that matches `selector` in document order. `:scope` and a
 /// top-level `&` are `node` when it is an element. From the document they select its element, and
 /// from a fragment they select no element, so a selector that starts with `:scope` finds nothing
-/// there. A node that is no element, fragment or document, such as a text leaf or a node tagged
-/// `#comment`, and an unknown id find nothing.
+/// there. A node that is no element, fragment or document, such as a text leaf or a comment,
+/// and an unknown id find nothing.
 ///
 /// # Errors
 ///
@@ -81,6 +81,7 @@ mod tests {
 
     use super::*;
     use crate::tests::*;
+    use crate::tree::FRAGMENT_TAG;
     use rstest::rstest;
 
     /// `root > (a > (a1, a2), b)`, created in the order a, a1, b, a2, so that the creation order,
@@ -170,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn text_leaves_and_comment_stand_ins_are_not_results() {
+    fn text_leaves_and_comments_are_not_results() {
         let m = mixed();
 
         assert_eq!(
@@ -182,7 +183,7 @@ mod tests {
     #[rstest]
     #[case::unknown_id(9999)]
     #[case::text_leaf(mixed().text_node)]
-    #[case::comment_stand_in(mixed().comment)]
+    #[case::comment(mixed().comment)]
     fn an_unknown_text_or_comment_start_gives_an_empty_result(#[case] start: NodeId) {
         let m = mixed();
 

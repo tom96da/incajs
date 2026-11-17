@@ -5,7 +5,7 @@
 
 use html5ever::{Namespace, ns};
 
-use super::{NodeId, TreeError, VirtualNode, VirtualTree};
+use super::{NodeId, NodeKind, TreeError, VirtualNode, VirtualTree};
 
 impl VirtualTree {
     /// Allocates a new node and returns its id. Ids are assigned
@@ -14,13 +14,16 @@ impl VirtualTree {
     ///
     /// # Errors
     ///
-    /// Returns [`TreeError::IdsExhausted`] once `u32::MAX` nodes have been
+    /// Returns [`TreeError::UnknownTag`] for a tag that starts with `#` and names no kind of node,
+    /// and [`TreeError::IdsExhausted`] once `u32::MAX` nodes have been
     /// created over the tree's lifetime. A template takes two ids, its own and its content's,
     /// and fails without creating either when fewer are left.
     pub fn create_node(&mut self, tag_name: impl Into<String>) -> Result<NodeId, TreeError> {
         let tag_name = tag_name.into();
-        let namespace = VirtualNode::is_element_tag(&tag_name).then_some(ns!(html));
-        self.create_element(namespace, None, tag_name)
+        match NodeKind::of_tag(&tag_name).ok_or(TreeError::UnknownTag)? {
+            NodeKind::Element => self.create_element(Some(ns!(html)), None, tag_name),
+            kind => self.allocate(kind, tag_name, None, None),
+        }
     }
 
     /// Makes the next id `next`, so a test reaches the end of the id space.
@@ -31,6 +34,7 @@ impl VirtualTree {
 
     pub(super) fn allocate(
         &mut self,
+        kind: NodeKind,
         tag_name: String,
         namespace: Option<Namespace>,
         prefix: Option<String>,
@@ -38,7 +42,7 @@ impl VirtualTree {
         let id = self.next_id;
         self.next_id = id.checked_add(1).ok_or(TreeError::IdsExhausted)?;
         self.nodes
-            .insert(id, VirtualNode::new(id, tag_name, namespace, prefix));
+            .insert(id, VirtualNode::new(id, kind, tag_name, namespace, prefix));
         self.orphans.insert(id);
         Ok(id)
     }
@@ -71,7 +75,7 @@ impl VirtualTree {
         if namespace == Some(ns!(html)) && tag_name == "template" {
             return self.create_template(tag_name, prefix);
         }
-        self.allocate(tag_name, namespace, prefix)
+        self.allocate(NodeKind::Element, tag_name, namespace, prefix)
     }
 }
 
@@ -97,6 +101,17 @@ mod tests {
         let parsed = tree.parse_html(Some(id), "<b>x</b>").unwrap();
         let tags: Vec<&str> = parsed.nodes.iter().map(|node| node.tag.as_str()).collect();
         assert_eq!(tags, ["b", "#text"]);
+    }
+
+    #[rstest]
+    #[case::unknown("#other")]
+    #[case::bare_hash("#")]
+    fn create_node_refuses_a_hash_tag_that_names_no_kind(#[case] tag: &str) {
+        let mut tree = VirtualTree::new();
+
+        assert_eq!(tree.create_node(tag), Err(TreeError::UnknownTag));
+        assert_eq!(tree.nodes.len(), 0);
+        assert_eq!(tree.create_node("div"), Ok(0));
     }
 
     #[test]

@@ -1,33 +1,69 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The name, namespace and prefix of a node, and the kinds of element they identify. The tests of
-//! these sit in the same file.
+//! The kind of a node, and the name, namespace and prefix of an element. The tests of these sit in
+//! the same file.
 
 use std::borrow::Cow;
 
 use html5ever::ns;
 
-use super::{DOCUMENT_TAG, VirtualNode};
+use super::{COMMENT_TAG, DOCUMENT_TAG, FRAGMENT_TAG, TEXT_TAG, VirtualNode};
+
+/// The kind of a node, set when the node is allocated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeKind {
+    /// An element, whose tag does not start with `#`.
+    Element,
+    /// A text node, tagged `#text`.
+    Text,
+    /// A comment, tagged `#comment`.
+    Comment,
+    /// A document, tagged `#document`.
+    Document,
+    /// A fragment, tagged `#fragment`.
+    Fragment,
+}
+
+impl NodeKind {
+    /// The kind a node with the tag `tag` has. `None` for a tag that starts with `#` and names no
+    /// kind.
+    #[must_use]
+    pub fn of_tag(tag: &str) -> Option<Self> {
+        match tag {
+            TEXT_TAG => Some(Self::Text),
+            COMMENT_TAG => Some(Self::Comment),
+            DOCUMENT_TAG => Some(Self::Document),
+            FRAGMENT_TAG => Some(Self::Fragment),
+            _ if tag.starts_with('#') => None,
+            _ => Some(Self::Element),
+        }
+    }
+}
 
 impl VirtualNode {
-    /// Whether a node with the tag `tag` is an element. The other kinds have tags that start
-    /// with `#`.
+    /// The kind of the node.
     #[must_use]
-    pub(crate) fn is_element_tag(tag: &str) -> bool {
-        !tag.starts_with('#')
+    pub fn kind(&self) -> NodeKind {
+        self.kind
     }
 
     /// Whether the node is an element.
     #[must_use]
     pub fn is_element(&self) -> bool {
-        Self::is_element_tag(&self.tag_name)
+        self.kind == NodeKind::Element
+    }
+
+    /// Whether the node is a text node or a comment.
+    #[must_use]
+    pub fn is_character_data(&self) -> bool {
+        matches!(self.kind, NodeKind::Text | NodeKind::Comment)
     }
 
     /// Whether the node is a document: the declared one or a copy of it.
     #[must_use]
     pub fn is_document(&self) -> bool {
-        self.tag_name == DOCUMENT_TAG
+        self.kind == NodeKind::Document
     }
 
     /// Whether the node is an HTML `template` element.
@@ -108,6 +144,7 @@ impl VirtualNode {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use super::NodeKind;
     use crate::tests::{HTML, SVG, node};
     use crate::tree::VirtualTree;
     use rstest::rstest;
@@ -160,6 +197,47 @@ mod tests {
         let id = node(&mut tree, tag);
 
         assert_eq!(tree.get(id).unwrap().is_element(), expected);
+    }
+
+    #[rstest]
+    #[case::element("div", Some(NodeKind::Element))]
+    #[case::text("#text", Some(NodeKind::Text))]
+    #[case::comment("#comment", Some(NodeKind::Comment))]
+    #[case::document("#document", Some(NodeKind::Document))]
+    #[case::fragment("#fragment", Some(NodeKind::Fragment))]
+    #[case::unknown("#other", None)]
+    #[case::bare_hash("#", None)]
+    fn a_tag_maps_to_its_kind(#[case] tag: &str, #[case] expected: Option<NodeKind>) {
+        assert_eq!(NodeKind::of_tag(tag), expected);
+    }
+
+    #[rstest]
+    #[case::element("div", NodeKind::Element)]
+    #[case::text("#text", NodeKind::Text)]
+    #[case::comment("#comment", NodeKind::Comment)]
+    #[case::document("#document", NodeKind::Document)]
+    #[case::fragment("#fragment", NodeKind::Fragment)]
+    fn create_node_gives_the_node_the_kind_of_its_tag(
+        #[case] tag: &str,
+        #[case] expected: NodeKind,
+    ) {
+        let mut tree = VirtualTree::new();
+        let id = node(&mut tree, tag);
+
+        assert_eq!(tree.get(id).unwrap().kind(), expected);
+    }
+
+    #[rstest]
+    #[case::element("div", false)]
+    #[case::text("#text", true)]
+    #[case::comment("#comment", true)]
+    #[case::document("#document", false)]
+    #[case::fragment("#fragment", false)]
+    fn is_character_data_is_true_for_text_and_comment(#[case] tag: &str, #[case] expected: bool) {
+        let mut tree = VirtualTree::new();
+        let id = node(&mut tree, tag);
+
+        assert_eq!(tree.get(id).unwrap().is_character_data(), expected);
     }
 
     #[rstest]

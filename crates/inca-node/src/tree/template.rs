@@ -5,7 +5,7 @@
 
 use html5ever::ns;
 
-use super::{FRAGMENT_TAG, NodeId, TreeError, VirtualTree};
+use super::{FRAGMENT_TAG, NodeId, NodeKind, TreeError, VirtualTree};
 
 impl VirtualTree {
     /// Creates a template and its empty content, and returns the id of the template. The content
@@ -16,8 +16,8 @@ impl VirtualTree {
         prefix: Option<String>,
     ) -> Result<NodeId, TreeError> {
         self.next_id.checked_add(2).ok_or(TreeError::IdsExhausted)?;
-        let template = self.allocate(tag_name, Some(ns!(html)), prefix)?;
-        let content = self.allocate(FRAGMENT_TAG.to_owned(), None, None)?;
+        let template = self.allocate(NodeKind::Element, tag_name, Some(ns!(html)), prefix)?;
+        let content = self.allocate(NodeKind::Fragment, FRAGMENT_TAG.to_owned(), None, None)?;
         self.orphans.remove(&content);
         if let Some(node) = self.nodes.get_mut(&template) {
             node.content = Some(content);

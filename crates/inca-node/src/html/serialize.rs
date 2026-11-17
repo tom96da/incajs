@@ -12,9 +12,7 @@ use html5ever::serialize::SerializeOpts;
 use html5ever::serialize::{Serialize, Serializer, TraversalScope, serialize};
 use html5ever::{LocalName, Namespace, QualName, ns};
 
-use crate::tree::{
-    COMMENT_TAG, FRAGMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree,
-};
+use crate::tree::{NodeId, NodeKind, TreeError, VirtualNode, VirtualTree};
 
 /// What [`VirtualTree::serialize_html`] writes of a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,10 +103,10 @@ impl Serialize for Subtree<'_> {
                     let Some(node) = self.tree.get(id) else {
                         continue;
                     };
-                    match node.tag_name() {
-                        TEXT_TAG => serializer.write_text(node.data())?,
-                        COMMENT_TAG => serializer.write_comment(node.data())?,
-                        FRAGMENT_TAG => {
+                    match node.kind() {
+                        NodeKind::Text => serializer.write_text(node.data())?,
+                        NodeKind::Comment => serializer.write_comment(node.data())?,
+                        NodeKind::Fragment => {
                             steps.extend(self.children(id).into_iter().rev().map(Step::Enter));
                         }
                         _ => {
@@ -144,8 +142,7 @@ impl VirtualTree {
     /// Returns [`TreeError::NodeNotFound`] if `id` names no node.
     pub fn serialize_html(&self, id: NodeId, scope: HtmlScope) -> Result<String, TreeError> {
         let node = self.get(id).ok_or(TreeError::NodeNotFound(id))?;
-        let tag = node.tag_name();
-        let leaf = matches!(tag, TEXT_TAG | COMMENT_TAG);
+        let leaf = node.is_character_data();
         let traversal_scope = match scope {
             HtmlScope::Inner if leaf => return Ok(String::new()),
             HtmlScope::Inner if node.in_html_namespace() => {
@@ -173,7 +170,7 @@ mod tests {
 
     use super::*;
     use crate::tests::{HTML, SVG, node};
-    use crate::tree::AttributeValue;
+    use crate::tree::{AttributeValue, COMMENT_TAG, FRAGMENT_TAG, TEXT_TAG};
 
     fn text_node(tree: &mut VirtualTree, data: &str) -> NodeId {
         let id = node(tree, TEXT_TAG);

@@ -4,11 +4,11 @@
 //! Matching one node against a selector, and `closest`. The tests sit in the same file.
 
 use super::{
-    Atom, AttrSelectorOperation, BloomFilter, COMMENT_TAG, CaseSensitivity, Element,
-    ElementSelectorFlags, Impl, MatchingContext, MatchingForInvalidation, MatchingMode,
-    NamespaceConstraint, NeedsSelectorFlags, NodeId, OpaqueElement, PseudoClass, PseudoElement,
-    QuirksMode, SelectorCaches, SelectorError, SelectorList, TEXT_TAG, VirtualNode, VirtualTree,
-    fmt, matches_selector_list, parse,
+    Atom, AttrSelectorOperation, BloomFilter, CaseSensitivity, Element, ElementSelectorFlags, Impl,
+    MatchingContext, MatchingForInvalidation, MatchingMode, NamespaceConstraint,
+    NeedsSelectorFlags, NodeId, NodeKind, OpaqueElement, PseudoClass, PseudoElement, QuirksMode,
+    SelectorCaches, SelectorError, SelectorList, VirtualNode, VirtualTree, fmt,
+    matches_selector_list, parse,
 };
 use selectors::matching::matches_selector as matches_selector_one;
 
@@ -202,7 +202,7 @@ impl Element for Node<'_> {
                 if child.is_element() {
                     true
                 } else {
-                    child.tag_name() == TEXT_TAG && has_text(child)
+                    child.kind() == NodeKind::Text && has_text(child)
                 }
             })
         })
@@ -274,7 +274,7 @@ pub(super) fn specificity_of_match(
 }
 
 /// Whether the element `node` matches `selector`. A node that is not an element, such as a text
-/// leaf or a node tagged `#comment`, and an unknown id match nothing.
+/// leaf or a comment, and an unknown id match nothing.
 ///
 /// # Errors
 ///
@@ -292,7 +292,7 @@ pub fn matches_selector(
 }
 
 /// The nearest element at or above `node` that matches `selector`. A `#text` node starts at its
-/// nearest element ancestor, and a node tagged `#comment` and an unknown id find nothing.
+/// nearest element ancestor, and a comment and an unknown id find nothing.
 ///
 /// # Errors
 ///
@@ -306,7 +306,7 @@ pub fn closest_selector(
     let Some(start) = tree.get(node) else {
         return Ok(None);
     };
-    if start.tag_name() == COMMENT_TAG {
+    if start.kind() == NodeKind::Comment {
         return Ok(None);
     }
     let scope = OpaqueElement::new(start);
@@ -471,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_ignores_a_comment_stand_in() {
+    fn empty_ignores_a_comment() {
         let mut f = Fixture::new();
         let holder = f.add(f.root, "div", "holder");
         f.add(holder, "#comment", "c");
@@ -555,14 +555,14 @@ mod tests {
     }
 
     #[test]
-    fn a_comment_stand_in_matches_nothing() {
+    fn a_comment_matches_nothing() {
         let m = mixed();
 
         assert!(!m.f.matches(m.comment, "*"));
     }
 
     #[test]
-    fn a_comment_stand_in_finds_no_closest() {
+    fn a_comment_finds_no_closest() {
         let m = mixed();
 
         assert_eq!(m.f.closest(m.comment, "*"), None);
@@ -619,7 +619,7 @@ mod tests {
     #[rstest]
     #[case::adjacent(":has(+ b)")]
     #[case::general_sibling(":has(~ b)")]
-    fn has_looks_past_a_comment_stand_in_to_the_next_siblings(#[case] selector: &str) {
+    fn has_looks_past_a_comment_to_the_next_siblings(#[case] selector: &str) {
         let (f, _, a) = has_fixture();
 
         assert!(f.matches(a, selector));

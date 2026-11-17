@@ -3,7 +3,7 @@
 
 //! The character data of text and comment nodes, kept in the `"value"` attribute.
 
-use super::{AttributeValue, COMMENT_TAG, NodeId, TEXT_TAG, TreeError, VirtualNode, VirtualTree};
+use super::{AttributeValue, NodeId, NodeKind, TEXT_TAG, TreeError, VirtualNode, VirtualTree};
 
 impl VirtualNode {
     /// The `"value"` attribute as text: empty when it is missing or not a string.
@@ -53,14 +53,14 @@ impl VirtualTree {
     /// Returns [`TreeError::NodeNotFound`] if `id` names no node.
     pub fn text_content(&self, id: NodeId) -> Result<String, TreeError> {
         let node = self.get(id).ok_or(TreeError::NodeNotFound(id))?;
-        if matches!(node.tag_name(), TEXT_TAG | COMMENT_TAG) {
+        if node.is_character_data() {
             return Ok(node.data().to_owned());
         }
         let mut text = String::new();
         let mut pending: Vec<NodeId> = node.children().iter().rev().copied().collect();
         while let Some(next) = pending.pop() {
             let Some(node) = self.get(next) else { continue };
-            if node.tag_name() == TEXT_TAG {
+            if node.kind() == NodeKind::Text {
                 text.push_str(node.data());
             }
             pending.extend(node.children().iter().rev());
@@ -75,7 +75,7 @@ impl VirtualTree {
     /// Returns [`TreeError::NodeNotFound`] if `id` names no node.
     pub fn whole_text(&self, id: NodeId) -> Result<String, TreeError> {
         let own = self.data_of(id)?;
-        let is_text = |id: &NodeId| self.get(*id).is_some_and(|n| n.tag_name() == TEXT_TAG);
+        let is_text = |id: &NodeId| self.get(*id).is_some_and(|n| n.kind() == NodeKind::Text);
         let mut before = Vec::new();
         let mut at = id;
         while let Some(previous) = self.previous_sibling(at).filter(is_text) {
