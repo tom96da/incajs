@@ -93,12 +93,6 @@ const infoCommand = defineCommand({
 
 const devCommand = defineCommand({
   meta: { name: "dev", description: "Run the app in a development window" },
-  args: {
-    "experimental-hmr": {
-      type: "boolean",
-      description: "Apply edits without a reload (or set INCA_EXPERIMENTAL_HMR)",
-    },
-  },
   async run({ args }) {
     if ("sourcemap" in args) {
       warn(process.stderr, "dev ignores --sourcemap and --no-sourcemap", { timestamp: true });
@@ -115,17 +109,8 @@ const devCommand = defineCommand({
     process.on("SIGINT", onSignal);
     process.on("SIGTERM", onSignal);
 
-    const variable = process.env.INCA_EXPERIMENTAL_HMR ?? "";
-    const experimentalHmr =
-      typeof args["experimental-hmr"] === "boolean"
-        ? args["experimental-hmr"]
-        : variable === ""
-          ? undefined
-          : !["0", "false"].includes(variable);
-    if (experimentalHmr) log(process.stdout, "experimental HMR active", { timestamp: true });
-
     try {
-      await dev({ signal: controller.signal, hmr: experimentalHmr });
+      await dev({ signal: controller.signal });
       if (controller.signal.aborted) closeStdio();
     } catch (error) {
       printFault(process.stderr, "dev failed", toFault(error), { timestamp: true });

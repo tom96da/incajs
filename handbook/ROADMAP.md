@@ -153,9 +153,7 @@ remounts the component. The runner itself runs inside QuickJS. See
 [PROTOCOL.md](./PROTOCOL.md#hmr-delivery) for how it is delivered. A future
 `rspack` would hold its own Node/QuickJS halves the same way.
 
-Ships **experimental and opt-in**: without the flag, `inca dev` keeps this
-phase's full reload unchanged. See [PLAN.md](./PLAN.md#phase-34-hmr)
-for the opt-in surface and the prerequisites this needs first.
+On by default; `dev.hmr: false` keeps the full reload.
 
 ## Phase 4: Input & text editing (in progress)
 

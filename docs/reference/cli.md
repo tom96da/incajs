@@ -22,10 +22,9 @@ An unknown command prints the command list and exits with code 1.
 
 ## `inca dev`
 
-Watches your app and opens a live-reloading development window, reloading
-on every change. Saving a file without changing it does not reload
-the app. If the app failed to start, save a change to try again. It
-exits with code 0 when you close the window and non-zero if the host
+Watches your app and opens a development window that applies each edit.
+Saving a file without changing it does not reload the app. If the app failed to start, save a
+change to try again. It exits with code 0 when you close the window and non-zero if the host
 crashes.
 
 When the config or the entry cannot be used before the first build, it
@@ -42,16 +41,6 @@ window open until one appears.
 ```sh
 $ inca dev
 ```
-
-### Options
-
-| Flag                 | Description |
-| -------------------- | ----------- |
-| `--experimental-hmr` | Reloads only the changed module instead of the whole bundle. |
-
-> [!WARNING]
-> `--experimental-hmr` is experimental. See the [HMR guide](../guide/hmr) for
-> what it does differently.
 
 ## `inca build`
 
@@ -134,4 +123,3 @@ host binary:    /home/user/.cache/incajs/host/linux-x64@0.0.25/inca-host
 | --------------- | -------------------- |
 | `INCA_HOST_BIN` | Path to a specific host binary, used in place of automatic resolution, e.g. on a custom or unpublished build. |
 | `INCA_CACHE_DIR` | The directory the CLI unpacks the host binary into. |
-| `INCA_EXPERIMENTAL_HMR` | Same as `--experimental-hmr`, for `inca dev`. See the [HMR guide](../guide/hmr). |
