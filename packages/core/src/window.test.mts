@@ -61,7 +61,7 @@ describe("window", () => {
   });
 
   it("dispatches at the window target", () => {
-    const event = { type: "ping" };
+    const event = new Event("x");
 
     window.dispatchEvent(event);
 

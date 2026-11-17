@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaEvent, IncaEventTarget } from "incajs";
+import type { IncaCustomEvent, IncaEvent, IncaEventTarget } from "incajs";
 
 // The host defines these globals before the app runs. This file carries their types.
 declare global {
@@ -37,6 +37,36 @@ declare global {
   var EventTarget: {
     readonly prototype: object;
     [Symbol.hasInstance](value: unknown): value is import("incajs").IncaEventTarget;
+  };
+
+  /** The fields an event constructor takes. */
+  interface EventInit {
+    bubbles?: boolean;
+    cancelable?: boolean;
+    composed?: boolean;
+  }
+
+  /** The fields the `CustomEvent` constructor takes. */
+  interface CustomEventInit<T = any> extends EventInit {
+    detail?: T;
+  }
+
+  /** The interface object of events. */
+  var Event: {
+    readonly prototype: Omit<IncaEvent, "isTrusted">;
+    readonly NONE: 0;
+    readonly CAPTURING_PHASE: 1;
+    readonly AT_TARGET: 2;
+    readonly BUBBLING_PHASE: 3;
+    new (type: string, eventInitDict?: EventInit): IncaEvent;
+    [Symbol.hasInstance](value: unknown): value is IncaEvent;
+  };
+
+  /** The interface object of custom events. */
+  var CustomEvent: {
+    readonly prototype: Omit<IncaCustomEvent, "isTrusted">;
+    new <T = any>(type: string, eventInitDict?: CustomEventInit<T>): IncaCustomEvent<T>;
+    [Symbol.hasInstance](value: unknown): value is IncaCustomEvent;
   };
 
   /** The interface object of nodes, which a script cannot construct. */

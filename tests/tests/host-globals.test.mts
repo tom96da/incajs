@@ -380,6 +380,13 @@ it("compiles a script that uses the declared globals with no other types", async
       const copy: number[] = structuredClone([1], { transfer: [] });
       document.createElement("div");
       window.addEventListener("keydown", () => {});
+      document.dispatchEvent(new Event("x"));
+      const detail: number = new CustomEvent("x", { detail: 1 }).detail;
+      const none: 0 = Event.NONE;
+      // @ts-expect-error CustomEvent has no static of its own
+      CustomEvent.NONE;
+      // @ts-expect-error eventPhase has the four values of the standard
+      const phase: 0 | 2 = new Event("x").eventPhase;
     `,
   );
   const options: ts.CompilerOptions = {

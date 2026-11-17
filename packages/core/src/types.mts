@@ -211,7 +211,7 @@ export interface IncaEventTarget {
    * @throws TypeError when `event` is not an event built with an event constructor
    * @throws DOMException named `InvalidStateError` when `event` is being dispatched
    */
-  dispatchEvent(event: EventLike): boolean;
+  dispatchEvent(event: IncaEvent): boolean;
 }
 
 /**
@@ -309,11 +309,11 @@ export interface IncaEvent {
    * the mount container is out of the document. A script dispatch at `document` or `window`
    * gives that object.
    */
-  // At run time it is null only for a node with no live handle: one made by createNode directly,
-  // or a collected handle. An event from a Vue element always has a handle.
-  readonly target: IncaEventTarget;
+  // At run time it is null for an event that no dispatch has reached, and for a node with no live
+  // handle, as one made by createNode directly or a collected one.
+  readonly target: IncaEventTarget | null;
   /** The same object as {@link IncaEvent.target}. */
-  readonly srcElement: IncaEventTarget;
+  readonly srcElement: IncaEventTarget | null;
   /**
    * The element, `document` or `window` whose listener is running, and `null` once the
    * event has been handled. A listener function runs with it as `this`.
@@ -366,6 +366,14 @@ export interface IncaEvent {
    * the event is dispatched it does nothing.
    */
   initEvent(type: string, bubbles?: boolean, cancelable?: boolean): void;
+}
+
+/** An event that carries a value of the script's choice in `detail`. */
+export interface IncaCustomEvent<T = any> extends IncaEvent {
+  /** The value the constructor's `detail` field gave, or `null`. */
+  readonly detail: T;
+  /** Sets the type, `bubbles`, `cancelable` and `detail`. */
+  initCustomEvent(type: string, bubbles?: boolean, cancelable?: boolean, detail?: T): void;
 }
 
 /**

@@ -141,7 +141,7 @@ export interface TextContentMember {
    * text node, or with none for `""`. A freed node reads `""` or its last data and ignores the
    * assignment.
    */
-  textContent: string;
+  textContent: string | null;
 }
 
 /** The members of a text node and a comment that read and edit their data. */

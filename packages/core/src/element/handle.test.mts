@@ -155,7 +155,7 @@ describe("event target methods", () => {
     const host = installCreationHost();
     const el = createElementNode("div");
 
-    el.dispatchEvent({ type: "ping" });
+    el.dispatchEvent(new Event("x"));
 
     expect(host.dispatchEvent.mock.calls[0]![0]).toBe(el.__node_id);
   });

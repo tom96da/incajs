@@ -161,10 +161,41 @@ describe("the event types", () => {
     expectTypeOf(listen).returns.toBeVoid();
   });
 
-  it("give an event a non-null target and a nullable current target", () => {
-    expectTypeOf<IncaEvent["target"]>().toEqualTypeOf<IncaEventTarget>();
+  it("give an event a nullable target, source element and current target", () => {
+    expectTypeOf<IncaEvent["target"]>().toEqualTypeOf<IncaEventTarget | null>();
+    expectTypeOf<IncaEvent["srcElement"]>().toEqualTypeOf<IncaEventTarget | null>();
     expectTypeOf<IncaEvent["currentTarget"]>().toEqualTypeOf<IncaEventTarget | null>();
     expectTypeOf<ReturnType<IncaEvent["composedPath"]>>().toEqualTypeOf<IncaEventTarget[]>();
+  });
+
+  it("make a listener guard the target before it reads it", () => {
+    const listen = (el: IncaElement) => {
+      el.addEventListener("click", (event) => {
+        // @ts-expect-error the target can be null
+        event.target.addEventListener("x", () => undefined);
+        event.target?.addEventListener("x", () => undefined);
+      });
+    };
+    expectTypeOf(listen).returns.toBeVoid();
+  });
+
+  it("type the text content of an element as nullable", () => {
+    const read = (el: IncaElement) => {
+      const text: string | null = el.textContent;
+      // @ts-expect-error textContent can be null
+      const length: number = el.textContent.length;
+      return [text, length];
+    };
+    expectTypeOf(read).returns.toBeArray();
+  });
+
+  it("take an event object in dispatchEvent and no plain object", () => {
+    const dispatch = (target: IncaEventTarget, event: IncaEvent) => {
+      target.dispatchEvent(event);
+      // @ts-expect-error a plain object is not an event
+      target.dispatchEvent({ type: "x" });
+    };
+    expectTypeOf(dispatch).returns.toBeVoid();
   });
 
   it("leave out the fields of one event kind from the base event", () => {
