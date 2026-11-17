@@ -1825,13 +1825,6 @@ A fixed entry is deleted and its ID is never reused.
   call that returns the element child at an index. Measure again with a built app that mounts a
   list of 1000 items and reads `children`, `parentNode` and `nextSibling` on the release host.
 
-- **B-341 A comment is a hidden element in the host**
-  `Units: node,gpui,core · Size: M · Impact: Low`
-
-  The host keeps a comment as a `#comment` container with `display: none` and its data in the
-  `value` attribute. Fix: add a comment node kind to the tree and to layout, then make
-  `createCommentNode()` create it and read its data through the text natives.
-
 - **B-342 A mutation method that throws with several nodes moves none of them**
   `Units: core,bridge · Size: M · Impact: Low`
 
