@@ -172,7 +172,7 @@ describe("document", () => {
   });
 
   it("dispatches at the document node", () => {
-    const event = { type: "ping" };
+    const event = new Event("x");
 
     document.dispatchEvent(event);
 

@@ -33,6 +33,7 @@ export type {
   EventListenerObject,
   EventListenerOrObject,
   IncaCompositionEvent,
+  IncaCustomEvent,
   IncaDocument,
   IncaEvent,
   IncaEventMap,

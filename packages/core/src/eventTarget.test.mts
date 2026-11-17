@@ -155,7 +155,7 @@ describe("removeEventListener", () => {
 describe("dispatchEvent", () => {
   it("forwards the event to the node the resolver names and returns the host's answer", () => {
     const target = createEventTarget(() => 9);
-    const event = { type: "ping" };
+    const event = new Event("x");
     native.dispatchEvent.mockReturnValueOnce(false);
 
     expect(target.dispatchEvent(event)).toBe(false);
