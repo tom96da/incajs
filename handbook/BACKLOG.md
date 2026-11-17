@@ -709,18 +709,14 @@ A fixed entry is deleted and its ID is never reused.
   first step is to route the bridge's style warnings through the console
   output, because `inca-bridge` already depends on `inca-jsenv`.
 
-- **B-163 HMR starts the host before the app's modules are transformed**
+- **B-163 A failed transform of the app's modules shows after the host has started**
   `Units: cli · Size: S–M · Impact: Low`
 
-  The development server creates the Vite server and starts the host at once.
-  The host then fetches each module of the app through the `vite` relay and
-  evaluates it, and the development window opens once the app has mounted. A
-  measured start spends about 0.3 s between the host starting and the window
-  opening. Fix: before `startHost`, call the Vite server's `warmupRequest`
-  for the entry so the transform time passes before the host exists. A
-  transform failure then shows before any host starts, the same as a failed
-  first build without HMR. Evaluation and mount errors still need the host's
-  wait.
+  The development server transforms the entry before it starts the host. The failure of an
+  import of the entry shows after the host has started, once, when the host fetches it
+  over the `vite` relay.
+  Fix: transform the imports of the entry before `startHost`, and keep the transform of a saved
+  file fresh. Evaluation and mount errors still need the host's wait.
 
 - **B-169 The Vue warning trace prints in the text color**
   `Units: core · Size: S · Impact: Low`

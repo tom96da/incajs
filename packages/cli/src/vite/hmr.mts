@@ -101,6 +101,16 @@ export function globalsOfDefine(
 }
 
 /**
+ * The id the synthesized entry passes to `start`, and the module graph holds the entry under.
+ *
+ * @param entry - the entry path
+ * @returns the path with `/` separators
+ */
+function entryIdOf(entry: string): string {
+  return entry.split(path.sep).join("/");
+}
+
+/**
  * Writes the entry the host evaluates for an HMR session. The entry awaits
  * the bundled module runner's import of the app, so the host opens the
  * development window once the app has mounted. `start` sets `globals` on
@@ -121,7 +131,7 @@ export async function writeHmrEntry(
 
   const entryPath = path.join(dir, "entry.js");
   const runtimeImport = importSpecifierTo(dir, runtimePath ?? resolveHmrRuntimePath());
-  const entryId = entry.split(path.sep).join("/");
+  const entryId = entryIdOf(entry);
   await writeFile(
     entryPath,
     dedent`
@@ -350,7 +360,8 @@ function fileChangedPlugins(changed: {
 /**
  * Starts a Vite dev server driving the app over its dev channel instead of
  * a browser: a `"client"` environment with a custom {@link HotChannel}
- * standing in for the WebSocket server `server.ws: false` disables.
+ * standing in for the WebSocket server `server.ws: false` disables. Resolves once the
+ * entry has been transformed, so the module graph holds it when the host asks.
  */
 export async function hmr(
   core: AdapterCore,
@@ -434,6 +445,12 @@ export async function hmr(
   } catch (error) {
     await server.close();
     throw error;
+  }
+
+  try {
+    await server.environments.client.transformRequest(entryIdOf(entry));
+  } catch {
+    // The host's own fetch of the entry reports the failure.
   }
 
   return {

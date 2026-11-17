@@ -176,8 +176,8 @@ interface Session {
 }
 
 /**
- * Builds the app, starts the host once the first build lands (at once under
- * HMR), and reloads it on every rebuild until `options.signal`
+ * Builds the app, starts the host once the first build lands (under HMR, once
+ * the entry has been transformed), and reloads it on every rebuild until `options.signal`
  * aborts or the host exits on its own.
  *
  * A config or entry that can't be used before the first build is printed as
