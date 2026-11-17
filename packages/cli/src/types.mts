@@ -147,6 +147,7 @@ export interface Bundler {
   /**
    * Module-granular dev updates, used by `inca dev` unless `dev.hmr` is false.
    * Optional: omit it when the adapter has no HMR support.
+   * Resolves once the entry has been transformed.
    */
   hmr?(options: HmrOptions): Promise<HmrChannel>;
 }

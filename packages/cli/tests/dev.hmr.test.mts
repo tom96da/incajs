@@ -380,6 +380,9 @@ describe("dev with HMR", () => {
   });
 
   it("folds the full reloads that arrive before ready into one", async () => {
+    const cwd = await scratch.makeApp({});
+    vi.stubEnv("MOCK_HOST_READY_GATE", path.join(cwd, "ready.release"));
+    onTestFinished(() => void vi.unstubAllEnvs());
     const bundler = makeFakeHmrBundler("/unused/entry.js");
     const hmr = vi.spyOn(bundler, "hmr");
     const stdout = makeSink();
@@ -387,7 +390,7 @@ describe("dev with HMR", () => {
     const controller = new AbortController();
 
     const running = dev({
-      cwd: await scratch.makeApp({}),
+      cwd,
       entry: "unused",
       bundler,
       hostBin: slowReadyMockHost,
@@ -399,6 +402,7 @@ describe("dev with HMR", () => {
     await waitFor(() => expect(hmr).toHaveBeenCalled());
     bundler.emitFullReload();
     bundler.emitFullReload();
+    await writeFile(path.join(cwd, "ready.release"), "");
     await waitFor(() => expect(stderr.text()).toContain("reload #1"));
 
     bundler.emitFullReload();
