@@ -238,7 +238,8 @@ it(
     expect(await clickCounter(client)).toBe("Clicked 4 time(s)");
 
     // Script edit: a fresh setup() call resets `clicks` back to 0.
-    // Wait on the mount marker: the `file-changed` event arrives before the module re-evaluates.
+    // Wait on the mount marker, because the `file-changed` event arrives before the module
+    // re-evaluates.
     const beforeScriptEdit = mountedCount(stderrText);
     await writeFile(vuePath, appVue(STYLE_V2, "!"));
     await vi.waitFor(() => expect(mountedCount(stderrText)).toBeGreaterThan(beforeScriptEdit), {

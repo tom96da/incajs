@@ -29,7 +29,7 @@ pub struct Host {
     /// The warnings printed for each node, as the text of the line without the node prefix.
     pub(crate) style_warned: HashMap<NodeId, HashSet<String>>,
     pub listeners: EventListeners,
-    /// The state of every `AbortSignal`, by id. Plain data: the objects live in JS.
+    /// The state of every `AbortSignal`, by id. Plain data. The objects live in JS.
     pub(crate) signals: Signals,
     pub focus: FocusRegistry,
     /// Last number handed out as an `eventId`. Each event takes the next one.

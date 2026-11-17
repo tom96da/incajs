@@ -5,7 +5,7 @@
 //!
 //! Rust keeps the state record of each signal under its id. The signal objects live in JS and are
 //! found by id through the signal table, a weak table in the vault. The abort steps remove nothing
-//! outside the signal in this module: the `abort` event reaches the listeners of the signal
+//! outside the signal in this module. The `abort` event reaches the listeners of the signal
 //! through the walk that serves nodes and `window`.
 
 mod any;
@@ -151,8 +151,8 @@ impl Signals {
         self.by_id.get(&id).is_some_and(|s| !s.sources.is_empty())
     }
 
-    /// Whether an `abort` listener on `id` keeps the signal alive: a dependent that is not
-    /// aborted and has a source left.
+    /// Whether an `abort` listener on `id` keeps the signal alive. That holds for a dependent that
+    /// is not aborted and has a source left.
     pub(crate) fn pins(&self, id: u32) -> bool {
         self.is_dependent(id) && !self.is_aborted(id) && self.has_source(id)
     }
@@ -208,7 +208,7 @@ pub(crate) fn dom_exception<'js>(ctx: &Ctx<'js>, name: &str, message: &str) -> V
     ctx.catch()
 }
 
-/// Aborts `signal` with `reason`, or an `AbortError` when `reason` is `None`: the signal and its
+/// Aborts `signal` with `reason`, or an `AbortError` when `reason` is `None`. The signal and its
 /// dependents take the reason, then the abort event runs for each. A signal aborted already stays
 /// as it is.
 ///
@@ -278,8 +278,8 @@ fn run_abort_steps(
     table.unpin(id)
 }
 
-/// Ends the strong hold of signal `id` when nothing needs it any more: it is dependent with no
-/// source left, or no `abort` listener is left on it.
+/// Ends the strong hold of signal `id` when nothing needs it any more. That is the case when it is
+/// dependent with no source left, or when no `abort` listener is left on it.
 pub(crate) fn after_removal(host: &Host, table: &Table<'_>, id: u32) -> JsResult<()> {
     let listened = host
         .listeners

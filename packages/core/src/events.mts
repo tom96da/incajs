@@ -86,7 +86,7 @@ export function addEventListener(
 }
 
 /**
- * The callback of a `once` listener: it removes the registration, then calls `call`. A signal
+ * The callback of a `once` listener. It removes the registration, then calls `call`. A signal
  * target is read from `currentTarget` when the callback runs, so the callback table holds neither
  * the signal nor the options.
  */

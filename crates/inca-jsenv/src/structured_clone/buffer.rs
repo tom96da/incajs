@@ -16,7 +16,7 @@ use crate::quickjs::{
     write_typed_array,
 };
 
-/// Checks the transfer list: every value is an `ArrayBuffer`, and no buffer comes twice.
+/// Checks the transfer list. Every value must be an `ArrayBuffer`, and no buffer may come twice.
 ///
 /// # Errors
 ///
@@ -38,7 +38,7 @@ pub(super) fn check_transfer_list<'js>(
     Ok(checked)
 }
 
-/// Moves the listed buffers: each one is detached after the clone is rewritten from its bytes.
+/// Moves the listed buffers. Each one is detached after the clone is rewritten from its bytes.
 ///
 /// # Errors
 ///

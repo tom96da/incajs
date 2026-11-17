@@ -239,7 +239,8 @@ describe("the node table", () => {
     insertNodes.mockImplementation(() => {
       throw new DOMException("no", "HierarchyRequestError");
     });
-    // The call runs directly: a closure passed to `expect` is kept by the assertion and holds `child`.
+    // The call runs directly. A closure passed to `expect` is kept by the assertion and holds
+    // `child`.
     const ref = (() => {
       const child = div();
       let thrown: unknown;
