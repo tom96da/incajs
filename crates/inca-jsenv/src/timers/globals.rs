@@ -77,7 +77,7 @@ fn start<'js>(
 }
 
 /// Drops timer `id`. An id the queue does not hold does nothing, so the id of a
-/// listener or a frame callback stays in the table.
+/// listener, a frame callback or a timer without a handle stays in the table.
 fn clear(ctx: &Ctx<'_>, timers: &Timers, id: i32) -> JsResult<()> {
     let Ok(id) = u32::try_from(id) else {
         return Ok(());
@@ -405,5 +405,28 @@ mod tests {
             fx.engine
                 .with(|ctx| callbacks::get(&ctx, id).unwrap().is_some())
         );
+    }
+
+    #[test]
+    fn clear_with_the_id_of_a_timer_without_a_handle_leaves_it_running() {
+        let fx = fixture();
+        fx.engine.eval::<()>("globalThis.log = [];").unwrap();
+        let id = fx
+            .engine
+            .with(|ctx| {
+                let handler: Function = ctx.eval("() => log.push('ran')").unwrap();
+                let entry = rquickjs::Array::new(ctx.clone()).unwrap();
+                entry.set(0, handler).unwrap();
+                callbacks::store(&ctx, entry.into_value()).unwrap()
+            })
+            .unwrap();
+        fx.timers.start_without_handle(id, 0);
+
+        fx.engine
+            .eval::<()>(&format!("clearTimeout({id});"))
+            .unwrap();
+        fx.run();
+
+        assert_eq!(fx.engine.eval::<String>("log.join()").unwrap(), "ran");
     }
 }
