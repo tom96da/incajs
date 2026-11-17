@@ -1938,3 +1938,13 @@ A fixed entry is deleted and its ID is never reused.
   nothing for a selector that starts with `:scope` from a fragment, because the matching context
   has no scope for it and the parent of a top-level child is no element. Fix: give the matching
   context a virtual scope for a fragment.
+
+- **B-355 A reload of core leaves the callbacks of the first copy unreleased**
+  `Units: core · Size: M · Impact: Low`
+
+  A second copy of core in one realm, from a reload or from a failed import that evaluates core
+  again, replaces `__inca_released__` and has its own callback maps. The host then releases nothing
+  from the maps of the first copy, so every listener and every `onabort` handler registered through
+  the first copy keeps its JS-side entry after its node or signal is gone. The `onabort` accessor
+  that the first copy installed stays in place. Fix: let the new copy chain the previous release hook, or share the
+  tables across copies.
