@@ -8,13 +8,13 @@
 // a script using them compiles against the declared types.
 
 import { spawn } from "node:child_process";
-import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Writable } from "node:stream";
 
 import { dedent } from "ts-dedent";
 import ts from "typescript";
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { defaultBundler } from "../../packages/cli/src/defaultPlugins.mts";
 import { HostClient } from "../../packages/cli/src/dev-client/client.mts";
@@ -405,4 +405,30 @@ it("compiles a script that uses the declared globals with no other types", async
       .getPreEmitDiagnostics(program)
       .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
   ).toEqual([]);
+});
+
+/** The built declarations of the package. */
+const DIST = path.resolve(import.meta.dirname, "../../packages/core/dist");
+
+/** `dist/index.d.ts` only re-exports from the chunks it imports, so the text is the entry with them. */
+async function declarations(): Promise<string> {
+  const entry = await readFile(path.join(DIST, "index.d.ts"), "utf8");
+  const chunks = [...entry.matchAll(/from "(\.\/chunks\/[^"]+)\.js"/g)].map((match) =>
+    readFile(path.join(DIST, `${match[1]!}.d.ts`), "utf8"),
+  );
+  return [entry, ...(await Promise.all(chunks))].join("\n");
+}
+
+describe("the declarations of incajs", () => {
+  it("have no readonly kind", async () => {
+    expect(await declarations()).not.toContain("readonly kind");
+  });
+
+  it("have no __node_id", async () => {
+    expect(await declarations()).not.toContain("__node_id");
+  });
+
+  it("declare readonly eventId once", async () => {
+    expect((await declarations()).match(/readonly eventId/g)).toHaveLength(1);
+  });
 });

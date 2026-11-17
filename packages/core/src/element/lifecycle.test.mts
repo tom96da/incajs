@@ -18,14 +18,12 @@ import {
   elementOf,
 } from "./lifecycle.mts";
 import type { ElementEntry, InterfacePrototypes, NodeEntry, Parsed } from "../ffi/index.mts";
-import type { IncaNode, IncaTemplateElement } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { HTMLTemplateElement } from "./types.mts";
 
 /** A stand-in handle with the given node id and kind. */
-function standIn(id: number, kind: "element" | "text" = "element"): IncaNode {
-  return Object.defineProperties(
-    {},
-    { __node_id: { value: id }, kind: { value: kind } },
-  ) as IncaNode;
+function standIn(id: number, kind: "element" | "text" = "element"): Node {
+  return Object.defineProperties({}, { __node_id: { value: id }, kind: { value: kind } }) as Node;
 }
 
 describe("the node table", () => {
@@ -49,7 +47,7 @@ describe("the node table", () => {
   });
 
   it.each([
-    ["attached", (handle: IncaNode) => entered(handle)],
+    ["attached", (handle: Node) => entered(handle)],
     ["parentless", () => {}],
   ] as const)(
     "reads a freed %s handle as destroyed and gives no handle for its id",
@@ -65,7 +63,7 @@ describe("the node table", () => {
   );
 
   it.each([
-    ["attached", (handle: IncaNode) => entered(handle)],
+    ["attached", (handle: Node) => entered(handle)],
     ["parentless", () => {}],
   ] as const)("reads a live %s handle as not destroyed", (_state, prepare) => {
     const text = standIn(43, "text");
@@ -86,7 +84,7 @@ describe("a template", () => {
 
   const template = () => {
     vi.stubGlobal("__inca_native__", nativeStub(host as never));
-    const owner = createElementNode("template") as IncaTemplateElement;
+    const owner = createElementNode("template") as HTMLTemplateElement;
     return { owner, content: owner.content };
   };
 
@@ -186,7 +184,7 @@ describe("the prototype of a handle", () => {
     ["a cloned comment", copied([[51, "#comment", null]]), "Comment"],
     [
       "the content of a template",
-      () => (createElementNode("template") as IncaTemplateElement).content,
+      () => (createElementNode("template") as HTMLTemplateElement).content,
       "DocumentFragment",
     ],
   ] as const)("is the prototype of %s", (_path, make, name) => {

@@ -1,14 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type {
-  Attr,
-  HTMLCollectionOf,
-  IncaElement,
-  IncaNode,
-  NamedNodeMap,
-  NodeListOf,
-} from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { Attr, HTMLCollectionOf, Element, NamedNodeMap, NodeListOf } from "./types.mts";
 
 const ARRAY_INDEX = /^(?:0|[1-9]\d*)$/;
 
@@ -21,7 +15,7 @@ function isIndex(key: string): boolean {
 }
 
 /** The first element in `elements` with an `id` of `name`, else with a `name` attribute of it. */
-function namedElement<T extends IncaElement>(elements: readonly T[], name: string): T | null {
+function namedElement<T extends Element>(elements: readonly T[], name: string): T | null {
   if (name === "") return null;
   return (
     elements.find((el) => el.id === name) ??
@@ -31,7 +25,7 @@ function namedElement<T extends IncaElement>(elements: readonly T[], name: strin
 }
 
 /** The `id` and `name` values of `elements` in tree order, each once and never empty. */
-function supportedNames(elements: readonly IncaElement[]): string[] {
+function supportedNames(elements: readonly Element[]): string[] {
   const names = new Set<string>();
   for (const el of elements) {
     names.add(el.id);
@@ -172,7 +166,7 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
  * @param source - lists the current elements in order
  * @returns the collection
  */
-export function htmlCollectionOf<T extends IncaElement>(
+export function htmlCollectionOf<T extends Element>(
   source: () => readonly T[],
 ): HTMLCollectionOf<T> {
   const find = (name: string): T | null => namedElement(source(), name);
@@ -214,7 +208,7 @@ export function namedNodeMapOf(
  * @param source - lists the current nodes in order
  * @returns the list
  */
-export function nodeListOf<T extends IncaNode>(source: () => readonly T[]): NodeListOf<T> {
+export function nodeListOf<T extends Node>(source: () => readonly T[]): NodeListOf<T> {
   return indexedCollection({
     tag: "NodeList",
     arrayMembers: true,

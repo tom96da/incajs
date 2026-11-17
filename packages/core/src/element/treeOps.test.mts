@@ -17,7 +17,8 @@ import {
 import { isRemoved, markFreed, nodeOf, releaseWhenCollected } from "./lifecycle.mts";
 import * as tree from "./treeOps.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
-import type { IncaElement, IncaNode } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { Element } from "./types.mts";
 
 let host: FakeHost;
 
@@ -27,7 +28,7 @@ beforeEach(() => {
 });
 
 /** The children of `node` as the host lists them. */
-const kids = (node: IncaNode): IncaNode[] => Array.from(node.childNodes);
+const kids = (node: Node): Node[] => Array.from(node.childNodes);
 const div = () => createElementNode("div");
 
 describe("insert", () => {
@@ -189,8 +190,8 @@ describe("remove", () => {
   });
 
   it("marks the content of a template removed", () => {
-    const owner = createElementNode("template") as unknown as IncaElement & {
-      content: IncaNode;
+    const owner = createElementNode("template") as unknown as Element & {
+      content: Node;
     };
 
     tree.remove(owner);

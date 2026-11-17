@@ -5,18 +5,24 @@ import { markFreed } from "./element/lifecycle.mts";
 import { signalId } from "./ffi/index.mts";
 import { createIdTable } from "./idTable.mts";
 import type { EventTargetId } from "./ffi/index.mts";
-import type { CallbackId, EventListenerOrObject } from "./types.mts";
+import type { CallbackId, EventListenerOrEventListenerObject } from "./types.mts";
 
 /**
  * Finds the id of a registration from its group and listener, when a listener
  * is added or removed.
  */
-const idsByGroup = new Map<string, Map<EventListenerOrObject<never, never>, CallbackId>>();
+const idsByGroup = new Map<
+  string,
+  Map<EventListenerOrEventListenerObject<never, never>, CallbackId>
+>();
 /**
  * Finds the group and listener of a registration from its id, when the host
  * reports the id released.
  */
-const ownerById = createIdTable<{ group: string; listener: EventListenerOrObject<never, never> }>();
+const ownerById = createIdTable<{
+  group: string;
+  listener: EventListenerOrEventListenerObject<never, never>;
+}>();
 
 /**
  * Records the registration of `listener` under `callbackId`. The host keeps the function it runs.
@@ -26,7 +32,7 @@ const ownerById = createIdTable<{ group: string; listener: EventListenerOrObject
  */
 export function addCallback(
   group: string,
-  listener: EventListenerOrObject<never, never>,
+  listener: EventListenerOrEventListenerObject<never, never>,
   callbackId: CallbackId,
 ): void {
   let ids = idsByGroup.get(group);
@@ -42,7 +48,7 @@ export function addCallback(
  */
 export function callbackIdFor(
   group: string,
-  listener: EventListenerOrObject<never, never>,
+  listener: EventListenerOrEventListenerObject<never, never>,
 ): CallbackId | undefined {
   return idsByGroup.get(group)?.get(listener);
 }

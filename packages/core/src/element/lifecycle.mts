@@ -10,18 +10,19 @@ import {
 } from "../ffi/index.mts";
 import { createIdTable } from "../idTable.mts";
 import type { ElementName, EventTargetId, InterfacePrototypes } from "../ffi/index.mts";
-import type { IncaDocument, NodeId } from "../types.mts";
+import type { Document, NodeId } from "../types.mts";
+import type { HandleNode } from "./handleNode.mts";
+import type { Node } from "./nodeTypes.mts";
 import type {
   CSSStyleDeclaration,
   DOMStringMap,
   DOMTokenList,
   HTMLCollectionOf,
-  IncaComment,
-  IncaElement,
-  IncaFragment,
-  IncaHTMLElement,
-  IncaNode,
-  IncaText,
+  Comment,
+  Element,
+  DocumentFragment,
+  HTMLElement,
+  Text,
   NodeListOf,
 } from "./types.mts";
 
@@ -34,27 +35,27 @@ import type {
 export interface HandleBuilders {
   /** The handle of an element. A tag string gives an HTML element. */
   element?: {
-    (id: NodeId, name?: string): IncaHTMLElement;
-    (id: NodeId, name?: ElementName): IncaElement;
+    (id: NodeId, name?: string): HTMLElement;
+    (id: NodeId, name?: ElementName): Element;
   };
   /** The handle of a text node the host has. */
-  text: (id: NodeId, data: string) => IncaText;
+  text: (id: NodeId, data: string) => Text;
   /** The handle of a comment the host has. */
-  comment?: (id: NodeId) => IncaComment;
+  comment?: (id: NodeId) => Comment;
   /** Creates a host text node and returns its handle. */
-  createText?: (data: string) => IncaText;
+  createText?: (data: string) => Text;
   /** Creates a host comment and returns its handle. */
-  createComment?: (data: string) => IncaComment;
-  fragment?: (id: NodeId) => IncaFragment;
+  createComment?: (data: string) => Comment;
+  fragment?: (id: NodeId) => DocumentFragment;
   /** The handle of the document. */
-  document: () => IncaDocument;
+  document: () => Document;
   /** The handle of a copy of the document, which has the node id of the copy. */
-  documentCopy: (id: NodeId) => IncaDocument;
+  documentCopy: (id: NodeId) => Document;
   /**
    * The handle of a node by id: the live handle, or the document handle for the document id. It
    * rebuilds the handle of the root container when that handle was collected.
    */
-  node: (id: NodeId) => IncaNode | undefined;
+  node: (id: NodeId) => HandleNode | undefined;
 }
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -80,7 +81,7 @@ export function prototypes(): InterfacePrototypes {
  *   prototype for the SVG and MathML namespaces, `Element` for any other namespace, and the
  *   prototype of the interface that names each other kind
  */
-export function prototypeOf(kind: IncaNode["kind"], name: ElementName = "div"): object {
+export function prototypeOf(kind: HandleNode["kind"], name: ElementName = "div"): object {
   const all = prototypes();
   switch (kind) {
     case "comment":
@@ -159,8 +160,8 @@ export interface NodeState {
   dataset?: DOMStringMap;
   /** The attribute store of an element, owned by `attributes.mts`. */
   attributes?: unknown;
-  childNodes?: NodeListOf<IncaNode>;
-  children?: HTMLCollectionOf<IncaElement>;
+  childNodes?: NodeListOf<Node>;
+  children?: HTMLCollectionOf<Element>;
   /** The handler slots by event name, owned by `eventHandlers.mts`. */
   handlers?: Map<string, unknown>;
 }
@@ -347,7 +348,7 @@ export function receiverOf(value: unknown, rule: Receiver): NodeState {
  * @returns `value`, as the handle type `T`
  * @throws {TypeError} when `value` is no handle of the interface
  */
-export function receiverNode<T extends IncaNode = IncaNode>(value: unknown, rule: Receiver): T {
+export function receiverNode<T extends HandleNode = HandleNode>(value: unknown, rule: Receiver): T {
   receiverOf(value, rule);
   return value as T;
 }
@@ -357,7 +358,7 @@ export function receiverNode<T extends IncaNode = IncaNode>(value: unknown, rule
  * @param value - the value to check
  * @returns `true` for an element, a comment, a text handle, a fragment or the document
  */
-export function isNode(value: unknown): value is IncaNode {
+export function isNode(value: unknown): value is HandleNode {
   const state = stateOf(value);
   return state !== undefined && state.kind !== "target";
 }
@@ -366,13 +367,13 @@ export function isNode(value: unknown): value is IncaNode {
  * The handle of each node that entered a parent and was not removed since. The entry keeps the
  * handle alive.
  */
-const strong = createIdTable<IncaNode>();
+const strong = createIdTable<Node>();
 
 /**
  * A weak reference to the handle of every other node: a node with no parent, a node below a
  * removed node, and the root container.
  */
-const weak = createIdTable<WeakRef<IncaNode>>();
+const weak = createIdTable<WeakRef<Node>>();
 
 /** The id of the root container, which stays weak while it sits under the document. */
 let rootId: NodeId | undefined;
@@ -381,7 +382,7 @@ let rootId: NodeId | undefined;
  * Records `node` under its id, weakly. A handle already recorded under the id is replaced.
  * @param node - the handle to record
  */
-export function registerNode(node: IncaNode): void {
+export function registerNode(node: Node): void {
   strong.delete(node.__node_id);
   weak.set(node.__node_id, new WeakRef(node));
 }
@@ -391,7 +392,7 @@ export function registerNode(node: IncaNode): void {
  * the tree, so the handle of an unmounted app is collectable.
  * @param node - the root container's handle
  */
-export function registerRoot(node: IncaElement): void {
+export function registerRoot(node: Element): void {
   rootId = node.__node_id;
   registerNode(node);
 }
@@ -402,7 +403,7 @@ export function registerRoot(node: IncaElement): void {
  * keeps them alive. The root container stays weak.
  * @param node - the handle of a node the host put under a parent
  */
-export function entered(node: IncaNode): void {
+export function entered(node: Node): void {
   const id = node.__node_id;
   if (id === rootId) return;
   strong.set(id, node);
@@ -414,7 +415,7 @@ export function entered(node: IncaNode): void {
  * collected. The entries below the node do not change.
  * @param node - the handle of a node the host took out of its parent
  */
-export function left(node: IncaNode): void {
+export function left(node: Node): void {
   unparent(node);
   hold(node);
 }
@@ -425,7 +426,7 @@ export function left(node: IncaNode): void {
  * is collected. The host frees a removed subtree at a frame after the handle of its top is
  * collected.
  */
-const kept = new WeakMap<IncaNode, IncaNode[]>();
+const kept = new WeakMap<Node, Node[]>();
 
 /**
  * Makes the handle of a node that has no parent weak, for a node the host holds already. Every
@@ -434,9 +435,9 @@ const kept = new WeakMap<IncaNode, IncaNode[]>();
  * @param node - the handle of a node that `removeNode` took out of its parent
  * @param nodeIds - the ids of `node` and every node below it
  */
-export function leftHeld(node: IncaNode, nodeIds: readonly NodeId[]): void {
+export function leftHeld(node: Node, nodeIds: readonly NodeId[]): void {
   unparent(node);
-  const below: IncaNode[] = [];
+  const below: Node[] = [];
   for (const id of nodeIds) {
     const handle = nodeOf(id);
     if (handle === undefined || handle === node) continue;
@@ -451,7 +452,7 @@ export function leftHeld(node: IncaNode, nodeIds: readonly NodeId[]): void {
  * Moves the entry of `node` to the weak table.
  * @param node - the handle of a node that has no parent, or sits below a removed node
  */
-function unparent(node: IncaNode): void {
+function unparent(node: Node): void {
   const id = node.__node_id;
   weak.set(id, new WeakRef(node));
   strong.delete(id);
@@ -462,7 +463,7 @@ function unparent(node: IncaNode): void {
  * node held already changes nothing.
  * @param node - the handle of a node that has no parent
  */
-export function hold(node: IncaNode): void {
+export function hold(node: Node): void {
   if (isHeld(node)) return;
   holdNode(node.__node_id);
   releaseWhenCollected(node);
@@ -473,8 +474,8 @@ export function hold(node: IncaNode): void {
  * @param id - the native node's id
  * @returns the handle, or `undefined` when none is live
  */
-export function nodeOf(id: NodeId): IncaNode | undefined {
-  return strong.get(id) ?? weak.get(id)?.deref();
+export function nodeOf(id: NodeId): HandleNode | undefined {
+  return (strong.get(id) ?? weak.get(id)?.deref()) as HandleNode | undefined;
 }
 
 /**
@@ -482,26 +483,26 @@ export function nodeOf(id: NodeId): IncaNode | undefined {
  * @param id - the native node's id
  * @returns the handle, or `undefined` when none is live or the node is not an element
  */
-export function elementOf(id: NodeId): IncaElement | undefined {
+export function elementOf(id: NodeId): Element | undefined {
   const node = nodeOf(id);
   return node?.kind === "element" ? node : undefined;
 }
 
 /** The content handle of each template handle. */
-const contents = new WeakMap<IncaElement, IncaFragment>();
+const contents = new WeakMap<Element, DocumentFragment>();
 
 /**
  * The template handle of each content handle. The entry keeps the template reachable while its
  * content is, so the host holds both nodes as long as either handle is.
  */
-const owners = new WeakMap<IncaFragment, IncaElement>();
+const owners = new WeakMap<DocumentFragment, Element>();
 
 /**
  * Reads the content handle of a template that already has one.
  * @param node - any node handle
  * @returns the stored content, or `undefined`
  */
-export function existingContent(node: IncaNode): IncaFragment | undefined {
+export function existingContent(node: HandleNode): DocumentFragment | undefined {
   return node.kind === "element" ? contents.get(node) : undefined;
 }
 
@@ -510,12 +511,12 @@ export function existingContent(node: IncaNode): IncaFragment | undefined {
  * @param template - the template handle
  * @param content - its content handle
  */
-export function storeContent(template: IncaElement, content: IncaFragment): void {
+export function storeContent(template: Element, content: DocumentFragment): void {
   contents.set(template, content);
   owners.set(content, template);
 }
 
-const removed = new WeakSet<IncaNode>();
+const removed = new WeakSet<Node>();
 
 /**
  * Whether `node` left the tree for good, removed or freed. A removed node stays in the host and
@@ -523,7 +524,7 @@ const removed = new WeakSet<IncaNode>();
  * @param node - the handle to check
  * @returns `true` after {@link markRemoved} reached `node`, or when the host freed it
  */
-export function isRemoved(node: IncaNode): boolean {
+export function isRemoved(node: Node): boolean {
   return removed.has(node) || isDestroyed(node);
 }
 
@@ -544,7 +545,7 @@ export function markRemoved(nodeIds: readonly NodeId[]): void {
  * @param node - the handle to check
  * @returns `true` when no table holds `node` under its id
  */
-export function isDestroyed(node: IncaNode): boolean {
+export function isDestroyed(node: Node): boolean {
   return nodeOf(node.__node_id) !== node;
 }
 
@@ -567,7 +568,7 @@ export function markFreed(nodeIds: readonly NodeId[]): void {
  */
 const released = new FinalizationRegistry<NodeId>((id) => releaseNode(id));
 
-const held = new WeakSet<IncaNode>();
+const held = new WeakSet<Node>();
 
 /**
  * Whether {@link releaseWhenCollected} already covers `handle`.
@@ -575,7 +576,7 @@ const held = new WeakSet<IncaNode>();
  * @returns `true` after `releaseWhenCollected(handle)`
  * @internal
  */
-export function isHeld(handle: IncaNode): boolean {
+export function isHeld(handle: Node): boolean {
   return held.has(handle);
 }
 
@@ -584,7 +585,7 @@ export function isHeld(handle: IncaNode): boolean {
  * @param handle - the handle of a node held with `holdNode`
  * @internal
  */
-export function releaseWhenCollected(handle: IncaNode): void {
+export function releaseWhenCollected(handle: Node): void {
   held.add(handle);
   released.register(handle, handle.__node_id);
 }

@@ -12,7 +12,7 @@ import { createIncaText } from "./element/text.mts";
 import { createEventTarget } from "./eventTarget.mts";
 import { window } from "./window.mts";
 import type { HostCallback } from "./ffi/index.mts";
-import type { EventLike, IncaEventTarget } from "./types.mts";
+import type { EventLike, EventTarget } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
 let nextCallbackId = 0;
@@ -164,7 +164,7 @@ describe("dispatchEvent", () => {
 });
 
 describe("the listener methods of the nodes", () => {
-  const kinds: [string, () => IncaEventTarget & { __node_id: number }][] = [
+  const kinds: [string, () => EventTarget & { __node_id: number }][] = [
     ["a text node", () => createIncaText(71, "x")],
     ["a comment", () => createIncaComment(72)],
     ["a fragment", () => createIncaFragment(73)],
@@ -267,7 +267,7 @@ describe("a signal as the receiver", () => {
 });
 
 describe("addEventListener reads its options as properties", () => {
-  const target = (): IncaEventTarget => createEventTarget(5);
+  const target = (): EventTarget => createEventTarget(5);
 
   it("takes the signal of a class instance with a getter", () => {
     const signal = new AbortSignal();

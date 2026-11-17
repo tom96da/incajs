@@ -1,33 +1,31 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaDocument } from "../types.mts";
-import type {
-  HTMLCollectionOf,
-  IncaElement,
-  IncaFragment,
-  IncaNode,
-  IncaText,
-  NodeListOf,
-} from "./types.mts";
+import type { Document, EventTarget, NodeId } from "../types.mts";
+import type { Element, HTMLCollectionOf, NodeListOf, Text } from "./types.mts";
 
 /** The sibling members of the nodes that have a parent and are no document type. */
-export interface NonDocumentTypeChildNodeMembers {
+export interface NonDocumentTypeChildNode extends Node {
   /** The closest earlier sibling that is an element, or `null`. */
-  readonly previousElementSibling: IncaElement | null;
+  readonly previousElementSibling: Element | null;
   /** The closest later sibling that is an element, or `null`. */
-  readonly nextElementSibling: IncaElement | null;
+  readonly nextElementSibling: Element | null;
 }
 
-/** The members every node has: what it is, its data and its place in the tree. */
-export interface NodeMembers {
+/** A node of the tree: what it is, its data and its place in the tree. */
+export interface Node extends EventTarget {
+  /**
+   * The node id the host knows this node by. Internal to the renderer.
+   * @internal
+   */
+  readonly __node_id: NodeId;
   /**
    * `1` for an element, `3` for a text node, `8` for a comment, `9` for the document and
    * `11` for a fragment.
    */
   readonly nodeType: 1 | 3 | 8 | 9 | 11;
   /**
-   * The {@link IncaElement.tagName} of an element, `"#text"` for a text node, `"#comment"` for a
+   * The {@link Element.tagName} of an element, `"#text"` for a text node, `"#comment"` for a
    * comment, `"#document"` for the document and `"#document-fragment"` for a fragment.
    */
   readonly nodeName: string;
@@ -40,30 +38,38 @@ export interface NodeMembers {
   /** Whether the node hangs under `document`. */
   readonly isConnected: boolean;
   /** `document`, and `null` for `document` itself. */
-  readonly ownerDocument: IncaDocument | null;
+  readonly ownerDocument: Document | null;
   /**
    * The parent, or `null` for a detached node. A node inside a fragment reads the fragment. A
    * freed node reads `null`.
    */
-  readonly parentNode: IncaElement | IncaFragment | IncaDocument | null;
+  readonly parentNode: Node | null;
   /**
    * The parent element, or `null` for a detached node, a node inside a fragment and the mount
    * container.
    */
-  readonly parentElement: IncaElement | null;
+  readonly parentElement: Element | null;
   /** The first child, or `null`. */
-  readonly firstChild: IncaNode | null;
+  readonly firstChild: Node | null;
   /** The last child, or `null`. */
-  readonly lastChild: IncaNode | null;
+  readonly lastChild: Node | null;
   /** The sibling right before this node, or `null`. */
-  readonly previousSibling: IncaNode | null;
+  readonly previousSibling: Node | null;
   /** The sibling right after this node, or `null`. */
-  readonly nextSibling: IncaNode | null;
+  readonly nextSibling: Node | null;
   /**
    * The children in order, as a live list. Every read returns the same object, which follows later
    * changes. A freed node has an empty list.
    */
-  readonly childNodes: NodeListOf<IncaNode>;
+  readonly childNodes: NodeListOf<Node>;
+  /**
+   * The data of a text node or a comment, and the data of the text nodes below an
+   * element in tree order, comments left out. Assigning `null` or `undefined` stores `""`
+   * and any other value stores its string. Assigning to an element replaces its children with one
+   * text node, or with none for `""`. A freed node reads `""` or its last data and ignores the
+   * assignment.
+   */
+  textContent: string | null;
   /** Whether the node has a child. */
   hasChildNodes(): boolean;
   /**
@@ -72,28 +78,28 @@ export interface NodeMembers {
    * a comment, or when `node` is this node or one of its ancestors.
    * @returns `node`
    */
-  appendChild<T extends IncaNode>(node: T): T;
+  appendChild<T extends Node>(node: T): T;
   /**
    * Inserts `node` before `child`, or last when `child` is `null` or `undefined`. A fragment gives
    * up its children in order and stays empty. Throws `HierarchyRequestError` as
-   * {@link NodeMembers.appendChild} does, and `NotFoundError` when `child` is not a child of this
+   * {@link Node.appendChild} does, and `NotFoundError` when `child` is not a child of this
    * node.
    * @returns `node`
    */
-  insertBefore<T extends IncaNode>(node: T, child: IncaNode | null | undefined): T;
+  insertBefore<T extends Node>(node: T, child: Node | null | undefined): T;
   /**
    * Removes `child`, which keeps its listeners and can be inserted again. Throws `NotFoundError`
    * when `child` is not a child of this node.
    * @returns `child`
    */
-  removeChild<T extends IncaNode>(child: T): T;
+  removeChild<T extends Node>(child: T): T;
   /**
    * Puts `node` in the place of `child`, which keeps its listeners and can be inserted again.
-   * Throws as {@link NodeMembers.insertBefore} does, with `child` as the node that has to be a
+   * Throws as {@link Node.insertBefore} does, with `child` as the node that has to be a
    * child of this node.
    * @returns `child`
    */
-  replaceChild<T extends IncaNode>(node: IncaNode, child: T): T;
+  replaceChild<T extends Node>(node: Node, child: T): T;
   /**
    * Copies the node: its tag, attributes and style, and with `deep` its descendants. The copy has
    * no parent, no listeners and no scroll offset, and the text of an `input` carries over.
@@ -107,12 +113,12 @@ export interface NodeMembers {
    * the node is removed, it still answers for the subtree it keeps. A freed node contains only
    * itself.
    */
-  contains(other: IncaNode | null): boolean;
+  contains(other: Node | null): boolean;
   /**
    * The topmost node above this one: `document` for a connected node, else the top of its
    * subtree, the node itself without a parent.
    */
-  getRootNode(): IncaNode;
+  getRootNode(): Node;
   /**
    * The position of `other` relative to this node as a bit mask: `1` disconnected, `2` preceding,
    * `4` following, `8` contains, `16` contained by and `32` implementation specific. Nodes of
@@ -121,31 +127,19 @@ export interface NodeMembers {
    * the two ids, and `0` for itself.
    * @throws {TypeError} when `other` is not a node
    */
-  compareDocumentPosition(other: IncaNode): number;
+  compareDocumentPosition(other: Node): number;
   /** Whether `other` is this node. `null` and `undefined` give `false`. */
-  isSameNode(other: IncaNode | null): boolean;
+  isSameNode(other: Node | null): boolean;
   /**
    * Whether `other` has the same tag, attributes, style and children, compared in depth. The typed
    * text of an `input` is not compared. `null` and `undefined` give `false`. A freed node equals
    * only itself.
    */
-  isEqualNode(other: IncaNode | null): boolean;
-}
-
-/** The `textContent` of a node. */
-export interface TextContentMember {
-  /**
-   * The data of a text node or a comment, and the data of the text nodes below an
-   * element in tree order, comments left out. Assigning `null` or `undefined` stores `""`
-   * and any other value stores its string. Assigning to an element replaces its children with one
-   * text node, or with none for `""`. A freed node reads `""` or its last data and ignores the
-   * assignment.
-   */
-  textContent: string | null;
+  isEqualNode(other: Node | null): boolean;
 }
 
 /** The members of a text node and a comment that read and edit their data. */
-export interface CharacterDataMembers {
+export interface CharacterData extends Node {
   /** The data. Assigning `null` stores `""` and any other value stores its string. */
   data: string;
   /** The number of UTF-16 code units of the data. */
@@ -198,7 +192,7 @@ export interface TextMembers {
    * @returns The new node.
    * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data.
    */
-  splitText(offset: number): IncaText;
+  splitText(offset: number): Text;
 }
 
 /** The members of the nodes that hold children that insert and replace nodes. */
@@ -212,58 +206,58 @@ export interface ParentNodeMutationMembers {
    * ancestors, or the insertion gives the document text or a second element
    * @throws {TypeError} for a `Symbol`, a string with a lone surrogate or a freed node
    */
-  append(...nodes: (IncaNode | string)[]): void;
+  append(...nodes: (Node | string)[]): void;
   /**
    * Inserts `nodes` before the first child that the call does not move. Takes and throws as
    * {@link ParentNodeMutationMembers.append} does.
    * @param nodes - the nodes and strings to insert
    */
-  prepend(...nodes: (IncaNode | string)[]): void;
+  prepend(...nodes: (Node | string)[]): void;
   /**
    * Makes `nodes` the only children. Every other child leaves, keeps its listeners and can be
    * inserted again. Takes and throws as {@link ParentNodeMutationMembers.append} does. A document
    * that holds an element throws when it gets an element.
    * @param nodes - the nodes and strings to insert
    */
-  replaceChildren(...nodes: (IncaNode | string)[]): void;
+  replaceChildren(...nodes: (Node | string)[]): void;
 }
 
 /** The members of the nodes that have a parent and leave it or change places in it. */
-export interface ChildNodeMembers {
+export interface ChildNode extends Node {
   /**
    * Inserts `nodes` before this node. A node that has no parent does nothing. Takes and throws as
    * {@link ParentNodeMutationMembers.append} does.
    * @param nodes - the nodes and strings to insert
    */
-  before(...nodes: (IncaNode | string)[]): void;
+  before(...nodes: (Node | string)[]): void;
   /**
    * Inserts `nodes` after this node. A node that has no parent does nothing. Takes and throws as
    * {@link ParentNodeMutationMembers.append} does.
    * @param nodes - the nodes and strings to insert
    */
-  after(...nodes: (IncaNode | string)[]): void;
+  after(...nodes: (Node | string)[]): void;
   /**
    * Puts `nodes` in the place of this node, which leaves its parent unless it is one of them. A
    * node that has no parent does nothing. Takes and throws as
    * {@link ParentNodeMutationMembers.append} does.
    * @param nodes - the nodes and strings to insert
    */
-  replaceWith(...nodes: (IncaNode | string)[]): void;
+  replaceWith(...nodes: (Node | string)[]): void;
   /** Takes this node out of its parent. It keeps its listeners and can be inserted again. */
   remove(): void;
 }
 
 /** The members of the nodes that hold children: the child elements and the queries. */
-export interface ParentNodeMembers extends ParentNodeMutationMembers {
+export interface ParentNode extends Node, ParentNodeMutationMembers {
   /**
    * The child elements in order, as a live collection. Every read returns the same object, which
    * follows later changes. A removed element lists the element children it kept.
    */
-  readonly children: HTMLCollectionOf<IncaElement>;
+  readonly children: HTMLCollectionOf<Element>;
   /** The first child that is an element, or `null`. */
-  readonly firstElementChild: IncaElement | null;
+  readonly firstElementChild: Element | null;
   /** The last child that is an element, or `null`. */
-  readonly lastElementChild: IncaElement | null;
+  readonly lastElementChild: Element | null;
   /** The number of children that are elements. */
   readonly childElementCount: number;
   /**
@@ -275,7 +269,7 @@ export interface ParentNodeMembers extends ParentNodeMutationMembers {
    * @param selectors - A selector list.
    * @returns The first matching descendant in document order, or `null`.
    */
-  querySelector(selectors: string): IncaElement | null;
+  querySelector(selectors: string): Element | null;
   /**
    * The descendant elements that match the selector list, in document order, as a list that later
    * changes do not reach. Every call returns a new list. A removed element searches the subtree it
@@ -285,5 +279,5 @@ export interface ParentNodeMembers extends ParentNodeMutationMembers {
    * @param selectors - A selector list.
    * @returns The matching descendants.
    */
-  querySelectorAll(selectors: string): NodeListOf<IncaElement>;
+  querySelectorAll(selectors: string): NodeListOf<Element>;
 }

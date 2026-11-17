@@ -9,7 +9,7 @@ import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
 import { window } from "../rendererCore.mts";
 import { createIncaApp } from "./createApp.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
-import type { IncaElement } from "../rendererCore.mts";
+import type { Element } from "../rendererCore.mts";
 
 let host: FakeHost;
 
@@ -21,7 +21,7 @@ describe("createIncaApp", () => {
   it("keeps the same root handle inside reactive()", () => {
     const app = createIncaApp({ render: () => h("div") });
     app.mount();
-    const root = (app as unknown as { _container: IncaElement })._container;
+    const root = (app as unknown as { _container: Element })._container;
 
     expect(root.__node_id).toBe(host.ROOT);
     expect(reactive(root)).toBe(root);
@@ -34,7 +34,7 @@ describe("createIncaApp", () => {
 
     app.mount();
 
-    expect((app as unknown as { _container: IncaElement })._container).toBe(resolved);
+    expect((app as unknown as { _container: Element })._container).toBe(resolved);
     app.unmount();
   });
 });
@@ -50,7 +50,7 @@ describe("createIncaApp mounted containers", () => {
     const [app, container] = (() => {
       const mountedApp = createIncaApp({ render: () => h("div") });
       mountedApp.mount();
-      const root = (mountedApp as unknown as { _container: IncaElement })._container;
+      const root = (mountedApp as unknown as { _container: Element })._container;
       return [new WeakRef(mountedApp), new WeakRef(root)];
     })();
 

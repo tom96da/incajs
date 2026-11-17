@@ -6,7 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installFakeHost } from "../tests/fakeHost.mts";
 import { collectGarbage, collectSentinel } from "../tests/gc.mts";
 import type { FakeHost } from "../tests/fakeHost.mts";
-import type { CSSStyleDeclaration, IncaElement, IncaNode, IncaText } from "./element/types.mts";
+import type { HandleNode } from "./element/handleNode.mts";
+import type { Node } from "./element/nodeTypes.mts";
+import type { CSSStyleDeclaration, Element, Text } from "./element/types.mts";
 
 let fake: FakeHost;
 let failNext: string | null;
@@ -138,7 +140,8 @@ describe("updateStyle", () => {
 });
 
 /** The kind and tag of a handle and of every handle below it. */
-function shape(node: IncaNode): unknown {
+function shape(value: Node): unknown {
+  const node = value as HandleNode;
   const tag = node.kind === "element" ? node.tagName : node.kind;
   return node.kind === "text" ? tag : [tag, ...Array.from(node.childNodes).map(shape)];
 }
@@ -171,7 +174,7 @@ describe("the tree of the root container", () => {
     const { rootElement } = await import("./element/handle.mts");
     updateStyle("b.css", "b");
 
-    expect((rootElement().firstChild as IncaElement).tagName).toBe("STYLE");
+    expect((rootElement().firstChild as Element).tagName).toBe("STYLE");
   });
 
   it("reaches the text children of a found style element", async () => {
@@ -181,9 +184,9 @@ describe("the tree of the root container", () => {
     updateStyle("b.css", "b");
     await collectSentinel();
 
-    const found = rootElement().firstChild as IncaElement;
+    const found = rootElement().firstChild as Element;
 
-    expect((found.firstChild as IncaText).text).toBe("old");
+    expect((found.firstChild as Text).text).toBe("old");
   });
 });
 

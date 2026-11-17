@@ -5,14 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
 
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaCore, IncaElement } from "../rendererCore.mts";
+import type { RendererCore, Element } from "../rendererCore.mts";
 
 /** The function a registration call received, callable with any event. */
 const listenerOf = (call: readonly unknown[]): ((...args: unknown[]) => void) =>
   call[2] as (...args: unknown[]) => void;
 
 const core: Pick<
-  IncaCore,
+  RendererCore,
   | "addEventListener"
   | "removeEventListener"
   | "latestEventId"
@@ -20,20 +20,20 @@ const core: Pick<
   | "setAttribute"
   | "removeAttribute"
 > = {
-  addEventListener: vi.fn<IncaCore["addEventListener"]>(),
-  removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
+  addEventListener: vi.fn<RendererCore["addEventListener"]>(),
+  removeEventListener: vi.fn<RendererCore["removeEventListener"]>(),
   latestEventId: vi.fn<() => number>(() => 0),
   isRemoved: () => false,
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
 };
 
-const patchProp = createPatchProp(core as unknown as IncaCore);
+const patchProp = createPatchProp(core as unknown as RendererCore);
 
 const BUBBLE = { capture: false, passive: false };
 
 /** An element holds the id of its node, which is all that patchProp reads. */
-const makeEl = (): IncaElement => ({ __node_id: 1 }) as unknown as IncaElement;
+const makeEl = (): Element => ({ __node_id: 1 }) as unknown as Element;
 
 let el = makeEl();
 

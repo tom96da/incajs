@@ -9,7 +9,9 @@ import { insertBefore, linkedNode, removeNode } from "../ffi/index.mts";
 import { handleOf } from "./handle.mts";
 import { entered, isDestroyed, leftHeld, markRemoved } from "./lifecycle.mts";
 import { notFound } from "./nodeMutation.mts";
-import type { IncaElement, IncaNode } from "./types.mts";
+import type { HandleNode } from "./handleNode.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { Element } from "./types.mts";
 
 /**
  * Attaches `child` to `parent`, before `anchor` or at the end when `anchor` is
@@ -21,7 +23,7 @@ import type { IncaElement, IncaNode } from "./types.mts";
  * @param anchor - the sibling to insert before, or omitted/`null` to append at the end
  * @throws {DOMException} `NotFoundError` when `anchor` was freed or is no child of `parent`
  */
-export function insert(child: IncaNode, parent: IncaElement, anchor?: IncaNode | null): void {
+export function insert(child: HandleNode, parent: Element, anchor?: Node | null): void {
   if (anchor && isDestroyed(anchor)) throw notFound();
   insertBefore(parent.__node_id, child.__node_id, anchor?.__node_id ?? null);
   if (child.kind !== "fragment") entered(child);
@@ -36,7 +38,7 @@ export function insert(child: IncaNode, parent: IncaElement, anchor?: IncaNode |
  * A caller that removes a subtree calls this on its root alone.
  * @param child - the node being removed
  */
-export function remove(child: IncaNode): void {
+export function remove(child: Node): void {
   if (isDestroyed(child)) return;
   const [callbackIds, nodeIds] = removeNode(child.__node_id);
   releaseCallbacks(callbackIds);
@@ -50,10 +52,10 @@ export function remove(child: IncaNode): void {
  * @returns the parent element, or `null` when `node` has no parent, has a fragment or the document
  *   as its parent, or was freed
  */
-export function parentNode(node: IncaNode): IncaElement | null {
+export function parentNode(node: Node): Element | null {
   if (isDestroyed(node)) return null;
   const id = linkedNode(node.__node_id, "parent", true);
-  return id === null ? null : ((handleOf(id) as IncaElement | undefined) ?? null);
+  return id === null ? null : ((handleOf(id) as Element | undefined) ?? null);
 }
 
 /**
@@ -62,7 +64,7 @@ export function parentNode(node: IncaNode): IncaElement | null {
  * @returns the sibling immediately after `node` in its parent's children, or `null` when there is
  *   none, `node` has no parent or it was freed
  */
-export function nextSibling(node: IncaNode): IncaNode | null {
+export function nextSibling(node: Node): Node | null {
   if (isDestroyed(node)) return null;
   const id = linkedNode(node.__node_id, "next");
   return id === null ? null : (handleOf(id) ?? null);

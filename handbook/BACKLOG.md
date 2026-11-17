@@ -1006,7 +1006,7 @@ A fixed entry is deleted and its ID is never reused.
   `Units: core,cli,docs · Size: M · Impact: Low`
 
   `addEventListener` and the `on<event>` properties take their event type
-  from `IncaEventMap`. A handler in a template, such as
+  from `GlobalEventHandlersEventMap`. A handler in a template, such as
   `@click="(e) => ..."`, is typed by vue-tsc from the element declarations
   of the DOM, which the repository does not provide. Fix: element type
   declarations for vue-tsc, or types generated into `.inca/`, as Nuxt does
@@ -1184,16 +1184,6 @@ A fixed entry is deleted and its ID is never reused.
   The runner never disposes its runtime: disposing it after the weak-reference
   test of `createApp` makes quickjs-ng abort in `JS_FreeRuntime`. Check this
   again with the CI step and with each engine update.
-
-- **B-252 The element types carry an `Inca` prefix that the standard types do not**
-  `Units: core,cli · Size: L · Impact: Medium`
-
-  A project that targets the browser and the desktop app types a template ref as
-  `HTMLInputElement` in shared code, while incajs exports `IncaInputElement`,
-  `IncaNode`, the `Inca*Event` types and other `Inca*` names. Fix: decide one
-  naming rule for the exported types and apply it to all of them, for example
-  the standard names from a dedicated type setup that replaces `lib.dom` for the
-  desktop target.
 
 - **B-255 The packaged app carries no license notice for its bundled JavaScript dependencies**
   `Units: cli · Size: M · Impact: Medium`
@@ -1535,7 +1525,9 @@ A fixed entry is deleted and its ID is never reused.
   `new DocumentFragment()` throw. No `Window` interface exists: `window` is an `EventTarget`, so
   `console.log(window)` prints `EventTarget { ... }`. Fix: host class definitions for the
   interfaces of the tags, for `SVGElement` and `MathMLElement` with their chains and for `Window`,
-  and constructors that create the node in the host.
+  and constructors that create the node in the host. The types carry the standard names
+  (`HTMLInputElement` and the others) and the interface objects do not exist yet, so
+  `x instanceof HTMLInputElement` is a compile error and a `ReferenceError`.
 
 - **B-298 `new Document()` throws**
   `Units: node,bridge · Size: M · Impact: Low`
@@ -1948,3 +1940,17 @@ A fixed entry is deleted and its ID is never reused.
   the first copy keeps its JS-side entry after its node or signal is gone. The `onabort` accessor
   that the first copy installed stays in place. Fix: let the new copy chain the previous release hook, or share the
   tables across copies.
+
+- **B-356 The other event classes have no constructor type**
+  `Units: core · Size: S · Impact: Low`
+
+  `MouseEvent`, `KeyboardEvent` and the other event classes have no `new` signature in
+  `globals.d.mts`, so a script cannot build one for `dispatchEvent`. Only `Event` and `CustomEvent`
+  have one. Fix: declare a constructor type for each class with its init dictionary.
+
+- **B-359 `Event.eventId` is a non-standard public member**
+  `Units: core,bridge · Size: S · Impact: Low`
+
+  `Event` declares `eventId`, which no standard defines. It is public so that the shape test of
+  `globals.d.mts` finds it in the built declaration file, which strips `@internal` members. Fix:
+  remove the member from the host and from the types, and the name from the shape test.

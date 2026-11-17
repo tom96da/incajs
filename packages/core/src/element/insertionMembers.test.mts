@@ -14,7 +14,8 @@ import {
 } from "./handle.mts";
 import { markFreed, nodeOf, prototypes } from "./lifecycle.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
-import type { IncaElement, IncaNode } from "./types.mts";
+import type { Node } from "./nodeTypes.mts";
+import type { Element } from "./types.mts";
 
 type Native = typeof globalThis.__inca_native__;
 
@@ -38,7 +39,7 @@ const call = (target: object, name: string, ...args: unknown[]): unknown =>
 
 const PARENT_MEMBERS = ["append", "prepend", "replaceChildren"];
 const CHILD_MEMBERS = ["before", "after", "replaceWith", "remove"];
-const RECEIVERS: Record<string, () => IncaNode> = {
+const RECEIVERS: Record<string, () => Node> = {
   element: div,
   document: () => document,
   fragment,
@@ -85,7 +86,7 @@ describe("the call to the host", () => {
     expect(insertNodes.mock.calls[0]![2]).toEqual([text]);
   });
 
-  const SYMBOL_TARGETS: [string, () => IncaElement][] = [
+  const SYMBOL_TARGETS: [string, () => Element][] = [
     ["a live target", () => div()],
     [
       "a freed target",
@@ -179,11 +180,11 @@ describe("the node table", () => {
     [
       "replaceChildren",
       () => div(),
-      (_child: IncaNode, parent: IncaNode) => call(parent, "replaceChildren"),
+      (_child: Node, parent: Node) => call(parent, "replaceChildren"),
     ],
-    ["replaceWith", () => div(), (child: IncaNode) => call(child, "replaceWith")],
-    ["remove", () => div(), (child: IncaNode) => call(child, "remove")],
-    ["remove on a comment", () => createCommentNode(), (child: IncaNode) => call(child, "remove")],
+    ["replaceWith", () => div(), (child: Node) => call(child, "replaceWith")],
+    ["remove", () => div(), (child: Node) => call(child, "remove")],
+    ["remove on a comment", () => createCommentNode(), (child: Node) => call(child, "remove")],
   ])("%s holds the removed node and frees its handle", async (_name, make, run) => {
     const parent = div();
     const [ref, id] = (() => {

@@ -11,9 +11,9 @@ import { createElementNode, rootElement } from "./element/handle.mts";
 import { isHeld, markFreed, registerNode } from "./element/lifecycle.mts";
 import "./targets.mts";
 import { HTML_NAMESPACE } from "./ffi/index.mts";
-import type { IncaElement } from "./element/types.mts";
+import type { Element } from "./element/types.mts";
 import type { ElementEntry, HostCallback, NodeEntry, NodeLink } from "./ffi/index.mts";
-import type { IncaDocument } from "./types.mts";
+import type { Document } from "./types.mts";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
@@ -112,7 +112,7 @@ afterEach(() => {
   markFreed([5]);
 });
 
-const elementOfId5 = { __node_id: 5, kind: "element" } as unknown as IncaElement;
+const elementOfId5 = { __node_id: 5, kind: "element" } as unknown as Element;
 
 describe("document", () => {
   it("is an instance of Document", () => {
@@ -688,7 +688,7 @@ describe("a copy of the document", () => {
   });
 
   it.each([
-    ["after cloneNode(true)", true, [CHILD], (copy: IncaDocument) => copy.childNodes[0]],
+    ["after cloneNode(true)", true, [CHILD], (copy: Document) => copy.childNodes[0]],
     ["after cloneNode()", false, [], () => null],
   ])(
     "reads the element child of the copy as activeElement %s",

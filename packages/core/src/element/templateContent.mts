@@ -6,7 +6,7 @@
 import { holdNode, templateContent } from "../ffi/index.mts";
 import { releaseWhenCollected, storeContent } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
-import type { IncaElement, IncaFragment } from "./types.mts";
+import type { Element, DocumentFragment } from "./types.mts";
 
 /**
  * Gives a new template handle its content handle, so `content` reads the same object before and
@@ -16,7 +16,7 @@ import type { IncaElement, IncaFragment } from "./types.mts";
  * @param build - builds the handle of a fragment
  * @internal
  */
-export function attachContent(template: IncaElement, build: (id: NodeId) => IncaFragment): void {
+export function attachContent(template: Element, build: (id: NodeId) => DocumentFragment): void {
   storeContent(template, build(templateContent(template.__node_id)!));
   holdNode(template.__node_id);
   releaseWhenCollected(template);

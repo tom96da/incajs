@@ -4,7 +4,7 @@
 // The checks and conversions the members apply to the arguments of a call.
 
 import { isNode } from "./lifecycle.mts";
-import type { IncaNode } from "./types.mts";
+import type { HandleNode } from "./handleNode.mts";
 
 /**
  * Converts a value to text. A `Symbol` throws a `TypeError`.
@@ -46,7 +46,7 @@ export function nullableText(value: unknown): string {
  * @throws {TypeError} when `value` is not a node
  * @internal
  */
-export function nodeArgument(value: unknown, position: number): IncaNode {
+export function nodeArgument(value: unknown, position: number): HandleNode {
   if (!isNode(value)) {
     throw new TypeError(
       `parameter ${position} is not a node. pass an element, a text node, a comment or a fragment`,

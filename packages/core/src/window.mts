@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { windowHandle } from "./element/handle.mts";
-import type { IncaWindow } from "./types.mts";
+import type { Window } from "./types.mts";
 
 /**
  * The event target at the top of the app, after `document`. Every event path ends at it. Bubble
@@ -11,4 +11,4 @@ import type { IncaWindow } from "./types.mts";
  * mount container and `document`. A `wheel` listener is passive unless its options say
  * `passive: false`.
  */
-export const window: IncaWindow = /* @__PURE__ */ windowHandle();
+export const window: Window = /* @__PURE__ */ windowHandle();

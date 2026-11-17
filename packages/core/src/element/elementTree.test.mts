@@ -8,7 +8,7 @@ import { createCommentNode, createElementNode, createTextNode, rootElement } fro
 import { markFreed } from "./lifecycle.mts";
 import { insert, remove } from "./treeOps.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
-import type { IncaElement } from "./types.mts";
+import type { Element } from "./types.mts";
 
 let host: FakeHost;
 
@@ -241,7 +241,7 @@ describe("a freed element", () => {
 
 describe("a child with no handle", () => {
   /** A `div` whose host child came from a raw native call, beside a child with a handle. */
-  function withRawChild(): IncaElement {
+  function withRawChild(): Element {
     const parent = createElementNode("div");
     host.natives.appendChild!(parent.__node_id, host.create("span"));
     insert(createElementNode("button"), parent);
@@ -249,9 +249,9 @@ describe("a child with no handle", () => {
   }
 
   it.each([
-    ["children", (parent: IncaElement) => parent.children.length],
-    ["childNodes", (parent: IncaElement) => parent.childNodes.length],
-    ["childElementCount", (parent: IncaElement) => parent.childElementCount],
+    ["children", (parent: Element) => parent.children.length],
+    ["childNodes", (parent: Element) => parent.childNodes.length],
+    ["childElementCount", (parent: Element) => parent.childElementCount],
   ] as const)("is skipped by %s", (_member, count) => {
     expect(count(withRawChild())).toBe(1);
   });

@@ -1,15 +1,60 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { IncaCustomEvent, IncaEvent, IncaEventTarget } from "incajs";
+import type {
+  AddEventListenerOptions as AddEventListenerOptionsType,
+  Attr as AttrType,
+  CSSStyleDeclaration as CSSStyleDeclarationType,
+  CharacterData as CharacterDataType,
+  ChildNode as ChildNodeType,
+  Comment as CommentType,
+  CompositionEvent as CompositionEventType,
+  CustomEvent as CustomEventType,
+  CustomEventInit as CustomEventInitType,
+  DOMRect as DOMRectType,
+  DOMRectReadOnly as DOMRectReadOnlyType,
+  DOMStringMap as DOMStringMapType,
+  DOMTokenList as DOMTokenListType,
+  Document as DocumentType,
+  DocumentFragment as DocumentFragmentType,
+  Element as ElementType,
+  Event as EventType,
+  EventInit as EventInitType,
+  EventListener as EventListenerType,
+  EventListenerObject as EventListenerObjectType,
+  EventListenerOptions as EventListenerOptionsType,
+  EventListenerOrEventListenerObject as EventListenerOrEventListenerObjectType,
+  EventTarget as EventTargetType,
+  FocusEvent as FocusEventType,
+  GlobalEventHandlersEventMap as GlobalEventHandlersEventMapType,
+  HTMLCollectionOf as HTMLCollectionOfType,
+  HTMLElement as HTMLElementType,
+  HTMLInputElement as HTMLInputElementType,
+  HTMLTemplateElement as HTMLTemplateElementType,
+  InputEvent as InputEventType,
+  KeyboardEvent as KeyboardEventType,
+  MouseEvent as MouseEventType,
+  NamedNodeMap as NamedNodeMapType,
+  Node as NodeType,
+  NodeListOf as NodeListOfType,
+  NonDocumentTypeChildNode as NonDocumentTypeChildNodeType,
+  ParentNode as ParentNodeType,
+  PointerEvent as PointerEventType,
+  ScrollIntoViewOptions as ScrollIntoViewOptionsType,
+  ScrollOptions as ScrollOptionsType,
+  Text as TextType,
+  UIEvent as UIEventType,
+  WheelEvent as WheelEventType,
+  Window as WindowType,
+} from "incajs";
 
 // The host defines these globals before the app runs. This file carries their types.
 declare global {
   /** The document of the app. The build adds its import to every module that names it. */
-  const document: import("incajs").IncaDocument;
+  const document: Document;
 
   /** The window of the app. The build adds its import to every module that names it. */
-  const window: import("incajs").IncaWindow;
+  const window: Window;
 
   /** The constants of `Node`, a number for each node type and document position. */
   interface NodeConstants {
@@ -33,109 +78,145 @@ declare global {
     readonly DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC: 32;
   }
 
+  // The global names of the types of `incajs`. Each adds no member to the exported type.
+  interface EventTarget extends EventTargetType {}
+  interface Event extends EventType {}
+  interface UIEvent extends UIEventType {}
+  interface FocusEvent extends FocusEventType {}
+  interface MouseEvent extends MouseEventType {}
+  interface PointerEvent extends PointerEventType {}
+  interface WheelEvent extends WheelEventType {}
+  interface KeyboardEvent extends KeyboardEventType {}
+  interface InputEvent extends InputEventType {}
+  interface CompositionEvent extends CompositionEventType {}
+  interface Node extends NodeType {}
+  interface Element extends ElementType {}
+  interface HTMLElement extends HTMLElementType {}
+  interface HTMLInputElement extends HTMLInputElementType {}
+  interface HTMLTemplateElement extends HTMLTemplateElementType {}
+  interface Text extends TextType {}
+  interface Comment extends CommentType {}
+  interface DocumentFragment extends DocumentFragmentType {}
+  interface Document extends DocumentType {}
+  interface Window extends WindowType {}
+  interface ParentNode extends ParentNodeType {}
+  interface ChildNode extends ChildNodeType {}
+  interface NonDocumentTypeChildNode extends NonDocumentTypeChildNodeType {}
+  interface CharacterData extends CharacterDataType {}
+  interface Attr extends AttrType {}
+  interface CSSStyleDeclaration extends CSSStyleDeclarationType {}
+  interface DOMStringMap extends DOMStringMapType {}
+  interface DOMTokenList extends DOMTokenListType {}
+  interface NamedNodeMap extends NamedNodeMapType {}
+  interface ScrollIntoViewOptions extends ScrollIntoViewOptionsType {}
+  interface ScrollOptions extends ScrollOptionsType {}
+  interface GlobalEventHandlersEventMap extends GlobalEventHandlersEventMapType {}
+  interface EventListenerOptions extends EventListenerOptionsType {}
+  interface AddEventListenerOptions extends AddEventListenerOptionsType {}
+  interface EventInit extends EventInitType {}
+  interface DOMRect extends DOMRectType {}
+  interface DOMRectReadOnly extends DOMRectReadOnlyType {}
+  interface EventListener extends EventListenerType<Event, EventTarget> {}
+  interface EventListenerObject extends EventListenerObjectType<Event> {}
+  type EventListenerOrEventListenerObject = EventListenerOrEventListenerObjectType<
+    Event,
+    EventTarget
+  >;
+  interface CustomEvent<T = any> extends CustomEventType<T> {}
+  interface CustomEventInit<T = any> extends CustomEventInitType<T> {}
+  interface NodeListOf<T extends Node> extends NodeListOfType<T> {}
+  interface HTMLCollectionOf<T extends Element> extends HTMLCollectionOfType<T> {}
+  type HTMLDocument = Document;
+
   /** The interface object of event targets, which a script cannot construct. */
   var EventTarget: {
     readonly prototype: object;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaEventTarget;
+    [Symbol.hasInstance](value: unknown): value is EventTarget;
   };
-
-  /** The fields an event constructor takes. */
-  interface EventInit {
-    bubbles?: boolean;
-    cancelable?: boolean;
-    composed?: boolean;
-  }
-
-  /** The fields the `CustomEvent` constructor takes. */
-  interface CustomEventInit<T = any> extends EventInit {
-    detail?: T;
-  }
 
   /** The interface object of events. */
   var Event: {
-    readonly prototype: Omit<IncaEvent, "isTrusted">;
+    readonly prototype: Omit<Event, "isTrusted">;
     readonly NONE: 0;
     readonly CAPTURING_PHASE: 1;
     readonly AT_TARGET: 2;
     readonly BUBBLING_PHASE: 3;
-    new (type: string, eventInitDict?: EventInit): IncaEvent;
-    [Symbol.hasInstance](value: unknown): value is IncaEvent;
+    new (type: string, eventInitDict?: EventInit): Event;
+    [Symbol.hasInstance](value: unknown): value is Event;
   };
 
   /** The interface object of custom events. */
   var CustomEvent: {
-    readonly prototype: Omit<IncaCustomEvent, "isTrusted">;
-    new <T = any>(type: string, eventInitDict?: CustomEventInit<T>): IncaCustomEvent<T>;
-    [Symbol.hasInstance](value: unknown): value is IncaCustomEvent;
+    readonly prototype: Omit<CustomEvent, "isTrusted">;
+    new <T = any>(type: string, eventInitDict?: CustomEventInit<T>): CustomEvent<T>;
+    [Symbol.hasInstance](value: unknown): value is CustomEvent;
   };
 
   /** The interface object of nodes, which a script cannot construct. */
   var Node: NodeConstants & {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaNode;
+    [Symbol.hasInstance](value: unknown): value is Node;
   };
 
   /** The interface object of text and comments, which a script cannot construct. */
   var CharacterData: {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](
-      value: unknown,
-    ): value is import("incajs").IncaText | import("incajs").IncaComment;
+    [Symbol.hasInstance](value: unknown): value is CharacterData;
   };
 
   /** The interface object of text nodes, which a script cannot construct. */
   var Text: {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaText;
+    [Symbol.hasInstance](value: unknown): value is Text;
   };
 
   /** The interface object of comments, which a script cannot construct. */
   var Comment: {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaComment;
+    [Symbol.hasInstance](value: unknown): value is Comment;
   };
 
   /** The interface object of elements, which a script cannot construct. */
   var Element: {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaElement;
+    [Symbol.hasInstance](value: unknown): value is Element;
   };
 
   /** The interface object of HTML elements, which a script cannot construct. */
   var HTMLElement: {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaHTMLElement;
+    [Symbol.hasInstance](value: unknown): value is HTMLElement;
   };
 
   /** The interface object of fragments, which a script cannot construct. */
   var DocumentFragment: {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaFragment;
+    [Symbol.hasInstance](value: unknown): value is DocumentFragment;
   };
 
   /** The interface object of `document`. */
   var Document: {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaDocument;
+    [Symbol.hasInstance](value: unknown): value is Document;
   };
 
   /** The interface object of the HTML document, which a script cannot construct. */
   var HTMLDocument: {
     readonly prototype: NodeConstants;
-    [Symbol.hasInstance](value: unknown): value is import("incajs").IncaDocument;
+    [Symbol.hasInstance](value: unknown): value is Document;
   };
 
   /** The interface object of `element.dataset`, which scripts cannot construct. */
-  var DOMStringMap: { readonly prototype: import("incajs").DOMStringMap };
+  var DOMStringMap: { readonly prototype: DOMStringMap };
 
   /** The interface object of shadow roots, which the host never creates. */
   var ShadowRoot: { readonly prototype: NodeConstants };
 
   /** The interface object of token lists. It cannot be called or constructed. */
-  var DOMTokenList: { readonly prototype: import("incajs").DOMTokenList };
+  var DOMTokenList: { readonly prototype: DOMTokenList };
 
   /** The interface object of the `style` of an element, which a script cannot construct. */
-  var CSSStyleDeclaration: { readonly prototype: import("incajs").CSSStyleDeclaration };
+  var CSSStyleDeclaration: { readonly prototype: CSSStyleDeclaration };
 
   function setTimeout<A extends unknown[]>(
     handler: (...args: A) => void,
@@ -399,11 +480,11 @@ declare global {
   };
 
   /** The signal of an `AbortController`. A script cannot construct one. */
-  interface AbortSignal extends IncaEventTarget {
+  interface AbortSignal extends EventTarget {
     readonly aborted: boolean;
     readonly reason: any;
     throwIfAborted(): void;
-    onabort: ((this: AbortSignal, ev: IncaEvent) => any) | null;
+    onabort: ((this: AbortSignal, ev: Event) => any) | null;
   }
 
   /** The interface object of signals and their static methods. */

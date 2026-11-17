@@ -5,17 +5,17 @@ import { layoutOf, linkedNode } from "../ffi/index.mts";
 import { ELEMENT_RULE, HTML_ELEMENT_RULE, isRemoved, receiverNode } from "./lifecycle.mts";
 import type { NodeBox } from "../ffi/index.mts";
 import type { HandleBuilders, Receiver } from "./lifecycle.mts";
-import type { IncaElement, IncaHTMLElement } from "./types.mts";
+import type { Element, HTMLElement } from "./types.mts";
 
 /** The members {@link layoutMembers} builds. */
 export type LayoutMembers = Pick<
-  IncaElement,
+  Element,
   "getBoundingClientRect" | "clientWidth" | "clientHeight" | "clientLeft" | "clientTop"
 >;
 
 /** The members {@link offsetMembers} builds. */
 export type OffsetMembers = Pick<
-  IncaHTMLElement,
+  HTMLElement,
   "offsetWidth" | "offsetHeight" | "offsetLeft" | "offsetTop" | "offsetParent"
 >;
 
@@ -25,7 +25,7 @@ export type OffsetMembers = Pick<
  * @param el - the node to read
  * @returns the box, or `null`
  */
-export function layoutBox(el: IncaElement): NodeBox | null {
+export function layoutBox(el: Element): NodeBox | null {
   return isRemoved(el) ? null : layoutOf(el.__node_id);
 }
 
@@ -36,10 +36,10 @@ export function layoutBox(el: IncaElement): NodeBox | null {
  * @param builders - the lookup of a handle by node id
  * @returns the parent, or `null`
  */
-export function offsetParentOf(el: IncaElement, builders: HandleBuilders): IncaElement | null {
+export function offsetParentOf(el: Element, builders: HandleBuilders): Element | null {
   if (!layoutBox(el)) return null;
   const id = linkedNode(el.__node_id, "parent", true);
-  const parent = id === null ? undefined : (builders.node(id) as IncaElement | undefined);
+  const parent = id === null ? undefined : (builders.node(id) as Element | undefined);
   return parent && layoutBox(parent) ? parent : null;
 }
 
@@ -51,7 +51,7 @@ export function offsetParentOf(el: IncaElement, builders: HandleBuilders): IncaE
  * @param builders - the lookup of a handle by node id
  * @returns `left` and `top`; both `0` when the node has no recorded box
  */
-export function offsetOf(el: IncaElement, builders: HandleBuilders): { left: number; top: number } {
+export function offsetOf(el: Element, builders: HandleBuilders): { left: number; top: number } {
   const box = layoutBox(el);
   if (!box) return { left: 0, top: 0 };
 
@@ -64,8 +64,8 @@ export function offsetOf(el: IncaElement, builders: HandleBuilders): { left: num
   };
 }
 
-/** The plain values of a {@link RectLike}, as `toJSON` returns them. */
-export interface RectValues {
+/** A rectangle with its position, its size and its four edges. `toJSON()` returns the plain values. */
+export interface DOMRectReadOnly {
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -74,24 +74,28 @@ export interface RectValues {
   readonly left: number;
   readonly right: number;
   readonly bottom: number;
+  toJSON(): object;
 }
 
-/**
- * A rectangle with its position, its size and its four edges. `toJSON()` returns
- * the plain values.
- */
-export interface RectLike extends RectValues {
-  toJSON(): RectValues;
+/** A rectangle whose position and size can be assigned. */
+export interface DOMRect extends DOMRectReadOnly {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
+
+/** The members of a rect that hold values. */
+type RectParts = Omit<DOMRectReadOnly, "toJSON">;
 
 /**
  * Builds a rect from a node's box. Values stay unrounded.
  * @param layout - the box from {@link NodeBox}, or `null` for no record
  * @returns the rect; all zeros for `null`
  */
-export function rectOf(layout: NodeBox | null): RectLike {
+export function rectOf(layout: NodeBox | null): DOMRect {
   const [x, y, width, height] = layout ?? [0, 0, 0, 0, 0];
-  const values: RectValues = {
+  const values: RectParts = {
     x,
     y,
     width,
@@ -131,7 +135,7 @@ export function tabIndexOf(value: string | number | boolean | null, kind: string
  * @returns the box, or `null`
  */
 function boxOf(self: unknown, rule: Receiver): NodeBox | null {
-  return layoutBox(receiverNode<IncaElement>(self, rule));
+  return layoutBox(receiverNode<Element>(self, rule));
 }
 
 /**
@@ -174,13 +178,13 @@ export function offsetMembers(builders: HandleBuilders): OffsetMembers {
       return Math.round(boxOf(this, HTML_ELEMENT_RULE)?.[3] ?? 0);
     },
     get offsetLeft() {
-      return offsetOf(receiverNode<IncaElement>(this, HTML_ELEMENT_RULE), builders).left;
+      return offsetOf(receiverNode<Element>(this, HTML_ELEMENT_RULE), builders).left;
     },
     get offsetTop() {
-      return offsetOf(receiverNode<IncaElement>(this, HTML_ELEMENT_RULE), builders).top;
+      return offsetOf(receiverNode<Element>(this, HTML_ELEMENT_RULE), builders).top;
     },
     get offsetParent() {
-      return offsetParentOf(receiverNode<IncaElement>(this, HTML_ELEMENT_RULE), builders);
+      return offsetParentOf(receiverNode<Element>(this, HTML_ELEMENT_RULE), builders);
     },
   };
 }

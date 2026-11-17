@@ -16,9 +16,9 @@ import {
   receiverNode,
 } from "./lifecycle.mts";
 import type { InsertionPlace } from "../ffi/index.mts";
+import type { HandleNode } from "./handleNode.mts";
 import type { HandleBuilders, Receiver } from "./lifecycle.mts";
-import type { ChildNodeMembers, ParentNodeMutationMembers } from "./nodeTypes.mts";
-import type { IncaNode, IncaParent } from "./types.mts";
+import type { ChildNode, Node, ParentNode, ParentNodeMutationMembers } from "./nodeTypes.mts";
 
 /**
  * Inserts the arguments with one host call and keeps the node table in step with the result. A
@@ -40,7 +40,7 @@ function insertConverted(
   builders: HandleBuilders,
 ): void {
   const target = receiverNode(self, rule);
-  const converted = nodes.map((value): IncaNode | string =>
+  const converted = nodes.map((value): HandleNode | string =>
     isNode(value) ? value : attributeText(value),
   );
   if (rule === NON_DOCUMENT_CHILD_RULE && isDestroyed(target)) return;
@@ -69,13 +69,13 @@ function insertConverted(
  */
 export function parentNodeMutationMembers(builders: HandleBuilders): ParentNodeMutationMembers {
   return {
-    append(this: IncaParent, ...nodes: unknown[]): void {
+    append(this: ParentNode, ...nodes: unknown[]): void {
       insertConverted(PARENT_NODE_RULE, this, "append", nodes, builders);
     },
-    prepend(this: IncaParent, ...nodes: unknown[]): void {
+    prepend(this: ParentNode, ...nodes: unknown[]): void {
       insertConverted(PARENT_NODE_RULE, this, "prepend", nodes, builders);
     },
-    replaceChildren(this: IncaParent, ...nodes: unknown[]): void {
+    replaceChildren(this: ParentNode, ...nodes: unknown[]): void {
       insertConverted(PARENT_NODE_RULE, this, "replaceChildren", nodes, builders);
     },
   };
@@ -86,18 +86,18 @@ export function parentNodeMutationMembers(builders: HandleBuilders): ParentNodeM
  * @param builders - the functions that build the handles of the new text nodes
  * @returns the members
  */
-export function childNodeMutationMembers(builders: HandleBuilders): ChildNodeMembers {
+export function childNodeMutationMembers(builders: HandleBuilders): Omit<ChildNode, keyof Node> {
   return {
-    before(this: IncaNode, ...nodes: unknown[]): void {
+    before(this: Node, ...nodes: unknown[]): void {
       insertConverted(NON_DOCUMENT_CHILD_RULE, this, "before", nodes, builders);
     },
-    after(this: IncaNode, ...nodes: unknown[]): void {
+    after(this: Node, ...nodes: unknown[]): void {
       insertConverted(NON_DOCUMENT_CHILD_RULE, this, "after", nodes, builders);
     },
-    replaceWith(this: IncaNode, ...nodes: unknown[]): void {
+    replaceWith(this: Node, ...nodes: unknown[]): void {
       insertConverted(NON_DOCUMENT_CHILD_RULE, this, "replaceWith", nodes, builders);
     },
-    remove(this: IncaNode): void {
+    remove(this: Node): void {
       insertConverted(NON_DOCUMENT_CHILD_RULE, this, "replaceWith", [], builders);
     },
   };

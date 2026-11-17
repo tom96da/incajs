@@ -7,7 +7,7 @@ import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markFreed, markRemoved } from "./lifecycle.mts";
 import type { ElementName } from "../ffi/index.mts";
-import type { IncaElement } from "./types.mts";
+import type { Element } from "./types.mts";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 const SVG: ElementName = ["svg", SVG_NAMESPACE, null, "svg"];
@@ -39,7 +39,7 @@ function setup(initial: Record<string, Stored> = {}, name: ElementName = "div") 
     attributeNames: vi.fn<(nodeId: number) => string[]>(() => [...store.keys()]),
   };
   vi.stubGlobal("__inca_native__", nativeStub(host as never));
-  const el: IncaElement = createIncaElement(1, name);
+  const el: Element = createIncaElement(1, name);
   return { host, el, store };
 }
 

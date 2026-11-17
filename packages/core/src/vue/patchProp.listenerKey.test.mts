@@ -8,14 +8,14 @@ import { nativeStub } from "../../tests/setup.mts";
 import * as rendererCore from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaCore, IncaElement, ListenerOptions } from "../rendererCore.mts";
+import type { RendererCore, Element, AddEventListenerOptions } from "../rendererCore.mts";
 
 /** The function a registration call received, callable with any event. */
 const listenerOf = (call: readonly unknown[]): ((...args: unknown[]) => void) =>
   call[2] as (...args: unknown[]) => void;
 
 const core: Pick<
-  IncaCore,
+  RendererCore,
   | "addEventListener"
   | "removeEventListener"
   | "latestEventId"
@@ -23,20 +23,20 @@ const core: Pick<
   | "setAttribute"
   | "removeAttribute"
 > = {
-  addEventListener: vi.fn<IncaCore["addEventListener"]>(),
-  removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
+  addEventListener: vi.fn<RendererCore["addEventListener"]>(),
+  removeEventListener: vi.fn<RendererCore["removeEventListener"]>(),
   latestEventId: vi.fn<() => number>(() => 0),
   isRemoved: () => false,
   setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
   removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
 };
 
-const patchProp = createPatchProp(core as unknown as IncaCore);
+const patchProp = createPatchProp(core as unknown as RendererCore);
 
 const BUBBLE = { capture: false, passive: false };
 
 /** An element holds the id of its node, which is all that patchProp reads. */
-const makeEl = (): IncaElement => ({ __node_id: 1 }) as unknown as IncaElement;
+const makeEl = (): Element => ({ __node_id: 1 }) as unknown as Element;
 
 let el = makeEl();
 
@@ -145,7 +145,7 @@ describe("onUpdate:* props", () => {
 });
 
 describe("on* modifiers", () => {
-  it.each<[string, ListenerOptions]>([
+  it.each<[string, AddEventListenerOptions]>([
     ["onClickCapture", { capture: true, passive: false }],
     ["onClickPassive", { capture: false, passive: true }],
     ["onClickCapturePassive", { capture: true, passive: true }],
@@ -227,10 +227,10 @@ describe("on* modifiers", () => {
 });
 
 describe("onXxx values", () => {
-  const core: IncaCore = {
+  const core: RendererCore = {
     ...rendererCore,
-    addEventListener: vi.fn<IncaCore["addEventListener"]>(),
-    removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
+    addEventListener: vi.fn<RendererCore["addEventListener"]>(),
+    removeEventListener: vi.fn<RendererCore["removeEventListener"]>(),
     latestEventId: vi.fn<() => number>(() => 0),
     isRemoved: () => false,
     setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
@@ -239,7 +239,7 @@ describe("onXxx values", () => {
 
   const patchProp = createPatchProp(core);
 
-  let el = { __node_id: 1 } as unknown as IncaElement;
+  let el = { __node_id: 1 } as unknown as Element;
 
   /** The listener the newest registration call received. */
   const registered = (): ((...args: unknown[]) => void) =>
@@ -247,7 +247,7 @@ describe("onXxx values", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    el = { __node_id: 1 } as unknown as IncaElement;
+    el = { __node_id: 1 } as unknown as Element;
   });
 
   let warn: MockInstance<typeof console.warn>;
@@ -351,7 +351,7 @@ describe("patchProp on a removed element", () => {
       } as never),
     );
     const ops = createNodeOps(core);
-    const el = ops.createElement("view") as IncaElement;
+    const el = ops.createElement("view") as Element;
     ops.remove(el);
 
     const patch = createPatchProp(core);

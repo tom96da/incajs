@@ -16,21 +16,21 @@ import { vModelText, withDirectives } from "../src/vue/runtime.mts";
 import { nativeStub } from "./setup.mts";
 import type { NodeMutationMembers } from "../src/element/nodeMutation.mts";
 import type { NodeRelationMembers } from "../src/element/nodeRelations.mts";
-import type { ChildNodeMembers, ParentNodeMutationMembers } from "../src/element/nodeTypes.mts";
+import type { ChildNode, ParentNodeMutationMembers } from "../src/element/nodeTypes.mts";
 import type { DOMTokenList, EventHandlers } from "../src/element/types.mts";
 import type { HostCallback } from "../src/ffi/index.mts";
-import type { IncaElement, NodeId } from "../src/index.mts";
+import type { Element, NodeId } from "../src/index.mts";
 
 /** The handler properties, absent: nothing here reads them. */
 const noHandlers = {} as EventHandlers;
 
 /** The mutation members, absent: nothing here calls them. */
 const noMutation = {} as Pick<
-  IncaElement,
+  Element,
   | keyof NodeMutationMembers
   | keyof NodeRelationMembers
   | keyof ParentNodeMutationMembers
-  | keyof ChildNodeMembers
+  | keyof ChildNode
 >;
 
 /**
@@ -322,7 +322,7 @@ function dispatch(node: FakeNode, event: string, payload?: unknown): void {
 
 describe("incajs/vue renderer, driven end to end through real core internals", () => {
   let nodes: Map<NodeId, FakeNode>;
-  let root: IncaElement;
+  let root: Element;
 
   beforeEach(() => {
     nodes = installFakeNative();
@@ -518,7 +518,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
   });
 
   it("lets a template ref add and remove listeners next to the template's own", async () => {
-    const box = ref<IncaElement | null>(null);
+    const box = ref<Element | null>(null);
     const log: string[] = [];
     const onRef = (): number => log.push("ref");
     const App = {
@@ -565,7 +565,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
 
 describe("v-model on an input", () => {
   let nodes: Map<NodeId, FakeNode>;
-  let mountRoot: IncaElement;
+  let mountRoot: Element;
 
   beforeEach(() => {
     nodes = installFakeNative();
@@ -577,7 +577,7 @@ describe("v-model on an input", () => {
 
   /** Mounts an `input` bound to `model` with `modifiers`, and returns its node id and handle. */
   async function mountInput(model: Ref<string>, modifiers: Record<string, boolean> = {}) {
-    const box = ref<IncaElement | null>(null);
+    const box = ref<Element | null>(null);
     const App = {
       setup() {
         return () =>

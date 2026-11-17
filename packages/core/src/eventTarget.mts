@@ -14,9 +14,13 @@ import {
 import { addEventListener, removeEventListener } from "./events.mts";
 import { dispatchEvent } from "./ffi/index.mts";
 import { signalTargetOf } from "./signalTarget.mts";
-import type { IncaNode } from "./element/types.mts";
+import type { Node } from "./element/nodeTypes.mts";
 import type { EventTargetId } from "./ffi/index.mts";
-import type { EventListenerOrObject, IncaEventTarget, ListenerOptions } from "./types.mts";
+import type {
+  EventListenerOrEventListenerObject,
+  EventTarget,
+  AddEventListenerOptions,
+} from "./types.mts";
 
 /**
  * Gives the target id of a receiver: the node id of a node, and the target of an event target
@@ -31,7 +35,7 @@ export function eventTargetOf(value: unknown): EventTargetId {
     if (signal !== undefined) return signal;
   }
   const state = receiverOf(value, EVENT_TARGET_RULE);
-  if (state.kind !== "target") return (value as IncaNode).__node_id;
+  if (state.kind !== "target") return (value as Node).__node_id;
   return typeof state.target === "function" ? state.target() : state.target!;
 }
 
@@ -47,7 +51,7 @@ function ignoresListeners(value: unknown): boolean {
     state !== undefined &&
     state.kind !== "target" &&
     state.kind !== "document" &&
-    isRemoved(value as IncaNode)
+    isRemoved(value as Node)
   );
 }
 
@@ -55,17 +59,17 @@ function ignoresListeners(value: unknown): boolean {
  * The listener methods of an event target. They install on `EventTarget.prototype`.
  * @returns the members
  */
-export function eventTargetMembers(): IncaEventTarget {
+export function eventTargetMembers(): EventTarget {
   return {
     addEventListener(
       type: string,
-      listener: EventListenerOrObject<never, never> | null,
-      ...rest: [options?: boolean | ListenerOptions]
+      listener: EventListenerOrEventListenerObject<never, never> | null,
+      ...rest: [options?: boolean | AddEventListenerOptions]
     ) {
       const target = eventTargetOf(this);
       if (ignoresListeners(this)) return;
       const options = rest[0];
-      const given: ListenerOptions =
+      const given: AddEventListenerOptions =
         typeof options === "boolean" ? { capture: options } : (options ?? {});
       // Each member is read once, in the order of the dictionary, and an inherited member counts.
       const capture = given.capture;
@@ -82,8 +86,8 @@ export function eventTargetMembers(): IncaEventTarget {
 
     removeEventListener(
       type: string,
-      listener: EventListenerOrObject<never, never> | null,
-      ...rest: [options?: boolean | Pick<ListenerOptions, "capture">]
+      listener: EventListenerOrEventListenerObject<never, never> | null,
+      ...rest: [options?: boolean | Pick<AddEventListenerOptions, "capture">]
     ) {
       const target = eventTargetOf(this);
       if (ignoresListeners(this)) return;
@@ -99,13 +103,13 @@ export function eventTargetMembers(): IncaEventTarget {
         state !== undefined &&
         state.kind !== "target" &&
         state.kind !== "document" &&
-        isDestroyed(this as IncaNode)
+        isDestroyed(this as Node)
       ) {
         return true;
       }
       return dispatchEvent(target, event);
     },
-  } as IncaEventTarget;
+  } as EventTarget;
 }
 
 /**
@@ -118,9 +122,9 @@ export function eventTargetMembers(): IncaEventTarget {
 export function createEventTarget(
   target: EventTargetId | (() => EventTargetId),
   passiveByDefault: readonly string[] = NO_EVENTS,
-): IncaEventTarget {
+): EventTarget {
   return withTargetState(
-    Object.create(prototypes().EventTarget) as IncaEventTarget,
+    Object.create(prototypes().EventTarget) as EventTarget,
     target,
     passiveByDefault,
   );

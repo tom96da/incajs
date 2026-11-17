@@ -18,7 +18,7 @@ import {
 } from "./handle.mts";
 import { elementOf, markFreed, markRemoved, nodeOf } from "./lifecycle.mts";
 import type { ElementName } from "../ffi/index.mts";
-import type { IncaElement, IncaHTMLElement, IncaInputElement } from "./types.mts";
+import type { Element, HTMLElement, HTMLInputElement } from "./types.mts";
 
 /** Installs a fake host whose reads give `stored`, `boxes` and `scroll`, and returns it. */
 function installHost(
@@ -213,7 +213,7 @@ describe("createIncaElement tagName", () => {
 describe("createIncaElement name", () => {
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
   const svg = (localName: string): ElementName => [localName, SVG_NAMESPACE, null, localName];
-  const membersOf = (el: IncaElement) => [el.tagName, el.localName, el.namespaceURI, el.prefix];
+  const membersOf = (el: Element) => [el.tagName, el.localName, el.namespaceURI, el.prefix];
 
   it("reads the members of a name tuple", () => {
     installHost();
@@ -270,7 +270,7 @@ describe("createIncaElement name", () => {
   it("reads -1 as the default tab index of an SVG button", () => {
     installHost();
 
-    expect((createIncaElement(1, svg("button")) as IncaHTMLElement).tabIndex).toBe(-1);
+    expect((createIncaElement(1, svg("button")) as HTMLElement).tabIndex).toBe(-1);
   });
 });
 
@@ -303,7 +303,7 @@ describe("createIncaElement value", () => {
 
   it("reads the text of an input", () => {
     const host = installInput("abc");
-    expect((createIncaElement(1, "input") as IncaInputElement).value).toBe("abc");
+    expect((createIncaElement(1, "input") as HTMLInputElement).value).toBe("abc");
     expect(host.inputValue).toHaveBeenCalledWith(1);
   });
 
@@ -312,7 +312,7 @@ describe("createIncaElement value", () => {
     [null, ""],
   ])("assigns the value of an input as a string (%o)", (value, expected) => {
     const host = installInput();
-    (createIncaElement(1, "input") as IncaInputElement).value = value as string;
+    (createIncaElement(1, "input") as HTMLInputElement).value = value as string;
     expect(host.setInputValue).toHaveBeenCalledWith(1, expected);
   });
 
@@ -320,7 +320,7 @@ describe("createIncaElement value", () => {
     const host = installInput("abc");
     const el = createIncaElement(1, "input");
     markFreed([el.__node_id]);
-    expect((el as IncaInputElement).value).toBe("");
+    expect((el as HTMLInputElement).value).toBe("");
     expect(host.inputValue).not.toHaveBeenCalled();
   });
 
@@ -328,7 +328,7 @@ describe("createIncaElement value", () => {
     const host = installInput();
     const el = createIncaElement(1, "input");
     markFreed([el.__node_id]);
-    (el as IncaInputElement).value = "a";
+    (el as HTMLInputElement).value = "a";
     expect(host.setInputValue).not.toHaveBeenCalled();
   });
 
@@ -367,7 +367,7 @@ describe("createIncaElement after the node is removed", () => {
     const el = createIncaElement(1, "input");
     markRemoved([el.__node_id]);
 
-    expect((el as IncaInputElement).value).toBe("abc");
+    expect((el as HTMLInputElement).value).toBe("abc");
   });
 
   it.each<["id" | "tabIndex", unknown, [number, string, unknown]]>([
@@ -387,7 +387,7 @@ describe("createIncaElement after the node is removed", () => {
     const el = createIncaElement(1, "input");
     markRemoved([el.__node_id]);
 
-    (el as IncaInputElement).value = "t";
+    (el as HTMLInputElement).value = "t";
 
     expect(host.setInputValue).toHaveBeenCalledWith(1, "t");
   });
@@ -651,14 +651,14 @@ describe("createIncaElement id", () => {
 
 describe("rootElement wheel listeners", () => {
   /** The `passive` argument that `element` registers a `wheel` listener with. */
-  function registeredPassive(element: IncaElement, options?: { passive: boolean }) {
+  function registeredPassive(element: Element, options?: { passive: boolean }) {
     const addEventListener = vi.fn<(...args: unknown[]) => number>(() => 0);
     vi.stubGlobal("__inca_native__", nativeStub({ addEventListener } as never));
     element.addEventListener("wheel", () => {}, options);
     return addEventListener.mock.calls[0]![4];
   }
 
-  function root(id: number): IncaElement {
+  function root(id: number): Element {
     vi.stubGlobal("__inca_native__", nativeStub({ rootNodeId: () => id } as never));
     return rootElement();
   }

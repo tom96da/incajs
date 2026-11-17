@@ -11,10 +11,10 @@ import {
 import { attributeText } from "./arguments.mts";
 import { receiverOf, HTML_OR_SVG_RULE } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
-import type { DOMStringMap, IncaHTMLElement } from "./types.mts";
+import type { DOMStringMap, HTMLElement } from "./types.mts";
 
 /** The members {@link datasetMembers} builds. */
-export type DatasetMembers = Pick<IncaHTMLElement, "dataset">;
+export type DatasetMembers = Pick<HTMLElement, "dataset">;
 
 /**
  * Builds the `dataset` member of the shared element members. The object is a proxy whose traps
@@ -26,7 +26,7 @@ export function datasetMembers(): DatasetMembers {
   return {
     get dataset() {
       const state = receiverOf(this, HTML_OR_SVG_RULE);
-      return (state.dataset ??= proxyOf((this as unknown as IncaHTMLElement).__node_id));
+      return (state.dataset ??= proxyOf((this as unknown as HTMLElement).__node_id));
     },
   };
 }

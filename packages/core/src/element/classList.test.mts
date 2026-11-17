@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import { createIncaElement } from "./handle.mts";
 import { markFreed } from "./lifecycle.mts";
-import type { IncaElement } from "./types.mts";
+import type { Element } from "./types.mts";
 
 type Stored = string | number | boolean;
 
@@ -28,7 +28,7 @@ function setup(initial: Record<string, Stored> = {}) {
     }),
   };
   vi.stubGlobal("__inca_native__", nativeStub(host as never));
-  const el: IncaElement = createIncaElement(1, "div");
+  const el: Element = createIncaElement(1, "div");
   return { host, el, store, lists };
 }
 

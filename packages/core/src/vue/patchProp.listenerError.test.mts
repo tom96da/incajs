@@ -10,16 +10,16 @@ import { nativeStub } from "../../tests/setup.mts";
 import * as rendererCore from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
 import { createPatchProp } from "./patchProp.mts";
-import type { IncaCore, IncaElement } from "../rendererCore.mts";
+import type { RendererCore, Element } from "../rendererCore.mts";
 
 /** The function a registration call received, callable with any event. */
 const listenerOf = (call: readonly unknown[]): ((...args: unknown[]) => void) =>
   call[2] as (...args: unknown[]) => void;
 
-const core: IncaCore = {
+const core: RendererCore = {
   ...rendererCore,
-  addEventListener: vi.fn<IncaCore["addEventListener"]>(),
-  removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
+  addEventListener: vi.fn<RendererCore["addEventListener"]>(),
+  removeEventListener: vi.fn<RendererCore["removeEventListener"]>(),
   latestEventId: vi.fn<() => number>(() => 0),
   isRemoved: () => false,
 };
@@ -27,7 +27,7 @@ const core: IncaCore = {
 const patchProp = createPatchProp(core);
 
 /** An element holds the id of its node, which is all that patchProp reads. */
-const makeEl = (): IncaElement => ({ __node_id: 1 }) as unknown as IncaElement;
+const makeEl = (): Element => ({ __node_id: 1 }) as unknown as Element;
 
 let el = makeEl();
 
@@ -405,21 +405,21 @@ describe("with a production build of Vue", () => {
 });
 
 describe("with a production build of Vue", () => {
-  const core: IncaCore = {
+  const core: RendererCore = {
     ...rendererCore,
-    addEventListener: vi.fn<IncaCore["addEventListener"]>(),
-    removeEventListener: vi.fn<IncaCore["removeEventListener"]>(),
+    addEventListener: vi.fn<RendererCore["addEventListener"]>(),
+    removeEventListener: vi.fn<RendererCore["removeEventListener"]>(),
     latestEventId: vi.fn<() => number>(() => 0),
     isRemoved: () => false,
     setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
     removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
   };
 
-  let el = { __node_id: 1 } as unknown as IncaElement;
+  let el = { __node_id: 1 } as unknown as Element;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    el = { __node_id: 1 } as unknown as IncaElement;
+    el = { __node_id: 1 } as unknown as Element;
   });
 
   let warn: MockInstance<typeof console.warn>;

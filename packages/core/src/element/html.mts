@@ -25,7 +25,7 @@ import {
 } from "./lifecycle.mts";
 import type { Parsed } from "../ffi/index.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
-import type { HtmlMembers, IncaElement } from "./types.mts";
+import type { HtmlMembers, Element } from "./types.mts";
 
 /**
  * Converts an assignment to `innerHTML` or `outerHTML`: `null` gives `""` and any other value its
@@ -64,7 +64,7 @@ function adopt(parsed: Parsed, builders: HandleBuilders): void {
  * @returns the members
  */
 export function htmlMembers(builders: HandleBuilders): HtmlMembers {
-  const elementOf = (self: unknown): IncaElement => receiverNode<IncaElement>(self, ELEMENT_RULE);
+  const elementOf = (self: unknown): Element => receiverNode<Element>(self, ELEMENT_RULE);
   return {
     get innerHTML() {
       const element = elementOf(this);
