@@ -1,9 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { start } from "./start.mts";
+
+const SETTLE_MS = 100;
 
 type Fetch = () => unknown;
 
@@ -72,7 +74,12 @@ describe("start", () => {
     });
   }
 
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     rejected.length = 0;
     vi.restoreAllMocks();
     globalThis.__inca_dev__ = undefined;
@@ -92,6 +99,7 @@ describe("start", () => {
     expect(dev.fetched()).toBe(1);
 
     dev.edit();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
     await started;
 
     expect(dev.fetched()).toBe(2);
@@ -116,6 +124,7 @@ describe("start", () => {
     await vi.waitFor(() => expect(dev.fetched()).toBe(1));
     dev.edit();
     release();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
     await started;
 
     expect(dev.fetched()).toBe(2);
@@ -132,6 +141,7 @@ describe("start", () => {
     expect(rejected[0]).toMatchObject({ message: "boom" });
 
     dev.edit();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
     await started;
 
     expect(dev.calls).toEqual([true, false]);
@@ -148,8 +158,10 @@ describe("start", () => {
     const started = start("/entry.js");
     await vi.waitFor(() => expect(dev.calls).toEqual([true]));
     dev.edit();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
     await vi.waitFor(() => expect(dev.calls).toEqual([true, false, true]));
     dev.edit();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
     await started;
 
     expect(dev.calls).toEqual([true, false, true, false]);
@@ -166,6 +178,47 @@ describe("start", () => {
     expect(rejected).toEqual(["x"]);
 
     dev.edit();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    await started;
+
+    expect(dev.calls).toEqual([true, false]);
+  });
+
+  it("restarts the wait when a payload arrives during it", async () => {
+    const dev = installDev([
+      () => {
+        throw new Error("compile error");
+      },
+      () => module("return 1"),
+    ]);
+
+    const started = start("/entry.js");
+    await vi.waitFor(() => expect(dev.calls).toEqual([true]));
+    dev.edit();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS - 1);
+    dev.edit();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    expect(dev.fetched()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await started;
+
+    expect(dev.fetched()).toBe(2);
+  });
+
+  it("clears the failed flag SETTLE_MS after the payload", async () => {
+    const dev = installDev([
+      () => {
+        throw new Error("compile error");
+      },
+      () => module("return 1"),
+    ]);
+
+    const started = start("/entry.js");
+    await vi.waitFor(() => expect(dev.calls).toEqual([true]));
+    dev.edit();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS - 1);
+    expect(dev.calls).toEqual([true]);
+    await vi.advanceTimersByTimeAsync(1);
     await started;
 
     expect(dev.calls).toEqual([true, false]);
@@ -192,6 +245,7 @@ describe("start", () => {
     const started = start("/entry.js");
     await vi.waitFor(() => expect(dev.fetched()).toBe(1));
     dev.edit();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
 
     await expect(started).resolves.toMatchObject({ answer: 42 });
     expect(rejected).toEqual([]);
