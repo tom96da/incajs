@@ -21,6 +21,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - text nodes, fragments and `document` have the tree and listener members they lacked ([dd7175af](https://github.com/tom96da/incajs/commit/dd7175af))
 - `structuredClone()` throws a `DataCloneError` for a node, `document` and `window` ([dd7175af](https://github.com/tom96da/incajs/commit/dd7175af))
 - nodes have the modern mutation members such as `append()`, `before()` and `replaceWith()` ([f7a128d2](https://github.com/tom96da/incajs/commit/f7a128d2))
+- `AbortController` and `AbortSignal` are available, with `abort()`, `timeout()` and `any()` ([6324c47c](https://github.com/tom96da/incajs/commit/6324c47c))
+- `addEventListener()` removes a listener when its `signal` option aborts ([d201f549](https://github.com/tom96da/incajs/commit/d201f549))
 
 ### Changed
 
