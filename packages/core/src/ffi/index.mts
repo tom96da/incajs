@@ -3,6 +3,9 @@
 
 export {
   appendChild,
+  childAt,
+  childCount,
+  childNames,
   childNodeIds,
   cloneNode,
   closestNode,
@@ -18,6 +21,7 @@ export {
   interfacePrototypes,
   isEqualNode,
   linkedNode,
+  namedChild,
   nodeHandle,
   queryNode,
   queryNodes,

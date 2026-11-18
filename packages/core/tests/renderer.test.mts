@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Ref } from "@vue/runtime-core";
 
 import { document } from "../src/document.mts";
-import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "../src/element/collections.mts";
+import { htmlCollectionOver, namedNodeMapOf, nodeListOf } from "../src/element/collections.mts";
 import { createEventTarget } from "../src/eventTarget.mts";
 import { createNode, rootNodeId } from "../src/ffi/index.mts";
 import { createIncaApp } from "../src/vue/index.mts";
@@ -381,7 +381,12 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       childElementCount: 0,
       previousElementSibling: null,
       nextElementSibling: null,
-      children: htmlCollectionOf(() => []),
+      children: htmlCollectionOver({
+        length: () => 0,
+        at: () => null,
+        named: () => null,
+        names: () => [],
+      }),
       contains: () => false,
       matches: () => false,
       setPointerCapture: () => {},

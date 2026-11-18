@@ -4,18 +4,22 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use inca_jsenv::callbacks;
 use inca_node::NodeId;
 
 use super::Natives;
-use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
+use super::convert::{
+    Flag, JsNodeId, existing_node, or_null, saturated, throw_tree_error, unsigned,
+};
 use super::host::Host;
 
-/// The retained tree itself: allocating and describing nodes, plus `templateContent`,
-/// `destroyNode`, `holdNode` and `releaseNode`. Freeing a subtree is a tree operation first, even
-/// though it also releases the listener/focus state that named its nodes.
+/// The retained tree itself: allocating and describing nodes, plus the collection reads
+/// `childCount`, `childAt`, `namedChild` and `childNames` (a freed node has no children),
+/// `templateContent`, `destroyNode`, `holdNode` and `releaseNode`. Freeing a subtree is a tree
+/// operation first, even though it also releases the listener/focus state that named its nodes.
 pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("rootNodeId", root_node_id)?;
     n.set("documentNodeId", document_node_id)?;
@@ -29,6 +33,10 @@ pub(super) fn install_tree(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("attributeNames", super::attributes::attribute_names)?;
     n.set("setStyle", super::attributes::set_style)?;
     n.set("removeStyle", super::attributes::remove_style)?;
+    n.set("childCount", child_count)?;
+    n.set("childAt", child_at)?;
+    n.set("namedChild", named_child)?;
+    n.set("childNames", child_names)?;
     n.set("templateContent", template_content)?;
     n.set("destroyNode", destroy_node)?;
     n.set("holdNode", hold_node)?;
@@ -50,6 +58,47 @@ fn create_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsR
             .create_node(tag_name)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
+}
+
+/// The number of children of the node `id`, only the elements with `elementOnly`.
+fn child_count(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId, Flag) -> u32 {
+    move |JsNodeId(node_id), element_only| {
+        saturated(
+            host.borrow()
+                .tree
+                .child_count(node_id, element_only.0.flatten() == Some(true)),
+        )
+    }
+}
+
+/// The id of the child of the node `id` at `index`, counting only the elements with
+/// `elementOnly`; `null` past the last child.
+fn child_at<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>, Flag) -> JsResult<Value<'js>> {
+    move |ctx, JsNodeId(node_id), index, element_only| {
+        let found = host.borrow().tree.child_at(
+            node_id,
+            unsigned(index) as usize,
+            element_only.0.flatten() == Some(true),
+        );
+        or_null(&ctx, found)
+    }
+}
+
+/// The id of the first element child of the node `id` that `HTMLCollection.namedItem` finds for
+/// `name`, or `null`.
+fn named_child<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
+    move |ctx, JsNodeId(node_id), name| {
+        or_null(&ctx, host.borrow().tree.named_child(node_id, &name))
+    }
+}
+
+/// The supported property names of the element children of the node `id`.
+fn child_names(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) -> Vec<String> {
+    move |JsNodeId(node_id)| host.borrow().tree.child_names(node_id)
 }
 
 /// The id of the content fragment of the template `node_id`, `null` for a node that is no template.
@@ -104,12 +153,65 @@ fn release_node(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    use rstest::rstest;
+
     use crate::Host;
     use crate::test_support::{callback_ids, engine_with_bindings, error_name};
     use crate::tests::callback_stored;
     use inca_node::NodeId;
     use std::cell::RefCell;
     use std::rc::Rc;
+
+    /// Builds `parent` with the children `a` (div, id `x`), a text node and `b` (span, name `y`).
+    const COLLECTION: &str = r"
+        const n = __inca_native__;
+        const parent = n.createNode('div');
+        const a = n.createNode('div');
+        const text = n.createNode('#text');
+        const b = n.createNode('span');
+        n.setAttribute(a, 'id', 'x');
+        n.setAttribute(b, 'name', 'y');
+        n.appendChild(parent, a);
+        n.appendChild(parent, text);
+        n.appendChild(parent, b);
+        ";
+
+    #[rstest]
+    #[case::count_of_all("n.childCount(parent)", "3")]
+    #[case::count_of_elements("n.childCount(parent, true)", "2")]
+    #[case::at_of_all("n.childAt(parent, 1) === text", "true")]
+    #[case::at_of_elements("n.childAt(parent, 1, true) === b", "true")]
+    #[case::at_past_the_end("n.childAt(parent, 2, true)", "null")]
+    #[case::named_by_id("n.namedChild(parent, 'x') === a", "true")]
+    #[case::named_by_name("n.namedChild(parent, 'y') === b", "true")]
+    #[case::named_no_match("n.namedChild(parent, 'z')", "null")]
+    #[case::names("n.childNames(parent).join()", "x,y")]
+    fn a_collection_native_reads_the_children(#[case] call: &str, #[case] want: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let got: String = engine
+            .eval(&format!("{COLLECTION} String({call});"))
+            .unwrap();
+
+        assert_eq!(got, want);
+    }
+
+    #[rstest]
+    #[case::count("childCount(999)", "0")]
+    #[case::count_of_elements("childCount(999, true)", "0")]
+    #[case::at("childAt(999, 0)", "null")]
+    #[case::at_of_elements("childAt(999, 0, true)", "null")]
+    #[case::named("namedChild(999, 'x')", "null")]
+    #[case::names("childNames(999).length", "0")]
+    fn a_collection_native_reads_a_freed_node_as_empty(#[case] call: &str, #[case] want: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let got: String = engine
+            .eval(&format!("String(__inca_native__.{call});"))
+            .unwrap();
+
+        assert_eq!(got, want);
+    }
 
     #[test]
     fn remove_style_on_an_unknown_node_throws() {

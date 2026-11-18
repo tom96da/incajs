@@ -31,6 +31,12 @@ const host = {
     (nodeId, link) => links[nodeId]?.[link] ?? null,
   ),
   childNodeIds: vi.fn<(nodeId: number) => number[]>((nodeId) => children[nodeId] ?? []),
+  childCount: vi.fn<(nodeId: number, elementOnly: boolean) => number>(
+    (nodeId) => (children[nodeId] ?? []).length,
+  ),
+  childAt: vi.fn<(nodeId: number, index: number, elementOnly: boolean) => number | null>(
+    (nodeId, index) => children[nodeId]?.[index] ?? null,
+  ),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => true),
 };
 
@@ -171,6 +177,18 @@ describe("childNodes", () => {
     expect([...parent.childNodes].map((node) => node.__node_id)).toEqual([999, text.__node_id]);
   });
 
+  it("reads every child, not only the elements", () => {
+    const parent = createElementNode("div");
+    children[parent.__node_id] = [keep(createTextNode("t")).__node_id];
+
+    void [parent.childNodes.length, parent.childNodes[0]];
+
+    expect([host.childCount.mock.calls[0]![1], host.childAt.mock.calls[0]![2]]).toEqual([
+      false,
+      false,
+    ]);
+  });
+
   it("is empty for a text node", () => {
     expect(createTextNode("t").childNodes.length).toBe(0);
   });
@@ -188,17 +206,15 @@ describe("childNodes", () => {
 });
 
 describe("a freed node", () => {
-  /** A freed element whose host answers every link, with a child list it read before. */
+  /** A freed element whose host answers every link. */
   function freed() {
     const parent = createElementNode("div");
     const child = createElementNode("div");
     const id = child.__node_id;
     links[id] = { parent: parent.__node_id, first: 1, last: 1, previous: 1, next: 1 };
-    children[id] = [parent.__node_id];
-    const list = child.childNodes;
     markFreed([child.__node_id]);
     vi.clearAllMocks();
-    return { child, list };
+    return { child };
   }
 
   it.each(["parentNode", "firstChild", "lastChild", "previousSibling", "nextSibling"] as const)(
@@ -207,10 +223,6 @@ describe("a freed node", () => {
       expect(freed().child[member]).toBeNull();
     },
   );
-
-  it("reads an empty childNodes", () => {
-    expect(freed().list.length).toBe(0);
-  });
 
   it("asks the host for no link", () => {
     const { child } = freed();

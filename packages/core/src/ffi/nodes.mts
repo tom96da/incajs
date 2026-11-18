@@ -349,6 +349,46 @@ export function childNodeIds(nodeId: NodeId, elementOnly?: boolean): NodeId[] {
 }
 
 /**
+ * Counts the children of a node in the host tree.
+ * @param nodeId - the parent
+ * @param elementOnly - `true` to count the element children only
+ * @returns the count, `0` for a freed node
+ */
+export function childCount(nodeId: NodeId, elementOnly: boolean): number {
+  return native().childCount(nodeId, elementOnly);
+}
+
+/**
+ * Reads one child of a node in the host tree.
+ * @param nodeId - the parent
+ * @param index - the position among the children, or among the element children with `elementOnly`
+ * @param elementOnly - `true` to count the element children only
+ * @returns the child's id, `null` past the last child and for a freed node
+ */
+export function childAt(nodeId: NodeId, index: number, elementOnly: boolean): NodeId | null {
+  return native().childAt(nodeId, index, elementOnly);
+}
+
+/**
+ * Finds the element child that `HTMLCollection.namedItem()` returns for `name`.
+ * @param nodeId - the parent
+ * @param name - the `id` or `name` to look up
+ * @returns the child's id, `null` for no match, for `""` and for a freed node
+ */
+export function namedChild(nodeId: NodeId, name: string): NodeId | null {
+  return native().namedChild(nodeId, name);
+}
+
+/**
+ * Lists the supported property names of the element children of a node.
+ * @param nodeId - the parent
+ * @returns the names in tree order, each once, `[]` for a freed node
+ */
+export function childNames(nodeId: NodeId): string[] {
+  return native().childNames(nodeId);
+}
+
+/**
  * Reads the text of a node in the host tree: the data of a text or comment node, and the data of
  * the text descendants in tree order for an element.
  * @param nodeId - the node to read

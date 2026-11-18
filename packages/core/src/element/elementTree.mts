@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { childNodeIds, linkedNode } from "../ffi/index.mts";
-import { htmlCollectionOf } from "./collections.mts";
+import { childAt, childCount, childNames, linkedNode, namedChild } from "../ffi/index.mts";
+import { htmlCollectionOver } from "./collections.mts";
 import {
   isDestroyed,
   receiverOf,
@@ -11,6 +11,7 @@ import {
   receiverNode,
 } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
+import type { ItemSource } from "./collections.mts";
 import type { HandleNode } from "./handleNode.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
 import type {
@@ -21,10 +22,17 @@ import type {
 } from "./nodeTypes.mts";
 import type { Element } from "./types.mts";
 
-/** The ParentNode members the tree gives, the queries excepted. Comments count as no element. */
+/**
+ * The ParentNode members the tree gives, the queries and `childElementCount` excepted. The host
+ * defines `childElementCount`. Comments count as no element.
+ */
 export type ElementTreeMembers = Omit<
   ParentNode,
-  keyof Node | keyof ParentNodeMutationMembers | "querySelector" | "querySelectorAll"
+  | keyof Node
+  | keyof ParentNodeMutationMembers
+  | "querySelector"
+  | "querySelectorAll"
+  | "childElementCount"
 >;
 
 /**
@@ -50,24 +58,24 @@ export function parentNodeMembers(builders: HandleBuilders): ElementTreeMembers 
     const found = linkedNode(node.__node_id, link, true);
     return found === null ? null : elementHandle(builders, found);
   };
-  const liveChildren = (node: HandleNode): Element[] =>
-    isDestroyed(node)
-      ? []
-      : childNodeIds(node.__node_id, true).map((child) => elementHandle(builders, child));
+  const elementOrNull = (id: number | null): Element | null =>
+    id === null ? null : elementHandle(builders, id);
+  const childItems = (node: HandleNode): ItemSource<Element> => ({
+    length: () => childCount(node.__node_id, true),
+    at: (index) => elementOrNull(childAt(node.__node_id, index, true)),
+    named: (name) => elementOrNull(namedChild(node.__node_id, name)),
+    names: () => childNames(node.__node_id),
+  });
   return {
     get children() {
       const state = receiverOf(this, PARENT_NODE_RULE);
-      const node = this as unknown as HandleNode;
-      return (state.children ??= htmlCollectionOf(() => liveChildren(node)));
+      return (state.children ??= htmlCollectionOver(childItems(this as unknown as HandleNode)));
     },
     get firstElementChild() {
       return reach(this, "first");
     },
     get lastElementChild() {
       return reach(this, "last");
-    },
-    get childElementCount() {
-      return liveChildren(receiverNode(this, PARENT_NODE_RULE)).length;
     },
   };
 }

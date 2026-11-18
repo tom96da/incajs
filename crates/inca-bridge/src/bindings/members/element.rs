@@ -70,7 +70,7 @@ pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
             "childElementCount",
             &PARENT_NODE,
             |_, host, id, _| {
-                Ok(u32::try_from(host.borrow().tree.child_ids(id, true).len()).unwrap_or(u32::MAX))
+                Ok(u32::try_from(host.borrow().tree.child_count(id, true)).unwrap_or(u32::MAX))
             },
         )?;
     }

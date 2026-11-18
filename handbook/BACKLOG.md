@@ -1794,17 +1794,6 @@ A fixed entry is deleted and its ID is never reused.
   binary, which ships to users, runs only its own bundle and accepts neither.
   `inca package` then copies `inca-app`.
 
-- **B-339 Reading `children` of a large list costs more than before**
-  `Units: bridge,core · Size: M · Impact: Low`
-
-  Every `length` or index read of `children` asks the host for the element children and builds the
-  handle of each, so a loop over a list grows with the square of its length. Reading the length and
-  every item of a list of 1000 items takes about 2.3 times as long as the JS tree it replaced (330
-  ms against 129 ms). Replacing every item of a list of 1000 takes 18% to 22% longer. Fix: keep a
-  snapshot per collection read, invalidated by a tree generation the host counts, or add a host
-  call that returns the element child at an index. Measure again with a built app that mounts a
-  list of 1000 items and reads `children`, `parentNode` and `nextSibling` on the release host.
-
 - **B-342 A mutation method that throws with several nodes moves none of them**
   `Units: core,bridge · Size: M · Impact: Low`
 
@@ -1934,3 +1923,12 @@ A fixed entry is deleted and its ID is never reused.
   object with a `defineProperty` hook, and the rquickjs exotic class has
   `define_own_property: None` (`third_party/rquickjs/core/src/runtime/exotic.rs:14`). Fix: add the
   hook in a wrapper or the vendored source, then make `dataset` a host class.
+
+- **B-364 `HTMLCollection.namedItem()` returns the first match in tree order**
+  `Units: node,core · Size: S · Impact: Low`
+
+  `namedItem()` returns the first element child in tree order that has the id or is in the HTML
+  namespace with that `name`. Chromium and WebKit return a child whose `id` matches before an
+  earlier child whose `name` matches. Example: for the children `<a name="x"></a><b id="x"></b>`,
+  `namedItem("x")` gives the `a`, and Chromium and WebKit give the `b`. Fix: none while the DOM
+  Standard keeps tree order, follow the standard if it changes.

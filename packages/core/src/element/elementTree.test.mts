@@ -1,9 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { installFakeHost } from "../../tests/fakeHost.mts";
+import { nativeStub } from "../../tests/setup.mts";
 import { createCommentNode, createElementNode, createTextNode, rootElement } from "./handle.mts";
 import { markFreed } from "./lifecycle.mts";
 import { insert, remove } from "./treeOps.mts";
@@ -234,8 +235,81 @@ describe("a freed element", () => {
   it("lists no child", () => {
     const { parent } = mixed();
     markFreed([parent.__node_id]);
+    host.nodes.delete(parent.__node_id);
 
     expect([parent.children.length, parent.childElementCount]).toEqual([0, 0]);
+  });
+});
+
+describe("a read of children", () => {
+  /** Installs a fake host that counts the calls of `nodeHandle`, and returns the count. */
+  function countedHost() {
+    const real = nativeStub();
+    const nodeHandle = vi.fn<ReturnType<typeof nativeStub>["nodeHandle"]>((id) =>
+      real.nodeHandle(id),
+    );
+    host = installFakeHost({ nodeHandle });
+    return nodeHandle;
+  }
+
+  it("makes one call of the host for the length", () => {
+    const { parent } = mixed();
+    host.spies.childNodeIds.mockClear();
+    host.spies.childCount.mockClear();
+
+    void parent.children.length;
+
+    expect([
+      host.spies.childCount.mock.calls.length,
+      host.spies.childNodeIds.mock.calls.length,
+    ]).toEqual([1, 0]);
+  });
+
+  it("makes one call of the host for an item with a live handle", () => {
+    const nodeHandle = countedHost();
+    const { parent, first } = mixed();
+    host.spies.childAt.mockClear();
+    nodeHandle.mockClear();
+
+    expect(parent.children[0]).toBe(first);
+    expect([host.spies.childAt.mock.calls.length, nodeHandle.mock.calls.length]).toEqual([1, 0]);
+  });
+
+  it("makes a second call of the host for an item with no handle", () => {
+    const nodeHandle = countedHost();
+    const parent = createElementNode("div");
+    host.natives.appendChild!(parent.__node_id, host.create("span"));
+    nodeHandle.mockClear();
+
+    void parent.children[0];
+
+    expect([host.spies.childAt.mock.calls.length, nodeHandle.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it("gives namedItem the handle of the id the host finds", () => {
+    let found: number | null = null;
+    host = installFakeHost({ namedChild: () => found });
+    const { parent, first } = mixed();
+    found = first.__node_id;
+
+    expect([parent.children.namedItem("x"), parent.children.namedItem("y")]).toEqual([
+      first,
+      first,
+    ]);
+  });
+
+  it("gives namedItem null when the host finds none", () => {
+    host = installFakeHost({ namedChild: () => null });
+    const { parent } = mixed();
+
+    expect(parent.children.namedItem("x")).toBeNull();
+  });
+
+  it("lists the names the host gives after the indices", () => {
+    host = installFakeHost({ childNames: () => ["x"] });
+    const { parent } = mixed();
+
+    expect(Object.getOwnPropertyNames(parent.children)).toEqual(["0", "1", "x"]);
   });
 });
 
