@@ -10,6 +10,7 @@ use std::cell::Cell;
 
 use rquickjs::convert::Coerced;
 use rquickjs::function::{IntoJsFunc, ParamRequirement, Params, Rest};
+use rquickjs::object::Property;
 // The import is for the derive on `Rect`.
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
@@ -288,7 +289,11 @@ fn define_read_only_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResul
             .borrow()
             .values()
         {
-            json.set(key, value)?;
+            // `set` would run a setter inherited from Object.prototype.
+            json.prop(
+                key,
+                Property::from(value).writable().enumerable().configurable(),
+            )?;
         }
         Ok(json)
     })?;
@@ -614,6 +619,27 @@ mod tests {
         assert_eq!(
             run("Object.prototype.toString.call(new DOMRectReadOnly())"),
             "[object DOMRectReadOnly]"
+        );
+    }
+
+    #[test]
+    fn to_json_ignores_a_setter_on_object_prototype() {
+        assert_eq!(
+            run(r"
+                Object.defineProperty(Object.prototype, 'x', {
+                    set() {},
+                    configurable: true,
+                });
+                let json;
+                try {
+                    json = new DOMRectReadOnly(1, 2, 3, 4).toJSON();
+                } finally {
+                    delete Object.prototype.x;
+                }
+                const d = Object.getOwnPropertyDescriptor(json, 'x');
+                `${json.x}${d.writable}${d.enumerable}${d.configurable}`;
+                "),
+            "1truetruetrue"
         );
     }
 
