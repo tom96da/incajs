@@ -148,6 +148,13 @@ impl FocusRegistry {
         !self.handles.is_empty()
     }
 
+    /// Whether a request, a changed `tabindex` or a blur owed by a tree change waits for
+    /// [`Self::apply_pending`].
+    #[must_use]
+    pub fn has_queued_work(&self) -> bool {
+        !self.pending.is_empty() || !self.tab_dirty.is_empty() || self.blur_owed.is_some()
+    }
+
     /// The node holding focus in `window` right now. A node whose focus a
     /// tree change took is not held.
     #[must_use]
@@ -251,6 +258,7 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use gpui::TestAppContext;
+    use inca_test_macros::gpui_cases;
 
     #[gpui::test]
     fn changing_tabindex_keeps_the_focused_handle(cx: &mut TestAppContext) {
@@ -538,5 +546,41 @@ mod tests {
         assert_eq!((lost.blurred(), lost.focused()), (Some(3), None));
         let regained = FocusTransition::window_activation(3, true);
         assert_eq!((regained.blurred(), regained.focused()), (None, Some(3)));
+    }
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::focus(|registry, id| registry.request_focus(id, true))]
+    #[case::blur(|registry, id| registry.request_blur(id))]
+    #[case::tab_dirty(|registry, id| registry.mark_tab_dirty(id))]
+    fn queued_work_is_reported_until_the_frame_applies_it(
+        cx: &mut TestAppContext,
+        queue: fn(&mut FocusRegistry, u32),
+    ) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_tree(1);
+        let mut registry = FocusRegistry::default();
+        assert!(!registry.has_queued_work());
+
+        queue(&mut registry, ids[0]);
+        assert!(registry.has_queued_work());
+        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+        assert!(!registry.has_queued_work());
+    }
+
+    #[gpui::test]
+    fn a_blur_owed_after_a_drop_is_queued_work_until_applied(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_tree(1);
+        let mut registry = FocusRegistry::default();
+        focus_all(cx, &mut registry, &tree, &ids, ids[0]);
+        cx.update(|window, cx| registry.observe(window, cx));
+        registry.drop_focus_in(&tree, ids[0]);
+        assert!(registry.has_queued_work());
+
+        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+        assert!(!registry.has_queued_work());
     }
 }
