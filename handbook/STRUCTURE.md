@@ -131,6 +131,7 @@ Policy: the standard decides. Where it is silent, two of the three engines
 
 | Path | Upstream | Pinned at | Covers |
 |---|---|---|---|
+| `specs/w3c/aria` | [w3c/aria](https://github.com/w3c/aria) | `90cf7d9` (2026-11-17) | `role` and the `ARIAMixin` properties. The text is `index.html`. |
 | `specs/w3c/clipboard-apis` | [w3c/clipboard-apis](https://github.com/w3c/clipboard-apis) | `6201fd1` (2026-06-24) | `copy`, `cut` and `paste`. |
 | `specs/w3c/csswg-drafts` | [w3c/csswg-drafts](https://github.com/w3c/csswg-drafts) | `dddf78d` (2026-10-03) | `display`, `visibility`, `overflow`, `:focus`, scrolling. One folder per spec. |
 | `specs/w3c/input-events` | [w3c/input-events](https://github.com/w3c/input-events) | `2ba5101` (2026-05-01) | `input` and `beforeinput`. |

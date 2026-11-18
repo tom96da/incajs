@@ -74,3 +74,7 @@
 	path = specs/w3c/webcrypto
 	url = https://github.com/w3c/webcrypto.git
 	shallow = true
+[submodule "specs/w3c/aria"]
+	path = specs/w3c/aria
+	url = https://github.com/w3c/aria.git
+	shallow = true
