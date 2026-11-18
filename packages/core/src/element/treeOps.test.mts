@@ -273,7 +273,7 @@ describe("remove", () => {
 
     tree.remove(root);
 
-    expect([root.id, leaf.id, leaf.tabIndex]).toEqual(["7", "7", 7]);
+    expect([root.id, leaf.id]).toEqual(["7", "7"]);
   });
 });
 

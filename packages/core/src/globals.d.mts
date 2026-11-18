@@ -261,7 +261,14 @@ declare global {
     readonly prototype: ElementMembers &
       Pick<
         HTMLElement,
-        "click" | "offsetWidth" | "offsetHeight" | "offsetLeft" | "offsetTop" | "focus" | "blur"
+        | "click"
+        | "offsetWidth"
+        | "offsetHeight"
+        | "offsetLeft"
+        | "offsetTop"
+        | "focus"
+        | "blur"
+        | "tabIndex"
       >;
     [Symbol.hasInstance](value: unknown): value is HTMLElement;
   };

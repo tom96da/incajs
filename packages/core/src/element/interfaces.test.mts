@@ -28,7 +28,7 @@ const parentNode = [
 const parentInsertion = ["append", "prepend", "replaceChildren"];
 const childInsertion = ["before", "after", "replaceWith", "remove"];
 const siblings = ["previousElementSibling", "nextElementSibling"];
-const shared = ["tabIndex", "style", "dataset", ...handlers];
+const shared = ["style", "dataset", ...handlers];
 
 /** The members the host defines. The stand-in prototypes of the tests hold some of them, and the Rust tests of the bridge pin the real set. */
 const HOST_MEMBERS = new Set([
@@ -81,6 +81,7 @@ const HOST_MEMBERS = new Set([
   "offsetTop",
   "focus",
   "blur",
+  "tabIndex",
   "childElementCount",
 ]);
 

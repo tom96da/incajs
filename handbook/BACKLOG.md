@@ -1924,6 +1924,19 @@ A fixed entry is deleted and its ID is never reused.
   `define_own_property: None` (`third_party/rquickjs/core/src/runtime/exotic.rs:14`). Fix: add the
   hook in a wrapper or the vendored source, then make `dataset` a host class.
 
+- **B-361 `tabIndex` of `video` and `audio` reads -1, Chromium reads 0**
+  `Units: node · Size: S · Impact: Low`
+
+  The host reads the default list of the HTML standard, which has neither element (WebKit reads
+  -1). Fix: add `video` and `audio` to the default list in `semantics/tab_index.rs` when the
+  standard lists them.
+
+- **B-362 `tabIndex` of a MathML `a` reads 0, Chromium reads -1**
+  `Units: node · Size: S · Impact: Low`
+
+  The standard lists the MathML `a` (WebKit and Firefox read 0). Fix: remove the MathML `a` from
+  the default list in `semantics/tab_index.rs` when the standard drops it.
+
 - **B-364 `HTMLCollection.namedItem()` returns the first match in tree order**
   `Units: node,core · Size: S · Impact: Low`
 

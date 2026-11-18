@@ -475,7 +475,8 @@ export interface HTMLElement extends Element, EventHandlers<HTMLElement> {
   /**
    * Assigning sets the `tabindex` attribute to the value's integer part,
    * wrapped to 32 bits. Reading returns the `tabindex` attribute as an
-   * integer, or `-1` (`0` for a `button` or an `input`) when it is unset or invalid.
+   * integer, or the default of the element kind when it is unset or invalid: `0` for a `button`, an
+   * `input`, a link and the other kinds the HTML standard lists, `-1` for the rest.
    */
   tabIndex: number;
   /**
