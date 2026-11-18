@@ -10,6 +10,16 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- `DOMRect`, `DOMRectReadOnly` and `SVGRect` are available ([31680dfe](https://github.com/tom96da/incajs/commit/31680dfe), [6328c498](https://github.com/tom96da/incajs/commit/6328c498))
+- `Event` and `CustomEvent` have global types, and `dispatchEvent()` takes an event object ([5dab1f3a](https://github.com/tom96da/incajs/commit/5dab1f3a))
+
+### Changed
+
+- the types have their Web standard names, such as `Element`, and are globals from `incajs/globals` ([cfb288a4](https://github.com/tom96da/incajs/commit/cfb288a4))
+- `getBoundingClientRect()` returns a `DOMRect`, whose edges follow an assigned size or position ([d6f3ff88](https://github.com/tom96da/incajs/commit/d6f3ff88))
+
 ## [0.0.34] - 2026-11-17
 
 ### Added
