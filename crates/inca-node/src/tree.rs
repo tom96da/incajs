@@ -35,6 +35,7 @@ use indexmap::IndexMap;
 
 mod class_list;
 mod clone;
+mod collection;
 mod computed;
 mod element;
 mod insert_nodes;

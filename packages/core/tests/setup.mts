@@ -245,10 +245,11 @@ function defineHostMembers(chain: InterfaceChain): void {
   defineMethod(chain.Element, "matches", () => false);
   defineGetter(chain.Element, "innerHTML", () => "");
   defineGetter(chain.Element, "outerHTML", () => "");
-  defineGetter(chain.Element, "childElementCount", function () {
-    const children = natives().childNodeIds?.(this.__node_id as never, true as never);
-    return (children as unknown[] | undefined)?.length ?? 0;
-  });
+  for (const proto of [chain.Element, chain.DocumentFragment, chain.Document]) {
+    defineGetter(proto, "childElementCount", function () {
+      return (natives().childCount?.(this.__node_id as never, true as never) as number) ?? 0;
+    });
+  }
   defineMethod(chain.HTMLElement, "click", (id) => natives().click?.(id as never));
   for (const proto of [chain.HTMLElement, chain.ForeignElement]) {
     defineMethod(proto, "focus", (id, [options]) =>

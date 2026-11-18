@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import {
   appendChild,
+  childAt,
+  childCount,
+  childNames,
   childNodeIds,
   cloneNode,
   compareNodePosition,
@@ -16,6 +19,7 @@ import {
   interfacePrototypes,
   isEqualNode,
   linkedNode,
+  namedChild,
   nodeHandle,
   queryNode,
   queryNodes,
@@ -75,6 +79,12 @@ const native = {
     () => null,
   ),
   childNodeIds: vi.fn<(nodeId: number, elementOnly?: boolean) => number[]>(() => []),
+  childCount: vi.fn<(nodeId: number, elementOnly: boolean) => number>(() => 0),
+  childAt: vi.fn<(nodeId: number, index: number, elementOnly: boolean) => number | null>(
+    () => null,
+  ),
+  namedChild: vi.fn<(nodeId: number, name: string) => number | null>(() => null),
+  childNames: vi.fn<(nodeId: number) => string[]>(() => []),
   textContent: vi.fn<(nodeId: number) => string>(() => ""),
   setCharacterData: vi.fn<(nodeId: number, data: string) => void>(),
   splitText: vi.fn<(nodeId: number, offset: number) => number>(() => 0),
@@ -203,6 +213,30 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("childNodeIds passes the element flag", () => {
     childNodeIds(1, true);
     expect(native.childNodeIds).toHaveBeenCalledWith(1, true);
+  });
+
+  it("childCount", () => {
+    native.childCount.mockReturnValueOnce(3);
+    expect(childCount(1, true)).toBe(3);
+    expect(native.childCount).toHaveBeenCalledWith(1, true);
+  });
+
+  it("childAt", () => {
+    native.childAt.mockReturnValueOnce(7);
+    expect(childAt(1, 2, false)).toBe(7);
+    expect(native.childAt).toHaveBeenCalledWith(1, 2, false);
+  });
+
+  it("namedChild", () => {
+    native.namedChild.mockReturnValueOnce(7);
+    expect(namedChild(1, "x")).toBe(7);
+    expect(native.namedChild).toHaveBeenCalledWith(1, "x");
+  });
+
+  it("childNames", () => {
+    native.childNames.mockReturnValueOnce(["x"]);
+    expect(childNames(1)).toEqual(["x"]);
+    expect(native.childNames).toHaveBeenCalledWith(1);
   });
 
   it.each([["textContent", () => textContent(1), "text", [1]]] as const)(

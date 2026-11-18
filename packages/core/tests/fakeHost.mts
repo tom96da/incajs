@@ -39,6 +39,8 @@ export interface FakeHost {
   readonly spies: {
     readonly linkedNode: ReturnType<typeof vi.fn<Native["linkedNode"]>>;
     readonly childNodeIds: ReturnType<typeof vi.fn<Native["childNodeIds"]>>;
+    readonly childCount: ReturnType<typeof vi.fn<Native["childCount"]>>;
+    readonly childAt: ReturnType<typeof vi.fn<Native["childAt"]>>;
     readonly removeNode: ReturnType<typeof vi.fn<Native["removeNode"]>>;
     readonly holdNode: ReturnType<typeof vi.fn<Native["holdNode"]>>;
     readonly releaseNode: ReturnType<typeof vi.fn<Native["releaseNode"]>>;
@@ -210,6 +212,9 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
       .map(([id]) => id);
   };
 
+  /** The children of a node, a freed node has none. */
+  const childrenOf = (id: number, elementOnly: boolean): number[] =>
+    (nodes.get(id)?.children ?? []).filter((child) => !elementOnly || isElement(child));
   const spies = {
     cloneNode: vi.fn<Native["cloneNode"]>(copyOf),
     linkedNode: vi.fn<Native["linkedNode"]>((id, link, elementOnly) =>
@@ -217,6 +222,12 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
     ),
     childNodeIds: vi.fn<Native["childNodeIds"]>((id, elementOnly) =>
       nodeOf(id).children.filter((child) => elementOnly !== true || isElement(child)),
+    ),
+    childCount: vi.fn<Native["childCount"]>(
+      (id, elementOnly) => childrenOf(id, elementOnly).length,
+    ),
+    childAt: vi.fn<Native["childAt"]>(
+      (id, index, elementOnly) => childrenOf(id, elementOnly)[index] ?? null,
     ),
     removeNode: vi.fn<Native["removeNode"]>((id) => {
       if (!nodes.has(id)) return [[], []];
@@ -325,6 +336,8 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
     cloneNode: spies.cloneNode,
     linkedNode: spies.linkedNode,
     childNodeIds: spies.childNodeIds,
+    childCount: spies.childCount,
+    childAt: spies.childAt,
     removeNode: spies.removeNode,
     holdNode: spies.holdNode,
     releaseNode: spies.releaseNode,

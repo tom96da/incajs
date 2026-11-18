@@ -90,6 +90,10 @@ const native = {
     },
   ),
   childNodeIds: vi.fn<(nodeId: number) => number[]>((nodeId) => childrenOf.get(nodeId) ?? []),
+  childCount: vi.fn<(nodeId: number) => number>((nodeId) => childrenOf.get(nodeId)?.length ?? 0),
+  childAt: vi.fn<(nodeId: number, index: number) => number | null>(
+    (nodeId, index) => childrenOf.get(nodeId)?.[index] ?? null,
+  ),
   attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => found),
   querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => foundAll),

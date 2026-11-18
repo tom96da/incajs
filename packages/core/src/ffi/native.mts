@@ -168,6 +168,10 @@ interface NativeBindings {
   datasetTarget(): object;
   linkedNode(nodeId: NodeId, link: NodeLink, elementOnly?: boolean): NodeId | null;
   childNodeIds(nodeId: NodeId, elementOnly?: boolean): NodeId[];
+  childCount(nodeId: NodeId, elementOnly: boolean): number;
+  childAt(nodeId: NodeId, index: number, elementOnly: boolean): NodeId | null;
+  namedChild(nodeId: NodeId, name: string): NodeId | null;
+  childNames(nodeId: NodeId): string[];
   textContent(nodeId: NodeId): string;
   setCharacterData(nodeId: NodeId, data: string): void;
   splitText(nodeId: NodeId, offset: number): NodeId;

@@ -14,25 +14,20 @@ function isIndex(key: string): boolean {
   return ARRAY_INDEX.test(key) && Number(key) < INDEX_LIMIT;
 }
 
-/** The first element in `elements` with an `id` of `name`, else with a `name` attribute of it. */
-function namedElement<T extends Element>(elements: readonly T[], name: string): T | null {
-  if (name === "") return null;
-  return (
-    elements.find((el) => el.id === name) ??
-    elements.find((el) => el.getAttribute("name") === name) ??
-    null
-  );
+/** The reads a collection makes of its items. */
+export interface ItemList<T> {
+  /** The number of items. */
+  length: () => number;
+  /** The item at `index`, `null` or `undefined` past the last one. */
+  at: (index: number) => T | null | undefined;
 }
 
-/** The `id` and `name` values of `elements` in tree order, each once and never empty. */
-function supportedNames(elements: readonly Element[]): string[] {
-  const names = new Set<string>();
-  for (const el of elements) {
-    names.add(el.id);
-    names.add(el.getAttribute("name") ?? "");
-  }
-  names.delete("");
-  return [...names];
+/** The reads a collection with named items makes. */
+export interface ItemSource<T> extends ItemList<T> {
+  /** The item the lookup method and a named property find for `name`, or `null`. */
+  named: (name: string) => T | null;
+  /** The supported property names in order. */
+  names: () => string[];
 }
 
 /** What distinguishes one kind of collection from another. */
@@ -43,19 +38,14 @@ interface Kind<T extends object> {
   method?: string;
   /** Whether the object also has forEach, entries, keys and values. */
   arrayMembers?: boolean;
-  /** Lists the current items in order. */
-  source: () => readonly T[];
-  /** The result of the lookup method for `name`. */
-  find: (name: string) => T | null;
-  /** The item a named property `key` reads, or `null`. */
-  named: (key: string) => T | null;
-  /** The supported property names of `items`. */
-  names: (items: readonly T[]) => string[];
+  /** Reads the items. A kind with no named items has no named properties. */
+  items: ItemSource<T>;
 }
 
-/** Builds a read-only indexed object. A kind with no named items has no named properties. */
+/** Builds a read-only indexed object. */
 function indexedCollection<T extends object>(kind: Kind<T>): object {
-  const { source, named } = kind;
+  const { items } = kind;
+  const { named } = items;
   /** Throws unless `self` is the collection. */
   const brand = (self: unknown): void => {
     if (self !== proxy) throw new TypeError("the receiver is not a collection. call it on one");
@@ -65,7 +55,7 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
     length: {
       get(this: unknown) {
         brand(this);
-        return source().length;
+        return items.length();
       },
       enumerable: true,
       configurable: true,
@@ -76,7 +66,7 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
         function (this: unknown, ...args: [index: unknown]) {
           brand(this);
           if (args.length < 1) throw new TypeError("item() needs 1 argument");
-          return source()[(args[0] as number) >>> 0] ?? null;
+          return items.at((args[0] as number) >>> 0) ?? null;
         },
         "length",
         { value: 1 },
@@ -88,7 +78,7 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
         value(this: unknown, ...args: [name: unknown]) {
           brand(this);
           if (args.length < 1) throw new TypeError(`${kind.method}() needs 1 argument`);
-          return kind.find(`${args[0] as string}`);
+          return named(`${args[0] as string}`);
         },
       },
     }),
@@ -113,13 +103,13 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
   const proxy = new Proxy(target, {
     get(_, key, receiver) {
       if (typeof key === "symbol") return Reflect.get(target, key, receiver);
-      if (isIndex(key)) return source()[Number(key)];
+      if (isIndex(key)) return items.at(Number(key)) ?? undefined;
       if (key in target) return Reflect.get(target, key, receiver);
       return named(key) ?? undefined;
     },
     has(_, key) {
       if (typeof key === "symbol" || key in target) return key in target;
-      return isIndex(key) ? Number(key) < source().length : named(key) !== null;
+      return isIndex(key) ? Number(key) < items.length() : named(key) !== null;
     },
     set(_, key, value, receiver) {
       if (receiver === proxy && typeof key === "string" && blocked(key)) return false;
@@ -127,7 +117,7 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
     },
     deleteProperty(_, key) {
       if (typeof key === "string") {
-        if (isIndex(key)) return Number(key) >= source().length;
+        if (isIndex(key)) return Number(key) >= items.length();
         if (blocked(key)) return false;
       }
       return Reflect.deleteProperty(target, key);
@@ -139,10 +129,9 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
       return Reflect.defineProperty(target, key, descriptor);
     },
     ownKeys() {
-      const items = source();
-      const indices = Array.from(items, (_, at) => String(at));
-      const names = kind
-        .names(items)
+      const indices = Array.from({ length: items.length() }, (_, at) => String(at));
+      const names = items
+        .names()
         .filter((name) => !isIndex(name) && !(name in members) && !own(name));
       const expandos = Reflect.ownKeys(target);
       return [...indices, ...expandos, ...names];
@@ -150,7 +139,7 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
     getOwnPropertyDescriptor(_, key) {
       if (typeof key === "symbol" || own(key)) return Reflect.getOwnPropertyDescriptor(target, key);
       if (isIndex(key)) {
-        const value = source()[Number(key)];
+        const value = items.at(Number(key));
         return value ? { value, writable: false, enumerable: true, configurable: true } : undefined;
       }
       const value = key in members ? undefined : named(key);
@@ -161,22 +150,15 @@ function indexedCollection<T extends object>(kind: Kind<T>): object {
 }
 
 /**
- * Builds a live, read-only `HTMLCollection` over the elements `source` returns. Every read asks
- * `source` again.
- * @param source - lists the current elements in order
+ * Builds a live, read-only `HTMLCollection`. Every read asks `items` again.
+ * @param items - reads the current elements
  * @returns the collection
  */
-export function htmlCollectionOf<T extends Element>(
-  source: () => readonly T[],
-): HTMLCollectionOf<T> {
-  const find = (name: string): T | null => namedElement(source(), name);
+export function htmlCollectionOver<T extends Element>(items: ItemSource<T>): HTMLCollectionOf<T> {
   return indexedCollection({
     tag: "HTMLCollection",
     method: "namedItem",
-    source,
-    find,
-    named: find,
-    names: supportedNames,
+    items,
   }) as HTMLCollectionOf<T>;
 }
 
@@ -195,11 +177,26 @@ export function namedNodeMapOf(
   return indexedCollection({
     tag: "NamedNodeMap",
     method: "getNamedItem",
-    source,
-    find,
-    named: find,
-    names: (items) => items.map((attr) => attr.name),
+    items: {
+      length: () => source().length,
+      at: (index) => source()[index],
+      named: find,
+      names: () => source().map((attr) => attr.name),
+    },
   }) as NamedNodeMap;
+}
+
+/**
+ * Builds a live, read-only `NodeList`. Every read asks `items` again.
+ * @param items - reads the current nodes
+ * @returns the list
+ */
+export function nodeListOver<T extends Node>(items: ItemList<T>): NodeListOf<T> {
+  return indexedCollection({
+    tag: "NodeList",
+    arrayMembers: true,
+    items: { ...items, named: () => null, names: () => [] },
+  }) as NodeListOf<T>;
 }
 
 /**
@@ -209,12 +206,5 @@ export function namedNodeMapOf(
  * @returns the list
  */
 export function nodeListOf<T extends Node>(source: () => readonly T[]): NodeListOf<T> {
-  return indexedCollection({
-    tag: "NodeList",
-    arrayMembers: true,
-    source,
-    find: () => null,
-    named: () => null,
-    names: () => [],
-  }) as NodeListOf<T>;
+  return nodeListOver({ length: () => source().length, at: (index) => source()[index] });
 }

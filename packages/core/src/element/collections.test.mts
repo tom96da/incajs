@@ -1,9 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "./collections.mts";
+import { htmlCollectionOver, namedNodeMapOf, nodeListOf } from "./collections.mts";
+import type { ItemSource } from "./collections.mts";
 import type { Element } from "./types.mts";
 
 type Loose = Record<PropertyKey, unknown>;
@@ -21,9 +22,23 @@ function fake(attrs: { id?: string; name?: string } = {}): Element {
   } as unknown as Element;
 }
 
+/** An item source over `source`. A name finds the first element with that id or `name`. */
+function itemsOver(source: readonly Element[]): ItemSource<Element> {
+  return {
+    length: () => source.length,
+    at: (index) => source[index],
+    named: (name) =>
+      source.find((el) => name !== "" && (el.id === name || el.getAttribute("name") === name)) ??
+      null,
+    names: () => [
+      ...new Set(source.flatMap((el) => [el.id, el.getAttribute("name") ?? ""]).filter(Boolean)),
+    ],
+  };
+}
+
 /** A collection over a mutable source array, with a loosely typed view of the same object. */
 function make(...source: Element[]) {
-  const c = htmlCollectionOf(() => source);
+  const c = htmlCollectionOver(itemsOver(source));
   return { source, c, loose: c as unknown as Loose };
 }
 
@@ -378,36 +393,23 @@ describe("a collection expando", () => {
 });
 
 describe("namedItem", () => {
-  it("finds the element with the id", () => {
+  it("returns the element its source finds", () => {
     const hit = fake({ id: "box" });
 
     expect(make(fake(), hit).c.namedItem("box")).toBe(hit);
   });
 
-  it("finds the element with the name", () => {
-    const hit = fake({ name: "nm" });
-
-    expect(make(fake(), hit).c.namedItem("nm")).toBe(hit);
-  });
-
-  it("prefers an id match over an earlier name match", () => {
-    const byId = fake({ id: "x" });
-
-    expect(make(fake({ name: "x" }), byId).c.namedItem("x")).toBe(byId);
-  });
-
-  it("returns the first of two id matches", () => {
-    const first = fake({ id: "x" });
-
-    expect(make(first, fake({ id: "x" })).c.namedItem("x")).toBe(first);
-  });
-
-  it("returns null for the empty string", () => {
-    expect(make(fake()).c.namedItem("")).toBeNull();
-  });
-
-  it("returns null for no match", () => {
+  it("returns null when its source finds none", () => {
     expect(make(fake({ id: "x" })).c.namedItem("none")).toBeNull();
+  });
+
+  it("passes the argument to its source as text", () => {
+    const named = vi.fn<(name: string) => null>(() => null);
+    const c = htmlCollectionOver({ ...itemsOver([]), named });
+
+    c.namedItem(12 as never);
+
+    expect(named).toHaveBeenCalledWith("12");
   });
 
   it("throws TypeError without an argument", () => {
@@ -432,30 +434,8 @@ describe("a named property", () => {
     expect(make(hit).loose["box"]).toBe(hit);
   });
 
-  it("reads the element with the name", () => {
-    const hit = fake({ name: "nm" });
-
-    expect(make(hit).loose["nm"]).toBe(hit);
-  });
-
   it("reads undefined for an unknown name", () => {
     expect(make(fake()).loose["nothing"]).toBeUndefined();
-  });
-
-  it("lists a repeated id once", () => {
-    const { loose } = make(fake({ id: "a" }), fake({ id: "a" }));
-
-    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "1", "a"]);
-  });
-
-  it("skips an empty id and an empty name", () => {
-    const { loose } = make(fake(), fake({ name: "" }));
-
-    expect(Object.getOwnPropertyNames(loose)).toEqual(["0", "1"]);
-  });
-
-  it("reads undefined for the empty string", () => {
-    expect(make(fake()).loose[""]).toBeUndefined();
   });
 
   it("follows a later id change", () => {

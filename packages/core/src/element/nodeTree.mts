@@ -4,13 +4,14 @@
 // The node members of every handle: identity, data and links read from the host tree.
 
 import {
-  childNodeIds,
+  childAt,
+  childCount,
   linkedNode,
   replaceWithText as replaceChildrenWithText,
   setCharacterData,
 } from "../ffi/index.mts";
 import { nullableText } from "./arguments.mts";
-import { nodeListOf } from "./collections.mts";
+import { nodeListOver } from "./collections.mts";
 import { isDestroyed, leftSubtrees, receiverOf, NODE_RULE, receiverNode } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
 import type { Document } from "../types.mts";
@@ -57,8 +58,6 @@ export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
     const found = linkedNode(node.__node_id, link, elementOnly);
     return found === null ? null : (builders.node(found) ?? null);
   };
-  const liveChildren = (node: HandleNode): HandleNode[] =>
-    isDestroyed(node) ? [] : childNodeIds(node.__node_id).map((child) => builders.node(child)!);
   return {
     set textContent(value: string | null) {
       const node = receiverNode(this, NODE_RULE);
@@ -96,8 +95,14 @@ export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
     },
     get childNodes() {
       const state = receiverOf(this, NODE_RULE);
-      const node = this as unknown as HandleNode;
-      return (state.childNodes ??= nodeListOf(() => liveChildren(node)));
+      const id = (this as unknown as HandleNode).__node_id;
+      return (state.childNodes ??= nodeListOver({
+        length: () => childCount(id, false),
+        at: (index) => {
+          const child = childAt(id, index, false);
+          return child === null ? null : builders.node(child);
+        },
+      }));
     },
   };
 }
