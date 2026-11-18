@@ -16,7 +16,7 @@ import { nativeStub } from "./setup.mts";
 import type { NodeMutationMembers } from "../src/element/nodeMutation.mts";
 import type { NodeRelationMembers } from "../src/element/nodeRelations.mts";
 import type { ChildNode, ParentNodeMutationMembers } from "../src/element/nodeTypes.mts";
-import type { DOMTokenList, EventHandlers } from "../src/element/types.mts";
+import type { ARIAMixin, DOMTokenList, EventHandlers } from "../src/element/types.mts";
 import type { HostCallback } from "../src/ffi/index.mts";
 import type { Element, NodeId } from "../src/index.mts";
 
@@ -31,6 +31,9 @@ const noMutation = {} as Pick<
   | keyof ParentNodeMutationMembers
   | keyof ChildNode
 >;
+
+/** The ARIA members, absent: nothing here reads them. */
+const noAria = {} as ARIAMixin;
 
 /**
  * What the fake host knows of each registration beyond its node and event.
@@ -338,6 +341,7 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
     root = {
       ...noHandlers,
       ...noMutation,
+      ...noAria,
       innerHTML: "",
       outerHTML: "",
       insertAdjacentHTML: () => {},

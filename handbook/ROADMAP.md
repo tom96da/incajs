@@ -185,11 +185,12 @@ send.
    a payload shape and, for a pointer input, a handler in the pointer tracker
    of `crates/inca-gpui`.
 
-## Phase 5: Accessibility (future)
+## Phase 5: Accessibility (in progress)
 
-Not started. It waits on Phase 4's focus and text models being stable. A
-screen reader reads a focus path, so there is nothing to expose before one
-exists.
+Items 1 and 4 start in v0.0.35: `role` and the `aria-*` attributes reflect on
+elements. The accessible name follows in v0.0.36 to v0.0.37 and AccessKit in
+v0.0.38. A screen reader reads a focus path, so Phase 4's focus model comes
+first.
 
 Electron inherits this layer from Chromium. Incarnative.js renders to the GPU
 directly and inherits none of it, so all of it is ours to build. It is

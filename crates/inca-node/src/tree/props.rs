@@ -27,6 +27,7 @@ impl VirtualTree {
             return Ok(());
         }
         let node = self.node_mut(node_id)?;
+        node.aria_refs.remove(key.as_str());
         node.attributes.insert(key, value);
         Ok(())
     }
@@ -42,6 +43,7 @@ impl VirtualTree {
         if key == "style" {
             node.style_props.clear();
         }
+        node.aria_refs.remove(key);
         node.attributes.shift_remove(key);
         Ok(())
     }

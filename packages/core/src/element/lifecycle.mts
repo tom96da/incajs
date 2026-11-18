@@ -94,6 +94,8 @@ export interface NodeState {
   children?: HTMLCollectionOf<Element>;
   /** The handler slots by event name, owned by `eventHandlers.mts`. */
   handlers?: Map<string, unknown>;
+  /** The last array of each element list member, with the node ids it holds. */
+  aria?: Map<string, { ids: readonly number[]; array: readonly Element[] }>;
 }
 
 /** The brand map: every handle and event target, with its state record. */

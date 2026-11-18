@@ -41,6 +41,7 @@ export {
   textContent,
 } from "./nodes.mts";
 export {
+  ariaElements,
   attributeKey,
   attributeNames,
   classList,
@@ -53,6 +54,7 @@ export {
   inputValue,
   removeAttribute,
   removeStyle,
+  setAriaElements,
   setAttribute,
   setInputValue,
   setStyle,

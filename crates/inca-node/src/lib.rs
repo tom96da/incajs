@@ -21,6 +21,7 @@ pub use selector::{
     SelectorError, check_selector, closest_selector, matches_selector, query_selector,
     query_selector_all,
 };
+pub use semantics::{ARIA_REFLECTIONS, AriaKind, AriaReflection, aria_reflection};
 pub use spec::{
     AlignSpec, ColorSpec, DisplaySpec, EdgesSpec, ElementSpec, ElementTag, FlexDirectionSpec,
     LengthSpec, OverflowSpec, STYLE_KEYS, StyleKey, StyleSpec, ValueKind, WheelAxes, build_spec,

@@ -291,6 +291,68 @@ export interface CSSStyleDeclaration {
   marginLeft: string;
 }
 
+/**
+ * The properties that reflect `role` and the `aria-*` attributes. A text property reads the
+ * attribute, or `null` when it is absent. Assigning `null` or `undefined` removes the attribute
+ * and any other value sets its text. The element properties read the elements an attribute names
+ * by ID, or the elements assigned. An assignment sets the attribute to an empty string. Nothing
+ * reaches assistive technology.
+ */
+export interface ARIAMixin {
+  role: string | null;
+  ariaActiveDescendantElement: Element | null;
+  ariaAtomic: string | null;
+  ariaAutoComplete: string | null;
+  ariaBrailleLabel: string | null;
+  ariaBrailleRoleDescription: string | null;
+  ariaBusy: string | null;
+  ariaChecked: string | null;
+  ariaColCount: string | null;
+  ariaColIndex: string | null;
+  ariaColIndexText: string | null;
+  ariaColSpan: string | null;
+  ariaControlsElements: readonly Element[] | null;
+  ariaCurrent: string | null;
+  ariaDescribedByElements: readonly Element[] | null;
+  ariaDescription: string | null;
+  ariaDetailsElements: readonly Element[] | null;
+  ariaDisabled: string | null;
+  ariaErrorMessageElements: readonly Element[] | null;
+  ariaExpanded: string | null;
+  ariaFlowToElements: readonly Element[] | null;
+  ariaHasPopup: string | null;
+  ariaHidden: string | null;
+  ariaInvalid: string | null;
+  ariaKeyShortcuts: string | null;
+  ariaLabel: string | null;
+  ariaLabelledByElements: readonly Element[] | null;
+  ariaLevel: string | null;
+  ariaLive: string | null;
+  ariaModal: string | null;
+  ariaMultiLine: string | null;
+  ariaMultiSelectable: string | null;
+  ariaOrientation: string | null;
+  ariaOwnsElements: readonly Element[] | null;
+  ariaPlaceholder: string | null;
+  ariaPosInSet: string | null;
+  ariaPressed: string | null;
+  ariaReadOnly: string | null;
+  ariaRelevant: string | null;
+  ariaRequired: string | null;
+  ariaRoleDescription: string | null;
+  ariaRowCount: string | null;
+  ariaRowIndex: string | null;
+  ariaRowIndexText: string | null;
+  ariaRowSpan: string | null;
+  ariaSelected: string | null;
+  ariaSetSize: string | null;
+  ariaSort: string | null;
+  ariaValueMax: string | null;
+  ariaValueMin: string | null;
+  ariaValueNow: string | null;
+  ariaValueText: string | null;
+}
+
 /** The members that read and write the markup of an element. */
 export interface HtmlMembers {
   /**
@@ -323,7 +385,8 @@ export interface HtmlMembers {
  * `removeEventListener()` ignore the call, an assignment to a handler property does nothing, and
  * `dispatchEvent()` runs no listener on it.
  */
-export interface Element extends ParentNode, ChildNode, NonDocumentTypeChildNode, HtmlMembers {
+export interface Element
+  extends ParentNode, ChildNode, NonDocumentTypeChildNode, HtmlMembers, ARIAMixin {
   readonly nodeType: 1;
   /**
    * The `id` attribute, or an empty string when it is unset. Assigning sets

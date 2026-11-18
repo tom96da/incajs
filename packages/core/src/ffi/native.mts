@@ -166,6 +166,8 @@ interface NativeBindings {
   datasetDelete(nodeId: NodeId, key: string): boolean;
   datasetKeys(nodeId: NodeId): string[];
   datasetTarget(): object;
+  ariaElements(nodeId: NodeId, attribute: string): NodeId[] | null;
+  setAriaElements(nodeId: NodeId, attribute: string, ids: NodeId[] | null): void;
   linkedNode(nodeId: NodeId, link: NodeLink, elementOnly?: boolean): NodeId | null;
   childNodeIds(nodeId: NodeId, elementOnly?: boolean): NodeId[];
   childCount(nodeId: NodeId, elementOnly: boolean): number;

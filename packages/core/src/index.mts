@@ -17,6 +17,7 @@ export type { ScrollIntoViewOptions, ScrollOptions } from "./element/scroll.mts"
 export type {
   Attr,
   Comment,
+  ARIAMixin,
   CSSStyleDeclaration,
   DocumentFragment,
   DOMStringMap,

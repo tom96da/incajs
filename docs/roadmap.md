@@ -40,8 +40,9 @@ composition are done. Interactive visual state is not built yet.
 [Elements & Styles](/reference/elements)
 ::::
 
-:::: not-started Phase 5: Accessibility
-A semantics layer, platform accessibility APIs, and keyboard reachability. Waits on the input/focus model above being stable.
+:::: in-progress Phase 5: Accessibility
+A semantics layer, platform accessibility APIs, and keyboard reachability. Element roles and ARIA
+properties are done. Platform accessibility APIs are not built yet.
 ::::
 
 :::: in-progress Phase 6: Runtime standard library

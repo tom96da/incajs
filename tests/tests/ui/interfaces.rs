@@ -56,3 +56,22 @@ fn a_removed_node_that_a_script_holds_survives_a_frame(cx: &mut TestAppContext) 
 
     assert_eq!(text_of(&mut h, "reattached"), "x");
 }
+
+#[gpui_cases]
+#[gpui::test]
+#[case::a_bound_aria_property_reads_back("boundLabel", json!("save"))]
+#[case::a_bound_aria_property_sets_its_attribute("boundLabelAttribute", json!("save"))]
+#[case::the_role_attribute_reads_through_role("role", json!("tab"))]
+#[case::an_aria_attribute_reads_through_its_property("selected", json!("true"))]
+#[case::the_labelled_by_property_resolves_the_id("labelledBy", json!(["name"]))]
+fn the_aria_members_reflect_the_attributes_of_a_template_on_the_real_host(
+    cx: &mut TestAppContext,
+    #[case] key: &str,
+    #[case] expected: Value,
+) {
+    let mut h = load(cx, "aria");
+    click(&mut h, "probe");
+    let got: Value = serde_json::from_str(&text_of(&mut h, "result")).unwrap();
+
+    assert_eq!(got[key], expected);
+}
