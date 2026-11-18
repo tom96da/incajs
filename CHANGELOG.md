@@ -19,6 +19,13 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - the types have their Web standard names, such as `Element`, and are globals from `incajs/globals` ([cfb288a4](https://github.com/tom96da/incajs/commit/cfb288a4))
 - `getBoundingClientRect()` returns a `DOMRect`, whose edges follow an assigned size or position ([d6f3ff88](https://github.com/tom96da/incajs/commit/d6f3ff88))
+- reading `children` and `childNodes` of a large list costs far less ([d565bc4b](https://github.com/tom96da/incajs/commit/d565bc4b))
+
+### Fixed
+
+- a `focus()` call in a `focus` or `blur` listener takes effect on the next frame ([1dc35fe8](https://github.com/tom96da/incajs/commit/1dc35fe8))
+- the layout reads of a removed element, such as `getBoundingClientRect()`, give 0 ([5e1dda86](https://github.com/tom96da/incajs/commit/5e1dda86))
+- removing a subtree through a node method releases its nodes without waiting for a frame ([39dd7da4](https://github.com/tom96da/incajs/commit/39dd7da4))
 
 ## [0.0.34] - 2026-11-17
 
