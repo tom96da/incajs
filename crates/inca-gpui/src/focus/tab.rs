@@ -3,73 +3,10 @@
 
 //! Tab order and tab-index reads.
 
-use super::{
-    App, AttributeValue, FocusRegistry, NodeId, PendingFocus, Start, VirtualTree, Window,
-    hidden_by_attribute, is_disabled_control,
-};
+mod index;
+mod order;
 
-/// The target of a Tab press. `stops` lists every focusable node with its
-/// `tabindex` in tree order. Positive values come first in ascending order,
-/// then 0 in tree order, and negative values are outside the order. Past either
-/// end the result is `None`. From a node outside the order the result is the
-/// nearest stop after it (before it when `backward`) in tree order, or forward
-/// with no stop after it the first stop. `current` `None` starts at the first
-/// (or, `backward`, last) stop.
-fn next_stop(stops: &[(NodeId, i32)], current: Option<NodeId>, backward: bool) -> Option<NodeId> {
-    // (sort key, tree position, node)
-    let mut ordered: Vec<(i32, usize, NodeId)> = stops
-        .iter()
-        .enumerate()
-        .filter(|(_, (_, index))| *index >= 0)
-        .map(|(pos, &(id, index))| (if index > 0 { index } else { i32::MAX }, pos, id))
-        .collect();
-    ordered.sort_by_key(|&(key, ..)| key);
-    let at = current.and_then(|id| ordered.iter().position(|&(_, _, node)| node == id));
-    let found = match (current, at) {
-        (Some(_), Some(at)) => {
-            if backward {
-                at.checked_sub(1).and_then(|i| ordered.get(i))
-            } else {
-                ordered.get(at + 1)
-            }
-        }
-        (Some(id), None) => match stops.iter().position(|&(node, _)| node == id) {
-            Some(here) if backward => ordered.iter().filter(|s| s.1 < here).max_by_key(|s| s.1),
-            Some(here) => ordered
-                .iter()
-                .filter(|s| s.1 > here)
-                .min_by_key(|s| s.1)
-                .or_else(|| ordered.first()),
-            None if backward => ordered.last(),
-            None => ordered.first(),
-        },
-        (None, _) if backward => ordered.last(),
-        (None, _) => ordered.first(),
-    };
-    found.map(|&(_, _, id)| id)
-}
-
-/// The target of a Tab press while no node is focused, from a press on `node`, which sits at
-/// `at` among `stops` in tree order. Forward, it is the first stop after `node`, or with none
-/// after it the first stop of the order when `node` is outside the order. Backward, it is the
-/// last stop up to `node` itself.
-fn after_press(stops: &[(NodeId, i32)], node: NodeId, at: usize, backward: bool) -> Option<NodeId> {
-    let own = stops.get(at).filter(|&&(id, _)| id == node);
-    let split = at + usize::from(own.is_some());
-    let in_order = |stop: &&(NodeId, i32)| stop.1 >= 0;
-    if backward {
-        return stops[..split]
-            .iter()
-            .rev()
-            .find(in_order)
-            .map(|&(id, _)| id);
-    }
-    match stops[split..].iter().find(in_order) {
-        Some(&(id, _)) => Some(id),
-        None if own.is_some_and(|&(_, index)| index >= 0) => None,
-        None => next_stop(stops, None, false),
-    }
-}
+use super::{App, FocusRegistry, NodeId, PendingFocus, Start, VirtualTree, Window};
 
 impl FocusRegistry {
     /// Moves focus one tab stop forward, or `backward`. With no node focused,
@@ -78,7 +15,9 @@ impl FocusRegistry {
     /// next Tab starts over at the first. A move that finds no stop forgets
     /// where it started. The transition is reported by the next
     /// [`Self::apply_pending`]. Returns the node that took focus. The move
-    /// also drops the scroll requests of earlier focus calls.
+    /// also drops the scroll requests of earlier focus calls. From a node that no longer takes
+    /// focus, the move goes to the nearest stop after its place in tree order (before it when
+    /// `backward`), or forward with none after it to the first stop.
     pub fn tab_move(
         &mut self,
         tree: &VirtualTree,
@@ -90,12 +29,13 @@ impl FocusRegistry {
         let focused = self.focused_node(window, cx);
         let start = if focused.is_none() { self.start } else { None };
         let mut stops = Vec::new();
-        let mut start_at = None;
+        let from = start.map(Start::node).or(focused);
+        let mut from_at = None;
         let mut stack = vec![root];
         while let Some(id) = stack.pop() {
             let Some(node) = tree.get(id) else { continue };
-            if start.is_some_and(|start| start.node() == id) {
-                start_at = Some(stops.len());
+            if from == Some(id) {
+                from_at = Some(stops.len());
             }
             if self.handles.contains_key(&id)
                 && let Some(index) = Self::tab_index_of(tree, id)
@@ -104,10 +44,15 @@ impl FocusRegistry {
             }
             stack.extend(node.children().iter().rev());
         }
-        let target = match (start, start_at) {
-            (Some(Start::Press { node, .. }), Some(at)) => after_press(&stops, node, at, backward),
-            (Some(Start::Focus(node)), _) => next_stop(&stops, Some(node), backward),
-            _ => next_stop(&stops, focused, backward),
+        let target = match (start, from.zip(from_at)) {
+            (Some(Start::Press { .. }), Some((node, at))) => {
+                order::after_press(&stops, node, at, backward)
+            }
+            (_, Some((node, at))) if stops.get(at).is_none_or(|stop| stop.0 != node) => {
+                order::after_press(&stops, node, at, backward)
+            }
+            (Some(Start::Focus(node)), _) => order::next_stop(&stops, Some(node), backward),
+            _ => order::next_stop(&stops, focused, backward),
         };
         if target.is_none() {
             self.start = None;
@@ -120,17 +65,6 @@ impl FocusRegistry {
         } else {
             window.blur(cx);
             None
-        }
-    }
-
-    /// Whether `node_id` can hold focus once this frame's tab check has run.
-    /// A node in `tab_dirty` holds it when it has a tab index, and any other
-    /// node holds it when it has a handle.
-    pub(super) fn focusable_after_frame(&self, tree: &VirtualTree, node_id: NodeId) -> bool {
-        if self.tab_dirty.contains(&node_id) {
-            Self::tab_index_of(tree, node_id).is_some()
-        } else {
-            self.handles.contains_key(&node_id)
         }
     }
 
@@ -153,61 +87,6 @@ impl FocusRegistry {
             self.focused = None;
         }
     }
-
-    /// Records that `node_id`'s `tabindex` may have changed. The next
-    /// [`Self::apply_pending`] re-reads it.
-    pub fn mark_tab_dirty(&mut self, node_id: NodeId) {
-        self.tab_dirty.insert(node_id);
-    }
-
-    /// Takes the nodes marked by [`Self::mark_tab_dirty`] and its subtree form.
-    #[cfg(feature = "test-support")]
-    pub fn take_tab_dirty(&mut self) -> std::collections::HashSet<NodeId> {
-        std::mem::take(&mut self.tab_dirty)
-    }
-
-    /// Like [`Self::mark_tab_dirty`] for `node_id` and its descendants that
-    /// have, or could take, a handle.
-    pub fn mark_subtree_dirty(&mut self, tree: &VirtualTree, node_id: NodeId) {
-        let mut stack = vec![node_id];
-        while let Some(id) = stack.pop() {
-            let Some(node) = tree.get(id) else { continue };
-            if self.handles.contains_key(&id)
-                || node.is_focusable_by_default()
-                || node.attributes().contains_key("tabindex")
-            {
-                self.tab_dirty.insert(id);
-            }
-            stack.extend(node.children());
-        }
-    }
-
-    /// The `tabindex` of `node_id`. A node not connected to the tree's document,
-    /// a text node, a node that has an ancestor (or itself) that is a template or has
-    /// `display: none`, `inert` or a hiding `hidden`, and a `disabled` HTML button
-    /// or input have none. An HTML button or input whose `tabindex` is missing or
-    /// unparsable has 0.
-    pub(super) fn tab_index_of(tree: &VirtualTree, node_id: NodeId) -> Option<i32> {
-        let node = tree.get(node_id)?;
-        if !tree.is_connected(node_id) {
-            return None;
-        }
-        let hidden = tree.ancestors(node_id).any(|id| {
-            hidden_by_attribute(tree, id) || tree.get(id).is_some_and(|ancestor| {
-                ancestor.is_template()
-                    || ancestor.attributes().contains_key("inert")
-                    || matches!(
-                        tree.computed_style(id).get("display"),
-                        Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("none")
-                    )
-            })
-        });
-        let by_default = node.is_focusable_by_default();
-        if !node.is_element() || hidden || is_disabled_control(node) {
-            return None;
-        }
-        tree.explicit_tab_index(node_id).or(by_default.then_some(0))
-    }
 }
 
 #[cfg(test)]
@@ -217,279 +96,8 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use gpui::TestAppContext;
+    use inca_node::AttributeValue;
     use inca_test_macros::gpui_cases;
-    use rstest::rstest;
-    use std::collections::HashSet;
-
-    // Nodes 1 to 6 have tabindex 3, 1, 0, 0, -1 and 2.
-    /// A rooted tree with one `button`, disabled when `disabled`.
-    fn rooted_button(disabled: bool) -> (VirtualTree, NodeId) {
-        let (mut tree, _) = rooted_tree(0);
-        let id = tree.create_node("button").unwrap();
-        tree.append_child(ROOT, id).unwrap();
-        if disabled {
-            tree.set_attribute(id, "disabled", true).unwrap();
-        }
-        (tree, id)
-    }
-
-    const STOPS: [(NodeId, i32); 6] = [(1, 3), (2, 1), (3, 0), (4, 0), (5, -1), (6, 2)];
-
-    fn walk(stops: &[(NodeId, i32)], start: Option<NodeId>, backward: bool) -> Vec<Option<NodeId>> {
-        let mut current = start;
-        let mut moves = Vec::new();
-        for _ in 0..stops.len() + 2 {
-            let target = next_stop(stops, current, backward);
-            moves.push(target);
-            current = target;
-        }
-        moves
-    }
-
-    #[test]
-    fn a_button_under_a_template_has_no_tab_index() {
-        let (mut tree, button) = rooted_button(false);
-        let template = tree.create_node("template").unwrap();
-        tree.append_child(ROOT, template).unwrap();
-        tree.append_child(template, button).unwrap();
-
-        assert_eq!(FocusRegistry::tab_index_of(&tree, button), None);
-    }
-
-    #[test]
-    fn a_text_node_and_a_display_none_node_have_no_tab_index() {
-        let (tree, id) = tree_with("#text", Some(AttributeValue::from("0")));
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
-        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
-        tree.set_style(id, "display", "none").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
-        tree.set_style(id, "display", "flex").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
-    }
-
-    #[test]
-    fn a_comment_with_a_tabindex_has_no_tab_index() {
-        let (tree, id) = tree_with("#comment", Some(AttributeValue::from("0")));
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
-    }
-
-    #[test]
-    fn a_display_none_in_capitals_leaves_no_tab_index() {
-        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
-        tree.set_style(id, "display", "NONE").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
-    }
-
-    #[rstest]
-    #[case::display("display")]
-    #[case::hidden("hidden")]
-    #[case::inert("inert")]
-    fn a_node_under_display_none_hidden_or_inert_has_no_tab_index(#[case] hide: &str) {
-        let mut mismatches = Vec::new();
-        let (mut tree, child) = tree_with("div", Some(AttributeValue::from("0")));
-        let parent = tree.create_node("div").unwrap();
-        tree.append_child(parent, child).unwrap();
-        for (target, name) in [(child, "self"), (parent, "ancestor")] {
-            if hide == "display" {
-                tree.set_style(target, "display", "none").unwrap();
-            } else {
-                tree.set_attribute(target, hide, true).unwrap();
-            }
-            if FocusRegistry::tab_index_of(&tree, child).is_some() {
-                mismatches.push(format!("{hide} on {name} keeps the tab index"));
-            }
-            if hide == "display" {
-                tree.remove_style(target, "display").unwrap();
-            } else {
-                tree.remove_attribute(target, hide).unwrap();
-            }
-            if FocusRegistry::tab_index_of(&tree, child) != Some(0) {
-                mismatches.push(format!("removing {hide} on {name} loses the tab index"));
-            }
-        }
-        assert!(mismatches.is_empty(), "{mismatches:#?}");
-    }
-
-    /// A `<style>` element under the root with a rule that hides `.h`.
-    fn hide_class_h(tree: &mut VirtualTree) {
-        let style = tree.create_node("style").unwrap();
-        tree.append_child(ROOT, style).unwrap();
-        let css = tree.create_node("#text").unwrap();
-        tree.set_data(css, ".h { display: none }").unwrap();
-        tree.append_child(style, css).unwrap();
-    }
-
-    #[test]
-    fn a_node_under_a_rule_display_none_has_no_tab_index() {
-        let (mut tree, _) = rooted_tree(0);
-        hide_class_h(&mut tree);
-        let parent = tree.create_node("div").unwrap();
-        tree.append_child(ROOT, parent).unwrap();
-        tree.set_attribute(parent, "class", "h").unwrap();
-        let child = tree.create_node("div").unwrap();
-        tree.append_child(parent, child).unwrap();
-        tree.set_attribute(child, "tabindex", "0").unwrap();
-
-        assert_eq!(FocusRegistry::tab_index_of(&tree, child), None);
-    }
-
-    #[test]
-    fn a_node_with_a_rule_display_none_has_no_tab_index() {
-        let (mut tree, _) = rooted_tree(0);
-        hide_class_h(&mut tree);
-        let node = tree.create_node("div").unwrap();
-        tree.append_child(ROOT, node).unwrap();
-        tree.set_attribute(node, "class", "h").unwrap();
-        tree.set_attribute(node, "tabindex", "0").unwrap();
-
-        assert_eq!(FocusRegistry::tab_index_of(&tree, node), None);
-    }
-
-    #[test]
-    fn hidden_with_an_own_display_or_until_found_keeps_the_tab_index() {
-        let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
-        tree.set_attribute(id, "hidden", "").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
-        tree.set_style(id, "display", "flex").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
-        tree.remove_style(id, "display").unwrap();
-        tree.set_attribute(id, "hidden", "until-found").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
-    }
-
-    const SVG: &str = "http://www.w3.org/2000/svg";
-
-    #[rstest]
-    #[case::button("button")]
-    #[case::input("input")]
-    fn an_svg_control_has_no_default_tab_index(#[case] tag: &str) {
-        let (mut tree, _) = rooted_tree(0);
-        let id = tree.create_element_ns(Some(SVG), None, tag).unwrap();
-        tree.append_child(ROOT, id).unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None, "{tag}");
-    }
-
-    #[test]
-    fn an_svg_template_ancestor_leaves_the_tab_index_of_its_subtree() {
-        let (mut tree, button) = rooted_button(false);
-        let template = tree.create_element_ns(Some(SVG), None, "template").unwrap();
-        tree.append_child(ROOT, template).unwrap();
-        tree.append_child(template, button).unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, button), Some(0));
-    }
-
-    #[gpui::test]
-    fn mark_subtree_dirty_queues_nodes_that_can_hold_focus(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (mut tree, focusable) = tree_with("div", Some(AttributeValue::from("0")));
-        let parent = tree.create_node("div").unwrap();
-        let plain = tree.create_node("div").unwrap();
-        let button = tree.create_node("button").unwrap();
-        let input = tree.create_node("input").unwrap();
-        let held = tree.create_node("div").unwrap();
-        for child in [focusable, plain, button, input, held] {
-            tree.append_child(parent, child).unwrap();
-        }
-        let mut registry = FocusRegistry::default();
-        cx.update(|_, cx| registry.get_or_create(held, cx));
-        registry.mark_subtree_dirty(&tree, parent);
-        assert_eq!(
-            registry.tab_dirty,
-            HashSet::from([focusable, button, input, held])
-        );
-    }
-
-    #[rstest]
-    #[case::absent(None, Some(0))]
-    #[case::positive(Some(AttributeValue::from("3")), Some(3))]
-    #[case::negative(Some(AttributeValue::from("-1")), Some(-1))]
-    #[case::not_a_number(Some(AttributeValue::from("abc")), Some(0))]
-    #[case::boolean(Some(AttributeValue::Bool(true)), Some(0))]
-    fn a_button_has_tab_index_0_unless_told_otherwise(
-        #[case] value: Option<AttributeValue>,
-        #[case] want: Option<i32>,
-    ) {
-        let (tree, id) = tree_with("button", value.clone());
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{value:?}");
-    }
-
-    #[test]
-    fn an_input_has_tab_index_0_without_a_tabindex() {
-        let (tree, id) = tree_with("input", None);
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
-    }
-
-    #[rstest]
-    #[case::button("button", None)]
-    #[case::input("input", None)]
-    #[case::div("div", Some(2))]
-    fn a_disabled_attribute_drops_the_tab_index_of_a_control_only(
-        #[case] tag: &str,
-        #[case] want: Option<i32>,
-    ) {
-        let (mut tree, id) = tree_with(tag, Some(AttributeValue::from("2")));
-        tree.set_attribute(id, "disabled", true).unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{tag}");
-        tree.remove_attribute(id, "disabled").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(2), "{tag}");
-    }
-
-    #[test]
-    fn next_stop_orders_positive_values_then_zeros_in_tree_order() {
-        assert_eq!(
-            walk(&STOPS, None, false),
-            [
-                Some(2),
-                Some(6),
-                Some(1),
-                Some(3),
-                Some(4),
-                None,
-                Some(2),
-                Some(6)
-            ]
-        );
-        assert_eq!(
-            walk(&STOPS, None, true),
-            [
-                Some(4),
-                Some(3),
-                Some(1),
-                Some(6),
-                Some(2),
-                None,
-                Some(4),
-                Some(3)
-            ]
-        );
-    }
-
-    #[test]
-    fn next_stop_from_a_negative_stop_continues_in_tree_order() {
-        assert_eq!(next_stop(&STOPS, Some(5), false), Some(6));
-        assert_eq!(next_stop(&STOPS, Some(5), true), Some(4));
-        let stops = [(1, 3), (2, -1), (3, 0), (4, 1)];
-        assert_eq!(next_stop(&stops, Some(2), false), Some(3));
-        assert_eq!(next_stop(&stops, Some(2), true), Some(1));
-        let stops = [(1, 1), (2, 0), (3, -1)];
-        assert_eq!(next_stop(&stops, Some(3), false), Some(1));
-        let stops = [(1, -1), (2, 1)];
-        assert_eq!(next_stop(&stops, Some(1), true), None);
-    }
-
-    #[test]
-    fn next_stop_from_an_unknown_node_starts_at_an_end() {
-        assert_eq!(next_stop(&STOPS, Some(99), false), Some(2));
-        assert_eq!(next_stop(&STOPS, Some(99), true), Some(4));
-    }
-
-    #[rstest]
-    #[case::forward(false)]
-    #[case::backward(true)]
-    fn next_stop_is_none_without_a_reachable_stop(#[case] backward: bool) {
-        assert_eq!(next_stop(&[], None, backward), None);
-        assert_eq!(next_stop(&[(1, -1)], None, backward), None);
-    }
 
     #[gpui::test]
     fn tab_move_returns_the_node_it_focused_and_none_past_the_end(cx: &mut TestAppContext) {
@@ -611,56 +219,158 @@ mod tests {
         assert_eq!(focused, None);
     }
 
+    type Spec<'a> = (&'a str, &'a [(&'a str, &'a str)]);
+
+    /// Nodes of `spec` under the root, in order.
+    fn rooted_nodes(spec: &[Spec]) -> (VirtualTree, Vec<NodeId>) {
+        let (mut tree, _) = rooted_tree(0);
+        let ids = spec
+            .iter()
+            .map(|&(tag, attributes)| {
+                let id = tree.create_node(tag).unwrap();
+                tree.append_child(ROOT, id).unwrap();
+                for &(key, value) in attributes {
+                    tree.set_attribute(id, key, value).unwrap();
+                }
+                id
+            })
+            .collect();
+        (tree, ids)
+    }
+
     #[gpui::test]
-    fn focus_on_a_disabled_button_is_ignored(cx: &mut TestAppContext) {
+    fn tab_visits_a_link_and_skips_an_a_without_href(cx: &mut TestAppContext) {
         let cx = cx.add_empty_window();
-        let (tree, id) = rooted_button(true);
+        let (tree, ids) = rooted_nodes(&[
+            ("button", &[]),
+            ("a", &[("href", "u")]),
+            ("button", &[]),
+            ("a", &[]),
+        ]);
         let mut registry = FocusRegistry::default();
-        registry.mark_tab_dirty(id);
-        registry.request_focus(id, false);
+        for &id in &ids {
+            registry.mark_tab_dirty(id);
+        }
+        let visited = cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, window, cx);
+            (0..4)
+                .map(|_| {
+                    let moved = registry.tab_move(&tree, ROOT, window, cx, false);
+                    let _ = registry.apply_pending(&tree, window, cx);
+                    moved
+                })
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(visited, [Some(ids[0]), Some(ids[1]), Some(ids[2]), None]);
+    }
+
+    #[gpui::test]
+    fn focus_on_an_a_without_href_is_ignored(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_nodes(&[("a", &[])]);
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(ids[0]);
+        registry.request_focus(ids[0], false);
 
         let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
 
         assert!(transitions.is_empty());
-        assert_eq!(
-            cx.update(|window, cx| registry.focused_node(window, cx)),
-            None
-        );
     }
 
+    const LINK_BETWEEN_BUTTONS: &[Spec] =
+        &[("button", &[]), ("a", &[("href", "u")]), ("button", &[])];
+    const DIV_BETWEEN_BUTTONS: &[Spec] = &[
+        ("button", &[]),
+        ("div", &[("tabindex", "0")]),
+        ("button", &[]),
+    ];
+
+    #[gpui_cases]
     #[gpui::test]
-    fn disabling_a_focused_button_reports_its_blur(cx: &mut TestAppContext) {
+    #[case::link_forward(LINK_BETWEEN_BUTTONS, (1, "href"), false, Some(2))]
+    #[case::link_backward(LINK_BETWEEN_BUTTONS, (1, "href"), true, Some(0))]
+    #[case::div_forward(DIV_BETWEEN_BUTTONS, (1, "tabindex"), false, Some(2))]
+    #[case::none_after_forward(&[("button", &[]), ("a", &[("href", "u")])], (1, "href"), false, Some(0))]
+    #[case::none_before_backward(&[("a", &[("href", "u")]), ("button", &[])], (0, "href"), true, None)]
+    #[case::positive_after_removed(
+        &[("button", &[("tabindex", "1")]), ("div", &[("tabindex", "0")]), ("button", &[]), ("button", &[("tabindex", "2")])],
+        (1, "tabindex"), false, Some(2)
+    )]
+    fn a_tab_move_from_a_node_that_lost_its_stop_continues_in_tree_order(
+        cx: &mut TestAppContext,
+        spec: &[Spec],
+        lost: (usize, &str),
+        backward: bool,
+        want: Option<usize>,
+    ) {
         let cx = cx.add_empty_window();
-        let (mut tree, id) = rooted_button(false);
+        let (mut tree, ids) = rooted_nodes(spec);
         let mut registry = FocusRegistry::default();
-        focus_all(cx, &mut registry, &tree, &[id], id);
-
-        tree.set_attribute(id, "disabled", true).unwrap();
-        registry.mark_tab_dirty(id);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
-
-        assert_eq!(transitions.len(), 1);
-        assert_eq!(transitions[0].blurred, Some(id));
-        assert_eq!(transitions[0].focused, None);
-    }
-
-    #[gpui::test]
-    fn an_enabled_button_takes_focus_again(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (mut tree, id) = rooted_button(false);
-        let mut registry = FocusRegistry::default();
-        focus_all(cx, &mut registry, &tree, &[id], id);
-        tree.set_attribute(id, "disabled", true).unwrap();
-        registry.mark_tab_dirty(id);
+        focus_all(cx, &mut registry, &tree, &ids, ids[lost.0]);
+        tree.remove_attribute(ids[lost.0], lost.1).unwrap();
+        registry.mark_tab_dirty(ids[lost.0]);
         cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
 
-        tree.remove_attribute(id, "disabled").unwrap();
-        registry.mark_tab_dirty(id);
-        registry.request_focus(id, false);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, backward));
 
-        assert_eq!(transitions.len(), 1);
-        assert_eq!(transitions[0].blurred, None);
-        assert_eq!(transitions[0].focused, Some(id));
+        assert_eq!(moved, want.map(|at| ids[at]));
+    }
+
+    #[gpui::test]
+    fn a_second_tab_after_the_wrap_to_the_first_stop_focuses_nothing(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, ids) = rooted_nodes(&[("button", &[]), ("a", &[("href", "u")])]);
+        let mut registry = FocusRegistry::default();
+        focus_all(cx, &mut registry, &tree, &ids, ids[1]);
+        tree.remove_attribute(ids[1], "href").unwrap();
+        registry.mark_tab_dirty(ids[1]);
+        cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+
+        let moved = cx.update(|window, cx| {
+            let first = registry.tab_move(&tree, ROOT, window, cx, false);
+            let _ = registry.apply_pending(&tree, window, cx);
+            (first, registry.tab_move(&tree, ROOT, window, cx, false))
+        });
+
+        assert_eq!(moved, (Some(ids[0]), None));
+    }
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::forward(false, 2)]
+    #[case::backward(true, 1)]
+    fn a_focused_stop_keeps_the_positive_tab_index_order(
+        cx: &mut TestAppContext,
+        backward: bool,
+        want: usize,
+    ) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_nodes(&[
+            ("button", &[("tabindex", "2")]),
+            ("button", &[("tabindex", "1")]),
+            ("button", &[("tabindex", "3")]),
+        ]);
+        let mut registry = FocusRegistry::default();
+        focus_all(cx, &mut registry, &tree, &ids, ids[0]);
+
+        let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, backward));
+
+        assert_eq!(moved, Some(ids[want]));
+    }
+
+    #[gpui::test]
+    fn a_tab_move_from_a_focused_a_that_lost_href_before_the_frame_continues_after_it(
+        cx: &mut TestAppContext,
+    ) {
+        let cx = cx.add_empty_window();
+        let (mut tree, ids) =
+            rooted_nodes(&[("button", &[]), ("a", &[("href", "u")]), ("button", &[])]);
+        let mut registry = FocusRegistry::default();
+        focus_all(cx, &mut registry, &tree, &ids, ids[1]);
+        tree.remove_attribute(ids[1], "href").unwrap();
+
+        let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, false));
+
+        assert_eq!(moved, Some(ids[2]));
     }
 }

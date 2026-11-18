@@ -241,7 +241,7 @@ be passed, and `undefined` there counts as `null`.
 | `closest` | `(nodeId: number, selector: string) => number \| null` | The id of the nearest element at or above `nodeId` that matches. A `#text` node starts at its nearest element ancestor and a `#comment` start gives `null`. Throws a `SyntaxError` for an invalid selector, checked first. An unknown node gives `null`. |
 | `querySelector` | `(nodeId: number, selector: string) => number \| null` | The id of the first descendant of `nodeId` that matches the selector list, in document order. `nodeId` is never a result. `:scope` and a top-level `&` are `nodeId`, and the whole tree takes part in the match. The document has no scope element, so `:scope` selects the element of the document. A `#fragment` start finds its descendants, and `:scope` selects no element there, so a selector that starts with `:scope` finds nothing. Text and `#comment` nodes are never results, and a `#text` or `#comment` start finds nothing. Throws a `SyntaxError` for an invalid selector, also for a `#text` or `#comment` start, an unknown node gives `null` after the selector check. |
 | `querySelectorAll` | `(nodeId: number, selector: string) => number[]` | The ids of every descendant of `nodeId` that matches, each once, in document order. Follows the rules of `querySelector`; an unknown node gives `[]` after the selector check. |
-| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button` or `input` defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside the client rectangle of a container centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
+| `focusNode` | `(nodeId: number, preventScroll?: boolean) => void` | Request focus for `nodeId`, next frame. Only a connected node with a `tabindex` that is not hidden takes it, and a `button`, an `input` or a link (an `a` with `href`, or an SVG `a` with `href` or `xlink:href`) defaults to `0`. Unless `preventScroll` is `true`, the scroll containers above the node then scroll it into view: a node that shows stays put, a node outside the client rectangle of a container centres, and a node that shows partly moves the least vertically and stays put horizontally. A node with no box yet is retried next frame. |
 | `focusedNode` | `() => number \| null` | The id of the focused node, or `null` when none has focus. |
 | `blurNode` | `(nodeId: number) => void` | Request that `nodeId` lose focus. Takes effect next frame, and does nothing if `nodeId` is not the focused node by then. |
 | `layoutOf` | `(nodeId: number) => [x, y, width, height, border, scrollX, scrollY, gutterWidth, gutterHeight] \| null` | Read the border box of `nodeId` in window pixels as the last drawn frame placed it, with `border` the uniform border width. `scrollX` and `scrollY` are the positive scroll offset the parent applied to that box. `gutterWidth` and `gutterHeight` are the strips the vertical and the horizontal scrollbar reserve inside the border. `null` for a node with no recorded box, for a node that is not connected, whatever the last frame recorded, and for an id that names no node. |
@@ -589,15 +589,17 @@ its number, or `null` for a value that is no signal.
 - `Tab` and `Shift+Tab` move focus, and Control, Alt and Meta cancel the move. The move focuses the
   next or previous node that can take focus in tree order, or blurs at the end of the order. While
   no node is focused, the move starts from the node of the last mouse press or the last focus. When
-  that node leaves the tree the start moves to the node before its place.
-- Enter clicks a focused enabled button on key down. Space clicks it on key
-  up with any modifier. An Enter click, a Space key down, a Space key up or
+  that node leaves the tree the start moves to the node before its place. From a node that no
+  longer takes focus, the move goes to the nearest node after its place in tree order that can take
+  focus, or with none after it to the first.
+- Enter clicks a focused enabled button or a focused link on key down. Space clicks the button on
+  key up with any modifier. An Enter click, a Space key down, a Space key up or
   the button losing focus clears the pending Space. A button under a held
   mouse press also takes one Space click on key up. A click, the mouse
   release or the button losing focus ends the hold.
   A key click carries the payload of the click of a key, see [Mouse payload](#mouse-payload),
-  and `preventDefault()` in `keydown`, the `keypress` of Enter, or `keyup` of the `button`
-  ends it.
+  and `preventDefault()` in `keydown`, the `keypress` of Enter, or `keyup` of the `button` or the
+  link ends it.
 - The Menu key (`key` `"ContextMenu"`, also the U+0010 key of a Mac keyboard) and Shift+F10 (not on
   macOS) fire `contextmenu` on `keydown`, unless a listener canceled it. It targets the focused node
   with `clientX`/`clientY` at the center of its recorded box, or the deepest recorded box at (1, 1)
@@ -609,7 +611,7 @@ its number, or `null` for a value that is no signal.
   target, when no Control or Meta is held, no composition runs, and the key is
   Enter without Alt or has a printable typed character. Alt may be held on macOS
   only, where Option composes a character. A canceled `keypress` cancels
-  the key's default action, except for Space.
+  the key's default action, except for Space. Enter on a focused link fires no `keypress`.
 - A modifier change bubbles `keydown` or `keyup` named `Shift`, `Control`, `Alt` or `Meta`, in that
   order, from the focused node, else the document element, else the document. The host measures the
   change against the modifiers it reads from the window on the first frame and on every activation.
@@ -618,7 +620,7 @@ its number, or `null` for a value that is no signal.
   change dispatches `blur`, `focusout`, `focus`, `focusin` in that order, and
   the `focusin`/`focusout` walk has `target` the node. Changes to `tabindex`
   (key compared case-insensitively), `disabled` on a button or input,
-  `hidden`, `inert` and `display`, and moving or removing a node, re-check
+  `href`, `xlink:href`, `hidden`, `inert` and `display`, and moving or removing a node, re-check
   the node's subtree before that frame's queued focus requests.
 - An uncanceled `mousedown` focuses the nearest node on the target's path that can take focus, and
   blurs the window when there is none. A press on a scrollbar focuses nothing.

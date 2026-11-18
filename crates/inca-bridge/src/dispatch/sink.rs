@@ -235,6 +235,7 @@ impl EventSink for EventDispatcher {
         // A canceled keypress keeps the default of Space, which runs on key up.
         let typed_canceled = !up
             && !canceled
+            && (keystroke.key != "enter" || self.focused_link(window, cx).is_none())
             && self.keypress_canceled(keystroke, target, &payload, window, cx)
             && keystroke.key != "space";
         self.key_default(keystroke, up, canceled || typed_canceled, window, cx);
