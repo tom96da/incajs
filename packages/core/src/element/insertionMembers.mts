@@ -11,13 +11,12 @@ import {
   entered,
   isDestroyed,
   isNode,
-  left,
-  nodeOf,
+  leftSubtrees,
   receiverNode,
 } from "./lifecycle.mts";
 import type { InsertionPlace } from "../ffi/index.mts";
 import type { HandleNode } from "./handleNode.mts";
-import type { HandleBuilders, Receiver } from "./lifecycle.mts";
+import type { Receiver } from "./lifecycle.mts";
 import type { ChildNode, Node, ParentNode, ParentNodeMutationMembers } from "./nodeTypes.mts";
 
 /**
@@ -27,7 +26,6 @@ import type { ChildNode, Node, ParentNode, ParentNodeMutationMembers } from "./n
  * @param self - `this` of the member
  * @param place - where the nodes go
  * @param nodes - the arguments of the member
- * @param builders - the functions that build the handles of the new text nodes
  * @throws {TypeError} when `self` fails `rule`, an argument is a `Symbol`, or the
  *   host refuses the call
  * @throws {DOMException} when the host refuses the insertion
@@ -37,7 +35,6 @@ function insertConverted(
   self: unknown,
   place: InsertionPlace,
   nodes: readonly unknown[],
-  builders: HandleBuilders,
 ): void {
   const target = receiverNode(self, rule);
   const converted = nodes.map((value): HandleNode | string =>
@@ -50,55 +47,48 @@ function insertConverted(
     converted.map((value) => (typeof value === "string" ? value : value.__node_id)),
   );
   if (result === null) return;
-  const [textIds, removedIds] = result;
-  const ids = textIds.values();
+  const [, removed] = result;
   for (const value of converted) {
-    if (typeof value === "string") builders.node(ids.next().value as number);
-    else if (value.kind !== "fragment") entered(value);
+    if (typeof value !== "string" && value.kind !== "fragment") entered(value);
   }
-  for (const id of removedIds) {
-    const handle = nodeOf(id);
-    if (handle) left(handle);
-  }
+  leftSubtrees(removed);
 }
 
 /**
  * Builds the members of `ParentNode` that insert nodes.
- * @param builders - the functions that build the handles of the new text nodes
  * @returns the members
  */
-export function parentNodeMutationMembers(builders: HandleBuilders): ParentNodeMutationMembers {
+export function parentNodeMutationMembers(): ParentNodeMutationMembers {
   return {
     append(this: ParentNode, ...nodes: unknown[]): void {
-      insertConverted(PARENT_NODE_RULE, this, "append", nodes, builders);
+      insertConverted(PARENT_NODE_RULE, this, "append", nodes);
     },
     prepend(this: ParentNode, ...nodes: unknown[]): void {
-      insertConverted(PARENT_NODE_RULE, this, "prepend", nodes, builders);
+      insertConverted(PARENT_NODE_RULE, this, "prepend", nodes);
     },
     replaceChildren(this: ParentNode, ...nodes: unknown[]): void {
-      insertConverted(PARENT_NODE_RULE, this, "replaceChildren", nodes, builders);
+      insertConverted(PARENT_NODE_RULE, this, "replaceChildren", nodes);
     },
   };
 }
 
 /**
  * Builds the members of `ChildNode`.
- * @param builders - the functions that build the handles of the new text nodes
  * @returns the members
  */
-export function childNodeMutationMembers(builders: HandleBuilders): Omit<ChildNode, keyof Node> {
+export function childNodeMutationMembers(): Omit<ChildNode, keyof Node> {
   return {
     before(this: Node, ...nodes: unknown[]): void {
-      insertConverted(NON_DOCUMENT_CHILD_RULE, this, "before", nodes, builders);
+      insertConverted(NON_DOCUMENT_CHILD_RULE, this, "before", nodes);
     },
     after(this: Node, ...nodes: unknown[]): void {
-      insertConverted(NON_DOCUMENT_CHILD_RULE, this, "after", nodes, builders);
+      insertConverted(NON_DOCUMENT_CHILD_RULE, this, "after", nodes);
     },
     replaceWith(this: Node, ...nodes: unknown[]): void {
-      insertConverted(NON_DOCUMENT_CHILD_RULE, this, "replaceWith", nodes, builders);
+      insertConverted(NON_DOCUMENT_CHILD_RULE, this, "replaceWith", nodes);
     },
     remove(this: Node): void {
-      insertConverted(NON_DOCUMENT_CHILD_RULE, this, "replaceWith", [], builders);
+      insertConverted(NON_DOCUMENT_CHILD_RULE, this, "replaceWith", []);
     },
   };
 }

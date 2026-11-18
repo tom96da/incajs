@@ -26,6 +26,7 @@ export {
   removeChild,
   removeNode,
   replaceChild,
+  replaceWithText,
   rootNodeId,
   rootOf,
   setCharacterData,

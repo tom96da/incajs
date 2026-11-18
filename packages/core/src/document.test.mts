@@ -69,7 +69,11 @@ const native = {
   }),
   setStyle: vi.fn<() => void>(),
   appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
-  removeChild: vi.fn<(parentId: number, childId: number) => void>(),
+  removeChild: vi.fn<(parentId: number, childId: number) => number[][]>(() => []),
+  replaceWithText: vi.fn<(nodeId: number, text: string) => [number | null, number[][]]>(() => [
+    nextId++,
+    [],
+  ]),
   holdNode: vi.fn<(nodeId: number) => void>(),
   releaseNode: vi.fn<(nodeId: number) => void>(),
   textContent: vi.fn<(nodeId: number) => string>((nodeId) => data[nodeId] ?? "joined"),
@@ -531,8 +535,7 @@ describe("createDocumentFragment", () => {
 
     fragment.textContent = "x";
 
-    expect(native.createNode).toHaveBeenLastCalledWith("#text");
-    expect(native.appendChild).toHaveBeenLastCalledWith(fragment.__node_id, nextId - 1);
+    expect(native.replaceWithText).toHaveBeenCalledExactlyOnceWith(fragment.__node_id, "x");
   });
 
   it("ignores a textContent assignment once the host freed it", () => {

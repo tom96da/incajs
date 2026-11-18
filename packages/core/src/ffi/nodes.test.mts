@@ -23,6 +23,7 @@ import {
   removeChild,
   removeNode,
   replaceChild,
+  replaceWithText,
   rootOf,
   setCharacterData,
   setInnerHtml,
@@ -45,14 +46,18 @@ const native = {
   ]),
   appendChild: vi.fn<(parentId: number, childId: number) => number>(() => 0),
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
-  removeChild: vi.fn<(parentId: number, childId: number) => void>(),
-  replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
+  removeChild: vi.fn<(parentId: number, childId: number) => number[][]>(() => []),
+  replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number[][]>(() => []),
+  replaceWithText: vi.fn<(nodeId: number, text: string) => [number | null, number[][]]>(() => [
+    null,
+    [],
+  ]),
   insertNodes: vi.fn<
     (
       nodeId: number,
       place: InsertionPlace,
       nodes: (number | string)[],
-    ) => [number[], number[]] | null
+    ) => [number[], number[][]] | null
   >(() => null),
   cloneNode: vi.fn<(nodeId: number, deep: boolean) => number>(() => 0),
   nodeHandle: vi.fn<(nodeId: number) => ReturnType<typeof nodeHandle>>(() => null),
@@ -61,8 +66,8 @@ const native = {
   isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => false),
   removeNode: vi.fn<(nodeId: number) => [number[], number[]]>(() => [[], []]),
   templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
-  setInnerHtml: vi.fn<(nodeId: number, html: string) => void>(),
-  setOuterHtml: vi.fn<(nodeId: number, html: string) => boolean>(() => false),
+  setInnerHtml: vi.fn<(nodeId: number, html: string) => number[][]>(() => []),
+  setOuterHtml: vi.fn<(nodeId: number, html: string) => number[][]>(() => []),
   insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => void>(),
   querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
   querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
@@ -94,9 +99,15 @@ describe("wrapper functions forward to __inca_native__", () => {
   });
 
   it("replaceChild", () => {
-    native.replaceChild.mockReturnValueOnce(6);
-    expect(replaceChild(1, 2, 3)).toBe(6);
+    native.replaceChild.mockReturnValueOnce([[3, 4]]);
+    expect(replaceChild(1, 2, 3)).toEqual([[3, 4]]);
     expect(native.replaceChild).toHaveBeenCalledWith(1, 2, 3);
+  });
+
+  it("replaceWithText", () => {
+    native.replaceWithText.mockReturnValueOnce([5, [[2, 3]]]);
+    expect(replaceWithText(1, "x")).toEqual([5, [[2, 3]]]);
+    expect(native.replaceWithText).toHaveBeenCalledWith(1, "x");
   });
 
   it("interfacePrototypes", () => {
@@ -132,13 +143,14 @@ describe("wrapper functions forward to __inca_native__", () => {
   });
 
   it("setInnerHtml", () => {
-    expect(setInnerHtml(1, "<b>")).toBeUndefined();
+    native.setInnerHtml.mockReturnValueOnce([[3, 4]]);
+    expect(setInnerHtml(1, "<b>")).toEqual([[3, 4]]);
     expect(native.setInnerHtml).toHaveBeenCalledWith(1, "<b>");
   });
 
   it("setOuterHtml", () => {
-    native.setOuterHtml.mockReturnValueOnce(true);
-    expect(setOuterHtml(1, "<b>")).toBe(true);
+    native.setOuterHtml.mockReturnValueOnce([[1, 2]]);
+    expect(setOuterHtml(1, "<b>")).toEqual([[1, 2]]);
     expect(native.setOuterHtml).toHaveBeenCalledWith(1, "<b>");
   });
 
@@ -166,7 +178,8 @@ describe("wrapper functions forward to __inca_native__", () => {
   });
 
   it("removeChild", () => {
-    removeChild(1, 2);
+    native.removeChild.mockReturnValueOnce([[2, 3]]);
+    expect(removeChild(1, 2)).toEqual([[2, 3]]);
     expect(native.removeChild).toHaveBeenCalledWith(1, 2);
   });
 
@@ -233,9 +246,9 @@ describe("wrapper functions forward to __inca_native__", () => {
   });
 
   it("insertNodes forwards its arguments and gives the lists the host returns", () => {
-    native.insertNodes.mockReturnValueOnce([[7], [8]]);
+    native.insertNodes.mockReturnValueOnce([[7], [[8, 9]]]);
 
-    expect(insertNodes(1, "before", [2, "s"])).toEqual([[7], [8]]);
+    expect(insertNodes(1, "before", [2, "s"])).toEqual([[7], [[8, 9]]]);
     expect(native.insertNodes).toHaveBeenCalledWith(1, "before", [2, "s"]);
   });
 

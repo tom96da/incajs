@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { adoptElement, adoptFragment } from "../../tests/adopt.mts";
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
+import { keep } from "../../tests/keep.mts";
 import { declareNode } from "../../tests/setup.mts";
 import { createElementNode } from "./handle.mts";
 import { isHeld, isRemoved, markFreed, nodeOf } from "./lifecycle.mts";
@@ -658,5 +659,54 @@ describe("the handles after a mutation member", () => {
     await collectSentinel();
 
     expect(nodeOf(added)).toBeDefined();
+  });
+});
+
+describe("the handles below a removed child", () => {
+  /** Builds a child of `parent` with one child of its own and removes it with `run`. */
+  const removeWithChild = (
+    parent: Node,
+    run: (parent: Node, top: Node) => void,
+  ): { top: Node; inner: WeakRef<Node> } => {
+    const top = div();
+    const inner = div();
+    parent.appendChild(top);
+    top.appendChild(inner);
+    const ref = new WeakRef(inner);
+    run(parent, top);
+    return { top, inner: ref };
+  };
+
+  it.each([
+    ["removeChild", (parent: Node, top: Node) => parent.removeChild(top)],
+    ["replaceChild", (parent: Node, top: Node) => parent.replaceChild(div(), top)],
+  ] as const)("%s keeps them while the handle of the child lives", async (_member, run) => {
+    const { top, inner } = removeWithChild(div(), run);
+    keep(top);
+
+    await collectSentinel();
+
+    expect(inner.deref()).toBeDefined();
+  });
+
+  it.each([
+    ["removeChild", (parent: Node, top: Node) => parent.removeChild(top)],
+    ["replaceChild", (parent: Node, top: Node) => parent.replaceChild(div(), top)],
+  ] as const)("%s lets them be collected with the handle of the child", async (_member, run) => {
+    const inner = removeWithChild(div(), run).inner;
+
+    await collectGarbage(() => inner.deref() === undefined);
+
+    expect(inner.deref()).toBeUndefined();
+  });
+
+  it("keeps a removed child with a handle in the host at the next frame", () => {
+    const { parent, children } = family(1);
+
+    host.natives.appendChild!(host.ROOT, parent.__node_id);
+    parent.removeChild(children[0]!);
+    host.frame();
+
+    expect(() => parent.appendChild(children[0]!)).not.toThrow();
   });
 });

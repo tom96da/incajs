@@ -46,3 +46,13 @@ fn a_v_if_comment_is_absent_from_the_snapshot(cx: &mut TestAppContext) {
 
     assert!(snap.find(&|node| node.tag == "#comment").is_none());
 }
+
+#[gpui::test]
+fn a_removed_node_that_a_script_holds_survives_a_frame(cx: &mut TestAppContext) {
+    let mut h = load(cx, "interfaces");
+    click(&mut h, "removeTop");
+
+    click(&mut h, "reattach");
+
+    assert_eq!(text_of(&mut h, "reattached"), "x");
+}

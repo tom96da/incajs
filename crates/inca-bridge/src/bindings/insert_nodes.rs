@@ -6,14 +6,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rquickjs::{Ctx, Exception, FromJs, Result as JsResult, Value};
+use rquickjs::{Array, Ctx, Exception, FromJs, Result as JsResult, Value};
 
-use inca_node::{InsertArg, NodeId, Placement};
+use inca_node::{InsertArg, Inserted, NodeId, Placement};
 
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
-use super::mutation::pair;
+use super::mutation::removed_subtrees;
 
 /// `insertNodes`: the one native behind `append`, `prepend`, `before`, `after`, `replaceWith`,
 /// `replaceChildren` and `remove`. Each moved or removed node drops the focus it held, moves the
@@ -63,32 +63,50 @@ impl<'js> FromJs<'js> for JsPlacement {
     }
 }
 
+/// Plans, checks and applies the insertion of `nodes` at `placement` of `node_id`, and settles the
+/// nodes that leave their place. Returns `None` without a change for `Before`, `After` and
+/// `ReplaceWith` on a node without a parent.
+pub(super) fn insert_planned(
+    ctx: &Ctx<'_>,
+    host: &mut Host,
+    node_id: NodeId,
+    placement: Placement,
+    nodes: &[InsertArg],
+) -> JsResult<Option<Inserted>> {
+    let planned = host
+        .tree
+        .plan_insertion(node_id, placement, nodes)
+        .map_err(|err| throw_tree_error(ctx, err))?;
+    let Some(insertion) = planned else {
+        return Ok(None);
+    };
+    let left = host.leaving(&insertion.leaving());
+    let inserted = host
+        .tree
+        .apply_insertion(insertion)
+        .map_err(|err| throw_tree_error(ctx, err))?;
+    host.settle(&left);
+    Ok(Some(inserted))
+}
+
 /// Inserts `nodes` at `place` of `node_id` after checking the whole insertion. Returns
-/// `[textIds, removedIds]`: the ids of the new text nodes in order and the ids of the nodes that
-/// left the tree. Returns `null` without a change for `before`, `after` and `replaceWith` on a
-/// node without a parent. A failed check throws and changes nothing. A removed node keeps its
-/// listeners.
+/// `[textIds, removedSubtrees]`: the ids of the new text nodes in order and, for each node that
+/// left the tree, the ids of its subtree in pre-order with the node first. Returns `null` without
+/// a change for `before`, `after` and `replaceWith` on a node without a parent. A failed check
+/// throws and changes nothing. A removed node keeps its listeners.
 fn insert_nodes<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsPlacement, Vec<JsInsertArg>) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), JsPlacement(placement), nodes| {
         let nodes: Vec<InsertArg> = nodes.into_iter().map(|JsInsertArg(arg)| arg).collect();
         let mut host = host.borrow_mut();
-        let planned = host
-            .tree
-            .plan_insertion(node_id, placement, &nodes)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        let Some(insertion) = planned else {
+        let Some(inserted) = insert_planned(&ctx, &mut host, node_id, placement, &nodes)? else {
             return Ok(Value::new_null(ctx.clone()));
         };
-        let left = host.leaving(&insertion.leaving());
-        let inserted = host
-            .tree
-            .apply_insertion(insertion)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        host.settle(&left);
-        let ids: &[NodeId] = &inserted.texts;
-        Ok(pair(&ctx, ids, &inserted.removed)?.into_value())
+        let array = Array::new(ctx.clone())?;
+        array.set(0, inserted.texts)?;
+        array.set(1, removed_subtrees(&ctx, &host.tree, &inserted.removed)?)?;
+        Ok(array.into_value())
     }
 }
 
@@ -119,6 +137,10 @@ mod tests {
         n.appendChild(p, a);
         n.appendChild(p, b);
         n.appendChild(p, c);
+        globalThis.listed = (call) => {
+            const names = { [a]: 'a', [b]: 'b', [c]: 'c', [e]: 'e', [globalThis.k]: 'k', [globalThis.j]: 'j' };
+            return JSON.stringify(call().map((ids) => ids.map((id) => names[id] ?? 'other')));
+        };
         globalThis.order = () => {
             const names = ['a', 'b', 'c', 'e'];
             return JSON.stringify(n.childNodeIds(p).map((id) => names[[a, b, c, e].indexOf(id)]));
@@ -149,19 +171,45 @@ mod tests {
     }
 
     #[rstest]
-    #[case::replace_children("n.insertNodes(p, 'replaceChildren', [])", "[0,1,2]")]
-    #[case::replace_with("n.insertNodes(b, 'replaceWith', [])", "[1]")]
-    fn insert_nodes_with_no_node_returns_the_removed_ids(
+    #[case::replace_children("n.insertNodes(p, 'replaceChildren', [])", r#"[["a"],["b"],["c"]]"#)]
+    #[case::replace_with("n.insertNodes(b, 'replaceWith', [])", r#"[["b"]]"#)]
+    fn insert_nodes_with_no_node_returns_the_subtree_of_each_removed_node(
         #[case] call: &str,
         #[case] expected: &str,
     ) {
         let (engine, _host) = engine_with_family();
 
-        let removed: String = engine
-            .eval(&format!(
-                "JSON.stringify({call}[1].map((id) => [a, b, c].indexOf(id)))"
-            ))
+        let removed: String = engine.eval(&format!("listed(() => {call}[1])")).unwrap();
+
+        assert_eq!(removed, expected);
+    }
+
+    #[rstest]
+    #[case::grandchild_moved_up(
+        "n.insertNodes(p, 'replaceChildren', [k])",
+        r#"[["a","j"],["b"],["c"]]"#
+    )]
+    #[case::node_moved_into_the_place_of_the_target(
+        "n.insertNodes(b, 'replaceWith', [a])",
+        r#"[["b"]]"#
+    )]
+    fn a_node_the_call_inserts_is_not_in_a_removed_subtree(
+        #[case] call: &str,
+        #[case] expected: &str,
+    ) {
+        let (engine, _host) = engine_with_family();
+        engine
+            .eval::<()>(
+                r"
+                globalThis.k = n.createNode('i');
+                globalThis.j = n.createNode('u');
+                n.appendChild(a, k);
+                n.appendChild(a, j);
+                ",
+            )
             .unwrap();
+
+        let removed: String = engine.eval(&format!("listed(() => {call}[1])")).unwrap();
 
         assert_eq!(removed, expected);
     }

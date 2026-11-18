@@ -325,16 +325,6 @@ export function entered(node: Node): void {
 }
 
 /**
- * Makes the handle of a node that has no parent weak, and holds the node until the handle is
- * collected. The entries below the node do not change.
- * @param node - the handle of a node the host took out of its parent
- */
-export function left(node: Node): void {
-  unparent(node);
-  hold(node);
-}
-
-/**
  * The handles `leftHeld` recorded below each removed node at its last removal, which live as long as
  * the handle of that node. A handle moved out of the subtree later stays in the list until the top
  * is collected. The host frees a removed subtree at a frame after the handle of its top is
@@ -343,10 +333,11 @@ export function left(node: Node): void {
 const kept = new WeakMap<Node, Node[]>();
 
 /**
- * Makes the handle of a node that has no parent weak, for a node the host holds already. Every
- * live handle below it becomes weak too and lives as long as `node`'s handle, whether the entry
- * was strong or weak before. The release of the node registers on the collection of the handle.
- * @param node - the handle of a node that `removeNode` took out of its parent
+ * Makes the handle of a node that has no parent weak, for a node that {@link hold} or the host
+ * holds already. Every live handle below it becomes weak too and lives as long as `node`'s handle,
+ * whether the entry was strong or weak before. The release of the node registers on the collection
+ * of the handle.
+ * @param node - the handle of a node that `removeNode` took out of its parent, or that `hold` holds
  * @param nodeIds - the ids of `node` and every node below it
  */
 export function leftHeld(node: Node, nodeIds: readonly NodeId[]): void {
@@ -360,6 +351,28 @@ export function leftHeld(node: Node, nodeIds: readonly NodeId[]): void {
   }
   kept.set(node, below);
   if (!isHeld(node)) releaseWhenCollected(node);
+}
+
+/**
+ * Keeps the table in step with the subtrees a host call removed. The handle of the top of a
+ * subtree is held until it is collected and keeps the handles below it. When the top has no
+ * handle, the handles below become weak and nothing holds the subtree, so the host frees it at
+ * the next frame.
+ * @param removed - the ids of each removed subtree, the removed node first
+ */
+export function leftSubtrees(removed: readonly (readonly NodeId[])[]): void {
+  for (const ids of removed) {
+    const top = nodeOf(ids[0]!);
+    if (top === undefined) {
+      for (const id of ids) {
+        const handle = nodeOf(id);
+        if (handle !== undefined) unparent(handle);
+      }
+      continue;
+    }
+    hold(top);
+    leftHeld(top, ids);
+  }
 }
 
 /**

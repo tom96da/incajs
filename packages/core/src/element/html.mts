@@ -4,16 +4,9 @@
 // The markup members of an element. The host parses and serializes, and the members keep the node
 // table in step.
 
-import { childNodeIds, insertAdjacentHtml, setInnerHtml, setOuterHtml } from "../ffi/index.mts";
+import { insertAdjacentHtml, setInnerHtml, setOuterHtml } from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./arguments.mts";
-import {
-  existingContent,
-  isDestroyed,
-  left,
-  nodeOf,
-  ELEMENT_RULE,
-  receiverNode,
-} from "./lifecycle.mts";
+import { isDestroyed, leftSubtrees, ELEMENT_RULE, receiverNode } from "./lifecycle.mts";
 import type { HtmlMembers, Element } from "./types.mts";
 
 /**
@@ -38,19 +31,13 @@ export function htmlMembers(): HtmlMembers {
       const element = elementOf(this);
       const text = markupText(value);
       if (isDestroyed(element)) return;
-      const container = existingContent(element) ?? element;
-      const old = childNodeIds(container.__node_id);
-      setInnerHtml(element.__node_id, text);
-      for (const child of old) {
-        const handle = nodeOf(child);
-        if (handle) left(handle);
-      }
+      leftSubtrees(setInnerHtml(element.__node_id, text));
     },
     set outerHTML(value: string) {
       const element = elementOf(this);
       const text = markupText(value);
       if (isDestroyed(element)) return;
-      if (setOuterHtml(element.__node_id, text)) left(element);
+      leftSubtrees(setOuterHtml(element.__node_id, text));
     },
     insertAdjacentHTML(position: string, text: string) {
       const element = elementOf(this);

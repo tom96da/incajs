@@ -7,26 +7,49 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rquickjs::convert::Coerced;
-use rquickjs::{Array, Ctx, Exception, Result as JsResult};
+use rquickjs::{Array, Ctx, Result as JsResult, Value};
 
 use inca_jsenv::callbacks;
-use inca_node::NodeId;
+use inca_node::{InsertArg, NodeId, Placement, VirtualTree};
 
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
+use super::insert_nodes::insert_planned;
+
+mod clone_node;
+
+use clone_node::clone_node;
 
 /// The mutation members: `appendChild`, `insertBefore`, `removeChild`, `removeNode`,
-/// `replaceChild` and `cloneNode`. Each moved or removed node drops the focus it held, moves the
-/// Tab start, queues a focus re-check and resets the scroll offsets of its subtree.
+/// `replaceChild`, `replaceWithText` and `cloneNode`. Each moved or removed node drops the focus it
+/// held, moves the Tab start, queues a focus re-check and resets the scroll offsets of its subtree.
 pub(super) fn install_mutation(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("appendChild", append_child)?;
     n.set("insertBefore", insert_before)?;
     n.set("removeChild", remove_child)?;
     n.set("removeNode", remove_node)?;
     n.set("replaceChild", replace_child)?;
+    n.set("replaceWithText", replace_with_text)?;
     n.set("cloneNode", clone_node)
+}
+
+/// The removed subtrees of a change: for each of `candidates` that has no parent after the change,
+/// the ids of its subtree in pre-order with the node first. A candidate that has a parent, or is
+/// unknown, is skipped, so a node the change inserted is never listed.
+pub(super) fn removed_subtrees<'js>(
+    ctx: &Ctx<'js>,
+    tree: &VirtualTree,
+    candidates: &[NodeId],
+) -> JsResult<Array<'js>> {
+    let array = Array::new(ctx.clone())?;
+    let tops = candidates
+        .iter()
+        .filter(|&&id| tree.get(id).is_some_and(|node| node.parent().is_none()));
+    for (index, &id) in tops.enumerate() {
+        array.set(index, tree.subtree(id))?;
+    }
+    Ok(array)
 }
 
 fn append_child<'js>(
@@ -52,26 +75,27 @@ fn insert_before<'js>(
     }
 }
 
+/// Puts `node_id` in the place of `child_id` under `parent_id` and returns the removed subtrees.
 fn replace_child<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId, JsNodeId) -> JsResult<usize> {
+) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId, JsNodeId) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(parent_id), JsNodeId(node_id), JsNodeId(child_id)| {
         let mut host = host.borrow_mut();
         let mut leaving = host.tree.nodes_to_move(node_id);
         leaving.push(child_id);
         let left = host.leaving(&leaving);
-        let position = host
-            .tree
+        host.tree
             .replace_child(parent_id, node_id, child_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         host.settle(&left);
-        Ok(position)
+        removed_subtrees(&ctx, &host.tree, &[child_id])
     }
 }
 
+/// Takes `child_id` out of `parent_id` and returns the removed subtrees.
 fn remove_child<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<()> {
+) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
         let mut host = host.borrow_mut();
         let left = host.leaving(&[child_id]);
@@ -79,7 +103,34 @@ fn remove_child<'js>(
             .remove_child(parent_id, child_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         host.settle(&left);
-        Ok(())
+        removed_subtrees(&ctx, &host.tree, &[child_id])
+    }
+}
+
+/// Replaces the children of `node_id` with one text node holding `text`, or with none for an empty
+/// `text`. Returns `[textId | null, removedSubtrees]`.
+fn replace_with_text<'js>(
+    host: Rc<RefCell<Host>>,
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
+    move |ctx, JsNodeId(node_id), text| {
+        let nodes = if text.is_empty() {
+            Vec::new()
+        } else {
+            vec![InsertArg::Text(text)]
+        };
+        let mut host = host.borrow_mut();
+        let inserted =
+            insert_planned(&ctx, &mut host, node_id, Placement::ReplaceChildren, &nodes)?;
+        let array = Array::new(ctx.clone())?;
+        let (text_id, removed) = inserted.map_or((None, Vec::new()), |made| {
+            (made.texts.first().copied(), made.removed)
+        });
+        match text_id {
+            Some(id) => array.set(0, id)?,
+            None => array.set(0, Value::new_null(ctx.clone()))?,
+        }
+        array.set(1, removed_subtrees(&ctx, &host.tree, &removed)?)?;
+        Ok(array)
     }
 }
 
@@ -121,34 +172,6 @@ pub(super) fn pair<'js>(ctx: &Ctx<'js>, first: &[u32], second: &[u32]) -> JsResu
     array.set(0, first.to_vec())?;
     array.set(1, second.to_vec())?;
     Ok(array)
-}
-
-/// Copies `node_id` and, when `deep`, its descendants, and returns the id of the copy of
-/// `node_id`. The copies include the content of a template. An HTML `input` copy gets the typed
-/// text of its original.
-fn clone_node<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<bool>) -> JsResult<NodeId> {
-    move |ctx, JsNodeId(node_id), Coerced(deep)| {
-        let mut host = host.borrow_mut();
-        let made = host
-            .tree
-            .clone_subtree(node_id, deep)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        let mut inputs = host.inputs.borrow_mut();
-        for &(original, copy) in &made {
-            let Some(node) = host.tree.get(copy) else {
-                return Err(Exception::throw_type(&ctx, "the copy is missing"));
-            };
-            let typed = inputs.get(&original).map(|input| input.value().to_owned());
-            if let (true, Some(typed)) = (node.is_html("input"), typed) {
-                inputs.entry(copy).or_default().set_value(&typed);
-            }
-        }
-        made.first()
-            .map(|&(_, copy)| copy)
-            .ok_or_else(|| Exception::throw_type(&ctx, "the copy is missing"))
-    }
 }
 
 /// Inserts `node_id` under `parent_id` before `reference_id`, or last without one, and returns
@@ -210,7 +233,7 @@ mod tests {
         n.appendChild(g, g2);
         ";
 
-    fn engine_with_family() -> (Engine, Rc<RefCell<Host>>) {
+    pub(super) fn engine_with_family() -> (Engine, Rc<RefCell<Host>>) {
         let (engine, host) = engine_with_bindings();
         engine.eval::<()>(LISTEN_JS).unwrap();
         engine.eval::<()>(SETUP).unwrap();
@@ -246,7 +269,6 @@ mod tests {
     #[case::insert_in_the_middle("n.insertBefore(p, loose, b)", 1)]
     #[case::insert_with_null("n.insertBefore(p, loose, null)", 2)]
     #[case::insert_with_undefined("n.insertBefore(p, loose, undefined)", 2)]
-    #[case::replace("n.replaceChild(p, loose, a)", 0)]
     #[case::fragment_with_children("n.insertBefore(p, g, b)", 1)]
     #[case::empty_fragment("n.appendChild(p, f)", 2)]
     fn a_native_returns_the_position_of_the_inserted_node(#[case] call: &str, #[case] want: u32) {
@@ -333,137 +355,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(fired, 1);
-    }
-
-    #[test]
-    fn clone_node_returns_the_id_of_a_new_node_with_the_name_of_the_original() {
-        let (engine, _host) = engine_with_family();
-
-        let got: String = engine
-            .eval(
-                r"
-                n.appendChild(a, t);
-                const copy = n.cloneNode(a, true);
-                JSON.stringify([![p, a, b, t].includes(copy), n.attributeKey(copy, 'X')]);
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(got, r#"[true,"x"]"#);
-    }
-
-    #[test]
-    fn a_deep_clone_node_copies_the_descendants() {
-        let (engine, _host) = engine_with_family();
-
-        let count: u32 = engine
-            .eval(
-                r"
-                n.appendChild(a, t);
-                n.appendChild(a, c);
-                n.childNodeIds(n.cloneNode(a, true)).length;
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(count, 2);
-    }
-
-    #[test]
-    fn a_shallow_clone_node_copies_no_descendant() {
-        let (engine, _host) = engine_with_family();
-
-        let count: u32 = engine
-            .eval(
-                r"
-                n.appendChild(a, t);
-                n.appendChild(a, c);
-                n.childNodeIds(n.cloneNode(a, false)).length;
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(count, 0);
-    }
-
-    #[test]
-    fn a_deep_clone_node_copies_the_data_of_a_text_descendant() {
-        let (engine, _host) = engine_with_family();
-
-        let data: String = engine
-            .eval(
-                r"
-                n.setCharacterData(t, 'abc');
-                n.appendChild(a, t);
-                n.textContent(n.cloneNode(a, true));
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(data, "abc");
-    }
-
-    #[test]
-    fn a_clone_node_of_the_document_is_a_document_copy() {
-        let (engine, _host) = engine_with_family();
-
-        let got: bool = engine
-            .eval(
-                r"
-                const copy = n.cloneNode(n.documentNodeId(), true);
-                copy !== n.documentNodeId() && n.childNodeIds(copy).length === 1;
-                ",
-            )
-            .unwrap();
-
-        assert!(got);
-    }
-
-    #[test]
-    fn a_cloned_input_has_the_typed_text_of_its_original() {
-        let (engine, _host) = engine_with_family();
-
-        let texts: Vec<String> = engine
-            .eval(
-                r"
-                const field = n.createNode('input');
-                n.setInputValue(field, 'typed');
-                const copy = n.cloneNode(field, false);
-                [n.inputValue(copy), n.inputValue(field)];
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(texts, ["typed", "typed"]);
-    }
-
-    #[test]
-    fn a_deep_cloned_input_keeps_its_own_typed_text() {
-        let (engine, _host) = engine_with_family();
-
-        let texts: Vec<String> = engine
-            .eval(
-                r"
-                const box = n.createNode('div');
-                const one = n.createNode('input');
-                const two = n.createNode('input');
-                n.appendChild(box, one);
-                n.appendChild(box, two);
-                n.setInputValue(one, 'first');
-                n.setInputValue(two, 'second');
-                n.childNodeIds(n.cloneNode(box, true)).map((id) => n.inputValue(id));
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(texts, ["first", "second"]);
-    }
-
-    #[test]
-    fn clone_node_of_an_unknown_id_throws_type_error() {
-        let (engine, _host) = engine_with_family();
-
-        assert_eq!(error_name(&engine, "n.cloneNode(999, true)"), "TypeError");
     }
 
     fn zero() -> Point<gpui::Pixels> {
@@ -721,22 +612,131 @@ mod tests {
         assert_eq!(host.borrow().focus.active_node(&host.borrow().tree), None);
     }
 
-    #[test]
-    fn clone_node_copies_the_content_fragment_of_a_template() {
-        let (engine, _host) = engine_with_bindings();
+    /// `a` gets the child `k` and `listed` evaluates `call` and names each returned id.
+    const NAMED: &str = r"
+        globalThis.k = n.createNode('i');
+        n.appendChild(a, k);
+        globalThis.listed = (call) => {
+            const names = { [a]: 'a', [b]: 'b', [k]: 'k', [x]: 'x', [loose]: 'loose' };
+            return JSON.stringify(call().map((ids) => ids.map((id) => names[id] ?? 'other')));
+        };
+        ";
 
-        let got: bool = engine
+    #[rstest]
+    #[case::remove_child("() => n.removeChild(p, a)", r#"[["a","k"]]"#)]
+    #[case::replace_child("() => n.replaceChild(p, loose, a)", r#"[["a","k"]]"#)]
+    #[case::unknown_child_removed("() => n.removeChild(p, 999)", "[]")]
+    fn a_removing_native_returns_the_pre_order_subtree_of_the_removed_node(
+        #[case] call: &str,
+        #[case] expected: &str,
+    ) {
+        let (engine, _host) = engine_with_family();
+        engine.eval::<()>(NAMED).unwrap();
+
+        let got: String = engine.eval(&format!("listed({call})")).unwrap();
+
+        assert_eq!(got, expected);
+    }
+
+    #[rstest]
+    #[case::replace_child_with_itself("() => n.replaceChild(p, a, a)", "[]")]
+    #[case::node_of_another_parent("() => n.replaceChild(p, x, b)", r#"[["b"]]"#)]
+    fn a_node_the_call_inserts_is_not_listed_as_removed(
+        #[case] call: &str,
+        #[case] expected: &str,
+    ) {
+        let (engine, _host) = engine_with_family();
+        engine.eval::<()>(NAMED).unwrap();
+
+        let got: String = engine.eval(&format!("listed({call})")).unwrap();
+
+        assert_eq!(got, expected);
+    }
+
+    #[test]
+    fn replace_child_does_not_list_the_descendant_it_moves_into_the_place() {
+        let (engine, _host) = engine_with_family();
+        engine.eval::<()>(NAMED).unwrap();
+
+        let got: String = engine
+            .eval("listed(() => n.replaceChild(p, k, a))")
+            .unwrap();
+
+        assert_eq!(got, r#"[["a"]]"#);
+    }
+
+    #[test]
+    fn a_removed_template_lists_its_content_before_its_children() {
+        let (engine, _host) = engine_with_family();
+
+        let got: String = engine
             .eval(
                 r"
-                const n = __inca_native__;
                 const template = n.createNode('template');
-                const copy = n.cloneNode(template, false);
-                const content = n.templateContent(copy);
-                content !== null && content !== n.templateContent(template);
+                const content = n.templateContent(template);
+                const inner = n.createNode('div');
+                n.appendChild(content, inner);
+                n.appendChild(p, template);
+                const removed = n.removeChild(p, template)[0];
+                JSON.stringify(removed.map((id) => [template, content, inner].indexOf(id)));
                 ",
             )
             .unwrap();
 
-        assert!(got);
+        assert_eq!(got, "[0,1,2]");
+    }
+
+    #[rstest]
+    #[case::text("'hi'", r#"["hi",[["a","k"],["b"]]]"#)]
+    #[case::empty("''", r#"[null,[["a","k"],["b"]]]"#)]
+    fn replace_with_text_returns_the_text_id_and_the_removed_subtrees(
+        #[case] text: &str,
+        #[case] expected: &str,
+    ) {
+        let (engine, _host) = engine_with_family();
+        engine.eval::<()>(NAMED).unwrap();
+
+        let got: String = engine
+            .eval(&format!(
+                r"
+                const [textId, removed] = n.replaceWithText(p, {text});
+                const data = textId === null ? null : n.textContent(textId);
+                JSON.stringify([data, JSON.parse(listed(() => removed))]);
+                "
+            ))
+            .unwrap();
+
+        assert_eq!(got, expected);
+    }
+
+    #[rstest]
+    #[case::text("'hi'", "1")]
+    #[case::empty("''", "0")]
+    fn replace_with_text_leaves_the_text_node_as_the_only_child(
+        #[case] text: &str,
+        #[case] count: &str,
+    ) {
+        let (engine, _host) = engine_with_family();
+
+        let got: String = engine
+            .eval(&format!(
+                "n.replaceWithText(p, {text}); String(n.childNodeIds(p).length)"
+            ))
+            .unwrap();
+
+        assert_eq!(got, count);
+    }
+
+    #[test]
+    fn replace_with_text_throws_for_a_lone_surrogate_and_keeps_the_children() {
+        let (engine, _host) = engine_with_family();
+
+        assert_eq!(
+            error_name(&engine, r"n.replaceWithText(p, '\ud800')"),
+            "TypeError"
+        );
+
+        let count: u32 = engine.eval("n.childNodeIds(p).length").unwrap();
+        assert_eq!(count, 2);
     }
 }

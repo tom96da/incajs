@@ -4,16 +4,14 @@
 // The node members of every handle: identity, data and links read from the host tree.
 
 import {
-  appendChild,
   childNodeIds,
-  createNode,
   linkedNode,
-  removeChild,
+  replaceWithText as replaceChildrenWithText,
   setCharacterData,
 } from "../ffi/index.mts";
 import { nullableText } from "./arguments.mts";
 import { nodeListOf } from "./collections.mts";
-import { isDestroyed, left, nodeOf, receiverOf, NODE_RULE, receiverNode } from "./lifecycle.mts";
+import { isDestroyed, leftSubtrees, receiverOf, NODE_RULE, receiverNode } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
 import type { Document } from "../types.mts";
 import type { HandleNode } from "./handleNode.mts";
@@ -40,20 +38,10 @@ export type NodeTreeMembers = { textContent: string | null } & Pick<
  * become a node leaves the children in place.
  * @param parent - the element or fragment whose children are replaced
  * @param text - the new text content
- * @param builders - the functions that build the handles
  */
-export function replaceWithText(parent: Node, text: string, builders: HandleBuilders): void {
-  const textId = text ? createNode("#text") : undefined;
-  if (textId !== undefined) setCharacterData(textId, text);
-  for (const childId of childNodeIds(parent.__node_id)) {
-    removeChild(parent.__node_id, childId);
-    const child = nodeOf(childId);
-    if (child) left(child);
-  }
-  if (textId === undefined) return;
-
-  appendChild(parent.__node_id, textId);
-  builders.node(textId);
+export function replaceWithText(parent: Node, text: string): void {
+  const [, removed] = replaceChildrenWithText(parent.__node_id, text);
+  leftSubtrees(removed);
 }
 
 /**
@@ -82,7 +70,7 @@ export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
         case "document":
           return;
         default:
-          if (!isDestroyed(node)) replaceWithText(node, nullableText(value), builders);
+          if (!isDestroyed(node)) replaceWithText(node, nullableText(value));
       }
     },
     get ownerDocument() {
