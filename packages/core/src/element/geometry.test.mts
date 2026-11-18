@@ -8,51 +8,10 @@ import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage } from "../../tests/gc.mts";
 import { keep } from "../../tests/keep.mts";
 import { installMembersHost } from "../../tests/setup.mts";
-import { tabIndexOf } from "./geometry.mts";
 import { createElementNode, rootElement } from "./handle.mts";
 import { markFreed } from "./lifecycle.mts";
 
 type Box = readonly [number, number, number, number, number, number, number, number, number];
-
-describe("tabIndexOf", () => {
-  it.each<[string | number | boolean | null, string, number]>([
-    ["0", "div", 0],
-    ["5", "div", 5],
-    ["  7", "div", 7],
-    ["\t\n\f\r 9", "div", 9],
-    ["+3", "div", 3],
-    ["-4", "div", -4],
-    ["-0", "div", 0],
-    ["12abc", "div", 12],
-    ["1.5", "div", 1],
-    [1.5, "div", 1],
-    ["2147483647", "div", 2147483647],
-    ["-2147483648", "div", -2147483648],
-    ["2147483648", "div", -1],
-    ["-2147483649", "div", -1],
-    [1e10, "div", -1],
-    [NaN, "div", -1],
-    ["", "div", -1],
-    [" ", "div", -1],
-    ["\u000b5", "div", -1],
-    ["+", "div", -1],
-    ["-", "div", -1],
-    ["abc", "div", -1],
-    [null, "div", -1],
-    [true, "div", -1],
-    [false, "div", -1],
-    [null, "button", 0],
-    [null, "input", 0],
-    [true, "button", 0],
-    ["x", "button", 0],
-    ["3", "button", 3],
-  ])(
-    "parses integers and applies the default on invalid input (%o, %s)",
-    (value, kind, expected) => {
-      expect(tabIndexOf(value, kind)).toBe(expected);
-    },
-  );
-});
 
 describe("offsetParent", () => {
   it("is null when there is no record", () => {

@@ -5,28 +5,8 @@
 
 use super::{
     App, AttributeValue, FocusRegistry, NodeId, PendingFocus, Start, VirtualTree, Window,
-    hidden_by_attribute, is_disabled_control, js_number_text,
+    hidden_by_attribute, is_disabled_control,
 };
-
-/// Parses a `tabindex` value: optional leading ASCII whitespace, an optional
-/// sign, then digits. Trailing characters are ignored. Returns `None` when the
-/// digits are missing or exceed `i32`.
-fn parse_tab_index(value: &str) -> Option<i32> {
-    let value = value.trim_start_matches([' ', '\t', '\n', '\x0c', '\r']);
-    let (negative, rest) = match value.as_bytes().first()? {
-        b'-' => (true, &value[1..]),
-        b'+' => (false, &value[1..]),
-        _ => (false, value),
-    };
-    let digits = rest
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(rest.len());
-    if digits == 0 {
-        return None;
-    }
-    let magnitude: i64 = rest[..digits].parse().ok()?;
-    i32::try_from(if negative { -magnitude } else { magnitude }).ok()
-}
 
 /// The target of a Tab press. `stops` lists every focusable node with its
 /// `tabindex` in tree order. Positive values come first in ascending order,
@@ -226,12 +206,7 @@ impl FocusRegistry {
         if !node.is_element() || hidden || is_disabled_control(node) {
             return None;
         }
-        let explicit = match node.attributes().get("tabindex") {
-            Some(AttributeValue::String(value)) => parse_tab_index(value),
-            Some(AttributeValue::Number(value)) => parse_tab_index(&js_number_text(*value)),
-            Some(AttributeValue::Bool(_)) | None => None,
-        };
-        explicit.or(by_default.then_some(0))
+        tree.explicit_tab_index(node_id).or(by_default.then_some(0))
     }
 }
 
@@ -269,53 +244,6 @@ mod tests {
             current = target;
         }
         moves
-    }
-
-    #[test]
-    fn tab_index_parsing_follows_the_leading_integer() {
-        let cases: [(&str, Option<i32>); 14] = [
-            (" 1.5", Some(1)),
-            ("+1", Some(1)),
-            ("-0", Some(0)),
-            ("-1", Some(-1)),
-            ("\t\n 7x", Some(7)),
-            ("1e3", Some(1)),
-            ("abc", None),
-            ("", None),
-            ("+", None),
-            ("-", None),
-            (".5", None),
-            ("2147483648", None),
-            ("-2147483649", None),
-            ("2147483647", Some(i32::MAX)),
-        ];
-        let mismatches: Vec<_> = cases
-            .iter()
-            .filter(|(text, want)| parse_tab_index(text) != *want)
-            .collect();
-        assert!(mismatches.is_empty(), "{mismatches:?}");
-    }
-
-    #[test]
-    fn tab_index_of_reads_strings_numbers_and_booleans() {
-        let cases = [
-            (AttributeValue::from("3"), Some(3)),
-            (AttributeValue::Number(0.0), Some(0)),
-            (AttributeValue::Number(-1.0), Some(-1)),
-            (AttributeValue::Number(1.5), Some(1)),
-            (AttributeValue::Number(1e21), Some(1)),
-            (AttributeValue::Number(2.5e-7), Some(2)),
-            (AttributeValue::Number(f64::NAN), None),
-            (AttributeValue::Bool(true), None),
-            (AttributeValue::Bool(false), None),
-        ];
-        for (value, want) in cases {
-            let (tree, id) = tree_with("div", Some(value.clone()));
-            assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{value:?}");
-        }
-        let (tree, id) = tree_with("div", None);
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
-        assert_eq!(FocusRegistry::tab_index_of(&tree, 999), None);
     }
 
     #[test]

@@ -9,6 +9,7 @@ mod element;
 mod layout;
 mod markup;
 mod node;
+mod semantics;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -90,7 +91,8 @@ pub(super) fn install_members(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResu
     node::install(ctx, host)?;
     element::install(ctx, host)?;
     markup::install(ctx, host)?;
-    layout::install(ctx, host)
+    layout::install(ctx, host)?;
+    semantics::install(ctx, host)
 }
 
 #[cfg(test)]
@@ -107,8 +109,8 @@ mod tests {
     #[case::character_data("CharacterData", &["data", "length", "substringData", "appendData", "insertData", "deleteData", "replaceData"])]
     #[case::text("Text", &["wholeText"])]
     #[case::element("Element", &["id", "className", "tagName", "localName", "namespaceURI", "prefix", "getAttribute", "setAttribute", "hasAttribute", "removeAttribute", "getAttributeNames", "matches", "innerHTML", "outerHTML", "getBoundingClientRect", "clientWidth", "clientHeight", "clientLeft", "clientTop", "scrollLeft", "scrollTop", "scrollWidth", "scrollHeight", "scrollTo", "scrollBy", "scrollIntoView", "setPointerCapture", "releasePointerCapture", "hasPointerCapture", "childElementCount"])]
-    #[case::html_element("HTMLElement", &["click", "offsetWidth", "offsetHeight", "offsetLeft", "offsetTop", "focus", "blur"])]
-    #[case::foreign_element("ForeignElement", &["focus", "blur"])]
+    #[case::html_element("HTMLElement", &["click", "offsetWidth", "offsetHeight", "offsetLeft", "offsetTop", "focus", "blur", "tabIndex"])]
+    #[case::foreign_element("ForeignElement", &["focus", "blur", "tabIndex"])]
     #[case::document("Document", &["childElementCount"])]
     #[case::fragment("DocumentFragment", &["childElementCount"])]
     fn a_prototype_holds_its_host_members(#[case] name: &str, #[case] members: &[&str]) {

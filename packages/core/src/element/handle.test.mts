@@ -11,7 +11,7 @@ import { document } from "../document.mts";
 import { createCommentNode, createElementNode, handleOf, rootElement } from "./handle.mts";
 import { elementOf, markFreed, markRemoved, nodeOf } from "./lifecycle.mts";
 import type { ElementName } from "../ffi/index.mts";
-import type { Element, HTMLElement, HTMLInputElement } from "./types.mts";
+import type { Element, HTMLInputElement } from "./types.mts";
 
 /** Installs a fake host whose reads give `stored`, `boxes` and `scroll`, and returns it. */
 function installHost(
@@ -234,28 +234,6 @@ describe("element name", () => {
 
     expect("content" in adoptElement(1, svg("template"))).toBe(false);
   });
-
-  it("reads -1 as the default tab index of an SVG button", () => {
-    installHost();
-
-    expect((adoptElement(1, svg("button")) as HTMLElement).tabIndex).toBe(-1);
-  });
-});
-
-describe("element tabIndex", () => {
-  it("reads the stored tabindex attribute", () => {
-    const host = installHost("4");
-    expect(adoptElement(1, "div").tabIndex).toBe(4);
-    expect(host.getAttribute).toHaveBeenCalledWith(1, "tabindex");
-  });
-
-  it("writes the value as a 32-bit integer", () => {
-    const host = installHost();
-    const el = adoptElement(1, "div");
-
-    el.tabIndex = -1.5;
-    expect(host.setAttribute).toHaveBeenLastCalledWith(1, "tabindex", -1);
-  });
 });
 
 describe("element value", () => {
@@ -315,10 +293,6 @@ describe("element after the node is removed", () => {
     return { host, el };
   }
 
-  it("reads its tabindex from the host", () => {
-    expect(removed("4").el.tabIndex).toBe(4);
-  });
-
   it("reads the text of an input from the host", () => {
     const host = {
       inputValue: vi.fn<(nodeId: number) => string>(() => "abc"),
@@ -329,14 +303,6 @@ describe("element after the node is removed", () => {
     markRemoved([el.__node_id]);
 
     expect((el as HTMLInputElement).value).toBe("abc");
-  });
-
-  it("writes tabIndex through the host", () => {
-    const { host, el } = removed();
-
-    el.tabIndex = 3;
-
-    expect(host.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "tabindex", 3);
   });
 
   it("writes the text of an input through the host", () => {

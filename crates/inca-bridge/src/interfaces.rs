@@ -515,16 +515,6 @@ mod tests {
     }
 
     #[test]
-    fn the_foreign_element_prototype_has_only_the_focus_members() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
-        let got = eval_json(
-            &dispatcher,
-            "Reflect.ownKeys(__inca_native__.interfacePrototypes().ForeignElement)",
-        );
-        assert_eq!(got, serde_json::json!(["focus", "blur"]));
-    }
-
-    #[test]
     fn no_global_names_the_foreign_element_prototype() {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
         let got = eval_json(&dispatcher, "typeof ForeignElement");

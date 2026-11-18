@@ -14,7 +14,6 @@ import { offsetMembers } from "./geometry.mts";
 import { htmlMembers } from "./html.mts";
 import { styleMembers } from "./inlineStyle.mts";
 import { childNodeMutationMembers, parentNodeMutationMembers } from "./insertionMembers.mts";
-import { focusMembers } from "./interaction.mts";
 import {
   DOCUMENT_RULE,
   HTML_OR_SVG_RULE,
@@ -87,7 +86,6 @@ function defineInsertionMembers(proto: object, ...sets: object[]): void {
 export function installInterfaces(builders: HandleBuilders): void {
   const all = prototypes();
   const shared = (proto: object): void => {
-    defineMembers(proto, focusMembers());
     defineMembers(proto, styleMembers());
     defineMembers(proto, datasetMembers());
     defineMembers(

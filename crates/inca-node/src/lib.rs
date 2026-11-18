@@ -7,6 +7,7 @@ mod inline_style;
 pub mod input_text;
 pub mod scroll;
 pub mod selector;
+pub mod semantics;
 pub mod spec;
 mod stylesheet;
 pub mod tree;

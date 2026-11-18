@@ -75,13 +75,29 @@ impl VirtualNode {
     /// Whether the node is a `style` element of the HTML or the SVG namespace.
     #[must_use]
     pub fn is_style(&self) -> bool {
-        self.is_html("style") || (self.namespace == Some(ns!(svg)) && self.tag_name == "style")
+        self.is_html("style") || self.is_svg("style")
     }
 
-    /// Whether the node is an HTML `button` or `input`, which takes focus without a `tabindex`.
+    /// Whether the node is an HTML `button` or `input`.
+    #[must_use]
+    pub fn is_form_control(&self) -> bool {
+        self.is_html("button") || self.is_html("input")
+    }
+
+    /// Whether the node is a link: an HTML `a` with `href`, or an SVG `a` with `href` or
+    /// `xlink:href`.
+    #[must_use]
+    pub fn is_link(&self) -> bool {
+        let has = |name| self.attributes().contains_key(name);
+        (self.is_html("a") && has("href"))
+            || (self.is_svg("a") && (has("href") || has("xlink:href")))
+    }
+
+    /// Whether the node is an HTML `button` or `input` or a link, which takes focus without a
+    /// `tabindex`.
     #[must_use]
     pub fn is_focusable_by_default(&self) -> bool {
-        self.is_html("button") || self.is_html("input")
+        self.is_form_control() || self.is_link()
     }
 
     /// The namespace of the element, `None` for a node that has none.
@@ -106,6 +122,18 @@ impl VirtualNode {
     #[must_use]
     pub fn is_html(&self, local_name: &str) -> bool {
         self.in_html_namespace() && self.tag_name == local_name
+    }
+
+    /// Whether the node is an element of the SVG namespace named `local_name`.
+    #[must_use]
+    pub fn is_svg(&self, local_name: &str) -> bool {
+        self.namespace == Some(ns!(svg)) && self.tag_name == local_name
+    }
+
+    /// Whether the node is an element of the `MathML` namespace named `local_name`.
+    #[must_use]
+    pub fn is_mathml(&self, local_name: &str) -> bool {
+        self.namespace == Some(ns!(mathml)) && self.tag_name == local_name
     }
 
     /// The name with its prefix: `prefix:local`, or the local name alone.
@@ -145,7 +173,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::NodeKind;
-    use crate::tests::{HTML, SVG, node};
+    use crate::tests::{HTML, MATHML, SVG, node};
     use crate::tree::VirtualTree;
     use rstest::rstest;
 
@@ -289,20 +317,41 @@ mod tests {
     }
 
     #[rstest]
-    #[case::html_button(Some(HTML), "button", true)]
-    #[case::html_input(Some(HTML), "input", true)]
-    #[case::html_div(Some(HTML), "div", false)]
-    #[case::svg_button(Some(SVG), "button", false)]
-    #[case::svg_input(Some(SVG), "input", false)]
-    fn is_focusable_by_default_takes_an_html_button_or_input(
+    #[case::html_a_href(Some(HTML), "a", &["href"], true, true, false)]
+    #[case::html_a_bare(Some(HTML), "a", &[], false, false, false)]
+    #[case::html_a_xlink_href(Some(HTML), "a", &["xlink:href"], false, false, false)]
+    #[case::svg_a_href(Some(SVG), "a", &["href"], true, true, false)]
+    #[case::svg_a_xlink_href(Some(SVG), "a", &["xlink:href"], true, true, false)]
+    #[case::svg_a_bare(Some(SVG), "a", &[], false, false, false)]
+    #[case::mathml_a_href(Some(MATHML), "a", &["href"], false, false, false)]
+    #[case::html_button(Some(HTML), "button", &[], false, true, true)]
+    #[case::html_input(Some(HTML), "input", &[], false, true, true)]
+    #[case::html_div(Some(HTML), "div", &[], false, false, false)]
+    #[case::svg_button(Some(SVG), "button", &[], false, false, false)]
+    #[case::svg_input(Some(SVG), "input", &[], false, false, false)]
+    fn link_form_control_and_default_focus_follow_the_kind_and_href(
         #[case] namespace: Option<&str>,
         #[case] local_name: &str,
-        #[case] expected: bool,
+        #[case] attributes: &[&str],
+        #[case] link: bool,
+        #[case] focusable: bool,
+        #[case] form_control: bool,
     ) {
         let mut tree = VirtualTree::new();
         let id = tree.create_element_ns(namespace, None, local_name).unwrap();
+        for attribute in attributes {
+            tree.set_attribute(id, *attribute, "u").unwrap();
+        }
+        let node = tree.get(id).unwrap();
 
-        assert_eq!(tree.get(id).unwrap().is_focusable_by_default(), expected);
+        assert_eq!(
+            (
+                node.is_link(),
+                node.is_focusable_by_default(),
+                node.is_form_control()
+            ),
+            (link, focusable, form_control)
+        );
     }
 
     #[rstest]
