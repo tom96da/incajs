@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { adoptElement } from "../../tests/adopt.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import * as rendererCore from "../rendererCore.mts";
 import { createPatchProp } from "./patchProp.mts";
@@ -142,7 +143,7 @@ describe("patchProp on a string style", () => {
   const patchProp = createPatchProp(core);
 
   /** A fresh element, so that no style bookkeeping carries over between tests. */
-  const makeEl = (id: number) => core.createIncaElement(id, "div");
+  const makeEl = (id: number) => adoptElement(id, "div");
 
   beforeEach(() => {
     vi.clearAllMocks();

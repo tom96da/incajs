@@ -2,18 +2,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The natives behind `innerHTML`, `outerHTML` and `insertAdjacentHTML`. A write parses the markup
-//! in the tree, puts the nodes in place and returns them as a `Parsed` list for JS to build its
-//! handles from: `[position, entries]`, where `position` is the index among the children of the
-//! container where the first inserted node sits and each entry is
-//! `[id, tag, namespace, parentId, data]`. An entry whose `parentId` is no id of the list is a
-//! root. `namespace` is the namespace of the node and `null` for a `#text`, `#comment` or
-//! `#fragment` node. `data` is the text of a `#text` or `#comment` node and `null` for any other
-//! node. The tests of these natives sit in the same file.
+//! in the tree and puts the nodes in place. `setInnerHtml` and `insertAdjacentHtml` return nothing,
+//! and `setOuterHtml` returns whether it replaced the node. The tests of these natives sit in the
+//! same file.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rquickjs::{Array, Ctx, Exception, IntoJs, Result as JsResult, Value};
+use rquickjs::{Ctx, Exception, Result as JsResult};
 
 use inca_node::{
     AttributeValue, HtmlScope, NodeId, ParsedHtml, TreeError, VirtualNode, VirtualTree,
@@ -21,9 +17,8 @@ use inca_node::{
 
 use super::Natives;
 use super::attributes::print_style_warning;
-use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
+use super::convert::{JsNodeId, existing_node, throw_tree_error};
 use super::host::Host;
-use crate::event::array_of;
 
 pub(super) fn install_html(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("innerHtml", inner_html)?;
@@ -85,7 +80,7 @@ fn outer_html<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> Js
 /// parses to in the context of the node.
 fn set_inner_html<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), markup| {
         let (container, parsed) = {
             let mut host = host.borrow_mut();
@@ -108,21 +103,22 @@ fn set_inner_html<'js>(
                 .map_err(|err| throw_tree_error(&ctx, err))?;
             host.settle(&left);
         }
-        let position = insert_parsed(&ctx, &mut host, &parsed, container, None)?;
-        parsed_js(&ctx, position, &parsed)
+        insert_parsed(&ctx, &mut host, &parsed, container, None)?;
+        Ok(())
     }
 }
 
-/// Replaces `node_id` with the nodes `markup` parses to in the context of its parent. A node
-/// without a parent changes nothing and gives `null`. A node whose parent is a document throws.
+/// Replaces `node_id` with the nodes `markup` parses to in the context of its parent and returns
+/// `true`. A node without a parent changes nothing and gives `false`. A node whose parent is a
+/// document throws.
 fn set_outer_html<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<bool> {
     move |ctx, JsNodeId(node_id), markup| {
         let parsed = {
             let mut host = host.borrow_mut();
             let Some(parent) = existing_node(&ctx, &host.tree, node_id)?.parent() else {
-                return Ok(Value::new_null(ctx.clone()));
+                return Ok(false);
             };
             if host.tree.get(parent).is_some_and(VirtualNode::is_document) {
                 return Err(throw_tree_error(&ctx, TreeError::DocumentParent(node_id)));
@@ -138,17 +134,16 @@ fn set_outer_html<'js>(
             .get(node_id)
             .and_then(inca_node::VirtualNode::parent)
         else {
-            return Ok(Value::new_null(ctx.clone()));
+            return Ok(false);
         };
         let mut left = host.leaving(&[node_id]);
         left.extend(host.leaving(&host.tree.nodes_to_move(parsed.fragment)));
-        let position = host
-            .tree
+        host.tree
             .replace_child(parent, parsed.fragment, node_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         host.settle(&left);
         finish(&mut host, &parsed);
-        Ok(parsed_js(&ctx, position, &parsed)?.into_value())
+        Ok(true)
     }
 }
 
@@ -156,7 +151,7 @@ fn set_outer_html<'js>(
 /// tree.
 fn insert_adjacent_html<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String, String) -> JsResult<Array<'js>> {
+) -> impl Fn(Ctx<'js>, JsNodeId, String, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), position, markup| {
         let position = Position::parse(&ctx, &position)?;
         let mut host = host.borrow_mut();
@@ -189,8 +184,8 @@ fn insert_adjacent_html<'js>(
             Position::BeforeEnd => None,
             Position::AfterEnd => host.tree.next_sibling(node_id),
         };
-        let position = insert_parsed(&ctx, &mut host, &parsed, container, reference)?;
-        parsed_js(&ctx, position, &parsed)
+        insert_parsed(&ctx, &mut host, &parsed, container, reference)?;
+        Ok(())
     }
 }
 
@@ -217,22 +212,20 @@ fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, roots: &[NodeId]) {
 }
 
 /// Moves the nodes of the parse result into `container` before `reference`, or last without one.
-/// Returns the position of the first inserted node.
 fn insert_parsed(
     ctx: &Ctx<'_>,
     host: &mut Host,
     parsed: &ParsedHtml,
     container: NodeId,
     reference: Option<NodeId>,
-) -> JsResult<usize> {
+) -> JsResult<()> {
     let left = host.leaving(&host.tree.nodes_to_move(parsed.fragment));
-    let position = host
-        .tree
+    host.tree
         .insert_before(container, parsed.fragment, reference)
         .map_err(|err| throw_tree_error(ctx, err))?;
     host.settle(&left);
     finish(host, parsed);
-    Ok(position)
+    Ok(())
 }
 
 /// The steps that follow a parse once its nodes are in place: prints the style warnings, gives an
@@ -260,25 +253,6 @@ fn finish(host: &mut Host, parsed: &ParsedHtml) {
     host.tree.destroy_node(parsed.fragment);
 }
 
-/// The `Parsed` value of a parse result put at `position`.
-fn parsed_js<'js>(ctx: &Ctx<'js>, position: usize, parsed: &ParsedHtml) -> JsResult<Array<'js>> {
-    let mut entries = Vec::with_capacity(parsed.nodes.len());
-    for node in &parsed.nodes {
-        let row = [
-            node.id.into_js(ctx)?,
-            node.tag.as_str().into_js(ctx)?,
-            or_null(ctx, node.namespace.as_deref())?,
-            node.parent.unwrap_or(parsed.fragment).into_js(ctx)?,
-            or_null(ctx, node.data.as_deref())?,
-        ];
-        entries.push(array_of(ctx, row)?.into_value());
-    }
-    array_of(
-        ctx,
-        [position.into_js(ctx)?, array_of(ctx, entries)?.into_value()],
-    )
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -292,18 +266,38 @@ mod tests {
     use crate::Host;
     use crate::test_support::{HTML, LISTEN_JS, MATHML, SVG, engine_with_bindings, error_name};
 
-    /// `host` is a `div` under the root. `rows` maps a `Parsed` result to
-    /// `[tag, index of the parent entry or -1, namespace, data]`.
+    /// `host` is a `div` under the root. `rows(id)` lists the descendants of `id` in pre-order as
+    /// `[tag, index of the parent row or -1, namespace, data]`.
     const SETUP: &str = r"
         const n = __inca_native__;
         const host = n.createNode('div');
         n.appendChild(n.rootNodeId(), host);
-        const rows = (parsed) => parsed[1].map((e) => [
-            e[1],
-            parsed[1].findIndex((x) => x[0] === e[3]),
-            e[2],
-            e[4],
-        ]);
+        const protos = n.interfacePrototypes();
+        const rows = (root) => {
+            const out = [];
+            const walk = (id, parent) => {
+                for (const child of n.childNodeIds(id)) {
+                    const handle = n.nodeHandle(child)[0];
+                    const proto = Object.getPrototypeOf(handle);
+                    let leaf = null;
+                    if (proto === protos.Text) {
+                        leaf = '#text';
+                    } else if (proto === protos.Comment) {
+                        leaf = '#comment';
+                    }
+                    const at = out.length;
+                    out.push([
+                        leaf ?? handle.localName,
+                        parent,
+                        leaf ? null : handle.namespaceURI,
+                        leaf ? n.textContent(child) : null,
+                    ]);
+                    walk(child, at);
+                }
+            };
+            walk(root, -1);
+            return out;
+        };
         const html = (id) => n.innerHtml(id);
         ";
 
@@ -321,14 +315,15 @@ mod tests {
     }
 
     #[test]
-    fn set_inner_html_returns_pre_order_entries_with_parent_ids_namespaces_and_data() {
+    fn set_inner_html_puts_the_parsed_nodes_in_place_with_their_namespaces_and_data() {
         let (engine, _host) = engine();
 
         let got = eval(
             &engine,
             r"
             const markup = '<p>a</p>b<!--c--><svg><foreignObject></foreignObject></svg><math><mi>x</mi></math>';
-            return rows(n.setInnerHtml(host, markup));
+            n.setInnerHtml(host, markup);
+            return rows(host);
             ",
         );
 
@@ -340,29 +335,27 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_parsed_text_node_has_a_null_namespace() {
-        let (engine, _host) = engine();
-
-        let strict: bool = engine
-            .eval("n.setInnerHtml(host, 'a')[1][0][2] === null;")
-            .unwrap();
-
-        assert!(strict);
-    }
-
     #[rstest]
-    #[case::html("<input value=a>", 0, true)]
-    #[case::svg("<svg><input value=a></svg>", 1, false)]
+    #[case::html("<input value=a>", "n.childNodeIds(host)[0]", true)]
+    #[case::svg(
+        "<svg><input value=a></svg>",
+        "n.childNodeIds(n.childNodeIds(host)[0])[0]",
+        false
+    )]
     fn a_parsed_input_takes_the_value_attribute_as_typed_text_in_html_only(
         #[case] markup: &str,
-        #[case] index: usize,
+        #[case] input: &str,
         #[case] typed: bool,
     ) {
         let (engine, host) = engine();
 
         let id: u32 = engine
-            .eval(&format!("n.setInnerHtml(host, '{markup}')[1][{index}][0];"))
+            .eval(&format!(
+                r"
+                n.setInnerHtml(host, '{markup}');
+                {input};
+                "
+            ))
             .unwrap();
 
         assert_eq!(host.borrow().inputs.borrow().contains_key(&id), typed);
@@ -375,9 +368,10 @@ mod tests {
         let got = eval(
             &engine,
             r"
-            const svg = n.setInnerHtml(host, '<svg><foreignObject></foreignObject></svg>')[1][0][0];
-            const foreign = n.childNodeIds(svg)[0];
-            return rows(n.setOuterHtml(foreign, '<title>'));
+            n.setInnerHtml(host, '<svg><foreignObject></foreignObject></svg>');
+            const svg = n.childNodeIds(host)[0];
+            n.setOuterHtml(n.childNodeIds(svg)[0], '<title>');
+            return rows(svg);
             ",
         );
 
@@ -385,19 +379,19 @@ mod tests {
     }
 
     #[test]
-    fn set_inner_html_replaces_all_old_children_and_returns_position_zero() {
+    fn set_inner_html_replaces_all_old_children() {
         let (engine, _host) = engine();
 
         let got = eval(
             &engine,
             r"
             n.setInnerHtml(host, '<b></b><i></i>');
-            const parsed = n.setInnerHtml(host, '<u></u>');
-            return [parsed[0], html(host)];
+            n.setInnerHtml(host, '<u></u>');
+            return html(host);
             ",
         );
 
-        assert_eq!(got, r#"[0,"<u></u>"]"#);
+        assert_eq!(got, r#""<u></u>""#);
     }
 
     #[test]
@@ -459,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn set_outer_html_replaces_the_node_and_returns_its_position() {
+    fn set_outer_html_replaces_the_node_and_returns_true() {
         let (engine, _host) = engine();
 
         let got = eval(
@@ -467,16 +461,15 @@ mod tests {
             r"
             n.setInnerHtml(host, '<a></a><b></b>');
             const b = n.childNodeIds(host)[1];
-            const parsed = n.setOuterHtml(b, '<i></i><u></u>');
-            return [parsed[0], html(host)];
+            return [n.setOuterHtml(b, '<i></i><u></u>'), html(host)];
             ",
         );
 
-        assert_eq!(got, r#"[1,"<a></a><i></i><u></u>"]"#);
+        assert_eq!(got, r#"[true,"<a></a><i></i><u></u>"]"#);
     }
 
     #[test]
-    fn set_outer_html_on_a_parentless_node_returns_null_and_changes_nothing() {
+    fn set_outer_html_on_a_parentless_node_returns_false_and_changes_nothing() {
         let (engine, _host) = engine();
 
         let got = eval(
@@ -487,7 +480,7 @@ mod tests {
             ",
         );
 
-        assert_eq!(got, r#"[null,"<p></p>"]"#);
+        assert_eq!(got, r#"[false,"<p></p>"]"#);
     }
 
     /// The error name of `call` and how many ids the next `createNode` skips after it.
@@ -528,7 +521,12 @@ mod tests {
         assert_eq!(
             error_name(
                 &engine,
-                &format!("const copy = n.cloneNode(n.documentNodeId(), true)[1][0]; {call}")
+                &format!(
+                    r"
+                    const copy = n.childNodeIds(n.cloneNode(n.documentNodeId(), true))[0];
+                    {call};
+                    "
+                )
             ),
             "NoModificationAllowedError"
         );
@@ -537,15 +535,15 @@ mod tests {
     const PLACED: &str = r"
         n.setInnerHtml(host, '<p></p><m><i></i></m><q></q>');
         const m = n.childNodeIds(host)[1];
-        const parsed = n.insertAdjacentHtml(m, POSITION, '<x></x>');
-        return [parsed[0], html(host)];
+        n.insertAdjacentHtml(m, POSITION, '<x></x>');
+        return html(host);
         ";
 
     #[rstest]
-    #[case::before_begin("beforebegin", r#"[1,"<p></p><x></x><m><i></i></m><q></q>"]"#)]
-    #[case::after_begin("afterbegin", r#"[0,"<p></p><m><x></x><i></i></m><q></q>"]"#)]
-    #[case::before_end("beforeend", r#"[1,"<p></p><m><i></i><x></x></m><q></q>"]"#)]
-    #[case::after_end("afterend", r#"[2,"<p></p><m><i></i></m><x></x><q></q>"]"#)]
+    #[case::before_begin("beforebegin", r#""<p></p><x></x><m><i></i></m><q></q>""#)]
+    #[case::after_begin("afterbegin", r#""<p></p><m><x></x><i></i></m><q></q>""#)]
+    #[case::before_end("beforeend", r#""<p></p><m><i></i><x></x></m><q></q>""#)]
+    #[case::after_end("afterend", r#""<p></p><m><i></i></m><x></x><q></q>""#)]
     fn insert_adjacent_html_places_the_nodes_at_the_position(
         #[case] position: &str,
         #[case] expected: &str,
@@ -749,6 +747,17 @@ mod tests {
         assert_eq!(lines.len(), 2, "{lines:?}");
         assert!(lines[0].contains("(p)"), "{lines:?}");
         assert!(lines[1].contains("(i)"), "{lines:?}");
+    }
+
+    #[rstest]
+    #[case::set_inner_html("n.setInnerHtml(host, '<i></i>')")]
+    #[case::insert_adjacent_html("n.insertAdjacentHtml(host, 'beforeend', '<i></i>')")]
+    fn an_html_write_returns_undefined(#[case] call: &str) {
+        let (engine, _host) = engine();
+
+        let got: bool = engine.eval(&format!("{call} === undefined")).unwrap();
+
+        assert!(got);
     }
 
     #[test]

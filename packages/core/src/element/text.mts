@@ -1,33 +1,20 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// The text handle, and the members of character data and of text nodes.
+// The members of character data and of text nodes.
 
 import {
-  linkedNode,
   replaceData,
   setCharacterData,
   splitText,
   substringData,
-  textContent,
   wholeText,
 } from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./arguments.mts";
-import {
-  entered,
-  hold,
-  isDestroyed,
-  prototypeOf,
-  registerNode,
-  NO_EVENTS,
-  withState,
-  CHARACTER_DATA_RULE,
-  TEXT_RULE,
-  receiverNode,
-} from "./lifecycle.mts";
+import { isDestroyed, CHARACTER_DATA_RULE, TEXT_RULE, receiverNode } from "./lifecycle.mts";
 import { readData, writeData } from "./nodeTree.mts";
-import type { NodeId } from "../types.mts";
 import type { HandleNode } from "./handleNode.mts";
+import type { HandleBuilders } from "./lifecycle.mts";
 import type { CharacterData, Node, TextMembers } from "./nodeTypes.mts";
 import type { Text } from "./types.mts";
 
@@ -86,9 +73,10 @@ export function characterDataMembers(): Omit<CharacterData, keyof Node> {
 
 /**
  * Builds the members only a text node has.
+ * @param builders - the lookup that builds the handle of the new node
  * @returns the members
  */
-export function textMembers(): TextMembers {
+export function textMembers(builders: HandleBuilders): TextMembers {
   return {
     get wholeText() {
       const node = receiverNode<Text>(this, TEXT_RULE);
@@ -99,10 +87,8 @@ export function textMembers(): TextMembers {
       requireArguments(arguments, 1, "splitText");
       if (isDestroyed(node)) throw new TypeError("the text node was freed. create a new one");
       const tailId = splitText(node.__node_id, offset);
-      const tail = createIncaText(tailId, textContent(tailId));
+      const tail = builders.node(tailId) as Text;
       node.text = readData(node);
-      if (linkedNode(tailId, "parent") === null) hold(tail);
-      else entered(tail);
       return tail;
     },
   };
@@ -116,18 +102,4 @@ export function textMembers(): TextMembers {
 export function setText(node: Text, text: string): void {
   setCharacterData(node.__node_id, text);
   node.text = text;
-}
-
-/**
- * Builds the handle of a text node.
- * @param id - the native node's id
- * @param text - the data the node holds
- * @returns the new, parentless handle
- */
-export function createIncaText(id: NodeId, text: string): Text {
-  const handle = Object.create(prototypeOf("text")) as Text;
-  withState(handle, id, "text", NO_EVENTS);
-  handle.text = text;
-  registerNode(handle);
-  return handle;
 }

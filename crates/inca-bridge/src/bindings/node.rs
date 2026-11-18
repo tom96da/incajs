@@ -458,7 +458,7 @@ mod tests {
             .eval(
                 r"
                 const n = __inca_native__;
-                n.isConnected(n.cloneNode(n.documentNodeId(), true)[1][0]);
+                n.isConnected(n.childNodeIds(n.cloneNode(n.documentNodeId(), true))[0]);
                 ",
             )
             .unwrap();

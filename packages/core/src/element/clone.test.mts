@@ -3,14 +3,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { adoptFragment } from "../../tests/adopt.mts";
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectSentinel } from "../../tests/gc.mts";
-import {
-  createCommentNode,
-  createElementNode,
-  createIncaFragment,
-  createTextNode,
-} from "./handle.mts";
+import { createCommentNode, createElementNode, createTextNode } from "./handle.mts";
 import { isHeld, nodeOf } from "./lifecycle.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
 import type { HandleNode } from "./handleNode.mts";
@@ -25,7 +21,7 @@ beforeEach(() => {
 });
 
 const div = () => createElementNode("div");
-const fragment = (): DocumentFragment => createIncaFragment(host.create("#fragment"));
+const fragment = (): DocumentFragment => adoptFragment(host.create("#fragment"));
 /** The children of `node` as the host lists them. */
 const kids = (node: Node): Node[] => Array.from(node.childNodes);
 /** The ids of the children of `node`, after checking that the host lists the same. */
@@ -41,6 +37,16 @@ const family = (count: number) => {
   for (const child of children) parent.appendChild(child);
   return { parent, children };
 };
+
+/** Replaces `nodeHandle` of the installed host by a spy that calls it. */
+function countNodeHandle() {
+  const real = globalThis.__inca_native__;
+  const spy = vi.fn<(id: number) => ReturnType<typeof real.nodeHandle>>((id) =>
+    real.nodeHandle(id),
+  );
+  vi.stubGlobal("__inca_native__", { ...real, nodeHandle: spy });
+  return spy;
+}
 
 describe("cloneNode", () => {
   /** An element holding a text node and an element that holds a comment. */
@@ -66,26 +72,10 @@ describe("cloneNode", () => {
     expect(host.spies.cloneNode).toHaveBeenCalledWith(parent.__node_id, asked);
   });
 
-  it("builds an element with the tag the host returns", () => {
+  it("builds an element", () => {
     const copy = createElementNode("span").cloneNode();
 
     expect(copy).toMatchObject({ kind: "element", tagName: "SPAN" });
-  });
-
-  it("builds an element with the name parts of a five-part entry", () => {
-    const original = createElementNode("div");
-    host.spies.cloneNode.mockImplementationOnce(() => [
-      [host.create("div"), "Y", "urn:x", "x", "X:Y"],
-    ]);
-
-    const copy = original.cloneNode() as Element;
-
-    expect([copy.tagName, copy.localName, copy.namespaceURI, copy.prefix]).toEqual([
-      "X:Y",
-      "Y",
-      "urn:x",
-      "x",
-    ]);
   });
 
   it("builds a comment as a comment", () => {
@@ -123,6 +113,26 @@ describe("cloneNode", () => {
 
   it("holds the copy", () => {
     expect(isHeld(div().cloneNode())).toBe(true);
+  });
+
+  it("builds one handle for a deep clone", () => {
+    const { parent } = tree();
+    const nodeHandle = countNodeHandle();
+
+    parent.cloneNode(true);
+
+    expect(nodeHandle).toHaveBeenCalledTimes(1);
+  });
+
+  it("builds the handle of a descendant of the copy when it is read", () => {
+    const { parent } = tree();
+    const copy = parent.cloneNode(true);
+    const nodeHandle = countNodeHandle();
+
+    const inner = kids(copy)[0]!;
+
+    expect(nodeHandle).toHaveBeenCalledWith(inner.__node_id);
+    expect(inner.parentNode).toBe(copy);
   });
 
   it("copies no child in a shallow clone", () => {

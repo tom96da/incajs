@@ -4,7 +4,7 @@
 // Defines each member of a node once, on the prototype of the interface that has it.
 
 import { eventTargetMembers } from "../eventTarget.mts";
-import { attributeMembers, nameMembers } from "./attributes.mts";
+import { attributeMembers } from "./attributes.mts";
 import { classMembers } from "./classList.mts";
 import { datasetMembers } from "./dataset.mts";
 import { documentMembers } from "./documentMembers.mts";
@@ -102,15 +102,14 @@ export function installInterfaces(builders: HandleBuilders): void {
   defineMembers(all.CharacterData, nonDocumentTypeChildNodeMembers(builders));
   defineInsertionMembers(all.CharacterData, childNodeMutationMembers(builders));
 
-  defineMembers(all.Text, textMembers());
+  defineMembers(all.Text, textMembers(builders));
   defineKind(all.Text, "text");
 
   defineKind(all.Comment, "comment");
 
   defineMembers(all.Element, attributeMembers());
-  defineMembers(all.Element, nameMembers());
   defineMembers(all.Element, classMembers());
-  defineMembers(all.Element, htmlMembers(builders));
+  defineMembers(all.Element, htmlMembers());
   defineMembers(all.Element, layoutMembers());
   defineMembers(all.Element, scrollMembers());
   defineMembers(all.Element, selectorMembers(builders));

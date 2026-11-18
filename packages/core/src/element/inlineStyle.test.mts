@@ -3,11 +3,12 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { adoptElement } from "../../tests/adopt.mts";
 import { nativeStub } from "../../tests/setup.mts";
-import { HTML_NAMESPACE } from "../ffi/index.mts";
-import { createIncaElement } from "./handle.mts";
-import type { ElementEntry } from "../ffi/index.mts";
 import type { CSSStyleDeclaration } from "./types.mts";
+
+/** The id the next copy gets. */
+let nextCopy = 2;
 
 /** The first block `styleOf` gives. */
 const block = { cssText: "keep" } as CSSStyleDeclaration;
@@ -20,14 +21,12 @@ function setup() {
       .mockReturnValueOnce(block),
     setAttribute: vi.fn<(nodeId: number, key: string, value: unknown) => void>(),
     removeAttribute: vi.fn<(nodeId: number, key: string) => void>(),
-    cloneNode: vi.fn<(nodeId: number, deep: boolean) => ElementEntry[]>(() => [
-      [2, "div", HTML_NAMESPACE, null, "DIV"],
-    ]),
+    cloneNode: vi.fn<(nodeId: number, deep: boolean) => number>(() => nextCopy++),
     holdNode: vi.fn<(nodeId: number) => void>(),
   };
   vi.stubGlobal("__inca_native__", nativeStub(host as never));
   block.cssText = "keep";
-  return { host, el: createIncaElement(1, "div") };
+  return { host, el: adoptElement(1, "div") };
 }
 
 describe("style", () => {
@@ -83,9 +82,10 @@ describe("style", () => {
   it("asks the host for the block of the clone's node", () => {
     const { host, el } = setup();
 
-    void el.cloneNode().style;
+    const clone = el.cloneNode();
+    void clone.style;
 
-    expect(host.styleOf).toHaveBeenLastCalledWith(2);
+    expect(host.styleOf).toHaveBeenLastCalledWith(clone.__node_id);
   });
 
   it("writes an assigned string to cssText", () => {

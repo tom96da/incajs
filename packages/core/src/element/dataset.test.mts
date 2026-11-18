@@ -3,8 +3,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { adoptElement } from "../../tests/adopt.mts";
 import { nativeStub } from "../../tests/setup.mts";
-import { createIncaElement } from "./handle.mts";
 import type { DOMStringMap } from "./types.mts";
 
 /** Stands for the prototype the host gives the target. */
@@ -35,7 +35,7 @@ function setup(initial: Record<string, string> = {}) {
     datasetTarget: vi.fn<() => object>(() => new FakeDOMStringMap()),
   };
   vi.stubGlobal("__inca_native__", nativeStub(host as never));
-  const el = createIncaElement(1, "div");
+  const el = adoptElement(1, "div");
   const dataset: DOMStringMap = el.dataset;
   return { host, el, dataset, store };
 }

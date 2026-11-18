@@ -8,11 +8,11 @@ import type { Ref } from "@vue/runtime-core";
 import { document } from "../src/document.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "../src/element/collections.mts";
 import { rectOf } from "../src/element/geometry.mts";
-import { createIncaElement } from "../src/element/handle.mts";
 import { createEventTarget } from "../src/eventTarget.mts";
 import { createNode, rootNodeId } from "../src/ffi/index.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import { vModelText, withDirectives } from "../src/vue/runtime.mts";
+import { adoptElement } from "./adopt.mts";
 import { nativeStub } from "./setup.mts";
 import type { NodeMutationMembers } from "../src/element/nodeMutation.mts";
 import type { NodeRelationMembers } from "../src/element/nodeRelations.mts";
@@ -141,7 +141,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       replaceChild(): number {
         throw new Error("not used here");
       },
-      cloneNode(): [NodeId, string, null][] {
+      cloneNode(): NodeId {
         throw new Error("not used here");
       },
       rootOf(id: NodeId): NodeId {
@@ -272,9 +272,9 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       templateContent: () => null,
       innerHtml: () => "",
       outerHtml: () => "",
-      setInnerHtml: () => [0, []],
-      setOuterHtml: () => null,
-      insertAdjacentHtml: () => [0, []],
+      setInnerHtml: () => undefined,
+      setOuterHtml: () => false,
+      insertAdjacentHtml: () => undefined,
       holdNode(): void {},
       releaseNode(): void {},
       focusNode(): void {},
@@ -577,7 +577,7 @@ describe("v-model on an input", () => {
     inputValues.clear();
     focused = null;
     hostCallbacks.clear();
-    mountRoot = createIncaElement(rootNodeId());
+    mountRoot = adoptElement(rootNodeId());
   });
 
   /** Mounts an `input` bound to `model` with `modifiers`, and returns its node id and handle. */

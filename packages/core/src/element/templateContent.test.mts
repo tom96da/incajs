@@ -3,7 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { nativeStub } from "../../tests/setup.mts";
+import { declareNode, nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import { createElementNode } from "./handle.mts";
 import { markFreed } from "./lifecycle.mts";
@@ -17,7 +17,10 @@ const host = {
   createNode: vi.fn<(tag: string) => number>((tag) => {
     const id = nextId;
     nextId += tag === "template" ? 2 : 1;
-    if (tag === "template") templates.add(id);
+    if (tag === "template") {
+      templates.add(id);
+      declareNode(id + 1, { kind: "fragment" });
+    }
     return id;
   }),
   templateContent: vi.fn<(nodeId: number) => number | null>((id) =>

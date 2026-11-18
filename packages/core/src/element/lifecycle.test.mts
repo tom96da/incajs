@@ -1,14 +1,22 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { nativeStub } from "../../tests/setup.mts";
-import { document } from "../document.mts";
-import { HTML_NAMESPACE } from "../ffi/index.mts";
-import { createElementNode, createIncaElement, rootElement } from "./handle.mts";
+import { adoptElement } from "../../tests/adopt.mts";
+import { declareNode, nativeStub, standInNodeHandle } from "../../tests/setup.mts";
+import { adoptHandle, createElementNode, handleOf } from "./handle.mts";
 import {
+  CHARACTER_DATA_RULE,
+  DOCUMENT_RULE,
+  ELEMENT_RULE,
+  HTML_ELEMENT_RULE,
+  HTML_OR_SVG_RULE,
+  PARENT_NODE_RULE,
+  TEXT_RULE,
   entered,
+  receiverOf,
+  stateOf,
   isDestroyed,
   isRemoved,
   markFreed,
@@ -17,9 +25,11 @@ import {
   registerNode,
   elementOf,
 } from "./lifecycle.mts";
-import type { ElementEntry, InterfacePrototypes, NodeEntry, Parsed } from "../ffi/index.mts";
+import type { Declared } from "../../tests/setup.mts";
+import type { InterfacePrototypes } from "../ffi/index.mts";
+import type { Receiver } from "./lifecycle.mts";
 import type { Node } from "./nodeTypes.mts";
-import type { HTMLTemplateElement } from "./types.mts";
+import type { Element, HTMLTemplateElement } from "./types.mts";
 
 /** A stand-in handle with the given node id and kind. */
 function standIn(id: number, kind: "element" | "text" = "element"): Node {
@@ -105,99 +115,51 @@ describe("a template", () => {
   });
 });
 
-describe("the name members of a freed element", () => {
-  it("keep their values", () => {
-    vi.stubGlobal("__inca_native__", nativeStub({ releaseNode: () => {} } as never));
-    const el = createIncaElement(1, ["Y", "urn:x", "x", "X:Y"]);
-
-    markFreed([el.__node_id]);
-
-    expect([el.tagName, el.localName, el.namespaceURI, el.prefix]).toEqual([
-      "X:Y",
-      "Y",
-      "urn:x",
-      "x",
-    ]);
-  });
-});
-
-describe("the prototype of a handle", () => {
+describe("the record of a handle built from the host", () => {
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
-  const MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML";
-  const host = {
-    createNode: vi.fn<(tag: string) => number>(() => 40),
-    createElement: vi.fn<() => [number, string]>(() => [41, "div"]),
-    createElementNS: vi.fn<() => ElementEntry>(),
-    setAttribute: vi.fn<() => void>(),
-    setCharacterData: vi.fn<() => void>(),
-    setStyle: vi.fn<() => void>(),
-    holdNode: vi.fn<() => void>(),
-    rootNodeId: vi.fn<() => number>(() => 2),
-    templateContent: vi.fn<() => number>(() => 43),
-    childNodeIds: vi.fn<() => number[]>(() => []),
-    setInnerHtml: vi.fn<() => Parsed>(),
-    cloneNode: vi.fn<() => NodeEntry[] | ElementEntry[]>(),
-  };
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.stubGlobal("__inca_native__", nativeStub(host as never));
-  });
-
-  /** Makes an element of the namespace with `createElementNS`. */
-  const made = (namespace: string | null) => () => {
-    host.createElementNS.mockReturnValueOnce([44, "x", namespace, null, "x"]);
-    return document.createElementNS(namespace, "x");
-  };
-
-  /** Parses `entry` into a child of a new `div` and gives the handle of the child. */
-  const parsed = (entry: Parsed[1][number]) => () => {
-    host.setInnerHtml.mockReturnValueOnce([0, [entry]]);
-    createElementNode("div").innerHTML = "x";
-    return nodeOf(entry[0])!;
-  };
-
-  /** Copies a node of the host that answers `entries`, and gives the copy. */
-  const copied = (entries: NodeEntry[] | ElementEntry[]) => () => {
-    host.cloneNode.mockReturnValueOnce(entries);
-    return createElementNode("div").cloneNode();
-  };
-
-  it.each([
-    ["createElement", () => document.createElement("div"), "HTMLElement"],
-    ["createElementNS with the HTML namespace", made(HTML_NAMESPACE), "HTMLElement"],
-    ["createElementNS with the SVG namespace", made(SVG_NAMESPACE), "ForeignElement"],
-    ["createElementNS with the MathML namespace", made(MATHML_NAMESPACE), "ForeignElement"],
-    ["createElementNS with no namespace", made(null), "Element"],
-    ["createElementNS with another namespace", made("urn:x"), "Element"],
-    ["createTextNode", () => document.createTextNode("x"), "Text"],
-    ["createComment", () => document.createComment("x"), "Comment"],
-    ["createDocumentFragment", () => document.createDocumentFragment(), "DocumentFragment"],
-    ["document", () => document, "HTMLDocument"],
-    ["a copy of document", copied([[45, "#document", null]]), "HTMLDocument"],
-    ["the mount container", () => rootElement(), "HTMLElement"],
-    ["a parsed element", parsed([46, "b", HTML_NAMESPACE, 40, null]), "HTMLElement"],
-    ["a parsed svg element", parsed([46, "b", SVG_NAMESPACE, 40, null]), "ForeignElement"],
-    ["a parsed text node", parsed([47, "#text", null, 40, "t"]), "Text"],
-    ["a parsed comment", parsed([48, "#comment", null, 40, "c"]), "Comment"],
-    ["a cloned element", copied([[49, "div", HTML_NAMESPACE, null, "div"]]), "HTMLElement"],
-    ["a cloned text node", copied([[50, "#text", "t"]]), "Text"],
-    ["a cloned comment", copied([[51, "#comment", null]]), "Comment"],
+  it.each<[string, Declared, string, Receiver]>([
+    ["an HTML element", { kind: "element", name: "div" }, "element", HTML_ELEMENT_RULE],
     [
-      "the content of a template",
-      () => (createElementNode("template") as HTMLTemplateElement).content,
-      "DocumentFragment",
+      "an SVG element",
+      { kind: "element", name: ["g", SVG_NAMESPACE, null, "g"] },
+      "element",
+      HTML_OR_SVG_RULE,
     ],
-  ] as const)("is the prototype of %s", (_path, make, name) => {
-    expect(Object.getPrototypeOf(make())).toBe(nativeStub().interfacePrototypes()[name]);
+    [
+      "an element of no namespace",
+      { kind: "element", name: ["a", null, null, "a"] },
+      "element",
+      ELEMENT_RULE,
+    ],
+    ["a text node", { kind: "text" }, "text", TEXT_RULE],
+    ["a comment", { kind: "comment" }, "comment", CHARACTER_DATA_RULE],
+    ["a fragment", { kind: "fragment" }, "fragment", PARENT_NODE_RULE],
+    ["a document", { kind: "document" }, "document", DOCUMENT_RULE],
+  ])("takes the kind and the rule of %s from its prototype", (_name, declared, kind, rule) => {
+    declareNode(70, declared);
+
+    const handle = adoptHandle(70);
+
+    expect([stateOf(handle)!.kind, receiverOf(handle, rule)]).toEqual([kind, stateOf(handle)]);
   });
 
-  it("stays on the stored prototype when a script overwrites the globals", () => {
-    const element = Object.getPrototypeOf(createElementNode("div"));
-    vi.stubGlobal("Element", class {});
-    vi.stubGlobal("HTMLElement", class {});
+  it.each<[string, Declared, Receiver]>([
+    [
+      "an SVG element",
+      { kind: "element", name: ["g", SVG_NAMESPACE, null, "g"] },
+      HTML_ELEMENT_RULE,
+    ],
+    [
+      "an element of no namespace",
+      { kind: "element", name: ["a", null, null, "a"] },
+      HTML_OR_SVG_RULE,
+    ],
+    ["an HTML element", { kind: "element", name: "div" }, TEXT_RULE],
+  ])("refuses %s for a rule of another namespace or kind", (_name, declared, rule) => {
+    declareNode(70, declared);
 
-    expect(Object.getPrototypeOf(createElementNode("div"))).toBe(element);
+    expect(() => receiverOf(adoptHandle(70), rule)).toThrow(TypeError);
   });
 
   it("asks the host for the prototypes once", async () => {
@@ -213,6 +175,74 @@ describe("the prototype of a handle", () => {
 
     expect(interfacePrototypes).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("a handle built on demand", () => {
+  const PARENT = 197;
+  const CHILD = 198;
+  const holdNode = vi.fn<(nodeId: number) => void>();
+
+  /** The ways to reach the handle of the node `CHILD` from the handle of `PARENT`. */
+  const PATHS: [string, (parent: Element) => unknown][] = [
+    ["handleOf", () => handleOf(CHILD)],
+    ["firstChild", (parent) => parent.firstChild],
+    ["querySelector", (parent) => parent.querySelector("p")],
+    ["closest", (parent) => parent.closest("p")],
+  ];
+
+  /** Installs a host that reports `CHILD` as parented or not, and returns the handle of `PARENT`. */
+  function installHost(parented: boolean): Element {
+    holdNode.mockClear();
+    vi.stubGlobal(
+      "__inca_native__",
+      nativeStub({
+        holdNode,
+        nodeHandle: (id: number) => standInNodeHandle(id, parented),
+        linkedNode: () => CHILD,
+        querySelector: () => CHILD,
+        closest: () => CHILD,
+      } as never),
+    );
+    declareNode(CHILD, { kind: "element", name: "div" });
+    const parent = adoptElement(PARENT, "div");
+    entered(parent);
+    return parent;
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "WeakRef",
+      class {
+        deref(): undefined {
+          return undefined;
+        }
+      },
+    );
+  });
+
+  afterEach(() => {
+    markFreed([PARENT, CHILD]);
+  });
+
+  it.each(PATHS)("is strong when reached by %s and its node has a parent", (_name, reach) => {
+    const parent = installHost(true);
+
+    reach(parent);
+
+    expect(nodeOf(CHILD)).toBeDefined();
+  });
+
+  it.each(PATHS)(
+    "is weak and held when reached by %s and its node has no parent",
+    (_name, reach) => {
+      const parent = installHost(false);
+
+      reach(parent);
+
+      expect(nodeOf(CHILD)).toBeUndefined();
+      expect(holdNode).toHaveBeenCalledWith(CHILD);
+    },
+  );
 });
 
 describe("the release of a template", () => {
@@ -266,9 +296,8 @@ describe("the release of a removed node", () => {
     );
     vi.resetModules();
     vi.stubGlobal("__inca_native__", nativeStub({ releaseNode: () => {} } as never));
-    const { createIncaElement } = await import("./handle.mts");
     const { leftHeld, releaseWhenCollected } = await import("./lifecycle.mts");
-    const el = createIncaElement(50, "div");
+    const el = adoptElement(50, "div");
     releaseWhenCollected(el);
 
     leftHeld(el, [el.__node_id]);

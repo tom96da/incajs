@@ -3,19 +3,12 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { adoptComment, adoptElement } from "../../tests/adopt.mts";
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage } from "../../tests/gc.mts";
-import { nativeStub } from "../../tests/setup.mts";
+import { declareNode, nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
-import { HTML_NAMESPACE } from "../ffi/index.mts";
-import {
-  createCommentNode,
-  createElementNode,
-  createIncaComment,
-  createIncaElement,
-  handleOf,
-  rootElement,
-} from "./handle.mts";
+import { createCommentNode, createElementNode, handleOf, rootElement } from "./handle.mts";
 import { elementOf, markFreed, markRemoved, nodeOf } from "./lifecycle.mts";
 import type { ElementName } from "../ffi/index.mts";
 import type { Element, HTMLElement, HTMLInputElement } from "./types.mts";
@@ -172,126 +165,102 @@ describe("event target methods", () => {
   });
 });
 
-describe("createIncaElement tagName", () => {
-  it.each([
-    ["button", "BUTTON"],
-    ["straße", "STRAßE"],
-  ])("reads the tag %s in ASCII upper case", (tag, expected) => {
-    installHost();
-
-    expect(createIncaElement(1, tag).tagName).toBe(expected);
-  });
-
-  it("reads DIV for the mount container", () => {
-    vi.stubGlobal("__inca_native__", nativeStub({ rootNodeId: () => 90 } as never));
-
-    expect(rootElement().tagName).toBe("DIV");
-  });
-
+describe("handleOf", () => {
   it("finds the mount container by its id before any handle of it exists", () => {
     vi.stubGlobal("__inca_native__", nativeStub({ rootNodeId: () => 91 } as never));
 
     expect(handleOf(91)).toBe(rootElement());
   });
 
-  it("reads the tag of a removed element", () => {
-    installHost();
-    const el = createIncaElement(1, "input");
-    markRemoved([el.__node_id]);
+  it("builds a handle for an id with none, and gives the same object on a second call", () => {
+    const first = handleOf(81);
 
-    expect(el.tagName).toBe("INPUT");
+    expect([first?.__node_id, handleOf(81)]).toEqual([81, first]);
+    markFreed([81]);
   });
 
-  it("reads the tag of a freed element", () => {
-    installHost();
-    const el = createIncaElement(1, "input");
-    markFreed([el.__node_id]);
+  it("gives undefined for an id the host does not have", () => {
+    vi.stubGlobal("__inca_native__", nativeStub({ nodeHandle: () => null } as never));
 
-    expect(el.tagName).toBe("INPUT");
+    expect(handleOf(82)).toBeUndefined();
+  });
+
+  it("builds the root container with one call of nodeHandle, as its own handle", () => {
+    const real = nativeStub();
+    const nodeHandle = vi.fn<(nodeId: number) => ReturnType<typeof real.nodeHandle>>((n) =>
+      real.nodeHandle(n),
+    );
+    vi.stubGlobal("__inca_native__", nativeStub({ rootNodeId: () => 92, nodeHandle } as never));
+
+    expect([handleOf(92), nodeHandle.mock.calls.length]).toEqual([rootElement(), 1]);
+    markFreed([92]);
+  });
+
+  it.each([
+    ["input", "value"],
+    ["template", "content"],
+  ] as const)("builds an HTML %s with its %s through one call of the host", (tag, member) => {
+    const real = nativeStub();
+    const nodeHandle = vi.fn<(nodeId: number) => ReturnType<typeof real.nodeHandle>>((id) =>
+      real.nodeHandle(id),
+    );
+    vi.stubGlobal(
+      "__inca_native__",
+      nativeStub({ nodeHandle, templateContent: () => 84, inputValue: () => "" } as never),
+    );
+    declareNode(83, { kind: "element", name: tag });
+    declareNode(84, { kind: "fragment" });
+
+    const handle = handleOf(83) as Element;
+
+    expect([member in handle, nodeHandle.mock.calls.filter(([id]) => id === 83).length]).toEqual([
+      true,
+      1,
+    ]);
+    markFreed([83, 84]);
   });
 });
 
-describe("createIncaElement name", () => {
+describe("element name", () => {
   const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
   const svg = (localName: string): ElementName => [localName, SVG_NAMESPACE, null, localName];
-  const membersOf = (el: Element) => [el.tagName, el.localName, el.namespaceURI, el.prefix];
-
-  it("reads the members of a name tuple", () => {
-    installHost();
-
-    const el = createIncaElement(1, ["Y", "urn:x", "x", "X:Y"]);
-
-    expect(membersOf(el)).toEqual(["X:Y", "Y", "urn:x", "x"]);
-  });
-
-  it("reads a tag string as an HTML name", () => {
-    installHost();
-
-    const el = createIncaElement(1, "button");
-
-    expect(membersOf(el)).toEqual(["BUTTON", "button", HTML_NAMESPACE, null]);
-  });
-
-  it("gives a tag string and the equal tuple the same members", () => {
-    installHost();
-
-    const tuple = createIncaElement(1, ["svg", HTML_NAMESPACE, null, "SVG"]);
-
-    expect(membersOf(tuple)).toEqual(membersOf(createIncaElement(2, "svg")));
-  });
-
-  it("makes an HTML div without a name", () => {
-    installHost();
-
-    expect(membersOf(createIncaElement(1))).toEqual(["DIV", "div", HTML_NAMESPACE, null]);
-  });
-
-  it.each(["tagName", "localName", "namespaceURI", "prefix"] as const)(
-    "throws in strict code on an assignment to %s",
-    (member) => {
-      installHost();
-      const el = createIncaElement(1, "div");
-
-      expect(() => ((el as unknown as Record<string, unknown>)[member] = "x")).toThrow(TypeError);
-    },
-  );
 
   it("gives an SVG input no value", () => {
     installHost();
 
-    expect("value" in createIncaElement(1, svg("input"))).toBe(false);
+    expect("value" in adoptElement(1, svg("input"))).toBe(false);
   });
 
   it("gives an SVG template no content", () => {
     installHost();
 
-    expect("content" in createIncaElement(1, svg("template"))).toBe(false);
+    expect("content" in adoptElement(1, svg("template"))).toBe(false);
   });
 
   it("reads -1 as the default tab index of an SVG button", () => {
     installHost();
 
-    expect((createIncaElement(1, svg("button")) as HTMLElement).tabIndex).toBe(-1);
+    expect((adoptElement(1, svg("button")) as HTMLElement).tabIndex).toBe(-1);
   });
 });
 
-describe("createIncaElement tabIndex", () => {
+describe("element tabIndex", () => {
   it("reads the stored tabindex attribute", () => {
     const host = installHost("4");
-    expect(createIncaElement(1, "div").tabIndex).toBe(4);
+    expect(adoptElement(1, "div").tabIndex).toBe(4);
     expect(host.getAttribute).toHaveBeenCalledWith(1, "tabindex");
   });
 
   it("writes the value as a 32-bit integer", () => {
     const host = installHost();
-    const el = createIncaElement(1, "div");
+    const el = adoptElement(1, "div");
 
     el.tabIndex = -1.5;
     expect(host.setAttribute).toHaveBeenLastCalledWith(1, "tabindex", -1);
   });
 });
 
-describe("createIncaElement value", () => {
+describe("element value", () => {
   /** Installs a fake host whose `inputValue` gives `text`, and returns it. */
   function installInput(text = "") {
     const host = {
@@ -304,7 +273,7 @@ describe("createIncaElement value", () => {
 
   it("reads the text of an input", () => {
     const host = installInput("abc");
-    expect((createIncaElement(1, "input") as HTMLInputElement).value).toBe("abc");
+    expect((adoptElement(1, "input") as HTMLInputElement).value).toBe("abc");
     expect(host.inputValue).toHaveBeenCalledWith(1);
   });
 
@@ -313,13 +282,13 @@ describe("createIncaElement value", () => {
     [null, ""],
   ])("assigns the value of an input as a string (%o)", (value, expected) => {
     const host = installInput();
-    (createIncaElement(1, "input") as HTMLInputElement).value = value as string;
+    (adoptElement(1, "input") as HTMLInputElement).value = value as string;
     expect(host.setInputValue).toHaveBeenCalledWith(1, expected);
   });
 
   it("reads an empty text after the node is removed", () => {
     const host = installInput("abc");
-    const el = createIncaElement(1, "input");
+    const el = adoptElement(1, "input");
     markFreed([el.__node_id]);
     expect((el as HTMLInputElement).value).toBe("");
     expect(host.inputValue).not.toHaveBeenCalled();
@@ -327,7 +296,7 @@ describe("createIncaElement value", () => {
 
   it("ignores an assignment after the node is removed", () => {
     const host = installInput();
-    const el = createIncaElement(1, "input");
+    const el = adoptElement(1, "input");
     markFreed([el.__node_id]);
     (el as HTMLInputElement).value = "a";
     expect(host.setInputValue).not.toHaveBeenCalled();
@@ -335,15 +304,15 @@ describe("createIncaElement value", () => {
 
   it("gives other elements no value property", () => {
     installInput();
-    expect("value" in createIncaElement(1, "div")).toBe(false);
+    expect("value" in adoptElement(1, "div")).toBe(false);
   });
 });
 
-describe("createIncaElement after the node is removed", () => {
+describe("element after the node is removed", () => {
   /** A handle that left the tree, over a host whose attribute reads give `stored`. */
   function removed(stored: string | number | boolean | null = null, tag: "div" | "input" = "div") {
     const host = installHost(stored);
-    const el = createIncaElement(1, tag);
+    const el = adoptElement(1, tag);
     markRemoved([el.__node_id]);
     return { host, el };
   }
@@ -365,7 +334,7 @@ describe("createIncaElement after the node is removed", () => {
       setInputValue: vi.fn<(nodeId: number, value: string) => void>(),
     };
     vi.stubGlobal("__inca_native__", nativeStub(host as never));
-    const el = createIncaElement(1, "input");
+    const el = adoptElement(1, "input");
     markRemoved([el.__node_id]);
 
     expect((el as HTMLInputElement).value).toBe("abc");
@@ -385,7 +354,7 @@ describe("createIncaElement after the node is removed", () => {
   it("writes the text of an input through the host", () => {
     const host = { setInputValue: vi.fn<(nodeId: number, value: string) => void>() };
     vi.stubGlobal("__inca_native__", nativeStub(host as never));
-    const el = createIncaElement(1, "input");
+    const el = adoptElement(1, "input");
     markRemoved([el.__node_id]);
 
     (el as HTMLInputElement).value = "t";
@@ -425,7 +394,7 @@ describe("createIncaElement after the node is removed", () => {
 
   it("reads zero box members without asking the host", () => {
     const host = installHost(null, { 1: [10, 20, 30, 40, 2, 0, 0, 0, 0] });
-    const el = createIncaElement(1, "div");
+    const el = adoptElement(1, "div");
     markRemoved([el.__node_id]);
 
     expect([el.offsetWidth, el.clientHeight, el.offsetLeft]).toEqual([0, 0, 0]);
@@ -434,7 +403,7 @@ describe("createIncaElement after the node is removed", () => {
 
   it("reads zero scroll members without asking the host", () => {
     const host = installHost(null, {}, [5, 6, 7, 8]);
-    const el = createIncaElement(1, "div");
+    const el = adoptElement(1, "div");
     markRemoved([el.__node_id]);
 
     expect([el.scrollTop, el.scrollWidth]).toEqual([0, 0]);
@@ -443,7 +412,7 @@ describe("createIncaElement after the node is removed", () => {
 
   it("ignores scrollTo", () => {
     const host = installHost(null, {}, [5, 6, 7, 8]);
-    const el = createIncaElement(1, "div");
+    const el = adoptElement(1, "div");
     markRemoved([el.__node_id]);
 
     el.scrollTo(1, 2);
@@ -452,41 +421,41 @@ describe("createIncaElement after the node is removed", () => {
   });
 });
 
-describe("createIncaElement registration", () => {
+describe("element registration", () => {
   it("registers an element handle", () => {
     installHost();
-    const el = createIncaElement(7, "div");
+    const el = adoptElement(7, "div");
 
     expect(elementOf(7)).toBe(el);
   });
 
   it("leaves a comment out of elementOf", () => {
     installHost();
-    createIncaComment(8);
+    adoptComment(8);
 
     expect(elementOf(8)).toBeUndefined();
   });
 
   it("registers a comment as a node", () => {
     installHost();
-    const comment = createIncaComment(8);
+    const comment = adoptComment(8);
 
     expect(nodeOf(8)).toBe(comment);
   });
 });
 
-describe("createIncaElement dataset", () => {
+describe("element dataset", () => {
   it("gives an element a dataset", () => {
     installHost();
 
-    expect("dataset" in createIncaElement(8, "div")).toBe(true);
+    expect("dataset" in adoptElement(8, "div")).toBe(true);
   });
 });
 
-describe("createIncaElement destroyed attributes", () => {
+describe("element destroyed attributes", () => {
   it("ignores setAttribute with an invalid name on a destroyed element", () => {
     const host = installHost();
-    const el = createIncaElement(8, "div");
+    const el = adoptElement(8, "div");
     markFreed([el.__node_id]);
 
     expect(() => el.setAttribute("a b", "v")).not.toThrow();
@@ -494,13 +463,13 @@ describe("createIncaElement destroyed attributes", () => {
   });
 });
 
-describe("createIncaElement focus and scrollIntoView", () => {
+describe("element focus and scrollIntoView", () => {
   it.each([
     ["no options", undefined, false],
     ["a truthy preventScroll", { preventScroll: 1 }, true],
   ])("passes preventScroll as a boolean for %s", (_name, options, expected) => {
     const host = installHost();
-    const el = createIncaElement(3, "div");
+    const el = adoptElement(3, "div");
 
     el.focus(options as { preventScroll?: boolean } | undefined);
     expect(host.focusNode).toHaveBeenLastCalledWith(3, expected);
@@ -508,7 +477,7 @@ describe("createIncaElement focus and scrollIntoView", () => {
 
   it("forwards the normalised alignments of scrollIntoView to the host", () => {
     const host = installHost();
-    const el = createIncaElement(3, "div");
+    const el = adoptElement(3, "div");
 
     el.scrollIntoView({ block: "center", inline: "end", behavior: "smooth" });
     expect(host.scrollIntoViewNode).toHaveBeenLastCalledWith(3, "center", "end");
@@ -516,7 +485,7 @@ describe("createIncaElement focus and scrollIntoView", () => {
 
   it("ignores focus and scrollIntoView once freed", () => {
     const host = installHost();
-    const el = createIncaElement(3, "div");
+    const el = adoptElement(3, "div");
     markFreed([el.__node_id]);
 
     el.focus({ preventScroll: true });
@@ -526,10 +495,10 @@ describe("createIncaElement focus and scrollIntoView", () => {
   });
 });
 
-describe("createIncaElement blur and click", () => {
+describe("element blur and click", () => {
   it("forwards blur of a freed element to the host", () => {
     const host = installHost();
-    const el = createIncaElement(4, "button");
+    const el = adoptElement(4, "button");
     markFreed([el.__node_id]);
 
     el.blur();
@@ -538,7 +507,7 @@ describe("createIncaElement blur and click", () => {
 
   it("ignores click once freed", () => {
     const host = installHost();
-    const el = createIncaElement(4, "button");
+    const el = adoptElement(4, "button");
     markFreed([el.__node_id]);
 
     el.click();
@@ -546,12 +515,12 @@ describe("createIncaElement blur and click", () => {
   });
 });
 
-describe("createIncaElement pointer capture", () => {
+describe("element pointer capture", () => {
   const methods = ["setPointerCapture", "releasePointerCapture", "hasPointerCapture"] as const;
 
   it.each(methods)("forwards %s to native with the node id and the pointer id", (method) => {
     const host = installHost();
-    const el = createIncaElement(4, "div");
+    const el = adoptElement(4, "div");
 
     el[method](1);
 
@@ -562,13 +531,13 @@ describe("createIncaElement pointer capture", () => {
     const host = installHost();
     host.hasPointerCapture.mockReturnValue(true);
 
-    expect(createIncaElement(4, "div").hasPointerCapture(1)).toBe(true);
+    expect(adoptElement(4, "div").hasPointerCapture(1)).toBe(true);
   });
 
   describe("after the element is freed", () => {
     function freed() {
       const host = installHost();
-      const el = createIncaElement(4, "div");
+      const el = adoptElement(4, "div");
       markFreed([el.__node_id]);
       return { host, el };
     }
@@ -602,14 +571,14 @@ describe("createIncaElement pointer capture", () => {
   });
 });
 
-describe("createIncaElement id", () => {
+describe("element id", () => {
   it.each([
     [null, ""],
     ["a", "a"],
     [5, "5"],
   ] as const)("reads a stored %j as %j", (stored, expected) => {
     const host = installHost(stored);
-    expect(createIncaElement(1, "div").id).toBe(expected);
+    expect(adoptElement(1, "div").id).toBe(expected);
     expect(host.getAttribute).toHaveBeenCalledWith(1, "id");
   });
 
@@ -618,14 +587,14 @@ describe("createIncaElement id", () => {
     [null, "null"],
   ] as const)("writes %j as the attribute %j", (value, expected) => {
     const host = installHost();
-    const el = createIncaElement(1, "div");
+    const el = adoptElement(1, "div");
     el.id = value as unknown as string;
     expect(host.setAttribute).toHaveBeenLastCalledWith(1, "id", expected);
   });
 
   it("reads an empty string after the node is freed", () => {
     const host = installHost("a");
-    const el = createIncaElement(1, "div");
+    const el = adoptElement(1, "div");
     markFreed([el.__node_id]);
     expect(el.id).toBe("");
     expect(host.getAttribute).not.toHaveBeenCalled();
@@ -633,7 +602,7 @@ describe("createIncaElement id", () => {
 
   it("ignores an id write after the node is freed", () => {
     const host = installHost();
-    const el = createIncaElement(1, "div");
+    const el = adoptElement(1, "div");
     markFreed([el.__node_id]);
     el.id = "b";
     expect(host.setAttribute).not.toHaveBeenCalled();
@@ -641,7 +610,7 @@ describe("createIncaElement id", () => {
 
   it("keeps the node id in a read-only, non-enumerable __node_id", () => {
     installHost();
-    const el = createIncaElement(9, "div");
+    const el = adoptElement(9, "div");
     expect(el.__node_id).toBe(9);
     expect(Object.keys(el)).not.toContain("__node_id");
     expect(() => {
@@ -673,7 +642,7 @@ describe("rootElement wheel listeners", () => {
   });
 
   it("are not passive on an inner element", () => {
-    expect(registeredPassive(createIncaElement(72, "div"))).toBe(false);
+    expect(registeredPassive(adoptElement(72, "div"))).toBe(false);
   });
 });
 

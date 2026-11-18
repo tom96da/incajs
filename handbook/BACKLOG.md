@@ -1676,6 +1676,8 @@ A fixed entry is deleted and its ID is never reused.
   detached subtree while a node in it has a live handle, and let core hold the top of such a
   subtree until the kept handle is collected. Vue does not meet it: it holds every node it creates
   and the mount container.
+  A removed node whose top has no handle is in the same state as one whose top handle was
+  collected.
 
 - **B-322 The nodes of a copied document report `document` as their owner**
   `Units: core,node,bridge · Size: M · Impact: Low`
@@ -1875,11 +1877,10 @@ A fixed entry is deleted and its ID is never reused.
 - **B-350 `register_uncloneable` and the TypeScript logic that fills its map are to be removed**
   `Units: jsenv,core · Size: M · Impact: Low`
 
-  A handle of a node, the document or the window is an ordinary JS object, so `inca-jsenv` cannot
-  tell it from plain data. `register_uncloneable` lets the layer above hand it a `WeakMap` of such
-  objects, and `structuredClone` refuses an object that is a key of one. The function and the
-  TypeScript logic that fills the map are a bridge. Fix: when handles become Rust classes, the walk
-  refuses them as an unknown class, and the function and the logic that fills the map are removed.
+  The handle of a node is an instance of a host class, so `structuredClone` refuses it as an unknown
+  class, and the map still holds it. The handles of the window and of the event targets are ordinary
+  JS objects, so `register_uncloneable` needs the map for them. Fix: make `window` and the targets
+  host class instances, then remove the function and the logic that fills the map.
 
 - **B-351 The quota error of `getRandomValues()` is a `DOMException`, where Chromium throws a `QuotaExceededError` class**
   `Units: jsenv · Size: S · Impact: Low`

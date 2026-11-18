@@ -3,10 +3,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { nativeStub } from "../tests/setup.mts";
+import { adoptComment, adoptFragment, adoptText } from "../tests/adopt.mts";
 import "./targets.mts";
+import { nativeStub } from "../tests/setup.mts";
 import { document } from "./document.mts";
-import { adoptTextNode, createIncaComment, createIncaFragment } from "./element/handle.mts";
 import { elementOf, registerNode, markFreed } from "./element/lifecycle.mts";
 import { windowTargetId } from "./ffi/index.mts";
 import { window } from "./window.mts";
@@ -37,6 +37,7 @@ describe("__inca_targets__", () => {
     markFreed([5]);
     markFreed([ROOT]);
     markFreed([8]);
+    markFreed([6]);
   });
 
   it("resolves the id of the document node to the document", () => {
@@ -52,9 +53,9 @@ describe("__inca_targets__", () => {
   });
 
   it.each([
-    ["a text node", () => adoptTextNode(8, "t")],
-    ["a comment", () => createIncaComment(8)],
-    ["a fragment", () => createIncaFragment(8)],
+    ["a text node", () => adoptText(8, "t")],
+    ["a comment", () => adoptComment(8)],
+    ["a fragment", () => adoptFragment(8)],
   ])("resolves %s to its handle", (_kind, make) => {
     const handle = make();
 
@@ -72,7 +73,15 @@ describe("__inca_targets__", () => {
     expect(found).toBe(handle);
   });
 
-  it("returns null for unknown nodes", () => {
+  it("builds the handle of a node that has none", () => {
+    const [built] = globalThis.__inca_targets__([6]) as [Element];
+
+    expect([built.__node_id, elementOf(6)]).toEqual([6, built]);
+  });
+
+  it("returns null for a node the host no longer has", () => {
+    vi.stubGlobal("__inca_native__", { ...globalThis.__inca_native__, nodeHandle: () => null });
+
     const [missing] = globalThis.__inca_targets__([6]);
 
     expect(missing).toBeNull();

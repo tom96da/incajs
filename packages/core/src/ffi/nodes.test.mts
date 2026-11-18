@@ -4,7 +4,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { nativeStub } from "../../tests/setup.mts";
-import { HTML_NAMESPACE } from "./native.mts";
 import {
   appendChild,
   checkSelector,
@@ -20,8 +19,7 @@ import {
   isConnected,
   isEqualNode,
   linkedNode,
-  nameOf,
-  nameOfRow,
+  nodeHandle,
   outerHtml,
   queryNode,
   queryNodes,
@@ -40,14 +38,7 @@ import {
   textContent,
   wholeText,
 } from "./nodes.mts";
-import type {
-  ElementEntry,
-  InsertionPlace,
-  InterfacePrototypes,
-  NodeEntry,
-  NodeLink,
-  Parsed,
-} from "./native.mts";
+import type { ElementEntry, InsertionPlace, InterfacePrototypes, NodeLink } from "./native.mts";
 
 const native = {
   interfacePrototypes: vi.fn<() => InterfacePrototypes>(),
@@ -70,7 +61,8 @@ const native = {
       nodes: (number | string)[],
     ) => [number[], number[]] | null
   >(() => null),
-  cloneNode: vi.fn<(nodeId: number, deep: boolean) => NodeEntry[]>(() => []),
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => number>(() => 0),
+  nodeHandle: vi.fn<(nodeId: number) => ReturnType<typeof nodeHandle>>(() => null),
   rootOf: vi.fn<(nodeId: number) => number>((nodeId) => nodeId),
   compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => 0),
   isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => false),
@@ -78,12 +70,9 @@ const native = {
   templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
   innerHtml: vi.fn<(nodeId: number) => string>(() => ""),
   outerHtml: vi.fn<(nodeId: number) => string>(() => ""),
-  setInnerHtml: vi.fn<(nodeId: number, html: string) => Parsed>(() => [0, []]),
-  setOuterHtml: vi.fn<(nodeId: number, html: string) => Parsed | null>(() => null),
-  insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => Parsed>(() => [
-    0,
-    [],
-  ]),
+  setInnerHtml: vi.fn<(nodeId: number, html: string) => void>(),
+  setOuterHtml: vi.fn<(nodeId: number, html: string) => boolean>(() => false),
+  insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => void>(),
   checkSelector: vi.fn<(selector: string) => void>(),
   querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
   querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
@@ -143,9 +132,16 @@ describe("wrapper functions forward to __inca_native__", () => {
     expect(native.createElementNS).toHaveBeenCalledWith("urn:x", "x:Y");
   });
 
+  it("nodeHandle", () => {
+    const result: ReturnType<typeof nodeHandle> = [{}, true, "input"];
+    native.nodeHandle.mockReturnValueOnce(result);
+    expect(nodeHandle(7)).toBe(result);
+    expect(native.nodeHandle).toHaveBeenCalledWith(7);
+  });
+
   it("cloneNode", () => {
-    native.cloneNode.mockReturnValueOnce([[7, "#text", "x"]]);
-    expect(cloneNode(1, true)).toEqual([[7, "#text", "x"]]);
+    native.cloneNode.mockReturnValueOnce(7);
+    expect(cloneNode(1, true)).toBe(7);
     expect(native.cloneNode).toHaveBeenCalledWith(1, true);
   });
 
@@ -159,20 +155,18 @@ describe("wrapper functions forward to __inca_native__", () => {
   });
 
   it("setInnerHtml", () => {
-    native.setInnerHtml.mockReturnValueOnce([0, [[2, "b", HTML_NAMESPACE, 9, null]]]);
-    expect(setInnerHtml(1, "<b>")).toEqual([0, [[2, "b", HTML_NAMESPACE, 9, null]]]);
+    expect(setInnerHtml(1, "<b>")).toBeUndefined();
     expect(native.setInnerHtml).toHaveBeenCalledWith(1, "<b>");
   });
 
   it("setOuterHtml", () => {
-    native.setOuterHtml.mockReturnValueOnce(null);
-    expect(setOuterHtml(1, "<b>")).toBeNull();
+    native.setOuterHtml.mockReturnValueOnce(true);
+    expect(setOuterHtml(1, "<b>")).toBe(true);
     expect(native.setOuterHtml).toHaveBeenCalledWith(1, "<b>");
   });
 
   it("insertAdjacentHtml", () => {
-    native.insertAdjacentHtml.mockReturnValueOnce([3, []]);
-    expect(insertAdjacentHtml(1, "afterend", "<b>")).toEqual([3, []]);
+    expect(insertAdjacentHtml(1, "afterend", "<b>")).toBeUndefined();
     expect(native.insertAdjacentHtml).toHaveBeenCalledWith(1, "afterend", "<b>");
   });
 
@@ -295,30 +289,5 @@ describe("wrapper functions forward to __inca_native__", () => {
       [1, 2],
     ]);
     expect(native.removeNode).toHaveBeenCalledWith(1);
-  });
-});
-
-describe("nameOf", () => {
-  it("gives the tag of a two-part entry", () => {
-    expect(nameOf([7, "div"])).toBe("div");
-  });
-
-  it("gives the four name parts of a five-part entry", () => {
-    expect(nameOf([7, "Y", "urn:x", "x", "X:Y"])).toEqual(["Y", "urn:x", "x", "X:Y"]);
-  });
-});
-
-describe("nameOfRow", () => {
-  it("gives the tag of an HTML row", () => {
-    expect(nameOfRow([7, "div", HTML_NAMESPACE, 0, null])).toBe("div");
-  });
-
-  it("gives the tuple of a foreign row without upper case or prefix", () => {
-    expect(nameOfRow([7, "foreignObject", "urn:x", 0, null])).toEqual([
-      "foreignObject",
-      "urn:x",
-      null,
-      "foreignObject",
-    ]);
   });
 });

@@ -15,6 +15,10 @@ Rust keeps ids and plain data. A handle kept past the call that produced it outl
 belongs to, so every function and object lives on the JS side. [Registering](#registering) is the
 implementation example: listener functions stay in JS and Rust holds only the callback ids.
 
+A node handle is an instance of the host class `NodeHandle`. It holds the node id. The host defines
+the members that need only the id on the interface prototypes; core defines the members that take or
+return a handle.
+
 Values the host keeps for itself, such as the promise of a pending module and the event store, sit
 in a per-realm vault, a null-prototype object. A read-only global function returns the vault only
 while Rust calls it through a native gate, so no script reaches it. Rust holds only the keys.
@@ -34,6 +38,7 @@ its lifetime marker. These types derive it:
 | `IncaEvent` | `inca-bridge` | An event object | Through `Held`, traced |
 | `Held` | `inca-bridge` | The JS values of an event | `target`, `path`, `related` and `detail`, traced |
 | `State` | `inca-bridge` | The plain fields of an event | None |
+| `NodeHandle` | `inca-bridge` | The id, kind and space of a node handle | None |
 | `TokenList` | `inca-bridge` | A `classList` object | None |
 | `TokenListIterator` | `inca-bridge` | A `classList` iterator | None |
 | `IncaStyle` | `inca-bridge` | A `CSSStyleDeclaration` object | None |
@@ -168,7 +173,7 @@ be passed, and `undefined` there counts as `null`.
 | `rootNodeId` | `() => number` | Return the id of the host-allocated root container, the node a mounting app attaches itself under. |
 | `documentNodeId` | `() => number` | The id of the document node. |
 | `interfacePrototypes` | `() => Record<string, object>` | A new object with no prototype at each call, holding the prototypes of the node interfaces under the keys `EventTarget`, `Node`, `CharacterData`, `Text`, `Comment`, `Element`, `HTMLElement`, `ForeignElement`, `DocumentFragment`, `Document` and `HTMLDocument`. `ForeignElement` is the prototype of an SVG or MathML element; it inherits `Element.prototype`, and no global names it. Core builds its handles on these objects and reads no global. |
-| `registerUncloneable` | `(map: WeakMap) => void` | Registers the `WeakMap` of the node handles. `structuredClone` throws a `DataCloneError` for an object whose prototype is neither `Object.prototype` nor `null` when the map holds it, and clones any other object as usual. A map stays registered for the life of the realm. |
+| `registerUncloneable` | `(map: WeakMap) => void` | Registers the `WeakMap` of the handles of nodes, of `window` and of the event targets. `structuredClone` throws a `DataCloneError` for an object whose prototype is neither `Object.prototype` nor `null` when the map holds it, and clones any other object as usual. A map stays registered for the life of the realm. |
 | `windowTargetId` | `() => string` | The target that names the window in `addEventListener`, `removeEventListener`, `dispatchEvent` and `__inca_targets__`. |
 | `signalId` | `(value: unknown) => number \| null` | The id of an `AbortSignal` object, `null` for any other value. It takes one value and throws nothing for it. |
 | `createNode` | `(tag: string) => number` | Allocate a node, return its id. The tags `#text`, `#comment`, `#document` and `#fragment` make a node of that kind and any other tag makes an element of the HTML namespace. Throws for a tag that starts with `#` and is none of the four, and once every id has been used. Freed at the next frame unless inserted or held, see [Retained virtual tree](#retained-virtual-tree). |
@@ -181,14 +186,15 @@ be passed, and `undefined` there counts as `null`.
 | `replaceChild` | `(parentId: number, nodeId: number, childId: number) => number` | Put a node where `childId` was and detach `childId`. Returns the position of the first inserted node. |
 | `insertNodes` | `(nodeId: number, place: "append" \| "prepend" \| "before" \| "after" \| "replaceWith" \| "replaceChildren", nodes: (number \| string)[]) => [number[], number[]] \| null` | Insert `nodes` at `place` of `nodeId`: `append` and `prepend` into `nodeId`, `before`, `after` and `replaceWith` next to it, `replaceChildren` as its only children. A number names a node, and a string makes a new `#text` node with the string as its data. `before`, `after` and `replaceWith` take the parent of `nodeId` and return `null` without a change for a node without one. Returns the ids of the new text nodes in order and the ids of the nodes it removed from the tree (a node that moves is not listed). A removed node is freed at the next frame unless re-inserted or held, see [Retained virtual tree](#retained-virtual-tree). Throws the errors of the list below the table, and a failure changes nothing and creates no node. |
 | `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next", elementOnly?: boolean) => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. With `elementOnly` true, the nearest element in that direction: the parent when it is an element, the first or last element child, the nearest element sibling. Throws a `TypeError` for an unknown node or another `link`. |
+| `nodeHandle` | `(nodeId: number) => [object, boolean, "input" \| "template" \| null] \| null` | Make the handle of a node: a new instance of the host class `NodeHandle`, on the stored prototype of the interface of the node (`HTMLElement` for an HTML element, the foreign element prototype for an SVG or MathML element, `Element` for any other element, `Text`, `Comment`, `DocumentFragment`, `HTMLDocument`), with the own property `__node_id`, which is read-only, hidden and fixed. Returns the handle, whether the node has a parent and `"input"` or `"template"` for an HTML `input` or `template`, `null` otherwise. Makes no entry and no hold. `null` for an unknown node. |
 | `childNodeIds` | `(nodeId: number, elementOnly?: boolean) => number[]` | The ids of the children of `nodeId` in order. With `elementOnly` true, only the element children. Throws a `TypeError` for an unknown node. |
 | `isConnected` | `(nodeId: number) => boolean` | Whether the root of `nodeId` is a document: the document or a copy of it. Throws a `TypeError` for an unknown node. |
-| `cloneNode` | `(nodeId: number, deep: boolean) => (number \| string \| null)[][]` | Copy a node with its name, attributes, style props and data, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns one entry per copy in pre-order, the copy of `nodeId` first. An element copy is `[id, localName, namespace \| null, prefix \| null, tagName]`. A `#text`, `#comment`, `#fragment` or `#document` copy is `[id, tag, data]`, with `data` the text of a `#text` copy and `null` otherwise. The copy of a template is followed by the copy of its content (`"#fragment"`), the content descendants when `deep` is truthy, and then the other children. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An HTML `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
+| `cloneNode` | `(nodeId: number, deep: boolean) => number` | Copy a node with its name, attributes, style props and data, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns the id of the copy of `nodeId`. The copy of a template has a copy of its content, with the content descendants when `deep` is truthy. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An HTML `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
 | `innerHtml` | `(nodeId: number) => string` | The markup of the children of `nodeId`. A template reads its content. Throws a `TypeError` for an unknown node. |
 | `outerHtml` | `(nodeId: number) => string` | The markup of `nodeId` with its children. Throws a `TypeError` for an unknown node. |
-| `setInnerHtml` | `(nodeId: number, html: string) => Parsed` | Parse `html` in the context of `nodeId` and replace all its children, or the children of its content for a template. The old children stay in the host as orphans with their listeners. Returns the parsed nodes at position 0. Throws a `TypeError` for an unknown node. |
-| `setOuterHtml` | `(nodeId: number, html: string) => Parsed \| null` | Parse `html` in the context of the parent of `nodeId` and replace the node with the result. `null` and no change for a node without a parent. Throws `NoModificationAllowedError` for a node whose parent is a document and a `TypeError` for an unknown node. |
-| `insertAdjacentHtml` | `(nodeId: number, position: string, html: string) => Parsed` | Parse `html` and insert the nodes at `position` (`beforebegin`, `afterbegin`, `beforeend` or `afterend`, matched ignoring ASCII case) of `nodeId`. The context is the container the nodes enter, and `body` for an `html` element. Throws `SyntaxError` for another position, `NoModificationAllowedError` for `beforebegin` or `afterend` on a node without a parent or a node whose parent is a document, and a `TypeError` for an unknown node. |
+| `setInnerHtml` | `(nodeId: number, html: string) => undefined` | Parse `html` in the context of `nodeId` and replace all its children, or the children of its content for a template. The old children stay in the host as orphans with their listeners. Throws a `TypeError` for an unknown node. |
+| `setOuterHtml` | `(nodeId: number, html: string) => boolean` | Parse `html` in the context of the parent of `nodeId` and replace the node with the result. Returns `true` when it replaced the node, and `false` with no change for a node without a parent. Throws `NoModificationAllowedError` for a node whose parent is a document and a `TypeError` for an unknown node. |
+| `insertAdjacentHtml` | `(nodeId: number, position: string, html: string) => undefined` | Parse `html` and insert the nodes at `position` (`beforebegin`, `afterbegin`, `beforeend` or `afterend`, matched ignoring ASCII case) of `nodeId`. The context is the container the nodes enter, and `body` for an `html` element. Throws `SyntaxError` for another position, `NoModificationAllowedError` for `beforebegin` or `afterend` on a node without a parent or a node whose parent is a document, and a `TypeError` for an unknown node. |
 | `compareNodePosition` | `(nodeId: number, otherId: number) => number` | The position of `otherId` relative to `nodeId` as a bit mask: `1` disconnected, `2` preceding, `4` following, `8` contains, `16` contained by, `32` implementation specific. Equal ids give `0`. Nodes of different trees give `1 \| 32` plus `2` or `4`. Throws a `TypeError` for an unknown node. |
 | `rootOf` | `(nodeId: number) => number` | The top of the parent chain of `nodeId`. A connected node gives the document. Throws a `TypeError` for an unknown node. |
 | `isEqualNode` | `(nodeId: number, otherId: number) => boolean` | Whether the two subtrees have the same namespace, prefix, local name, data, attributes, style props and children. The typed text of an `input` is not compared. Throws a `TypeError` for an unknown node. |
@@ -292,16 +298,11 @@ a failure changes nothing and creates no node.
 - `NotFoundError`: for `after`, and for `replaceWith` with the target in the group, a following
   sibling that the call moves out of the parent.
 
-### Parsed
+### Parsed markup
 
-`setInnerHtml`, `setOuterHtml` and `insertAdjacentHtml` return `[position, entries]`. `position` is
-the index among the children of the container where the first inserted node sits, or would sit for
-an empty result. Each entry is `[id, tag, namespace, parentId, data]` in pre-order, the content
-fragments of templates included. `namespace` is the namespace of the node and `null` for a `#text`,
-`#comment` or `#fragment` node. A parsed element has no prefix. An entry whose `parentId` is no id
-of the list is a root. `data` is the text of a `#text` or `#comment` node and `null` for any other
-node. A `style` attribute applies as style props and its warnings print through `warn`. An `input`
-takes the typed text of its `value` attribute.
+`setInnerHtml`, `setOuterHtml` and `insertAdjacentHtml` return no node. A `style` attribute applies
+as style props and its warnings print through `warn`. An `input` takes the typed text of its `value`
+attribute.
 
 ### Token lists
 
@@ -380,10 +381,10 @@ keeps nothing.
 - When the global is not a function, these fields carry the ids.
 - A throw, or a result that is not an array, is reported and the walk runs no listener.
   `dispatchEvent` throws it.
-- Core gives the handle of every node that has one, the `document` export
-  for the document node, the `window` export for the value `windowTargetId()` returns, the
+- Core gives the handle of every node the host has, building it when none is live, the `document`
+  export for the document node, the `window` export for the value `windowTargetId()` returns, the
   element of the host root, which it creates on first use and `mount()`
-  reuses, and `null` for an id with no handle.
+  reuses, and `null` for an id the host no longer has.
 
 #### Tagged targets
 

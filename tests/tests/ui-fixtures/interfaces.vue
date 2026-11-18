@@ -16,6 +16,9 @@ function probe() {
   fragment.appendChild(document.createElement("div")).appendChild(document.createElement("p"));
   const fragmentQueryOne = fragment.querySelector("p")?.nodeName ?? null;
   const fragmentQueryAll = fragment.querySelectorAll("div, p").length;
+  const list = document.createElement("ul");
+  for (let i = 0; i < 1000; i++) list.appendChild(document.createElement("li"));
+  const copy = list.cloneNode(true);
   const comment = box.value.lastChild;
   box.value.innerHTML = "<svg></svg>";
   const svg = box.value.firstChild;
@@ -31,6 +34,7 @@ function probe() {
     fragmentIsDocumentFragment: document.createDocumentFragment() instanceof DocumentFragment,
     windowIsEventTarget: window instanceof EventTarget,
     fragmentFindsDescendants: [fragmentQueryOne, fragmentQueryAll],
+    deepCloneChildTag: [copy.children.length, copy.children[999].tagName],
     textParentIsTheRef: paragraph.value.firstChild.parentElement === paragraph.value,
   });
 }

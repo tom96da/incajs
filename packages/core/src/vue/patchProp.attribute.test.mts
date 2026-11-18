@@ -4,6 +4,7 @@
 import { createRenderer, h, nextTick, ref } from "@vue/runtime-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { adoptElement } from "../../tests/adopt.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import * as rendererCore from "../rendererCore.mts";
 import { createNodeOps } from "./nodeOps.mts";
@@ -161,13 +162,13 @@ describe("patchProp on the value key", () => {
     ["a", "a"],
     [undefined, ""],
   ])("assigns value on an input (%o)", (value, expected) => {
-    patchProp(core.createIncaElement(1, "input"), "value", undefined, value);
+    patchProp(adoptElement(1, "input"), "value", undefined, value);
     expect(setInputValue).toHaveBeenCalledWith(1, expected);
     expect(setAttribute).not.toHaveBeenCalled();
   });
 
   it("sends value on other elements to setAttribute", () => {
-    patchProp(core.createIncaElement(1, "div"), "value", undefined, "a");
+    patchProp(adoptElement(1, "div"), "value", undefined, "a");
     expect(setAttribute).toHaveBeenCalledWith(1, "value", "a");
     expect(setInputValue).not.toHaveBeenCalled();
   });
@@ -228,7 +229,7 @@ describe("patchProp on a handler property key", () => {
     native = installNative();
   });
 
-  const element = () => core.createIncaElement(1, "div");
+  const element = () => adoptElement(1, "div");
 
   it.each([
     ["a function", () => {}],

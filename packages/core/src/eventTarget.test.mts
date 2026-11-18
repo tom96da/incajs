@@ -3,12 +3,11 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { nativeStub } from "../tests/setup.mts";
+import { adoptComment, adoptFragment, adoptText } from "../tests/adopt.mts";
 import "./targets.mts";
+import { nativeStub } from "../tests/setup.mts";
 import { document } from "./document.mts";
-import { createIncaComment, createIncaFragment } from "./element/handle.mts";
 import { markFreed, markRemoved } from "./element/lifecycle.mts";
-import { createIncaText } from "./element/text.mts";
 import { createEventTarget } from "./eventTarget.mts";
 import { window } from "./window.mts";
 import type { HostCallback } from "./ffi/index.mts";
@@ -165,13 +164,13 @@ describe("dispatchEvent", () => {
 
 describe("the listener methods of the nodes", () => {
   const kinds: [string, () => EventTarget & { __node_id: number }][] = [
-    ["a text node", () => createIncaText(71, "x")],
-    ["a comment", () => createIncaComment(72)],
-    ["a fragment", () => createIncaFragment(73)],
+    ["a text node", () => adoptText(71, "x")],
+    ["a comment", () => adoptComment(72)],
+    ["a fragment", () => adoptFragment(73)],
   ];
 
   it("run a listener of a text node for a dispatch at it, with the node as this", () => {
-    const text = createIncaText(70, "x");
+    const text = adoptText(70, "x");
     const listener = vi.fn<(this: unknown) => void>();
     text.addEventListener("click", listener);
     const callback = native.addEventListener.mock.calls[0]![2];

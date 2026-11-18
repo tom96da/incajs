@@ -31,6 +31,7 @@ fn probe(cx: &mut TestAppContext) -> Value {
 #[case::a_fragment_finds_a_descendant_with_both_queries("fragmentFindsDescendants", json!(["P", 2]))]
 #[case::window_is_an_event_target("windowIsEventTarget", json!(true))]
 #[case::a_text_child_reads_its_ref_as_parent_element("textParentIsTheRef", json!(true))]
+#[case::a_deep_clone_reads_a_child_by_index("deepCloneChildTag", json!([1000, "LI"]))]
 fn the_nodes_are_instances_of_their_interfaces_on_the_real_host(
     cx: &mut TestAppContext,
     #[case] key: &str,

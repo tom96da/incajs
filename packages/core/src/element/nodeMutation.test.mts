@@ -3,10 +3,11 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { adoptElement, adoptFragment } from "../../tests/adopt.mts";
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
-import { HTML_NAMESPACE } from "../ffi/index.mts";
-import { createElementNode, createIncaElement, createIncaFragment } from "./handle.mts";
+import { declareNode } from "../../tests/setup.mts";
+import { createElementNode } from "./handle.mts";
 import { isHeld, isRemoved, markFreed, nodeOf } from "./lifecycle.mts";
 import { remove } from "./treeOps.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
@@ -21,7 +22,7 @@ beforeEach(() => {
 });
 
 const div = () => createElementNode("div");
-const fragment = (): DocumentFragment => createIncaFragment(host.create("#fragment"));
+const fragment = (): DocumentFragment => adoptFragment(host.create("#fragment"));
 /** The children of `node` as the host lists them. */
 const kids = (node: Node): Node[] => Array.from(node.childNodes);
 /** The ids of the children of `node`, after checking that the host lists the same. */
@@ -512,21 +513,20 @@ describe("a template", () => {
     expect(kids(owner.content)).toEqual([]);
   });
 
-  it("makes no content for the copy of an SVG template and keeps the ids in step", () => {
+  it("makes no content for the copy of an SVG template", () => {
     const svgNamespace = "http://www.w3.org/2000/svg";
-    const owner = createIncaElement(host.create("div"), [
+    const svgTemplate: [string, string, null, string] = [
       "template",
       svgNamespace,
       null,
       "template",
-    ]);
+    ];
+    const owner = adoptElement(host.create("div"), svgTemplate);
     owner.appendChild(div());
     const [copyId, childId] = [host.create("div"), host.create("div")];
+    declareNode(copyId, { kind: "element", name: svgTemplate });
     host.natives.appendChild!(copyId, childId);
-    host.spies.cloneNode.mockImplementationOnce(() => [
-      [copyId, "template", svgNamespace, null, "template"],
-      [childId, "div", HTML_NAMESPACE, null, "DIV"],
-    ]);
+    host.spies.cloneNode.mockImplementationOnce(() => copyId);
 
     const copy = owner.cloneNode(true);
 
@@ -551,7 +551,7 @@ describe("a template", () => {
     expect([copy.content.__node_id, kids(copy.content)]).toEqual([copy.__node_id + 1, []]);
   });
 
-  it("copies the content nodes and children of a deep clone from their own entries", () => {
+  it("copies the content nodes and the children of a deep clone into new nodes", () => {
     const owner = template();
     const inside = div();
     const own = div();
@@ -560,12 +560,12 @@ describe("a template", () => {
 
     const copy = owner.cloneNode(true) as HTMLTemplateElement;
 
-    const pairs = host.spies.cloneNode.mock.results[0]!.value as unknown[][];
     expect([
-      kids(copy.content)[0]!.__node_id,
-      kids(copy)[0]!.__node_id,
+      kids(copy.content).length,
+      kids(copy).length,
       kids(copy.content)[0] === inside,
-    ]).toEqual([pairs[2]![0], pairs[3]![0], false]);
+      kids(copy)[0] === own,
+    ]).toEqual([1, 1, false, false]);
   });
 });
 

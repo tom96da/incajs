@@ -3,15 +3,11 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { adoptFragment } from "../../tests/adopt.mts";
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
 import { document } from "../document.mts";
-import {
-  createCommentNode,
-  createElementNode,
-  createIncaFragment,
-  createTextNode,
-} from "./handle.mts";
+import { createCommentNode, createElementNode, createTextNode } from "./handle.mts";
 import { markFreed, nodeOf, prototypes } from "./lifecycle.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
 import type { Node } from "./nodeTypes.mts";
@@ -29,7 +25,7 @@ beforeEach(() => {
 });
 
 const div = () => createElementNode("div");
-const fragment = () => createIncaFragment(host.create("#fragment"));
+const fragment = () => adoptFragment(host.create("#fragment"));
 /** The reply of the native: the new text ids and the removed ids. */
 const reply = (texts: number[] = [], removed: number[] = []) =>
   insertNodes.mockReturnValue([texts, removed]);
@@ -112,9 +108,11 @@ describe("the call to the host", () => {
 
   it("gives a new text handle the id of the host and the string as data", () => {
     const id = host.create("#text");
+    const parent = div();
+    host.natives.appendChild!(parent.__node_id, id);
     reply([id]);
 
-    div().append("s");
+    parent.append("s");
 
     expect(nodeOf(id)).toMatchObject({ __node_id: id, text: "s" });
   });
@@ -141,8 +139,10 @@ describe("the node table", () => {
       "a new text handle",
       () => {
         const id = host.create("#text");
+        const parent = div();
+        host.natives.appendChild!(parent.__node_id, id);
         reply([id]);
-        div().append("s");
+        parent.append("s");
         return id;
       },
     ],
