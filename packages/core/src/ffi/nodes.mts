@@ -1,17 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { HTML_NAMESPACE, native } from "./native.mts";
+import { native } from "./native.mts";
 import type { CallbackId, NodeId, TagName } from "../types.mts";
 import type {
   ElementEntry,
-  ElementName,
   InsertionPlace,
   InterfacePrototypes,
-  NodeEntry,
+  NodeHandleResult,
   NodeLink,
-  Parsed,
-  ParsedEntry,
 } from "./native.mts";
 
 /**
@@ -76,22 +73,14 @@ export function createElementNS(namespace: string | null, qualifiedName: string)
 }
 
 /**
- * Reads the name a creating native returned.
- * @param entry - an entry of `createElement`, `createElementNS` or `cloneNode`
- * @returns the last four parts for a five-part entry, and the tag string for any other entry
+ * Makes the handle of a node: a new instance of the host class on the prototype of the node's
+ * interface, with the own property `__node_id`. The call records nothing in the host.
+ * @param nodeId - the node to build the handle of
+ * @returns the handle, whether the node has a parent, and `"input"` or `"template"` for an HTML
+ *   `input` or `template`, `null` for any other node; or `null` when `nodeId` names no node
  */
-export function nameOf(entry: [id: NodeId, tag: string] | NodeEntry | ElementEntry): ElementName {
-  return entry.length === 5 ? [entry[1], entry[2], entry[3], entry[4]] : entry[1];
-}
-
-/**
- * Reads the name of an element row of a parse result. A parsed element has no prefix, and a name
- * outside the HTML namespace keeps its case.
- * @param row - an element row
- * @returns the tag string for an HTML row, and the name tuple for any other namespace
- */
-export function nameOfRow(row: ParsedEntry): ElementName {
-  return row[2] === HTML_NAMESPACE ? row[1] : [row[1], row[2], null, row[1]];
+export function nodeHandle(nodeId: NodeId): NodeHandleResult | null {
+  return native().nodeHandle(nodeId);
 }
 
 /**
@@ -195,12 +184,10 @@ export function insertNodes(
  * original and the typed text of an `input`, and no listeners.
  * @param nodeId - the node to copy
  * @param deep - whether the descendants are copied too
- * @returns one entry per copy in pre-order, the copy of `nodeId` first: the id and the four name
- *   parts of an element, the id, the marker and the text of any other node (`null` unless it is a
- *   `#text` copy)
+ * @returns the id of the copy of `nodeId`
  * @throws {TypeError} when `nodeId` names no node
  */
-export function cloneNode(nodeId: NodeId, deep: boolean): (NodeEntry | ElementEntry)[] {
+export function cloneNode(nodeId: NodeId, deep: boolean): NodeId {
   return native().cloneNode(nodeId, deep);
 }
 
@@ -230,22 +217,21 @@ export function outerHtml(nodeId: NodeId): string {
  * frame unless held.
  * @param nodeId - the node whose children are replaced
  * @param html - the markup
- * @returns the parsed nodes, put at position 0
  * @throws {TypeError} when `nodeId` names no node
  */
-export function setInnerHtml(nodeId: NodeId, html: string): Parsed {
-  return native().setInnerHtml(nodeId, html);
+export function setInnerHtml(nodeId: NodeId, html: string): void {
+  native().setInnerHtml(nodeId, html);
 }
 
 /**
  * Parses `html` in the context of the parent of a node and replaces the node with the result.
  * @param nodeId - the node to replace
  * @param html - the markup
- * @returns the parsed nodes and their position, or `null` and no change for a node without a parent
+ * @returns `true` when the node was replaced, `false` and no change for a node without a parent
  * @throws {DOMException} `NoModificationAllowedError` for a node whose parent is the document
  * @throws {TypeError} when `nodeId` names no node
  */
-export function setOuterHtml(nodeId: NodeId, html: string): Parsed | null {
+export function setOuterHtml(nodeId: NodeId, html: string): boolean {
   return native().setOuterHtml(nodeId, html);
 }
 
@@ -254,13 +240,12 @@ export function setOuterHtml(nodeId: NodeId, html: string): Parsed | null {
  * @param nodeId - the node the position is relative to
  * @param position - `beforebegin`, `afterbegin`, `beforeend` or `afterend`, in any ASCII case
  * @param html - the markup
- * @returns the parsed nodes and their position among the children of their new parent
  * @throws {DOMException} `SyntaxError` for another position; `NoModificationAllowedError` for
  *   `beforebegin` or `afterend` on a node without a parent or a node whose parent is the document
  * @throws {TypeError} when `nodeId` names no node
  */
-export function insertAdjacentHtml(nodeId: NodeId, position: string, html: string): Parsed {
-  return native().insertAdjacentHtml(nodeId, position, html);
+export function insertAdjacentHtml(nodeId: NodeId, position: string, html: string): void {
+  native().insertAdjacentHtml(nodeId, position, html);
 }
 
 /**
@@ -435,7 +420,7 @@ export function replaceData(nodeId: NodeId, offset: number, count: number, data:
  * a parent. It has no parent otherwise, and the host frees it at the start of the next frame
  * unless it is inserted or held with {@link holdNode} by then.
  * @param nodeId - the text node
- * @param offset - where to cut, converted like in {@link substringData}
+ * @param offset - where to cut, converted to an unsigned 32-bit integer
  * @returns the id of the new node
  * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data
  * @throws {TypeError} when `nodeId` names no node

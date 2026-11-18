@@ -28,18 +28,18 @@ export type ElementTreeMembers = Omit<
 >;
 
 /**
- * Finds the element handle of a node id.
+ * Finds the element handle of a node id the host just listed.
  * @param builders - the lookup of a handle by node id
  * @param id - the native node's id
- * @returns the handle, or `undefined` when the node has none
+ * @returns the handle
  */
-function elementHandle(builders: HandleBuilders, id: number): Element | undefined {
-  return builders.node(id) as Element | undefined;
+function elementHandle(builders: HandleBuilders, id: number): Element {
+  return builders.node(id) as Element;
 }
 
 /**
  * Builds the ParentNode members of the tree, for the interfaces that hold children. Each read asks
- * the host tree again. A freed node has no links, and a node with no handle is skipped.
+ * the host tree again. A freed node has no links.
  * @param builders - the lookup of a handle by node id
  * @returns the members, as getters
  */
@@ -48,12 +48,12 @@ export function parentNodeMembers(builders: HandleBuilders): ElementTreeMembers 
     const node = receiverNode(self, PARENT_NODE_RULE);
     if (isDestroyed(node)) return null;
     const found = linkedNode(node.__node_id, link, true);
-    return found === null ? null : (elementHandle(builders, found) ?? null);
+    return found === null ? null : elementHandle(builders, found);
   };
   const liveChildren = (node: HandleNode): Element[] =>
     isDestroyed(node)
       ? []
-      : childNodeIds(node.__node_id, true).flatMap((child) => elementHandle(builders, child) ?? []);
+      : childNodeIds(node.__node_id, true).map((child) => elementHandle(builders, child));
   return {
     get children() {
       const state = receiverOf(this, PARENT_NODE_RULE);
@@ -84,7 +84,7 @@ export function nonDocumentTypeChildNodeMembers(
     const node = receiverNode(self, NON_DOCUMENT_CHILD_RULE);
     if (isDestroyed(node)) return null;
     const found = linkedNode(node.__node_id, link, true);
-    return found === null ? null : (elementHandle(builders, found) ?? null);
+    return found === null ? null : elementHandle(builders, found);
   };
   return {
     get previousElementSibling() {

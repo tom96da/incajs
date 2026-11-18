@@ -5,12 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
-import { HTML_NAMESPACE } from "../ffi/index.mts";
+import { declareNode } from "../../tests/setup.mts";
 import { createElementNode } from "./handle.mts";
 import { markFreed, nodeOf } from "./lifecycle.mts";
 import { insert } from "./treeOps.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
-import type { Parsed, ParsedEntry } from "../ffi/index.mts";
 import type { Node } from "./nodeTypes.mts";
 import type { Element, HTMLTemplateElement, Text } from "./types.mts";
 
@@ -19,13 +18,11 @@ let fake: FakeHost;
 /** The children of `node` as the host lists them. */
 const kids = (node: Node): Node[] => Array.from(node.childNodes);
 
-/** Puts the roots of `entries` into `container` at `at` and returns the parse result. */
-function parsed(container: number, at: number, entries: ParsedEntry[]): Parsed {
-  const ids = new Set(entries.map(([id]) => id));
-  const roots = entries.filter(([, , , parentId]) => !ids.has(parentId));
+/** Puts the parentless nodes of `ids` into `container` at `at`, as a parse does. */
+function parsed(container: number, at: number, ids: number[]): void {
+  const roots = ids.filter((id) => fake.nodes.get(id)!.parent === null);
   const before = fake.nodes.get(container)!.children[at] ?? null;
-  for (const [id] of roots) fake.natives.insertBefore!(container, id, before);
-  return [at, entries];
+  for (const id of roots) fake.natives.insertBefore!(container, id, before);
 }
 
 /** Takes the children of a container out of it, as a parse that replaces them does. */
@@ -41,9 +38,9 @@ const containerOf = (id: number): number => fake.nodes.get(id)!.content ?? id;
 const host = {
   innerHtml: vi.fn<(nodeId: number) => string>(() => "<i></i>"),
   outerHtml: vi.fn<(nodeId: number) => string>(() => "<p><i></i></p>"),
-  setInnerHtml: vi.fn<(nodeId: number, html: string) => Parsed>(),
-  setOuterHtml: vi.fn<(nodeId: number, html: string) => Parsed | null>(),
-  insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => Parsed>(),
+  setInnerHtml: vi.fn<(nodeId: number, html: string) => void>(),
+  setOuterHtml: vi.fn<(nodeId: number, html: string) => boolean>(),
+  insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => void>(),
 };
 
 beforeEach(() => {
@@ -51,20 +48,19 @@ beforeEach(() => {
   fake = installFakeHost(host as never);
   host.setInnerHtml.mockImplementation((id) => {
     clear(containerOf(id));
-    return [0, []];
   });
   host.setOuterHtml.mockImplementation((id) => {
     fake.natives.removeChild!(fake.nodes.get(id)!.parent!, id);
-    return [0, []];
+    return true;
   });
-  host.insertAdjacentHtml.mockImplementation(() => [0, []]);
+  host.insertAdjacentHtml.mockImplementation(() => undefined);
 });
 
-/** Makes the next `innerHTML` assignment parse into `entries`. */
-const willParseInner = (entries: ParsedEntry[]): void =>
+/** Makes the next `innerHTML` assignment parse into `ids`. */
+const willParseInner = (ids: number[]): void =>
   void host.setInnerHtml.mockImplementationOnce((id) => {
     clear(containerOf(id));
-    return parsed(containerOf(id), 0, entries);
+    parsed(containerOf(id), 0, ids);
   });
 
 const withChild = (): [Element, Element] => {
@@ -75,15 +71,12 @@ const withChild = (): [Element, Element] => {
 };
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 /** A parsed node the host made, below `parentId` when it names a node of the host. */
-const entry = (
-  tag: string,
-  parentId = 0,
-  data: string | null = null,
-  namespace: string | null = tag.startsWith("#") ? null : HTML_NAMESPACE,
-): ParsedEntry => {
+const entry = (tag: string, parentId = 0, namespace?: string): number => {
   const id = fake.create(tag);
+  if (namespace !== undefined)
+    declareNode(id, { kind: "element", name: [tag, namespace, null, tag] });
   if (parentId !== 0) fake.natives.appendChild!(parentId, id);
-  return [id, tag, namespace, parentId, data];
+  return id;
 };
 
 describe("conversion of an assigned markup", () => {
@@ -146,12 +139,12 @@ describe("insertAdjacentHTML", () => {
     child.insertAdjacentHTML(position, "<b>");
 
     const container = [parent, child][target]!;
-    expect(kids(container).map((node) => node.__node_id)).toContain(made[0]);
+    expect(kids(container).map((node) => node.__node_id)).toContain(made);
   });
 });
 
 describe("the tree after a replacement", () => {
-  it("reads the roots of innerHTML at the returned position", () => {
+  it("enters the roots of innerHTML in order", () => {
     const [parent] = withChild();
     const first = entry("b");
     const second = entry("i");
@@ -159,7 +152,7 @@ describe("the tree after a replacement", () => {
 
     parent.innerHTML = "<b></b><i></i>";
 
-    expect(kids(parent).map((node) => node.__node_id)).toEqual([first[0], second[0]]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual([first, second]);
   });
 
   it("takes the old children out of innerHTML", () => {
@@ -186,7 +179,7 @@ describe("the tree after a replacement", () => {
     expect(fake.spies.holdNode).toHaveBeenCalledWith(old.__node_id);
   });
 
-  it("replaces the element of outerHTML by its nodes at the returned position", () => {
+  it("replaces the element of outerHTML by its nodes", () => {
     const parent = createElementNode("div");
     const before = createElementNode("a");
     const target = createElementNode("b");
@@ -195,12 +188,13 @@ describe("the tree after a replacement", () => {
     const made = entry("i");
     host.setOuterHtml.mockImplementationOnce((id) => {
       fake.natives.removeChild!(parent.__node_id, id);
-      return parsed(parent.__node_id, 1, [made]);
+      parsed(parent.__node_id, 1, [made]);
+      return true;
     });
 
     target.outerHTML = "<i></i>";
 
-    expect(kids(parent).map((node) => node.__node_id)).toEqual([before.__node_id, made[0]]);
+    expect(kids(parent).map((node) => node.__node_id)).toEqual([before.__node_id, made]);
   });
 
   it("leaves the old element of outerHTML parentless", () => {
@@ -229,7 +223,7 @@ describe("the tree after a replacement", () => {
 
   it("changes nothing for an outerHTML the host declines", () => {
     const [parent, child] = withChild();
-    host.setOuterHtml.mockReturnValueOnce(null);
+    host.setOuterHtml.mockReturnValueOnce(false);
 
     child.outerHTML = "<i></i>";
 
@@ -239,12 +233,13 @@ describe("the tree after a replacement", () => {
   });
 });
 
-describe("adopt", () => {
-  it("reads the nested entries through the host links", () => {
+describe("the handles of the parsed nodes", () => {
+  it("reads the nested nodes through the host links", () => {
     const el = createElementNode("div");
     const outer = entry("p");
-    const inner = entry("b", outer[0]);
-    const text = entry("#text", inner[0], "t");
+    const inner = entry("b", outer);
+    const text = entry("#text", inner);
+    fake.natives.setCharacterData!(text, "t");
     willParseInner([outer, inner, text]);
 
     el.innerHTML = "<p><b>t</b></p>";
@@ -257,55 +252,18 @@ describe("adopt", () => {
   it("reaches the content of a parsed template", () => {
     const el = createElementNode("div");
     const template = entry("template");
-    const content: ParsedEntry = [
-      fake.nodes.get(template[0])!.content!,
-      "#fragment",
-      null,
-      template[0],
-      null,
-    ];
-    const child = entry("p", content[0]);
-    willParseInner([template, content, child]);
+    const child = entry("p", fake.nodes.get(template)!.content!);
+    willParseInner([template]);
 
     el.innerHTML = "<template><p></p></template>";
 
     const made = kids(el)[0] as HTMLTemplateElement;
-    expect([kids(made).length, kids(made.content)[0]?.__node_id]).toEqual([0, child[0]]);
-  });
-
-  it("names a parsed HTML element from its row", () => {
-    const el = createElementNode("div");
-    willParseInner([entry("b")]);
-
-    el.innerHTML = "<b></b>";
-
-    const made = kids(el)[0] as Element;
-    expect([made.tagName, made.localName, made.namespaceURI, made.prefix]).toEqual([
-      "B",
-      "b",
-      HTML_NAMESPACE,
-      null,
-    ]);
-  });
-
-  it("names a parsed foreign element from its row", () => {
-    const el = createElementNode("div");
-    willParseInner([entry("foreignObject", 0, null, SVG_NAMESPACE)]);
-
-    el.innerHTML = "<svg><foreignObject></foreignObject></svg>";
-
-    const made = kids(el)[0] as Element;
-    expect([made.tagName, made.localName, made.namespaceURI, made.prefix]).toEqual([
-      "foreignObject",
-      "foreignObject",
-      SVG_NAMESPACE,
-      null,
-    ]);
+    expect([kids(made).length, kids(made.content)[0]?.__node_id]).toEqual([0, child]);
   });
 
   it("makes a parsed foreign input without value", () => {
     const el = createElementNode("div");
-    willParseInner([entry("input", 0, null, SVG_NAMESPACE)]);
+    willParseInner([entry("input", 0, SVG_NAMESPACE)]);
 
     el.innerHTML = "<svg><input></svg>";
 
@@ -352,10 +310,11 @@ describe("a freed element", () => {
 
 describe("the handles after a markup member", () => {
   /** Makes the next `outerHTML` assignment replace the node by `entries` at `at` of `parent`. */
-  const willParseOuter = (parent: Element, entries: ParsedEntry[]): void =>
+  const willParseOuter = (parent: Element, ids: number[]): void =>
     void host.setOuterHtml.mockImplementationOnce((id) => {
       fake.natives.removeChild!(parent.__node_id, id);
-      return parsed(parent.__node_id, 0, entries);
+      parsed(parent.__node_id, 0, ids);
+      return true;
     });
 
   it("lets the old children of innerHTML be collected", async () => {
@@ -372,15 +331,16 @@ describe("the handles after a markup member", () => {
     expect(old.deref()).toBeUndefined();
   });
 
-  it("keeps the parsed handles of innerHTML after a collection", async () => {
+  it("keeps a read parsed handle of innerHTML after a collection", async () => {
     const el = createElementNode("div");
     const made = entry("b");
     willParseInner([made]);
 
     el.innerHTML = "<b></b>";
+    kids(el);
     await collectSentinel();
 
-    expect(nodeOf(made[0])).toBeDefined();
+    expect(nodeOf(made)).toBeDefined();
   });
 
   it("lets the element of outerHTML be collected", async () => {
@@ -397,7 +357,7 @@ describe("the handles after a markup member", () => {
     expect(old.deref()).toBeUndefined();
   });
 
-  it("keeps the parsed handles of outerHTML after a collection", async () => {
+  it("keeps a read parsed handle of outerHTML after a collection", async () => {
     const parent = createElementNode("div");
     const made = entry("i");
     (() => {
@@ -406,20 +366,21 @@ describe("the handles after a markup member", () => {
       willParseOuter(parent, [made]);
       child.outerHTML = "<i></i>";
     })();
-
+    kids(parent);
     await collectSentinel();
 
-    expect(nodeOf(made[0])).toBeDefined();
+    expect(nodeOf(made)).toBeDefined();
   });
 
-  it("keeps the parsed handles of insertAdjacentHTML after a collection", async () => {
+  it("keeps a read parsed handle of insertAdjacentHTML after a collection", async () => {
     const el = createElementNode("div");
     const made = entry("b");
     host.insertAdjacentHtml.mockImplementationOnce(() => parsed(el.__node_id, 0, [made]));
 
     el.insertAdjacentHTML("beforeend", "<b></b>");
+    kids(el);
     await collectSentinel();
 
-    expect(nodeOf(made[0])).toBeDefined();
+    expect(nodeOf(made)).toBeDefined();
   });
 });

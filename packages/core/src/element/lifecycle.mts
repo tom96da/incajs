@@ -1,15 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import {
-  HTML_NAMESPACE,
-  holdNode,
-  interfacePrototypes,
-  registerUncloneable,
-  releaseNode,
-} from "../ffi/index.mts";
+import { holdNode, interfacePrototypes, registerUncloneable, releaseNode } from "../ffi/index.mts";
 import { createIdTable } from "../idTable.mts";
-import type { ElementName, EventTargetId, InterfacePrototypes } from "../ffi/index.mts";
+import type { EventTargetId, InterfacePrototypes } from "../ffi/index.mts";
 import type { Document, NodeId } from "../types.mts";
 import type { HandleNode } from "./handleNode.mts";
 import type { Node } from "./nodeTypes.mts";
@@ -18,48 +12,24 @@ import type {
   DOMStringMap,
   DOMTokenList,
   HTMLCollectionOf,
-  Comment,
   Element,
   DocumentFragment,
-  HTMLElement,
-  Text,
   NodeListOf,
 } from "./types.mts";
 
-/**
- * The functions that build and find the handles of native nodes. Every handle passes `text`,
- * `document` and `node`. A member that builds a node also passes `element`, `comment`,
- * `fragment`, `createText` and `createComment`. The first three build the handle of a host node
- * that exists, and the last two create a new host node and build its handle.
- */
+/** The lookups every handle uses. */
 export interface HandleBuilders {
-  /** The handle of an element. A tag string gives an HTML element. */
-  element?: {
-    (id: NodeId, name?: string): HTMLElement;
-    (id: NodeId, name?: ElementName): Element;
-  };
-  /** The handle of a text node the host has. */
-  text: (id: NodeId, data: string) => Text;
-  /** The handle of a comment the host has. */
-  comment?: (id: NodeId) => Comment;
-  /** Creates a host text node and returns its handle. */
-  createText?: (data: string) => Text;
-  /** Creates a host comment and returns its handle. */
-  createComment?: (data: string) => Comment;
-  fragment?: (id: NodeId) => DocumentFragment;
   /** The handle of the document. */
   document: () => Document;
-  /** The handle of a copy of the document, which has the node id of the copy. */
-  documentCopy: (id: NodeId) => Document;
   /**
-   * The handle of a node by id: the live handle, or the document handle for the document id. It
-   * rebuilds the handle of the root container when that handle was collected.
+   * The handle of a node by id: the live handle, or a new one when none is live. It rebuilds the
+   * handle of the root container when that handle was collected, and gives `undefined` for an id
+   * the host no longer has.
+   * @param id - the native node's id
+   * @param data - the data of a text node, when the caller knows it
    */
-  node: (id: NodeId) => HandleNode | undefined;
+  node: (id: NodeId, data?: string) => HandleNode | undefined;
 }
-
-const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
-const MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML";
 
 /** The prototypes of the host, read at the first call. */
 let stored: InterfacePrototypes | undefined;
@@ -71,38 +41,6 @@ let stored: InterfacePrototypes | undefined;
  */
 export function prototypes(): InterfacePrototypes {
   return (stored ??= interfacePrototypes());
-}
-
-/**
- * Picks the prototype of a new handle.
- * @param kind - the kind of the handle
- * @param name - the name of an element, an HTML `div` when omitted
- * @returns the prototype: `HTMLElement` for an element of the HTML namespace, the foreign element
- *   prototype for the SVG and MathML namespaces, `Element` for any other namespace, and the
- *   prototype of the interface that names each other kind
- */
-export function prototypeOf(kind: HandleNode["kind"], name: ElementName = "div"): object {
-  const all = prototypes();
-  switch (kind) {
-    case "comment":
-      return all.Comment;
-    case "text":
-      return all.Text;
-    case "fragment":
-      return all.DocumentFragment;
-    case "document":
-      return all.HTMLDocument;
-    case "element":
-      switch (typeof name === "string" ? HTML_NAMESPACE : name[1]) {
-        case HTML_NAMESPACE:
-          return all.HTMLElement;
-        case SVG_NAMESPACE:
-        case MATHML_NAMESPACE:
-          return all.ForeignElement;
-        default:
-          return all.Element;
-      }
-  }
 }
 
 /** The kind of a handle record: a node kind, or `"target"` for an event target with no node. */
@@ -127,14 +65,6 @@ const NS_OTHER = 4;
 /** Every namespace class: the value of a record that is no element. */
 const NS_ALL = 7;
 
-/** The name parts of an element: the local name, namespace, prefix and tag name. */
-export type ElementParts = [
-  localName: string,
-  namespaceURI: string | null,
-  prefix: string | null,
-  tagName: string,
-];
-
 /**
  * The state of one handle. The cached members are filled at the first read and kept. The record is
  * reachable only through the brand map entry of its handle.
@@ -147,10 +77,6 @@ export interface NodeState {
   ns: number;
   /** The event names whose listeners are passive by default. */
   passive: readonly string[];
-  /** The name of an element as the host gave it. */
-  name?: ElementName;
-  /** The name parts of an element, computed once. */
-  parts?: ElementParts;
   /** Whether a document is a copy. */
   copy?: boolean;
   /** The target of a record of the kind `target`: an id, or a function that gives it. */
@@ -174,56 +100,34 @@ registerUncloneable(brand);
 export const NO_EVENTS: readonly string[] = [];
 
 /**
- * Reads the name parts of an element, computed at the first read. The tag name of an HTML element
- * is its name in ASCII upper case.
- * @param state - the record of an element
- * @returns the four parts
- */
-export function partsOf(state: NodeState): ElementParts {
-  if (state.parts === undefined) {
-    const name = state.name!;
-    state.parts =
-      typeof name === "string"
-        ? [name, HTML_NAMESPACE, null, name.replace(/[a-z]/g, (letter) => letter.toUpperCase())]
-        : name;
-  }
-  return state.parts;
-}
-
-/**
- * Gives `handle` a read-only, non-enumerable `__node_id` and records its state.
- * @param handle - the new handle
- * @param id - the native node's id
- * @param kind - the kind of the handle
+ * Records the state of a handle the host built. The kind and the namespace class come from its
+ * prototype.
+ * @param handle - the new handle, with its `__node_id`
  * @param passive - the event names whose listeners are passive by default
- * @param name - the name of an element as the host gave it
  * @returns `handle`
  */
 export function withState<T extends object>(
   handle: T,
-  id: NodeId,
-  kind: RecordKind,
   passive: readonly string[],
-  name?: ElementName,
 ): T & { readonly __node_id: NodeId } {
-  const space = name === undefined ? null : typeof name === "string" ? HTML_NAMESPACE : name[1];
-  brand.set(handle, {
-    kind,
-    bit: KIND_BITS[kind],
-    ns:
-      name === undefined
-        ? NS_ALL
-        : space === HTML_NAMESPACE
-          ? NS_HTML
-          : space === SVG_NAMESPACE || space === MATHML_NAMESPACE
-            ? NS_FOREIGN
-            : NS_OTHER,
-    passive,
-    name,
-  });
-  return Object.defineProperty(handle, "__node_id", { value: id }) as T & {
-    readonly __node_id: NodeId;
-  };
+  const all = prototypes();
+  const proto = Object.getPrototypeOf(handle);
+  const [kind, ns] =
+    proto === all.HTMLElement
+      ? (["element", NS_HTML] as const)
+      : proto === all.ForeignElement
+        ? (["element", NS_FOREIGN] as const)
+        : proto === all.Element
+          ? (["element", NS_OTHER] as const)
+          : proto === all.Text
+            ? (["text", NS_ALL] as const)
+            : proto === all.Comment
+              ? (["comment", NS_ALL] as const)
+              : proto === all.DocumentFragment
+                ? (["fragment", NS_ALL] as const)
+                : (["document", NS_ALL] as const);
+  brand.set(handle, { kind, bit: KIND_BITS[kind], ns, passive });
+  return handle as T & { readonly __node_id: NodeId };
 }
 
 /**

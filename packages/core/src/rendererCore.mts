@@ -28,9 +28,9 @@ export {
   removeStyle,
 } from "./ffi/index.mts";
 export {
+  adoptHandle,
   createCommentNode,
   createElementNode,
-  createIncaElement,
   createTextNode,
   rootElement,
   setElementText,

@@ -3,22 +3,24 @@
 
 import { createEventTarget } from "../eventTarget.mts";
 import {
-  HTML_NAMESPACE,
   createNode,
   documentNodeId,
   inputValue,
+  nodeHandle,
   rootNodeId,
   setCharacterData,
   setInputValue,
+  textContent,
   windowTargetId,
 } from "../ffi/index.mts";
 import { installInterfaces, defineMembers, windowHandlerMembers } from "./interfaces.mts";
 import {
   elementOf,
+  entered,
   existingContent,
+  hold,
   isDestroyed,
   nodeOf,
-  prototypeOf,
   registerNode,
   registerRoot,
   stateOf,
@@ -29,24 +31,15 @@ import {
 } from "./lifecycle.mts";
 import { replaceWithText } from "./nodeTree.mts";
 import { attachContent } from "./templateContent.mts";
-import { createIncaText } from "./text.mts";
-import type { ElementName } from "../ffi/index.mts";
 import type { Document, Window, NodeId, TagName } from "../types.mts";
 import type { HandleNode } from "./handleNode.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
 import type { ParentNode } from "./nodeTypes.mts";
 import type { Comment, Element, DocumentFragment, HTMLElement, Text } from "./types.mts";
 
-/** The builders a clone uses for each kind of handle, and the lookups every handle uses. */
+/** The lookups the members use. */
 const builders: HandleBuilders = {
-  element: createIncaElement,
-  text: createIncaText,
-  comment: createIncaComment,
-  createText: createTextNode,
-  createComment: createCommentNode,
-  fragment: createIncaFragment,
   document: documentHandle,
-  documentCopy: (id) => createIncaDocument(id, true),
   node: handleOf,
 };
 
@@ -81,46 +74,54 @@ const VALUE: PropertyDescriptor = {
 };
 
 /**
- * Builds the handle of a native element node: parentless and childless, on the prototype of its
- * interface with its node id and state. The handle keeps the name, so the name members read after
- * the host frees the node.
+ * Builds the handle of an existing host node: a new instance of the host class on the prototype of
+ * its kind, with its state. An HTML `input` has `value`, an HTML `template` has `content`, and a
+ * text node has `text`. The handle is recorded weakly.
  * @param id - the native node's id
- * @param name - the element name, an HTML `div` when omitted. An HTML `input` has `value` and an
- *   HTML `template` has `content`.
+ * @param passiveByDefault - event names whose listeners are passive unless their options say
+ *   `passive: false`. A document passes `wheel` when this is omitted.
+ * @param data - the data of a text node, read from the host when omitted
+ * @returns the handle and whether its node has a parent, or `undefined` for an id the host no
+ *   longer has
+ */
+function buildHandle(
+  id: NodeId,
+  passiveByDefault?: readonly string[],
+  data?: string,
+): { handle: HandleNode; parented: boolean } | undefined {
+  const built = nodeHandle(id);
+  if (built === null) return undefined;
+  const [instance, parented, special] = built;
+  const handle = instance as HandleNode;
+  withState(handle, passiveByDefault ?? NO_EVENTS);
+  const state = stateOf(handle)!;
+  if (state.kind === "document") {
+    state.passive = passiveByDefault ?? WHEEL_EVENTS;
+    state.copy = id !== documentNodeId();
+  }
+  if (special === "template") Object.defineProperty(handle, "content", CONTENT);
+  if (special === "input") Object.defineProperty(handle, "value", VALUE);
+  if (state.kind === "text") (handle as Text).text = data ?? textContent(id);
+  registerNode(handle);
+  if (special === "template")
+    attachContent(handle as Element, (content) => adoptHandle(content) as DocumentFragment);
+  return { handle, parented };
+}
+
+/**
+ * Builds the handle of a node the host just created or copied, and records it weakly.
+ * @param id - the native node's id
  * @param passiveByDefault - event names whose listeners are passive unless their options say
  *   `passive: false`
+ * @param data - the data of a text node, read from the host when omitted
  * @returns the new handle
  */
-export function createIncaElement(
+export function adoptHandle(
   id: NodeId,
-  name?: string,
   passiveByDefault?: readonly string[],
-): HTMLElement;
-export function createIncaElement(
-  id: NodeId,
-  name?: ElementName,
-  passiveByDefault?: readonly string[],
-): Element;
-export function createIncaElement(
-  id: NodeId,
-  name: ElementName = "div",
-  passiveByDefault: readonly string[] = NO_EVENTS,
-): Element {
-  const localName = typeof name === "string" ? name : name[0];
-  const namespaceURI = typeof name === "string" ? HTML_NAMESPACE : name[1];
-  const element = withState(
-    Object.create(prototypeOf("element", name)) as Element,
-    id,
-    "element",
-    passiveByDefault,
-    name,
-  );
-  const html = namespaceURI === HTML_NAMESPACE;
-  if (html && localName === "template") Object.defineProperty(element, "content", CONTENT);
-  if (html && localName === "input") Object.defineProperty(element, "value", VALUE);
-  registerNode(element);
-  if (html && localName === "template") attachContent(element, createIncaFragment);
-  return element;
+  data?: string,
+): HandleNode {
+  return buildHandle(id, passiveByDefault, data)!.handle;
 }
 
 /**
@@ -129,8 +130,7 @@ export function createIncaElement(
  * @returns the new, parentless, childless element
  */
 export function createElementNode(tag: TagName): HTMLElement {
-  const id = createNode(tag);
-  return createIncaElement(id, tag);
+  return adoptHandle(createNode(tag)) as HTMLElement;
 }
 
 /**
@@ -141,23 +141,7 @@ export function createElementNode(tag: TagName): HTMLElement {
 export function createCommentNode(text = ""): Comment {
   const id = createNode("#comment");
   setCharacterData(id, text);
-  return createIncaComment(id);
-}
-
-/**
- * Builds the handle of a comment: an object of `Comment.prototype` with its node id and state.
- * @param id - the native node's id
- * @returns the new, parentless handle
- */
-export function createIncaComment(id: NodeId): Comment {
-  const comment = withState(
-    Object.create(prototypeOf("comment")) as Comment,
-    id,
-    "comment",
-    NO_EVENTS,
-  );
-  registerNode(comment);
-  return comment;
+  return adoptHandle(id) as Comment;
 }
 
 /**
@@ -168,17 +152,7 @@ export function createIncaComment(id: NodeId): Comment {
 export function createTextNode(text: string): Text {
   const id = createNode("#text");
   setCharacterData(id, text);
-  return createIncaText(id, text);
-}
-
-/**
- * Builds the handle of an existing text node.
- * @param id - the native node's id
- * @param data - the data the node holds
- * @returns the new, parentless handle
- */
-export function adoptTextNode(id: NodeId, data: string): Text {
-  return createIncaText(id, data);
+  return adoptHandle(id, NO_EVENTS, text) as Text;
 }
 
 /**
@@ -201,25 +175,9 @@ export function rootElement(): HTMLElement {
   const id = rootNodeId();
   const live = elementOf(id);
   if (live) return live as HTMLElement;
-  const root = createIncaElement(id, "div", WHEEL_EVENTS);
+  const root = adoptHandle(id, WHEEL_EVENTS) as HTMLElement;
   registerRoot(root);
   return root;
-}
-
-/**
- * Builds the handle of a fragment.
- * @param id - the native node's id
- * @returns the new, empty handle
- */
-export function createIncaFragment(id: NodeId): DocumentFragment {
-  const fragment = withState(
-    Object.create(prototypeOf("fragment")) as DocumentFragment,
-    id,
-    "fragment",
-    NO_EVENTS,
-  );
-  registerNode(fragment);
-  return fragment;
 }
 
 /** The handle of the document, built on first use and kept for the life of the realm. */
@@ -230,7 +188,7 @@ let theDocument: Document | undefined;
  * @returns the handle, which names the same object on every call
  */
 export function documentHandle(): Document {
-  return (theDocument ??= createIncaDocument(documentNodeId(), false));
+  return (theDocument ??= adoptHandle(documentNodeId()) as Document);
 }
 
 /** The handle of the window, built on first use and kept for the life of the realm. */
@@ -251,34 +209,21 @@ export function windowHandle(): Window {
 }
 
 /**
- * Looks up the handle of a node by id, the document handle included. A collected handle of the
- * root container is rebuilt.
+ * Looks up the handle of a node by id, the document handle included, and builds it when none is
+ * live. A built handle of a node with a parent is strong, and a built handle of a node with none
+ * is weak and held. A collected handle of the root container is rebuilt.
  * @param id - the native node's id
- * @returns the live handle, or `undefined` when none is live
+ * @param data - the data of a text node, read from the host when omitted
+ * @returns the handle, or `undefined` for an id the host no longer has
  */
-export function handleOf(id: NodeId): HandleNode | undefined {
+export function handleOf(id: NodeId, data?: string): HandleNode | undefined {
   const live = nodeOf(id);
   if (live) return live;
   if (id === rootNodeId()) return rootElement();
-  return id === documentNodeId() ? documentHandle() : undefined;
-}
-
-/**
- * Builds the handle of a document node: an object of `HTMLDocument.prototype` with its node id and
- * state.
- * @param id - the native node's id
- * @param copy - whether the node is a copy of the document, which the focus of the host never
- *   reaches
- * @returns the new handle
- */
-function createIncaDocument(id: NodeId, copy: boolean): Document {
-  const handle = withState(
-    Object.create(prototypeOf("document")) as Document,
-    id,
-    "document",
-    WHEEL_EVENTS,
-  );
-  stateOf(handle)!.copy = copy;
-  registerNode(handle);
-  return handle;
+  if (id === documentNodeId()) return documentHandle();
+  const built = buildHandle(id, undefined, data);
+  if (built === undefined) return undefined;
+  if (built.parented) entered(built.handle);
+  else hold(built.handle);
+  return built.handle;
 }

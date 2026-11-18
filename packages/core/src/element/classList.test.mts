@@ -3,8 +3,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { adoptElement } from "../../tests/adopt.mts";
 import { nativeStub } from "../../tests/setup.mts";
-import { createIncaElement } from "./handle.mts";
 import { markFreed } from "./lifecycle.mts";
 import type { Element } from "./types.mts";
 
@@ -28,7 +28,7 @@ function setup(initial: Record<string, Stored> = {}) {
     }),
   };
   vi.stubGlobal("__inca_native__", nativeStub(host as never));
-  const el: Element = createIncaElement(1, "div");
+  const el: Element = adoptElement(1, "div");
   return { host, el, store, lists };
 }
 
@@ -118,7 +118,7 @@ describe("classList", () => {
 
   it("gives each handle its own list", () => {
     const { el } = setup();
-    const other = createIncaElement(2, "div");
+    const other = adoptElement(2, "div");
 
     expect(other.classList).not.toBe(el.classList);
   });

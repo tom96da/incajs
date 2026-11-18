@@ -1,7 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
+
+import type { ElementName } from "../src/ffi/index.mts";
 
 // The globals the host defines before an app runs.
 
@@ -28,6 +30,112 @@ type InterfaceChain = Record<(typeof NODE_INTERFACES)[number][0], object>;
 
 const CHAIN_KEY = Symbol.for("incajs.test.interfaceChain");
 
+const HTML = "http://www.w3.org/1999/xhtml";
+const SVG = "http://www.w3.org/2000/svg";
+const MATHML = "http://www.w3.org/1998/Math/MathML";
+
+/** What a test declares about a node id, which the stand-in `nodeHandle` reads. */
+export type Declared =
+  | { kind: "element"; name: ElementName }
+  | { kind: "text" | "comment" | "fragment" | "document" };
+
+const DECLARED_KEY = Symbol.for("incajs.test.declared");
+
+/** The declarations by node id, made once per realm so a second evaluation shares them. */
+function declarations(): Map<number, Declared> {
+  const shared = globalThis as { [DECLARED_KEY]?: Map<number, Declared> };
+  return (shared[DECLARED_KEY] ??= new Map());
+}
+
+beforeEach(() => declarations().clear());
+
+/** The declaration of an id with none: the document for its id, an HTML `div` for any other. */
+function declaredOf(id: number): Declared {
+  const documentId = globalThis.__inca_native__?.documentNodeId?.();
+  return (
+    declarations().get(id) ??
+    (id === documentId ? { kind: "document" } : { kind: "element", name: "div" })
+  );
+}
+
+/**
+ * Declares the kind and name of a node id. An id with no declaration is an HTML `div`.
+ * @param id - the node id
+ * @param declared - the kind, and the name of an element
+ */
+export function declareNode(id: number, declared: Declared): void {
+  declarations().set(id, declared);
+}
+
+/** The declaration of each tag that names a kind other than an element. */
+export const KINDS: Record<string, Declared> = {
+  "#text": { kind: "text" },
+  "#comment": { kind: "comment" },
+  "#fragment": { kind: "fragment" },
+  "#document": { kind: "document" },
+};
+
+/** The name parts of the element `id`: local name, namespace, prefix and tag name. */
+function partsOf(id: number): [string, string | null, string | null, string] {
+  const declared = declaredOf(id);
+  const name = declared.kind === "element" ? declared.name : "div";
+  return typeof name === "string" ? [name, HTML, null, name.toUpperCase()] : name;
+}
+
+/**
+ * The stand-in for the name members the host defines on `Element`.
+ * @param proto - the stand-in prototype of `Element`
+ */
+function defineNameMembers(proto: object): void {
+  const members = { localName: 0, namespaceURI: 1, prefix: 2, tagName: 3 } as const;
+  for (const [key, index] of Object.entries(members)) {
+    Object.defineProperty(proto, key, {
+      get(this: { __node_id: number }) {
+        return partsOf(this.__node_id)[index];
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+}
+
+/**
+ * The stand-in for the native `nodeHandle`: an object of the stand-in prototype that the
+ * declaration of `id` names, with the own property `__node_id`.
+ * @param id - the node id
+ * @param parented - whether the node has a parent
+ * @returns the result of the native
+ */
+export function standInNodeHandle(
+  id: number,
+  parented = false,
+): Native["nodeHandle"] extends (...args: never[]) => infer R ? R : never {
+  const declared = declaredOf(id);
+  const chain = interfaceChain();
+  let proto: object;
+  let special: "input" | "template" | null = null;
+  if (declared.kind === "element") {
+    const [local, space] = partsOf(id);
+    proto =
+      space === HTML
+        ? chain.HTMLElement
+        : space === SVG || space === MATHML
+          ? chain.ForeignElement
+          : chain.Element;
+    if (space === HTML && (local === "input" || local === "template")) special = local;
+  } else {
+    proto = {
+      text: chain.Text,
+      comment: chain.Comment,
+      fragment: chain.DocumentFragment,
+      document: chain.HTMLDocument,
+    }[declared.kind];
+  }
+  const handle = Object.create(proto) as object;
+  Object.defineProperty(handle, "__node_id", { value: id });
+  return [handle, parented, special];
+}
+
 /**
  * The stand-in for the prototypes of the host: plain objects in the inheritance of the node
  * interfaces. Each has the string tag of its name, the foreign element prototype excepted.
@@ -43,6 +151,7 @@ function interfaceChain(): InterfaceChain {
     }
     chain[name] = prototype;
   }
+  defineNameMembers(chain.Element!);
   return (shared[CHAIN_KEY] = chain as InterfaceChain);
 }
 
@@ -137,14 +246,43 @@ type Native = typeof globalThis.__inca_native__;
  * @returns the stand-in, in which `documentNodeId()` gives 1
  */
 export function nativeStub(extra: Partial<Native> = {}): Native {
+  const { createNode, createElement, createElementNS } = extra;
+  // A node a test creates is declared from the tag or the name its creating native gets or gives.
+  const declaring: Partial<Native> = {};
+  if (createNode) {
+    declaring.createNode = (tag) => {
+      const id = createNode(tag);
+      declareNode(id, KINDS[tag] ?? { kind: "element", name: tag });
+      return id;
+    };
+  }
+  if (createElement) {
+    declaring.createElement = (name) => {
+      const entry = createElement(name);
+      declareNode(entry[0], { kind: "element", name: entry[1] });
+      return entry;
+    };
+  }
+  if (createElementNS) {
+    declaring.createElementNS = (namespace, name) => {
+      const entry = createElementNS(namespace, name);
+      declareNode(entry[0], { kind: "element", name: [entry[1], entry[2], entry[3], entry[4]] });
+      return entry;
+    };
+  }
   return {
     documentNodeId: () => 1,
     releaseNode: () => undefined,
+    holdNode: () => undefined,
+    rootNodeId: () => -1,
+    textContent: () => "",
     registerUncloneable: () => undefined,
     windowTargetId: () => "window-target",
     signalId: (value) => signalKit().ids.get(value as object) ?? null,
     interfacePrototypes: () => Object.assign(Object.create(null), interfaceChain()),
+    nodeHandle: (id) => standInNodeHandle(id),
     ...extra,
+    ...declaring,
   } as Native;
 }
 

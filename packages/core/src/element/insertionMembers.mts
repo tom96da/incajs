@@ -53,7 +53,7 @@ function insertConverted(
   const [textIds, removedIds] = result;
   const ids = textIds.values();
   for (const value of converted) {
-    if (typeof value === "string") entered(builders.text(ids.next().value as number, value));
+    if (typeof value === "string") builders.node(ids.next().value as number, value);
     else if (value.kind !== "fragment") entered(value);
   }
   for (const id of removedIds) {

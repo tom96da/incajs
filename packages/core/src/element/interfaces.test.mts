@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { adoptComment, adoptElement, adoptFragment, adoptText } from "../../tests/adopt.mts";
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage } from "../../tests/gc.mts";
 import { nativeStub } from "../../tests/setup.mts";
@@ -10,14 +11,8 @@ import { document } from "../document.mts";
 import { HTML_NAMESPACE } from "../ffi/index.mts";
 import { window } from "../window.mts";
 import { HANDLER_EVENTS } from "./eventHandlers.mts";
-import {
-  createIncaComment,
-  createIncaElement,
-  createIncaFragment,
-  rootElement,
-} from "./handle.mts";
+import { rootElement } from "./handle.mts";
 import { prototypes } from "./lifecycle.mts";
-import { createIncaText } from "./text.mts";
 import { insert, remove } from "./treeOps.mts";
 import type { ElementName } from "../ffi/index.mts";
 
@@ -174,9 +169,9 @@ describe("the members of each prototype", () => {
   });
 
   it.each([
-    ["an element", () => createIncaElement(21), ["__node_id"]],
-    ["a text node", () => createIncaText(22, "x"), ["__node_id", "text"]],
-    ["an HTML input", () => createIncaElement(23, "input"), ["__node_id", "value"]],
+    ["an element", () => adoptElement(21), ["__node_id"]],
+    ["a text node", () => adoptText(22, "x"), ["__node_id", "text"]],
+    ["an HTML input", () => adoptElement(23, "input"), ["__node_id", "value"]],
     ["an HTML template", () => document.createElement("template"), ["__node_id", "content"]],
   ] as const)("gives %s only its own state as keys", (_kind, make, keys) => {
     installFakeHost();
@@ -281,8 +276,8 @@ describe("the members of a mixin", () => {
 
 describe("the receiver check", () => {
   const all = prototypes();
-  const text = () => createIncaText(31, "x");
-  const svg = () => createIncaElement(32, svgName);
+  const text = () => adoptText(31, "x");
+  const svg = () => adoptElement(32, svgName);
 
   it.each([
     ["a Node member on a plain object", () => call(all.Node, "hasChildNodes", {}), "a Node"],
@@ -299,17 +294,13 @@ describe("the receiver check", () => {
     ["click on an SVG element", () => call(all.HTMLElement, "click", svg()), "an HTMLElement"],
     [
       "a CharacterData member on an element",
-      () => call(all.CharacterData, "appendData", createIncaElement(33), "x"),
+      () => call(all.CharacterData, "appendData", adoptElement(33), "x"),
       "a CharacterData",
     ],
-    [
-      "splitText on a comment",
-      () => call(all.Text, "splitText", createIncaComment(34), 0),
-      "a Text",
-    ],
+    ["splitText on a comment", () => call(all.Text, "splitText", adoptComment(34), 0), "a Text"],
     [
       "focus on an element of no namespace",
-      () => call(all.HTMLElement, "focus", createIncaElement(35, plainName)),
+      () => call(all.HTMLElement, "focus", adoptElement(35, plainName)),
       "an HTML, SVG or MathML element",
     ],
     [
@@ -319,12 +310,12 @@ describe("the receiver check", () => {
     ],
     [
       "previousElementSibling on a fragment",
-      () => read(all.CharacterData, "previousElementSibling", createIncaFragment(36)),
+      () => read(all.CharacterData, "previousElementSibling", adoptFragment(36)),
       "an Element or CharacterData",
     ],
     [
       "createElement on an element",
-      () => call(all.Document, "createElement", createIncaElement(37), "a"),
+      () => call(all.Document, "createElement", adoptElement(37), "a"),
       "a Document",
     ],
     [
@@ -334,12 +325,12 @@ describe("the receiver check", () => {
     ],
     [
       "click on an element of another namespace",
-      () => call(all.HTMLElement, "click", createIncaElement(39, otherName)),
+      () => call(all.HTMLElement, "click", adoptElement(39, otherName)),
       "an HTMLElement",
     ],
     [
       "focus on an element of another namespace",
-      () => call(all.HTMLElement, "focus", createIncaElement(40, otherName)),
+      () => call(all.HTMLElement, "focus", adoptElement(40, otherName)),
       "an HTML, SVG or MathML element",
     ],
     ["a getter read on the prototype itself", () => read(all.Node, "nodeType", all.Node), "a Node"],
@@ -350,7 +341,7 @@ describe("the receiver check", () => {
     ],
     [
       "a member called on an object that inherits a handle",
-      () => call(all.Node, "hasChildNodes", Object.create(createIncaElement(38))),
+      () => call(all.Node, "hasChildNodes", Object.create(adoptElement(38))),
       "a Node",
     ],
   ])("throws for %s", (_row, run, name) => {
@@ -373,10 +364,7 @@ describe("the receiver check", () => {
 
   it.each([
     ["an SVG element", () => svg()],
-    [
-      "an element of an HTML namespace",
-      () => createIncaElement(42, ["a", HTML_NAMESPACE, null, "A"]),
-    ],
+    ["an element of an HTML namespace", () => adoptElement(42, ["a", HTML_NAMESPACE, null, "A"])],
   ])("runs focus on %s", (_row, make) => {
     const focus = vi.fn<(id: number, preventScroll: boolean) => void>();
     vi.stubGlobal("__inca_native__", nativeStub({ focusNode: focus } as never));
@@ -396,11 +384,11 @@ describe("the receiver check", () => {
   it("runs the children getter of DocumentFragment.prototype on a fragment", () => {
     installFakeHost();
 
-    expect(() => read(all.DocumentFragment, "children", createIncaFragment(43))).not.toThrow();
+    expect(() => read(all.DocumentFragment, "children", adoptFragment(43))).not.toThrow();
   });
 
   it("runs an Element member on an element of another namespace", () => {
-    expect(read(all.Element, "tagName", createIncaElement(45, otherName))).toBe("a");
+    expect(read(all.Element, "tagName", adoptElement(45, otherName))).toBe("a");
   });
 
   it("rejects window as the node argument of an insertion", () => {
@@ -416,7 +404,7 @@ describe("the receiver check", () => {
   it("answers false from contains for document", () => {
     installFakeHost({ compareNodePosition: () => 0 });
 
-    expect(createIncaElement(44).contains(document)).toBe(false);
+    expect(adoptElement(44).contains(document)).toBe(false);
   });
 });
 
@@ -543,11 +531,11 @@ describe("a second evaluation of core", () => {
     vi.resetModules();
     const again = await import("./handle.mts");
 
-    expect(again.createIncaElement(61).nodeName).toBe("DIV");
+    expect((again.adoptHandle(61) as Element).nodeName).toBe("DIV");
   });
 
   it("throws the receiver error for a handle of the first evaluation", async () => {
-    const before = createIncaElement(62);
+    const before = adoptElement(62);
     vi.resetModules();
     await import("./handle.mts");
 

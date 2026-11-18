@@ -3,9 +3,8 @@
 
 import { vi } from "vitest";
 
-import { HTML_NAMESPACE } from "../src/ffi/index.mts";
-import { nativeStub } from "./setup.mts";
-import type { ElementEntry, HostCallback, NodeEntry } from "../src/ffi/index.mts";
+import { KINDS, declareNode, nativeStub, standInNodeHandle } from "./setup.mts";
+import type { HostCallback } from "../src/ffi/index.mts";
 
 /** The host object core calls. */
 type Native = typeof globalThis.__inca_native__;
@@ -74,6 +73,7 @@ let nextId = 10;
 export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
   const nodes = new Map<number, FakeNode>();
   const held = new Set<number>();
+  const freed = new Set<number>();
   const callbacks = new Map<number, HostCallback>();
   const DOCUMENT = DOCUMENT_ID;
   const ROOT = ROOT_ID;
@@ -90,6 +90,7 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
       data: null,
       attrs: new Map(),
     });
+    declareNode(id, KINDS[tag] ?? { kind: "element", name: tag });
     if (tag === "template") {
       const content = create("#fragment");
       nodes.get(id)!.content = content;
@@ -182,30 +183,17 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
   const matching = (id: number, tag: string): number[] =>
     subtree(id).filter((found) => found !== id && nodeOf(found).tag === tag);
 
-  const copyOf = (original: number, deep: boolean): (NodeEntry | ElementEntry)[] => {
+  const copyOf = (original: number, deep: boolean): number => {
     const { tag, content, children, data, attrs } = nodeOf(original);
     const made = create(tag);
     nodeOf(made).data = data;
     nodeOf(made).attrs = new Map(attrs);
-    const entries: (NodeEntry | ElementEntry)[] = [
-      tag.startsWith("#")
-        ? [made, tag, tag === "#text" ? data : null]
-        : [made, tag, HTML_NAMESPACE, null, tag.toUpperCase()],
-    ];
     const copyInto = (parent: number, sources: number[]): void => {
-      for (const child of sources) {
-        const copied = copyOf(child, deep);
-        place(parent, copied[0]![0], null);
-        entries.push(...copied);
-      }
+      for (const child of sources) place(parent, copyOf(child, deep), null);
     };
-    if (content !== null) {
-      const madeContent = nodeOf(made).content!;
-      entries.push([madeContent, "#fragment", null]);
-      if (deep) copyInto(madeContent, nodeOf(content).children);
-    }
+    if (content !== null && deep) copyInto(nodeOf(made).content!, nodeOf(content).children);
     if (deep) copyInto(made, children);
-    return entries;
+    return made;
   };
 
   const orphans = (): number[] => {
@@ -261,6 +249,9 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
     createNode: create,
     createElement: (name) => [create(name), name],
     createElementNS: (namespace, name) => [create(name), name, namespace, null, name],
+    // An id the test never created gets a handle too, as a test adopts a handle by any id.
+    nodeHandle: (id) =>
+      freed.has(id) ? null : standInNodeHandle(id, (nodes.get(id)?.parent ?? null) !== null),
     templateContent: (id) => nodeOf(id).content,
     appendChild: (parentId, nodeId) => place(parentId, nodeId, null),
     removeChild: spies.removeChild,
@@ -342,7 +333,7 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
     idsOf: (tag) => [...nodes].filter(([, node]) => node.tag === tag).map(([id]) => id),
     orphans,
     frame() {
-      const freed: number[] = [];
+      const freedIds: number[] = [];
       const listeners: number[] = [];
       for (const id of orphans()) {
         if (!nodes.has(id)) continue;
@@ -351,10 +342,11 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
           for (const callbackId of nodeOf(gone).listeners) callbacks.delete(callbackId);
           nodes.delete(gone);
           held.delete(gone);
-          freed.push(gone);
+          freed.add(gone);
+          freedIds.push(gone);
         }
       }
-      if (freed.length > 0) globalThis.__inca_released__(freed, listeners);
+      if (freedIds.length > 0) globalThis.__inca_released__(freedIds, listeners);
     },
   };
 }

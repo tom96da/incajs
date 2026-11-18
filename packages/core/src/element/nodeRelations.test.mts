@@ -3,9 +3,9 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { adoptElement, adoptFragment, adoptText } from "../../tests/adopt.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
-import { adoptTextNode, createIncaElement, createIncaFragment } from "./handle.mts";
 import { markFreed } from "./lifecycle.mts";
 
 /** The id `nativeStub` gives the document. */
@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.stubGlobal("__inca_native__", nativeStub(host as never));
 });
 
-const div = (id: number) => createIncaElement(id, "div");
+const div = (id: number) => adoptElement(id, "div");
 
 describe("contains", () => {
   it("is true for the node itself without asking the host", () => {
@@ -115,17 +115,17 @@ describe("getRootNode", () => {
   });
 
   it("gives the fragment that holds the node", () => {
-    const group = createIncaFragment(21);
+    const group = adoptFragment(21);
     top = 21;
 
-    expect(adoptTextNode(10, "x").getRootNode()).toBe(group);
+    expect(adoptText(10, "x").getRootNode()).toBe(group);
   });
 
-  it("gives the node itself when the top of its tree has no handle", () => {
+  it("builds the handle of the top of its tree when it has none", () => {
     const node = div(10);
     top = 99;
 
-    expect(node.getRootNode()).toBe(node);
+    expect(node.getRootNode().__node_id).toBe(99);
   });
 
   it("gives a freed node itself without asking the host", () => {

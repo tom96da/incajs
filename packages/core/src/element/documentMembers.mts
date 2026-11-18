@@ -9,10 +9,10 @@ import {
   createNode,
   focusedNode,
   linkedNode,
-  nameOf,
+  setCharacterData,
 } from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./arguments.mts";
-import { elementOf, hold, receiverOf, DOCUMENT_RULE } from "./lifecycle.mts";
+import { hold, receiverOf, DOCUMENT_RULE } from "./lifecycle.mts";
 import type { Document } from "../types.mts";
 import type { HandleNode } from "./handleNode.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
@@ -33,9 +33,9 @@ export type DocumentMembers = Pick<
  * @param handle - the new, parentless handle
  * @returns `handle`
  */
-function held<T extends HandleNode>(handle: T): T {
-  hold(handle);
-  return handle;
+function held<T extends HandleNode>(handle: HandleNode | undefined): T {
+  hold(handle!);
+  return handle as T;
 }
 
 /**
@@ -50,37 +50,41 @@ export function documentMembers(builders: HandleBuilders): DocumentMembers {
       const state = receiverOf(this, DOCUMENT_RULE);
       const node = this as unknown as HandleNode;
       const focused = state.copy ? null : focusedNode();
-      if (focused !== null) return elementOf(focused) ?? null;
-      const first = linkedNode(node.__node_id, "first", true);
-      const element = first === null ? undefined : builders.node(first);
+      const id = focused ?? linkedNode(node.__node_id, "first", true);
+      const element = id === null ? undefined : builders.node(id);
       return element?.kind === "element" ? element : null;
     },
     createDocumentFragment() {
       receiverOf(this, DOCUMENT_RULE);
-      return held(builders.fragment!(createNode("#fragment")));
+      return held(builders.node(createNode("#fragment")));
     },
     createElement(localName: string) {
       receiverOf(this, DOCUMENT_RULE);
       requireArguments(arguments, 1, "createElement");
       const entry = createHostElement(attributeText(localName));
-      return held(builders.element!(entry[0], entry[1]));
+      return held(builders.node(entry[0]));
     },
     createElementNS(namespace: string | null, qualifiedName: string) {
       receiverOf(this, DOCUMENT_RULE);
       requireArguments(arguments, 2, "createElementNS");
       const space = namespace === null || namespace === undefined ? null : attributeText(namespace);
       const entry = createHostElementNS(space || null, attributeText(qualifiedName));
-      return held(builders.element!(entry[0], nameOf(entry)));
+      return held(builders.adopt(entry[0]));
     },
     createTextNode(data: string) {
       receiverOf(this, DOCUMENT_RULE);
       requireArguments(arguments, 1, "createTextNode");
-      return held(builders.createText!(attributeText(data)));
+      const id = createNode("#text");
+      const text = attributeText(data);
+      setCharacterData(id, text);
+      return held(builders.node(id, text));
     },
     createComment(data: string) {
       receiverOf(this, DOCUMENT_RULE);
       requireArguments(arguments, 1, "createComment");
-      return held(builders.createComment!(attributeText(data)));
+      const id = createNode("#comment");
+      setCharacterData(id, attributeText(data));
+      return held(builders.node(id));
     },
   };
 }

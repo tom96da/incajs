@@ -3,12 +3,13 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { adoptElement } from "../../tests/adopt.mts";
 import { keep } from "../../tests/keep.mts";
 import { nativeStub } from "../../tests/setup.mts";
-import { createIncaElement, rootElement } from "./handle.mts";
+import { rootElement } from "./handle.mts";
 import { markFreed, markRemoved } from "./lifecycle.mts";
 
-describe("createIncaElement selectors", () => {
+describe("element selectors", () => {
   /** A fake host whose `matches` and `closest` answer `found`; the queries find nothing. */
   function installSelectors(found: number | null = null, matched = false) {
     const host = {
@@ -25,7 +26,7 @@ describe("createIncaElement selectors", () => {
 
   /** Three elements with ids 1, 2 and 3. */
   function chain() {
-    const [outer, inner, leaf] = [1, 2, 3].map((id) => keep(createIncaElement(id, "div")));
+    const [outer, inner, leaf] = [1, 2, 3].map((id) => keep(adoptElement(id, "div")));
     return { outer: outer!, inner: inner!, leaf: leaf! };
   }
 
@@ -82,10 +83,10 @@ describe("createIncaElement selectors", () => {
     expect(leaf.closest("div")).toBe(rootElement());
   });
 
-  it("closest is null when the matched ancestor has no handle", () => {
+  it("closest builds the handle of a matched ancestor that has none", () => {
     installSelectors(77);
 
-    expect(chain().leaf.closest("div")).toBeNull();
+    expect(chain().leaf.closest("div")?.__node_id).toBe(77);
   });
 
   it("closest is null when nothing matches", () => {
@@ -186,22 +187,23 @@ describe("createIncaElement selectors", () => {
     expect(host.querySelector).toHaveBeenCalledWith(1, "div");
   });
 
-  it("querySelector returns null for a match with no handle", () => {
+  it("querySelector builds the handle of a match that has none", () => {
     const host = installSelectors();
     const { outer } = chain();
     host.querySelector.mockReturnValueOnce(77);
 
-    expect(outer.querySelector("div")).toBeNull();
+    expect(outer.querySelector("div")?.__node_id).toBe(77);
   });
 
-  it("querySelectorAll skips a match with no handle", () => {
+  it("querySelectorAll builds the handle of a match that has none", () => {
     const host = installSelectors();
     const { outer, inner } = chain();
     host.querySelectorAll.mockReturnValueOnce([77, 2]);
 
-    expect(Array.from(outer.querySelectorAll("div")).map((node) => node.__node_id)).toEqual(
-      [inner].map((node) => node.__node_id),
-    );
+    expect(Array.from(outer.querySelectorAll("div")).map((node) => node.__node_id)).toEqual([
+      77,
+      inner.__node_id,
+    ]);
   });
 
   it("querySelector returns null without a match", () => {

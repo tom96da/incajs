@@ -69,12 +69,6 @@ export type NodeBox = readonly [
 /** The scroll offset of a node and its maximum, as of the last drawn frame. */
 export type NodeScroll = readonly [left: number, top: number, maxLeft: number, maxTop: number];
 
-/**
- * What a native returns for a copy of a node without a name: id, the marker or tag, and the text
- * of a `#text` copy (`null` for any other node).
- */
-export type NodeEntry = [id: NodeId, tag: string, data: string | null];
-
 /** What a native returns for an element it makes: id and the four name parts. */
 export type ElementEntry = [
   id: NodeId,
@@ -85,22 +79,14 @@ export type ElementEntry = [
 ];
 
 /**
- * One node of a parsed fragment: id, tag, namespace (`null` for a text node, a comment and a
- * fragment), parent id and the text of a text node or a comment.
+ * What a native `nodeHandle` returns for a node: the handle, whether the node has a parent and the
+ * special element it is.
  */
-export type ParsedEntry = [
-  id: NodeId,
-  tag: string,
-  namespaceURI: string | null,
-  parentId: NodeId,
-  data: string | null,
+export type NodeHandleResult = [
+  handle: object,
+  parented: boolean,
+  special: "input" | "template" | null,
 ];
-
-/**
- * What a parse writes into the tree: the position of the first inserted node among the children of
- * its container, and the nodes in pre-order. An entry whose parent is no entry is a root.
- */
-export type Parsed = [position: number, entries: ParsedEntry[]];
 
 /** The target that names `window`, as the host gives it. */
 export type WindowTargetId = string & { readonly __windowTarget: unique symbol };
@@ -154,13 +140,14 @@ interface NativeBindings {
     place: InsertionPlace,
     nodes: (NodeId | string)[],
   ): [textIds: NodeId[], removedIds: NodeId[]] | null;
-  cloneNode(nodeId: NodeId, deep: boolean): (NodeEntry | ElementEntry)[];
+  cloneNode(nodeId: NodeId, deep: boolean): NodeId;
+  nodeHandle(nodeId: NodeId): NodeHandleResult | null;
   templateContent(nodeId: NodeId): NodeId | null;
   innerHtml(nodeId: NodeId): string;
   outerHtml(nodeId: NodeId): string;
-  setInnerHtml(nodeId: NodeId, html: string): Parsed;
-  setOuterHtml(nodeId: NodeId, html: string): Parsed | null;
-  insertAdjacentHtml(nodeId: NodeId, position: string, html: string): Parsed;
+  setInnerHtml(nodeId: NodeId, html: string): void;
+  setOuterHtml(nodeId: NodeId, html: string): boolean;
+  insertAdjacentHtml(nodeId: NodeId, position: string, html: string): void;
   rootOf(nodeId: NodeId): NodeId;
   compareNodePosition(nodeId: NodeId, otherId: NodeId): number;
   isEqualNode(nodeId: NodeId, otherId: NodeId): boolean;

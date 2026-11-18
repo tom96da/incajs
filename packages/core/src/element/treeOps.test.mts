@@ -3,13 +3,13 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { adoptFragment } from "../../tests/adopt.mts";
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
 import { addCallback, callbackIdFor, groupOf } from "../callbacks.mts";
 import {
   createCommentNode,
   createElementNode,
-  createIncaFragment,
   createTextNode,
   documentHandle,
   rootElement,
@@ -115,7 +115,7 @@ describe("insert", () => {
   it("lets the handle of an inserted fragment be collected", async () => {
     const parent = div();
     const group = (() => {
-      const made = createIncaFragment(host.create("#fragment"));
+      const made = adoptFragment(host.create("#fragment"));
       tree.insert(made, parent);
       return new WeakRef(made);
     })();
@@ -295,7 +295,7 @@ describe("parentNode and nextSibling", () => {
     [
       "a node in a fragment",
       () => {
-        const group = createIncaFragment(host.create("#fragment"));
+        const group = adoptFragment(host.create("#fragment"));
         const child = div();
         group.appendChild(child);
         return child;
@@ -349,14 +349,14 @@ describe("parentNode and nextSibling", () => {
     expect(host.spies.linkedNode).not.toHaveBeenCalled();
   });
 
-  it("nextSibling gives null for a sibling with no handle, after one link read", () => {
+  it("nextSibling builds the handle of a sibling that has none, after one link read", () => {
     const parent = div();
     const first = div();
     tree.insert(first, parent);
     host.natives.appendChild!(parent.__node_id, host.create("span"));
     host.spies.linkedNode.mockClear();
 
-    expect(tree.nextSibling(first)).toBeNull();
+    expect(tree.nextSibling(first)).toBeTruthy();
     expect(host.spies.linkedNode).toHaveBeenCalledTimes(1);
   });
 });

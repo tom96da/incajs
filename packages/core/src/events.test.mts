@@ -7,7 +7,7 @@ import { nativeStub } from "../tests/setup.mts";
 import { callbackIdFor, groupOf, registeredGroupCount, releaseCallbacks } from "./callbacks.mts";
 import { addEventListener, removeEventListener } from "./events.mts";
 import { windowTargetId } from "./ffi/index.mts";
-import type { HostCallback, NodeLink, Parsed } from "./ffi/index.mts";
+import type { HostCallback, NodeLink } from "./ffi/index.mts";
 import type { EventLike } from "./types.mts";
 
 // Ids come from the host, which numbers them in order.
@@ -20,7 +20,7 @@ const native = {
   insertBefore: vi.fn<(parentId: number, childId: number, refId: number | null) => number>(() => 0),
   removeChild: vi.fn<(parentId: number, childId: number) => void>(),
   replaceChild: vi.fn<(parentId: number, nodeId: number, childId: number) => number>(() => 0),
-  cloneNode: vi.fn<(nodeId: number, deep: boolean) => [number, string, null][]>(() => []),
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => number>(() => 0),
   rootOf: vi.fn<(nodeId: number) => number>((nodeId) => nodeId),
   compareNodePosition: vi.fn<(nodeId: number, otherId: number) => number>(() => 0),
   isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => false),
@@ -50,12 +50,9 @@ const native = {
   templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
   innerHtml: vi.fn<(nodeId: number) => string>(() => ""),
   outerHtml: vi.fn<(nodeId: number) => string>(() => ""),
-  setInnerHtml: vi.fn<(nodeId: number, html: string) => Parsed>(() => [0, []]),
-  setOuterHtml: vi.fn<(nodeId: number, html: string) => Parsed | null>(() => null),
-  insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => Parsed>(() => [
-    0,
-    [],
-  ]),
+  setInnerHtml: vi.fn<(nodeId: number, html: string) => void>(),
+  setOuterHtml: vi.fn<(nodeId: number, html: string) => boolean>(() => false),
+  insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => void>(),
   attributeNames: vi.fn<(nodeId: number) => string[]>(() => []),
   matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => false),
   closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),

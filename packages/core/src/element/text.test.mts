@@ -386,7 +386,7 @@ describe("element registry", () => {
 });
 
 describe("the tail of splitText", () => {
-  it("reads the parent of the tail with one link read", () => {
+  it("builds the tail without a link read", () => {
     const parent = createElementNode("div");
     const text = createTextNode("abcd");
     insert(text, parent);
@@ -394,9 +394,7 @@ describe("the tail of splitText", () => {
 
     text.splitText(2);
 
-    expect(fake.spies.linkedNode.mock.calls).toEqual([
-      [host.splitText.mock.results[0]!.value, "parent", undefined],
-    ]);
+    expect(fake.spies.linkedNode).not.toHaveBeenCalled();
   });
 
   it("keeps the handle of a tail that has a parent after a collection", async () => {

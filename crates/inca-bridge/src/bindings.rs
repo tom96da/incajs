@@ -13,6 +13,7 @@ pub(crate) mod convert;
 mod create_element;
 mod dataset;
 mod focus;
+mod handle;
 mod host;
 mod html;
 mod inline_style;
@@ -20,6 +21,7 @@ mod input;
 mod insert_nodes;
 mod links;
 mod listeners;
+mod members;
 mod mutation;
 mod node;
 mod scroll;
@@ -39,11 +41,13 @@ use rquickjs::{Ctx, Function, Object, Result as JsResult};
 use capture::install_capture;
 use dataset::install_dataset;
 use focus::install_focus;
+use handle::install_handle;
 use html::install_html;
 use inline_style::install_style;
 use input::install_input;
 use insert_nodes::install_insert_nodes;
 use listeners::install_events;
+use members::install_members;
 use mutation::install_mutation;
 use node::install_node;
 use scroll::install_scroll;
@@ -87,6 +91,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_scroll(&natives)?;
     install_selector(&natives)?;
     install_input(&natives)?;
+    install_handle(&natives)?;
     natives.set("interfacePrototypes", |_host| {
         crate::interfaces::interface_prototypes()
     })?;
@@ -98,6 +103,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     inca_jsenv::frames::install(ctx, &host.borrow().frames)?;
     crate::event::install(ctx)?;
     crate::interfaces::install(ctx)?;
+    install_members(ctx, host)?;
     crate::abort::install(ctx, host)?;
     let globals = ctx.globals();
     globals.prop("__inca_native__", native)

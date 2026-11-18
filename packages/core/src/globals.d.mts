@@ -200,13 +200,15 @@ declare global {
 
   /** The interface object of elements, which a script cannot construct. */
   var Element: {
-    readonly prototype: NodeConstants;
+    readonly prototype: NodeConstants &
+      Pick<Element, "tagName" | "localName" | "namespaceURI" | "prefix">;
     [Symbol.hasInstance](value: unknown): value is Element;
   };
 
   /** The interface object of HTML elements, which a script cannot construct. */
   var HTMLElement: {
-    readonly prototype: NodeConstants;
+    readonly prototype: NodeConstants &
+      Pick<Element, "tagName" | "localName" | "namespaceURI" | "prefix">;
     [Symbol.hasInstance](value: unknown): value is HTMLElement;
   };
 

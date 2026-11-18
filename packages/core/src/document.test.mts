@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { keep } from "../tests/keep.mts";
-import { nativeStub } from "../tests/setup.mts";
+import { declareNode, nativeStub } from "../tests/setup.mts";
 import { document } from "./document.mts";
 import { HANDLER_EVENTS } from "./element/eventHandlers.mts";
 import { createElementNode, rootElement } from "./element/handle.mts";
@@ -12,7 +12,7 @@ import { isHeld, markFreed, registerNode } from "./element/lifecycle.mts";
 import "./targets.mts";
 import { HTML_NAMESPACE } from "./ffi/index.mts";
 import type { Element } from "./element/types.mts";
-import type { ElementEntry, HostCallback, NodeEntry, NodeLink } from "./ffi/index.mts";
+import type { ElementEntry, HostCallback, NodeLink } from "./ffi/index.mts";
 import type { Document } from "./types.mts";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -75,7 +75,7 @@ const native = {
   textContent: vi.fn<(nodeId: number) => string>((nodeId) => data[nodeId] ?? "joined"),
   isConnected: vi.fn<(nodeId: number) => boolean>(() => false),
   layoutOf: vi.fn<() => null>(() => null),
-  cloneNode: vi.fn<(nodeId: number, deep: boolean) => (NodeEntry | ElementEntry)[]>(),
+  cloneNode: vi.fn<(nodeId: number, deep: boolean) => number>(),
   /** Every parent the test sets is a fragment or the document, so none is an element. */
   linkedNode: vi.fn<(nodeId: number, link: NodeLink, elementOnly?: boolean) => number | null>(
     (nodeId, link, elementOnly) => {
@@ -108,7 +108,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  markFreed([5]);
+  markFreed([5, ...Array.from({ length: nextId - 100 }, (_, i) => 100 + i)]);
 });
 
 const elementOfId5 = { __node_id: 5, kind: "element" } as unknown as Element;
@@ -136,11 +136,12 @@ describe("document", () => {
     expect(document.activeElement).toBe(rootElement());
   });
 
-  it("reads null as activeElement for a focused id with no registered element", () => {
+  it("builds the handle of a focused element that had none for activeElement", () => {
     focused = 999;
     firstElements.set(DOCUMENT, 0);
 
-    expect(document.activeElement).toBeNull();
+    expect(document.activeElement?.__node_id).toBe(999);
+    markFreed([999]);
   });
 
   it("registers a listener on the document node", () => {
@@ -641,13 +642,10 @@ describe("queries", () => {
 describe("a copy of the document", () => {
   const COPY = 200;
   const CHILD = 201;
-  const copyEntries = (deep: boolean): (NodeEntry | ElementEntry)[] => [
-    [COPY, "#document", null],
-    ...(deep ? [[CHILD, "div", HTML_NAMESPACE, null, "DIV"] as ElementEntry] : []),
-  ];
 
   beforeEach(() => {
-    native.cloneNode.mockImplementation((_nodeId, deep) => copyEntries(deep));
+    declareNode(COPY, { kind: "document" });
+    native.cloneNode.mockImplementation(() => COPY);
   });
 
   it("reads 9 as nodeType and #document as nodeName", () => {

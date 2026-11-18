@@ -30,13 +30,13 @@ function selectorText(args: ArrayLike<unknown>, method: string, selectors: unkno
 }
 
 /**
- * Finds the element handle of an element node.
+ * Finds the element handle of an element node the host just returned.
  * @param id - the native node's id
  * @param builders - the lookup of a handle by node id
- * @returns the handle, or `undefined` when the node has none
+ * @returns the handle
  */
-function elementHandle(id: NodeId, builders: HandleBuilders): Element | undefined {
-  return builders.node(id) as Element | undefined;
+function elementHandle(id: NodeId, builders: HandleBuilders): Element {
+  return builders.node(id) as Element;
 }
 
 /**
@@ -54,7 +54,7 @@ export function queryMembers(builders: HandleBuilders): QueryMembers {
         return null;
       }
       const found = queryNode(node.__node_id, text);
-      return found === null ? null : (elementHandle(found, builders) ?? null);
+      return found === null ? null : elementHandle(found, builders);
     },
     querySelectorAll(selectors: string) {
       const node = receiverNode(this, PARENT_NODE_RULE);
@@ -63,8 +63,8 @@ export function queryMembers(builders: HandleBuilders): QueryMembers {
         checkSelector(text);
         return nodeListOf(() => []);
       }
-      const found = queryNodes(node.__node_id, text).flatMap(
-        (nodeId) => elementHandle(nodeId, builders) ?? [],
+      const found = queryNodes(node.__node_id, text).map((nodeId) =>
+        elementHandle(nodeId, builders),
       );
       return nodeListOf(() => found);
     },
@@ -95,7 +95,7 @@ export function selectorMembers(builders: HandleBuilders): SelectorMembers {
         return null;
       }
       const found = closestNode(element.__node_id, text);
-      return found === null ? null : (elementHandle(found, builders) ?? null);
+      return found === null ? null : elementHandle(found, builders);
     },
   };
 }

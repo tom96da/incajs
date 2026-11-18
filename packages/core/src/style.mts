@@ -3,23 +3,10 @@
 
 // The style elements of the stylesheets that built code applies.
 
-import {
-  adoptTextNode,
-  createElementNode,
-  createIncaElement,
-  createTextNode,
-  rootElement,
-} from "./element/handle.mts";
+import { adoptHandle, createElementNode, createTextNode, rootElement } from "./element/handle.mts";
 import { entered, nodeOf } from "./element/lifecycle.mts";
 import { insert, remove } from "./element/treeOps.mts";
-import {
-  childNodeIds,
-  getAttribute,
-  queryNodes,
-  rootNodeId,
-  setAttribute,
-  textContent,
-} from "./ffi/index.mts";
+import { childNodeIds, getAttribute, queryNodes, rootNodeId, setAttribute } from "./ffi/index.mts";
 import type { Element } from "./element/types.mts";
 import type { NodeId } from "./types.mts";
 
@@ -30,10 +17,8 @@ let scanned = false;
 
 /** Gives a style element an earlier evaluation left a handle, and makes it strong with its text. */
 function adopt(id: NodeId): Element {
-  const el = createIncaElement(id, "style");
-  for (const child of childNodeIds(id)) {
-    entered(adoptTextNode(child, textContent(child)));
-  }
+  const el = adoptHandle(id) as Element;
+  for (const child of childNodeIds(id)) entered(adoptHandle(child));
   entered(el);
   return el;
 }

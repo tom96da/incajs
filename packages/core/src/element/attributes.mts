@@ -10,7 +10,7 @@ import {
 } from "../ffi/index.mts";
 import { requireArguments, attributeText } from "./arguments.mts";
 import { namedNodeMapOf } from "./collections.mts";
-import { isDestroyed, partsOf, receiverNode, receiverOf, ELEMENT_RULE } from "./lifecycle.mts";
+import { isDestroyed, receiverNode, receiverOf, ELEMENT_RULE } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
 import type { Attr, Element, NamedNodeMap } from "./types.mts";
 
@@ -215,30 +215,6 @@ export function attributeMembers(): AttributeMembers & Pick<Element, "id"> {
     },
     get attributes() {
       return attributesOf(this).store.map();
-    },
-  };
-}
-
-/** The four name members of an element. */
-type NameMembers = Pick<Element, "tagName" | "localName" | "namespaceURI" | "prefix">;
-
-/**
- * Builds the name members of `Element`, read from the parts the record computed once.
- * @returns the members
- */
-export function nameMembers(): NameMembers {
-  return {
-    get localName() {
-      return partsOf(receiverOf(this, ELEMENT_RULE))[0];
-    },
-    get namespaceURI() {
-      return partsOf(receiverOf(this, ELEMENT_RULE))[1];
-    },
-    get prefix() {
-      return partsOf(receiverOf(this, ELEMENT_RULE))[2];
-    },
-    get tagName() {
-      return partsOf(receiverOf(this, ELEMENT_RULE))[3];
     },
   };
 }

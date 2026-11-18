@@ -6,6 +6,7 @@
 import {
   appendChild,
   childNodeIds,
+  createNode,
   isConnected,
   linkedNode,
   removeChild,
@@ -14,15 +15,7 @@ import {
 } from "../ffi/index.mts";
 import { nullableText } from "./arguments.mts";
 import { nodeListOf } from "./collections.mts";
-import {
-  entered,
-  isDestroyed,
-  left,
-  nodeOf,
-  receiverOf,
-  NODE_RULE,
-  receiverNode,
-} from "./lifecycle.mts";
+import { isDestroyed, left, nodeOf, receiverOf, NODE_RULE, receiverNode } from "./lifecycle.mts";
 import type { NodeLink } from "../ffi/index.mts";
 import type { Document } from "../types.mts";
 import type { HandleNode } from "./handleNode.mts";
@@ -83,16 +76,17 @@ export function writeData(node: HandleNode, data: string): void {
  * @param builders - the functions that build the handles
  */
 export function replaceWithText(parent: Node, text: string, builders: HandleBuilders): void {
-  const textNode = text ? builders.createText!(text) : undefined;
+  const textId = text ? createNode("#text") : undefined;
+  if (textId !== undefined) setCharacterData(textId, text);
   for (const childId of childNodeIds(parent.__node_id)) {
     removeChild(parent.__node_id, childId);
     const child = nodeOf(childId);
     if (child) left(child);
   }
-  if (textNode === undefined) return;
+  if (textId === undefined) return;
 
-  appendChild(parent.__node_id, textNode.__node_id);
-  entered(textNode);
+  appendChild(parent.__node_id, textId);
+  builders.node(textId, text);
 }
 
 /**
@@ -108,9 +102,7 @@ export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
     return found === null ? null : (builders.node(found) ?? null);
   };
   const liveChildren = (node: HandleNode): HandleNode[] =>
-    isDestroyed(node)
-      ? []
-      : childNodeIds(node.__node_id).flatMap((child) => builders.node(child) ?? []);
+    isDestroyed(node) ? [] : childNodeIds(node.__node_id).map((child) => builders.node(child)!);
   return {
     get nodeType() {
       return NODE_TYPES[receiverNode(this, NODE_RULE).kind];

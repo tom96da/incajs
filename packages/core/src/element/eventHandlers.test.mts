@@ -3,8 +3,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { adoptElement } from "../../tests/adopt.mts";
 import { nativeStub } from "../../tests/setup.mts";
-import { createIncaElement } from "./handle.mts";
 import { markFreed, prototypes } from "./lifecycle.mts";
 import type { HostCallback } from "../ffi/index.mts";
 import type { Element } from "./types.mts";
@@ -57,8 +57,8 @@ beforeEach(() => {
   native = installNative();
 });
 
-describe("createIncaElement handler properties", () => {
-  const element = () => createIncaElement(1, "div");
+describe("element handler properties", () => {
+  const element = () => adoptElement(1, "div");
 
   it("defines onclick on HTMLElement.prototype as an enumerable, configurable accessor", () => {
     const descriptor = Object.getOwnPropertyDescriptor(prototypes().HTMLElement, "onclick")!;

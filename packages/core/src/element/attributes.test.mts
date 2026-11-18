@@ -3,8 +3,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { adoptElement } from "../../tests/adopt.mts";
 import { nativeStub } from "../../tests/setup.mts";
-import { createIncaElement } from "./handle.mts";
 import { markFreed, markRemoved } from "./lifecycle.mts";
 import type { ElementName } from "../ffi/index.mts";
 import type { Element } from "./types.mts";
@@ -39,7 +39,7 @@ function setup(initial: Record<string, Stored> = {}, name: ElementName = "div") 
     attributeNames: vi.fn<(nodeId: number) => string[]>(() => [...store.keys()]),
   };
   vi.stubGlobal("__inca_native__", nativeStub(host as never));
-  const el: Element = createIncaElement(1, name);
+  const el: Element = adoptElement(1, name);
   return { host, el, store };
 }
 

@@ -252,7 +252,7 @@ describe("a child with no handle", () => {
     ["children", (parent: Element) => parent.children.length],
     ["childNodes", (parent: Element) => parent.childNodes.length],
     ["childElementCount", (parent: Element) => parent.childElementCount],
-  ] as const)("is skipped by %s", (_member, count) => {
-    expect(count(withRawChild())).toBe(1);
+  ] as const)("is counted by %s", (_member, count) => {
+    expect(count(withRawChild())).toBe(2);
   });
 });
