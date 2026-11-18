@@ -623,7 +623,7 @@ mod tests {
             &dispatcher,
             c,
             "mouseover",
-            &format!("() => seen.push(String(__inca_native__.matches({c}, ':hover')))"),
+            &format!("() => seen.push('' + __inca_native__.nodeHandle({c})[0].matches(':hover'))"),
         );
 
         let got = hover(cx, &dispatcher, Some(c));

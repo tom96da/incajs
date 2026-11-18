@@ -192,26 +192,6 @@ export function cloneNode(nodeId: NodeId, deep: boolean): NodeId {
 }
 
 /**
- * Reads the markup of the children of a node. A template reads its content.
- * @param nodeId - the node to read
- * @returns the markup
- * @throws {TypeError} when `nodeId` names no node
- */
-export function innerHtml(nodeId: NodeId): string {
-  return native().innerHtml(nodeId);
-}
-
-/**
- * Reads the markup of a node and its children.
- * @param nodeId - the node to read
- * @returns the markup
- * @throws {TypeError} when `nodeId` names no node
- */
-export function outerHtml(nodeId: NodeId): string {
-  return native().outerHtml(nodeId);
-}
-
-/**
  * Parses `html` in the context of a node and replaces its children, or the children of its content
  * for a template. The old children keep their listeners and are freed at the start of the next
  * frame unless held.
@@ -348,16 +328,6 @@ export function childNodeIds(nodeId: NodeId, elementOnly?: boolean): NodeId[] {
 }
 
 /**
- * Whether the parent chain of a node reaches the document.
- * @param nodeId - the node to test
- * @returns `true` for the document and the nodes below it
- * @throws {TypeError} when `nodeId` names no node
- */
-export function isConnected(nodeId: NodeId): boolean {
-  return native().isConnected(nodeId);
-}
-
-/**
  * Reads the text of a node in the host tree: the data of a text or comment node, and the data of
  * the text descendants in tree order for an element.
  * @param nodeId - the node to read
@@ -379,43 +349,6 @@ export function setCharacterData(nodeId: NodeId, data: string): void {
 }
 
 /**
- * Reads the data of a text node and of the text siblings that touch it.
- * @param nodeId - the text node
- * @returns the joined data in order
- * @throws {TypeError} when `nodeId` names no node
- */
-export function wholeText(nodeId: NodeId): string {
-  return native().wholeText(nodeId);
-}
-
-/**
- * Reads a range of the data of a node. Offset and count convert to unsigned 32-bit integers and
- * count UTF-16 code units.
- * @param nodeId - the text or comment node
- * @param offset - where the range starts
- * @param count - the length of the range, cut at the end of the data
- * @returns the text of the range
- * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data
- * @throws {TypeError} when `nodeId` names no node
- */
-export function substringData(nodeId: NodeId, offset: number, count: number): string {
-  return native().substringData(nodeId, offset, count);
-}
-
-/**
- * Replaces a range of the data of a node. Offset and count convert like in {@link substringData}.
- * @param nodeId - the text or comment node
- * @param offset - where the range starts
- * @param count - the length of the range, cut at the end of the data
- * @param data - the text that takes the place of the range
- * @throws {DOMException} named `IndexSizeError` when `offset` is beyond the data
- * @throws {TypeError} when `nodeId` names no node
- */
-export function replaceData(nodeId: NodeId, offset: number, count: number, data: string): void {
-  native().replaceData(nodeId, offset, count, data);
-}
-
-/**
  * Cuts the data of a text node. The new node holds the tail and follows `nodeId` when `nodeId` has
  * a parent. It has no parent otherwise, and the host frees it at the start of the next frame
  * unless it is inserted or held with {@link holdNode} by then.
@@ -430,24 +363,11 @@ export function splitText(nodeId: NodeId, offset: number): NodeId {
 }
 
 /**
- * Whether the element `nodeId` matches the selector list `selector`.
- * @param nodeId - the node to test
- * @param selector - the selector list
- * @returns `true` for a match
- * @throws {DOMException} named `SyntaxError` for an invalid selector
- * @throws {TypeError} when `nodeId` names no node
- */
-export function matchesNode(nodeId: NodeId, selector: string): boolean {
-  return native().matches(nodeId, selector);
-}
-
-/**
  * Finds the nearest element at or above `nodeId` that matches `selector`.
  * @param nodeId - the node to start at
  * @param selector - the selector list
- * @returns the id of the match, or `null`
+ * @returns the id of the match, or `null` when none matches or `nodeId` names no node
  * @throws {DOMException} named `SyntaxError` for an invalid selector
- * @throws {TypeError} when `nodeId` names no node
  */
 export function closestNode(nodeId: NodeId, selector: string): NodeId | null {
   return native().closest(nodeId, selector);
@@ -457,9 +377,8 @@ export function closestNode(nodeId: NodeId, selector: string): NodeId | null {
  * Finds the first descendant of `nodeId` that matches `selector`, in document order.
  * @param nodeId - the node to search below
  * @param selector - the selector list
- * @returns the id of the match, or `null`
+ * @returns the id of the match, or `null` when none matches or `nodeId` names no node
  * @throws {DOMException} named `SyntaxError` for an invalid selector
- * @throws {TypeError} when `nodeId` names no node
  */
 export function queryNode(nodeId: NodeId, selector: string): NodeId | null {
   return native().querySelector(nodeId, selector);
@@ -469,19 +388,9 @@ export function queryNode(nodeId: NodeId, selector: string): NodeId | null {
  * Finds every descendant of `nodeId` that matches `selector`, in document order.
  * @param nodeId - the node to search below
  * @param selector - the selector list
- * @returns the ids of the matches
+ * @returns the ids of the matches, empty when `nodeId` names no node
  * @throws {DOMException} named `SyntaxError` for an invalid selector
- * @throws {TypeError} when `nodeId` names no node
  */
 export function queryNodes(nodeId: NodeId, selector: string): NodeId[] {
   return native().querySelectorAll(nodeId, selector);
-}
-
-/**
- * Checks that `selector` is a valid selector list, without a node.
- * @param selector - the selector list
- * @throws {DOMException} named `SyntaxError` for an invalid selector
- */
-export function checkSelector(selector: string): void {
-  native().checkSelector(selector);
 }

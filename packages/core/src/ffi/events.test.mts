@@ -6,9 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import {
   addListener,
-  blur,
   click,
-  focus,
   focusedNode,
   removeListener,
   signalId,
@@ -30,8 +28,6 @@ const native = {
   removeEventListener: vi.fn<(nodeId: number, event: string, callbackId: number) => boolean>(
     () => true,
   ),
-  focusNode: vi.fn<(nodeId: number, preventScroll?: boolean) => void>(),
-  blurNode: vi.fn<(nodeId: number) => void>(),
   focusedNode: vi.fn<() => number | null>(() => null),
   click: vi.fn<(nodeId: number) => void>(),
   windowTargetId: vi.fn<() => WindowTargetId>(() => "window-target" as WindowTargetId),
@@ -75,22 +71,6 @@ describe("wrapper functions forward to __inca_native__", () => {
   it("focusedNode gives the id the host reports", () => {
     native.focusedNode.mockReturnValueOnce(7);
     expect(focusedNode()).toBe(7);
-  });
-});
-
-describe("focus", () => {
-  it("passes the preventScroll flag through", () => {
-    focus(7, true);
-    focus(7, false);
-    expect(native.focusNode).toHaveBeenNthCalledWith(1, 7, true);
-    expect(native.focusNode).toHaveBeenNthCalledWith(2, 7, false);
-  });
-});
-
-describe("blur", () => {
-  it("forwards the node id to native blurNode", () => {
-    blur(7);
-    expect(native.blurNode).toHaveBeenCalledWith(7);
   });
 });
 

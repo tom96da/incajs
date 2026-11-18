@@ -3,10 +3,10 @@
 
 // The selector members: `matches()`, `closest()` and the queries of an element and the document.
 
-import { checkSelector, closestNode, matchesNode, queryNode, queryNodes } from "../ffi/index.mts";
+import { closestNode, queryNode, queryNodes } from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./arguments.mts";
 import { nodeListOf } from "./collections.mts";
-import { isDestroyed, ELEMENT_RULE, PARENT_NODE_RULE, receiverNode } from "./lifecycle.mts";
+import { ELEMENT_RULE, PARENT_NODE_RULE, receiverNode } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
 import type { Element } from "./types.mts";
@@ -15,7 +15,7 @@ import type { Element } from "./types.mts";
 export type QueryMembers = Pick<Element, "querySelector" | "querySelectorAll">;
 
 /** The members {@link selectorMembers} builds. */
-export type SelectorMembers = Pick<Element, "matches" | "closest">;
+export type SelectorMembers = Pick<Element, "closest">;
 
 /**
  * Checks the argument count of a selector method and converts the selector to text.
@@ -49,20 +49,12 @@ export function queryMembers(builders: HandleBuilders): QueryMembers {
     querySelector(selectors: string) {
       const node = receiverNode(this, PARENT_NODE_RULE);
       const text = selectorText(arguments, "querySelector", selectors);
-      if (isDestroyed(node)) {
-        checkSelector(text);
-        return null;
-      }
       const found = queryNode(node.__node_id, text);
       return found === null ? null : elementHandle(found, builders);
     },
     querySelectorAll(selectors: string) {
       const node = receiverNode(this, PARENT_NODE_RULE);
       const text = selectorText(arguments, "querySelectorAll", selectors);
-      if (isDestroyed(node)) {
-        checkSelector(text);
-        return nodeListOf(() => []);
-      }
       const found = queryNodes(node.__node_id, text).map((nodeId) =>
         elementHandle(nodeId, builders),
       );
@@ -72,28 +64,16 @@ export function queryMembers(builders: HandleBuilders): QueryMembers {
 }
 
 /**
- * Builds `matches()` and `closest()` of `Element`.
+ * Builds `closest()` of `Element`. A node the host freed finds nothing, and a bad selector still
+ * throws.
  * @param builders - the lookup of a handle by node id
  * @returns the members
  */
 export function selectorMembers(builders: HandleBuilders): SelectorMembers {
   return {
-    matches(selectors: string) {
-      const element = receiverNode(this, ELEMENT_RULE);
-      const text = selectorText(arguments, "matches", selectors);
-      if (isDestroyed(element)) {
-        checkSelector(text);
-        return false;
-      }
-      return matchesNode(element.__node_id, text);
-    },
     closest(selectors: string) {
       const element = receiverNode(this, ELEMENT_RULE);
       const text = selectorText(arguments, "closest", selectors);
-      if (isDestroyed(element)) {
-        checkSelector(text);
-        return null;
-      }
       const found = closestNode(element.__node_id, text);
       return found === null ? null : elementHandle(found, builders);
     },

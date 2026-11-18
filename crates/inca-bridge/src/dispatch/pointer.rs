@@ -569,7 +569,7 @@ mod tests {
     }
 
     fn read_active(node: NodeId) -> String {
-        format!("() => out.push(String(__inca_native__.matches({node}, ':active')))")
+        format!("() => out.push(String(__inca_native__.nodeHandle({node})[0].matches(':active')))")
     }
 
     #[gpui_cases]

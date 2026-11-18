@@ -8,8 +8,6 @@ export { createEventTarget } from "./eventTarget.mts";
 export { window } from "./window.mts";
 export { addEventListener, removeEventListener, latestEventId } from "./events.mts";
 export {
-  focus,
-  blur,
   dispatchEvent,
   click,
   focusedNode,

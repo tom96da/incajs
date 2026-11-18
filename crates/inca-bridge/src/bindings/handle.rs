@@ -14,9 +14,9 @@ use std::rc::Rc;
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 use rquickjs::object::Property;
-use rquickjs::{Array, Class, Ctx, IntoJs, Object, Result as JsResult, Value};
+use rquickjs::{Array, Class, Ctx, Exception, IntoJs, Object, Result as JsResult, Value};
 
-use inca_jsenv::class::{plain_class, receiver_named};
+use inca_jsenv::class::plain_class;
 use inca_jsenv::required_prototype;
 use inca_node::{NodeId, NodeKind, VirtualNode};
 
@@ -92,12 +92,28 @@ fn kind_bit(kind: NodeKind) -> u8 {
     }
 }
 
+const fn rule(kinds: u8, spaces: u8, name: &'static str) -> Rule {
+    Rule {
+        kinds,
+        spaces,
+        name,
+    }
+}
+
+/// The receiver of a `Node` member: any node.
+pub(super) const NODE: Rule = rule(31, 7, "a Node");
+/// The receiver of a `CharacterData` member: a text node or a comment.
+pub(super) const CHARACTER_DATA: Rule = rule(6, 7, "a CharacterData");
+/// The receiver of a `Text` member: a text node.
+pub(super) const TEXT: Rule = rule(2, 7, "a Text");
 /// The receiver of an `Element` member: an element of any namespace.
-pub(super) const ELEMENT: Rule = Rule {
-    kinds: 1,
-    spaces: 7,
-    name: "Element",
-};
+pub(super) const ELEMENT: Rule = rule(1, 7, "an Element");
+/// The receiver of an `HTMLElement` member: an element of the HTML namespace.
+pub(super) const HTML_ELEMENT: Rule = rule(1, 1, "an HTMLElement");
+/// The receiver of a shared element member: an HTML, SVG or `MathML` element.
+pub(super) const HTML_OR_SVG: Rule = rule(1, 3, "an HTML, SVG or MathML element");
+/// The receiver of a `ParentNode` member: an element, a fragment or the document.
+pub(super) const PARENT_NODE: Rule = rule(25, 7, "an Element, Document or DocumentFragment");
 
 /// The node, kind and space of the instance `this`, which has to fit `rule`.
 ///
@@ -111,15 +127,23 @@ pub(super) fn receiver_of<'js>(
     this: &Value<'js>,
     rule: &Rule,
 ) -> JsResult<(NodeId, NodeKind, Space)> {
-    let handle = receiver_named::<NodeHandle>(ctx, this, rule.name)?;
+    let wrong = || {
+        Exception::throw_type(
+            ctx,
+            &format!(
+                "the receiver is not {}. call the method on an instance",
+                rule.name
+            ),
+        )
+    };
+    let handle = Class::<NodeHandle>::from_value(this).map_err(|_| wrong())?;
     let (node, kind, space) = {
         let handle = handle.borrow();
         (handle.node, handle.kind, handle.space)
     };
     let space_fits = kind != NodeKind::Element || rule.spaces & space.bit() != 0;
     if rule.kinds & kind_bit(kind) == 0 || !space_fits {
-        // The error of a value that is no instance names the interface the same way.
-        receiver_named::<NodeHandle>(ctx, &Value::new_undefined(ctx.clone()), rule.name)?;
+        return Err(wrong());
     }
     Ok((node, kind, space))
 }
@@ -153,9 +177,9 @@ pub(super) fn install_handle(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("nodeHandle", node_handle)
 }
 
-/// A new handle of the node `id`: `[handle, parented, special]`, where `parented` tells whether the
-/// node has a parent and `special` is `"input"`, `"template"` or `null`. An id the tree does not
-/// have gives `null`.
+/// A new handle of the node `id`, on the stored prototype of the node's interface:
+/// `[handle, parented, special]`, where `parented` tells whether the node has a parent and `special`
+/// is `"input"`, `"template"` or `null`. An id the tree does not have gives `null`.
 fn node_handle<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
@@ -190,7 +214,9 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::test_support::{MATHML, SVG, engine_with_bindings, error_name};
+    use crate::test_support::{
+        MATHML, SVG, engine_with_bindings, error_name, member_error, member_json,
+    };
 
     /// The name of the interface of the prototype of the handle of the node `make` builds.
     fn interface_of(make: &str) -> String {
@@ -347,26 +373,7 @@ mod tests {
         assert_eq!(got, "object");
     }
 
-    #[test]
-    fn a_member_called_on_a_forged_object_throws_the_receiver_error() {
-        let (engine, _host) = engine_with_bindings();
-
-        let got = error_name(
-            &engine,
-            r"
-            const n = __inca_native__;
-            const forged = Object.create(n.interfacePrototypes().HTMLElement);
-            Object.defineProperty(forged, '__node_id', { value: n.createNode('div') });
-            const element = n.interfacePrototypes().Element;
-            Object.getOwnPropertyDescriptor(element, 'tagName').get.call(forged);
-            ",
-        );
-
-        assert_eq!(got, "TypeError");
-    }
-
     #[rstest]
-    #[case::text("n.createNode('#text')")]
     #[case::comment("n.createNode('#comment')")]
     #[case::fragment("n.createNode('#fragment')")]
     #[case::document("n.documentNodeId()")]
@@ -388,5 +395,75 @@ mod tests {
         );
 
         assert_eq!(got, "TypeError");
+    }
+
+    #[rstest]
+    #[case::plain_object("({})")]
+    #[case::inheriting_object("Object.create(mk('div'))")]
+    #[case::forged(
+        "Object.defineProperty(Object.create(Element.prototype), '__node_id', { value: 1 })"
+    )]
+    fn a_member_throws_for_a_receiver_that_is_no_instance(#[case] receiver: &str) {
+        assert_eq!(
+            member_error(&format!(
+                r"
+                const get = Object.getOwnPropertyDescriptor(n.interfacePrototypes().Element, 'tagName').get;
+                get.call({receiver});
+                "
+            )),
+            "TypeError"
+        );
+    }
+
+    #[rstest]
+    #[case::element_member_on_text("Element", "tagName", "txt('a')", "an Element")]
+    #[case::click_on_svg(
+        "HTMLElement",
+        "click",
+        "h(n.createElementNS('http://www.w3.org/2000/svg', 'g')[0])",
+        "an HTMLElement"
+    )]
+    #[case::focus_on_null_namespace(
+        "HTMLElement",
+        "focus",
+        "h(n.createElementNS(null, 'a')[0])",
+        "an HTML, SVG or MathML element"
+    )]
+    #[case::data_on_element("CharacterData", "data", "mk('div')", "a CharacterData")]
+    fn a_member_names_the_interface_of_a_wrong_receiver(
+        #[case] proto: &str,
+        #[case] key: &str,
+        #[case] receiver: &str,
+        #[case] name: &str,
+    ) {
+        let (got, _host) = member_json(&format!(
+            r"
+            const d = Object.getOwnPropertyDescriptor(n.interfacePrototypes().{proto}, '{key}');
+            const f = d.get ?? d.value;
+            try {{
+                f.call({receiver});
+            }} catch (e) {{
+                return e.message;
+            }}
+            "
+        ));
+
+        assert_eq!(
+            got,
+            serde_json::json!(format!(
+                "the receiver is not {name}. call the method on an instance"
+            ))
+        );
+    }
+
+    #[rstest]
+    #[case::text("txt('a')")]
+    #[case::comment("h(n.createNode('#comment'))")]
+    #[case::fragment("h(n.createNode('#fragment'))")]
+    #[case::document("h(n.documentNodeId())")]
+    fn a_kind_other_than_an_element_passes_the_node_receiver_in_every_space(#[case] make: &str) {
+        let (got, _host) = member_json(&format!("return typeof ({make}).nodeType;"));
+
+        assert_eq!(got, serde_json::json!("number"));
     }
 }

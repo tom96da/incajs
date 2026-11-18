@@ -43,111 +43,6 @@ beforeEach(() => {
   vi.stubGlobal("__inca_native__", nativeStub(host as never));
 });
 
-describe("nodeType", () => {
-  it.each([
-    ["an element", () => createElementNode("button"), 1],
-    ["a text node", () => createTextNode("t"), 3],
-    ["a comment", () => createCommentNode(), 8],
-  ] as const)("reads %s", (_, make, type) => {
-    expect(make().nodeType).toBe(type);
-  });
-});
-
-describe("nodeName", () => {
-  it.each([
-    ["an element", () => createElementNode("button"), "BUTTON"],
-    ["a text node", () => createTextNode("t"), "#text"],
-    ["a comment", () => createCommentNode(), "#comment"],
-  ] as const)("reads %s", (_, make, name) => {
-    expect(make().nodeName).toBe(name);
-  });
-});
-
-describe("nodeValue", () => {
-  it("is null for an element", () => {
-    expect(createElementNode("div").nodeValue).toBeNull();
-  });
-
-  it("stays null after an assignment to an element", () => {
-    const el = createElementNode("div");
-
-    el.nodeValue = "x";
-
-    expect(el.nodeValue).toBeNull();
-  });
-
-  it("sends nothing to the host for an assignment to an element", () => {
-    createElementNode("div").nodeValue = "x";
-
-    expect(host.setCharacterData).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ["a text node", () => createTextNode("first")],
-    ["a comment", () => createCommentNode()],
-  ] as const)("reads the data of %s from the host", (_, make) => {
-    const node = make();
-    data[node.__node_id] = "second";
-
-    expect(node.nodeValue).toBe("second");
-  });
-
-  it.each([
-    [null, ""],
-    [undefined, ""],
-    ["x", "x"],
-  ] as const)("sends %s to the host as %j for a text node", (value, stored) => {
-    const text = createTextNode("first");
-    host.setCharacterData.mockClear();
-
-    text.nodeValue = value as string | null;
-
-    expect(host.setCharacterData).toHaveBeenCalledWith(text.__node_id, stored);
-  });
-
-  it.each([
-    [null, ""],
-    [undefined, ""],
-    ["x", "x"],
-  ] as const)("mirrors %s as %j in the text field", (value, stored) => {
-    const text = createTextNode("first");
-
-    text.nodeValue = value as string | null;
-
-    expect(text.text).toBe(stored);
-  });
-
-  it("sends the text of a new comment to the host", () => {
-    const comment = createCommentNode("x");
-
-    expect(host.setCharacterData).toHaveBeenCalledWith(comment.__node_id, "x");
-  });
-
-  it("sends an assignment to a comment to the host", () => {
-    const comment = createCommentNode();
-
-    comment.nodeValue = "note";
-
-    expect(host.setCharacterData).toHaveBeenCalledWith(comment.__node_id, "note");
-  });
-});
-
-describe("isConnected", () => {
-  it.each([true, false])("reads %s from the host", (connected) => {
-    host.isConnected.mockReturnValueOnce(connected);
-
-    expect(createElementNode("div").isConnected).toBe(connected);
-  });
-
-  it("asks the host about its own node", () => {
-    const el = createElementNode("div");
-
-    void el.isConnected;
-
-    expect(host.isConnected).toHaveBeenCalledWith(el.__node_id);
-  });
-});
-
 describe("ownerDocument", () => {
   it.each([
     ["element", () => createElementNode("div")],
@@ -317,50 +212,12 @@ describe("a freed node", () => {
     expect(freed().list.length).toBe(0);
   });
 
-  it("reads false for hasChildNodes", () => {
-    expect(freed().child.hasChildNodes()).toBe(false);
-  });
-
-  it("reads false for isConnected", () => {
-    expect(freed().child.isConnected).toBe(false);
-  });
-
   it("asks the host for no link", () => {
     const { child } = freed();
 
     void [child.parentNode, child.firstChild, child.nextSibling];
 
     expect(host.linkedNode).not.toHaveBeenCalled();
-  });
-
-  it("asks the host nothing for isConnected", () => {
-    void freed().child.isConnected;
-
-    expect(host.isConnected).not.toHaveBeenCalled();
-  });
-
-  it("keeps the last data of a text node", () => {
-    const text = createTextNode("kept");
-    markFreed([text.__node_id]);
-
-    expect(text.nodeValue).toBe("kept");
-  });
-
-  it("has an empty nodeValue as a comment", () => {
-    const comment = createCommentNode();
-    markFreed([comment.__node_id]);
-
-    expect(comment.nodeValue).toBe("");
-  });
-
-  it("ignores an assignment to nodeValue", () => {
-    const text = createTextNode("kept");
-    markFreed([text.__node_id]);
-    host.setCharacterData.mockClear();
-
-    text.nodeValue = "changed";
-
-    expect(host.setCharacterData).not.toHaveBeenCalled();
   });
 });
 

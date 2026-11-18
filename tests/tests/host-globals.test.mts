@@ -329,7 +329,7 @@ it(
     const handlers = HANDLER_EVENTS.map((event) => `on${event}: [Getter/Setter]`).join(", ");
 
     expect(await runInHost(printEntry)).toBe(
-      "[e2e] HTMLElement {} Text { text: 'x' } HTMLElement { value: [Getter/Setter] } " +
+      "[e2e] HTMLElement {} Text {} HTMLElement { value: [Getter/Setter] } " +
         `HTMLElement { content: [Getter] } Element {} EventTarget { ${handlers} }`,
     );
   },

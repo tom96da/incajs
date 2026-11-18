@@ -4,14 +4,7 @@
 // The markup members of an element. The host parses and serializes, and the members keep the node
 // table in step.
 
-import {
-  childNodeIds,
-  insertAdjacentHtml,
-  innerHtml,
-  outerHtml,
-  setInnerHtml,
-  setOuterHtml,
-} from "../ffi/index.mts";
+import { childNodeIds, insertAdjacentHtml, setInnerHtml, setOuterHtml } from "../ffi/index.mts";
 import { attributeText, requireArguments } from "./arguments.mts";
 import {
   existingContent,
@@ -34,16 +27,13 @@ function markupText(value: unknown): string {
 }
 
 /**
- * Builds the markup members of `Element`.
+ * Builds the markup members of `Element`. The host defines the getters of `innerHTML` and
+ * `outerHTML`, and `defineMembers` keeps them beside these setters.
  * @returns the members
  */
 export function htmlMembers(): HtmlMembers {
   const elementOf = (self: unknown): Element => receiverNode<Element>(self, ELEMENT_RULE);
   return {
-    get innerHTML() {
-      const element = elementOf(this);
-      return isDestroyed(element) ? "" : innerHtml(element.__node_id);
-    },
     set innerHTML(value: string) {
       const element = elementOf(this);
       const text = markupText(value);
@@ -55,10 +45,6 @@ export function htmlMembers(): HtmlMembers {
         const handle = nodeOf(child);
         if (handle) left(handle);
       }
-    },
-    get outerHTML() {
-      const element = elementOf(this);
-      return isDestroyed(element) ? "" : outerHtml(element.__node_id);
     },
     set outerHTML(value: string) {
       const element = elementOf(this);

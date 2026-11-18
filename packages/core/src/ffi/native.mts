@@ -143,8 +143,6 @@ interface NativeBindings {
   cloneNode(nodeId: NodeId, deep: boolean): NodeId;
   nodeHandle(nodeId: NodeId): NodeHandleResult | null;
   templateContent(nodeId: NodeId): NodeId | null;
-  innerHtml(nodeId: NodeId): string;
-  outerHtml(nodeId: NodeId): string;
   setInnerHtml(nodeId: NodeId, html: string): void;
   setOuterHtml(nodeId: NodeId, html: string): boolean;
   insertAdjacentHtml(nodeId: NodeId, position: string, html: string): void;
@@ -163,16 +161,10 @@ interface NativeBindings {
   datasetTarget(): object;
   linkedNode(nodeId: NodeId, link: NodeLink, elementOnly?: boolean): NodeId | null;
   childNodeIds(nodeId: NodeId, elementOnly?: boolean): NodeId[];
-  isConnected(nodeId: NodeId): boolean;
   textContent(nodeId: NodeId): string;
   setCharacterData(nodeId: NodeId, data: string): void;
-  wholeText(nodeId: NodeId): string;
-  substringData(nodeId: NodeId, offset: number, count: number): string;
-  replaceData(nodeId: NodeId, offset: number, count: number, data: string): void;
   splitText(nodeId: NodeId, offset: number): NodeId;
-  matches(nodeId: NodeId, selector: string): boolean;
   closest(nodeId: NodeId, selector: string): NodeId | null;
-  checkSelector(selector: string): void;
   querySelector(nodeId: NodeId, selector: string): NodeId | null;
   querySelectorAll(nodeId: NodeId, selector: string): NodeId[];
   setStyle(nodeId: NodeId, key: string, value: AttributeValue): void;
@@ -203,9 +195,6 @@ interface NativeBindings {
   windowTargetId(): WindowTargetId;
   signalId(value: unknown): number | null;
   click(nodeId: NodeId): void;
-  setPointerCapture(nodeId: NodeId, pointerId: number): void;
-  releasePointerCapture(nodeId: NodeId, pointerId: number): void;
-  hasPointerCapture(nodeId: NodeId, pointerId: number): boolean;
 }
 
 /** What the host calls: it passes the event object as the first argument. */

@@ -10,7 +10,6 @@ import {
   rootNodeId,
   setCharacterData,
   setInputValue,
-  textContent,
   windowTargetId,
 } from "../ffi/index.mts";
 import { installInterfaces, defineMembers, windowHandlerMembers } from "./interfaces.mts";
@@ -20,10 +19,10 @@ import {
   existingContent,
   hold,
   isDestroyed,
+  knownRootId,
   nodeOf,
   registerNode,
   registerRoot,
-  stateOf,
   withState,
   NO_EVENTS,
   HTML_ELEMENT_RULE,
@@ -41,6 +40,7 @@ import type { Comment, Element, DocumentFragment, HTMLElement, Text } from "./ty
 const builders: HandleBuilders = {
   document: documentHandle,
   node: handleOf,
+  adopt: (id) => adoptHandle(id),
 };
 
 installInterfaces(builders);
@@ -74,38 +74,32 @@ const VALUE: PropertyDescriptor = {
 };
 
 /**
- * Builds the handle of an existing host node: a new instance of the host class on the prototype of
- * its kind, with its state. An HTML `input` has `value`, an HTML `template` has `content`, and a
- * text node has `text`. The handle is recorded weakly.
+ * Completes the handle of an existing host node: the state, an HTML `input`'s `value`, an HTML
+ * `template`'s `content`, and the weak record.
  * @param id - the native node's id
+ * @param built - what `nodeHandle` gave for `id`
  * @param passiveByDefault - event names whose listeners are passive unless their options say
  *   `passive: false`. A document passes `wheel` when this is omitted.
- * @param data - the data of a text node, read from the host when omitted
- * @returns the handle and whether its node has a parent, or `undefined` for an id the host no
- *   longer has
+ * @returns the handle
  */
-function buildHandle(
+function finishHandle(
   id: NodeId,
+  built: NonNullable<ReturnType<typeof nodeHandle>>,
   passiveByDefault?: readonly string[],
-  data?: string,
-): { handle: HandleNode; parented: boolean } | undefined {
-  const built = nodeHandle(id);
-  if (built === null) return undefined;
-  const [instance, parented, special] = built;
-  const handle = instance as HandleNode;
-  withState(handle, passiveByDefault ?? NO_EVENTS);
-  const state = stateOf(handle)!;
+): HandleNode {
+  const handle = built[0] as HandleNode;
+  const special = built[2];
+  const state = withState(handle, passiveByDefault ?? NO_EVENTS);
   if (state.kind === "document") {
     state.passive = passiveByDefault ?? WHEEL_EVENTS;
     state.copy = id !== documentNodeId();
   }
   if (special === "template") Object.defineProperty(handle, "content", CONTENT);
   if (special === "input") Object.defineProperty(handle, "value", VALUE);
-  if (state.kind === "text") (handle as Text).text = data ?? textContent(id);
   registerNode(handle);
   if (special === "template")
     attachContent(handle as Element, (content) => adoptHandle(content) as DocumentFragment);
-  return { handle, parented };
+  return handle;
 }
 
 /**
@@ -113,15 +107,10 @@ function buildHandle(
  * @param id - the native node's id
  * @param passiveByDefault - event names whose listeners are passive unless their options say
  *   `passive: false`
- * @param data - the data of a text node, read from the host when omitted
  * @returns the new handle
  */
-export function adoptHandle(
-  id: NodeId,
-  passiveByDefault?: readonly string[],
-  data?: string,
-): HandleNode {
-  return buildHandle(id, passiveByDefault, data)!.handle;
+export function adoptHandle(id: NodeId, passiveByDefault?: readonly string[]): HandleNode {
+  return finishHandle(id, nodeHandle(id)!, passiveByDefault);
 }
 
 /**
@@ -152,7 +141,7 @@ export function createCommentNode(text = ""): Comment {
 export function createTextNode(text: string): Text {
   const id = createNode("#text");
   setCharacterData(id, text);
-  return adoptHandle(id, NO_EVENTS, text) as Text;
+  return adoptHandle(id, NO_EVENTS) as Text;
 }
 
 /**
@@ -213,17 +202,17 @@ export function windowHandle(): Window {
  * live. A built handle of a node with a parent is strong, and a built handle of a node with none
  * is weak and held. A collected handle of the root container is rebuilt.
  * @param id - the native node's id
- * @param data - the data of a text node, read from the host when omitted
  * @returns the handle, or `undefined` for an id the host no longer has
  */
-export function handleOf(id: NodeId, data?: string): HandleNode | undefined {
+export function handleOf(id: NodeId): HandleNode | undefined {
   const live = nodeOf(id);
   if (live) return live;
-  if (id === rootNodeId()) return rootElement();
-  if (id === documentNodeId()) return documentHandle();
-  const built = buildHandle(id, undefined, data);
-  if (built === undefined) return undefined;
-  if (built.parented) entered(built.handle);
-  else hold(built.handle);
-  return built.handle;
+  if (id === (knownRootId() ?? rootNodeId())) return rootElement();
+  if (id === (theDocument?.__node_id ?? documentNodeId())) return documentHandle();
+  const built = nodeHandle(id);
+  if (built === null) return undefined;
+  const handle = finishHandle(id, built);
+  if (built[1]) entered(handle);
+  else hold(handle);
+  return handle;
 }

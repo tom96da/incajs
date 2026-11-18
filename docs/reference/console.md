@@ -117,9 +117,8 @@ type as in Node. These environment variables override the terminal check:
 ## Known issues
 
 - Output is not wrapped across lines.
-- A node prints as its interface and its own properties, such as `HTMLElement {}`. These nodes
-  show one property:
-  - a text node its `text`
+- A node prints as its interface and its own properties, such as `HTMLElement {}` or `Text {}`.
+  These nodes show one property:
   - an `input` its `value`
   - a `template` its `content`
 - An SVG or MathML element prints as `Element`.

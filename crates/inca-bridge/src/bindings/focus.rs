@@ -8,10 +8,12 @@ use gpui::Bounds;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
 use super::Natives;
+use inca_node::NodeId;
+
 use super::convert::{Flag, JsNodeId, existing_node, or_null};
 use super::host::Host;
 
-/// Requesting and releasing focus.
+/// Requesting and releasing focus, and reading the focused node and the box of a node.
 pub(super) fn install_focus(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("focusNode", focus_node)?;
     n.set("blurNode", blur_node)?;
@@ -40,26 +42,33 @@ fn focused_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>) -> JsResult<V
     }
 }
 
+/// The box of the node `id` in the last drawn frame: `x`, `y`, `width`, `height`, the border, the
+/// scroll offset applied to the box and the two gutters. A node that is not connected has none,
+/// whatever the frame record still holds, and an id the tree does not have is not connected.
+pub(super) fn node_box(host: &Host, id: NodeId) -> Option<[f64; 9]> {
+    if !host.tree.is_connected(id) {
+        return None;
+    }
+    host.layout_of(id).map(|layout| {
+        let Bounds { origin, size } = layout.bounds;
+        [
+            origin.x,
+            origin.y,
+            size.width,
+            size.height,
+            layout.border,
+            layout.scroll.x,
+            layout.scroll.y,
+            layout.gutter.width,
+            layout.gutter.height,
+        ]
+        .map(|px| f64::from(f32::from(px)))
+    })
+}
+
 fn layout_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
-        let host = host.borrow();
-        existing_node(&ctx, &host.tree, node_id)?;
-        let layout = host.layout_of(node_id);
-        let rect = layout.map(|layout| {
-            let Bounds { origin, size } = layout.bounds;
-            [
-                origin.x,
-                origin.y,
-                size.width,
-                size.height,
-                layout.border,
-                layout.scroll.x,
-                layout.scroll.y,
-                layout.gutter.width,
-                layout.gutter.height,
-            ]
-            .map(|px| f64::from(f32::from(px)))
-        });
+        let rect = node_box(&host.borrow(), node_id);
         or_null(&ctx, rect.as_ref().map(<[f64; 9]>::as_slice))
     }
 }
@@ -168,7 +177,15 @@ mod tests {
     #[test]
     fn layout_of_reads_the_recorded_box() {
         let (engine, host) = engine_with_bindings();
-        let node: u32 = engine.eval("__inca_native__.createNode('div')").unwrap();
+        let node: u32 = engine
+            .eval(
+                r"
+                const id = __inca_native__.createNode('div');
+                __inca_native__.appendChild(__inca_native__.rootNodeId(), id);
+                id;
+                ",
+            )
+            .unwrap();
         host.borrow().layout.borrow_mut().insert(node, layout(1.5));
 
         let read: Vec<f64> = engine
@@ -191,20 +208,26 @@ mod tests {
     }
 
     #[test]
-    fn layout_of_an_unknown_node_throws_type_error() {
-        let (engine, _host) = engine_with_bindings();
-
-        let caught: bool = engine
+    fn layout_of_a_node_that_is_not_connected_is_null_whatever_the_record_holds() {
+        let (engine, host) = engine_with_bindings();
+        let node: u32 = engine
             .eval(
                 r"
-                let caught = false;
-                try { __inca_native__.layoutOf(999); } catch (e) { caught = e instanceof TypeError; }
-                caught;
+                const n = __inca_native__;
+                globalThis.id = n.createNode('div');
+                n.appendChild(n.rootNodeId(), id);
+                n.removeChild(n.rootNodeId(), id);
+                id;
                 ",
             )
             .unwrap();
+        host.borrow().layout.borrow_mut().insert(node, layout(1.5));
 
-        assert!(caught);
+        let got: Vec<bool> = engine
+            .eval("[__inca_native__.layoutOf(id) === null, __inca_native__.layoutOf(999) === null]")
+            .unwrap();
+
+        assert_eq!(got, [true, true]);
     }
 
     #[test]

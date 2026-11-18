@@ -1941,3 +1941,11 @@ A fixed entry is deleted and its ID is never reused.
   `Event` declares `eventId`, which no standard defines. It is public so that the shape test of
   `globals.d.mts` finds it in the built declaration file, which strips `@internal` members. Fix:
   remove the member from the host and from the types, and the name from the shape test.
+
+- **B-360 `dataset` is a JS proxy over host natives**
+  `Units: core,bridge · Size: M–L · Impact: Low`
+
+  `dataset` is a JS proxy over the dataset natives. Moving it to a host class needs an exotic
+  object with a `defineProperty` hook, and the rquickjs exotic class has
+  `define_own_property: None` (`third_party/rquickjs/core/src/runtime/exotic.rs:14`). Fix: add the
+  hook in a wrapper or the vendored source, then make `dataset` a host class.

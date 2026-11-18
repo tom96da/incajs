@@ -87,7 +87,7 @@ describe("cloneNode", () => {
   it("builds a text node with the data of the original", () => {
     const copy = createTextNode("x").cloneNode();
 
-    expect(copy).toMatchObject({ kind: "text", text: "x" });
+    expect(copy).toMatchObject({ kind: "text", textContent: "x" });
   });
 
   it("reuses the content handle that the copy of a template made", () => {

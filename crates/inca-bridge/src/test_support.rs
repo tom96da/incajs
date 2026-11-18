@@ -93,6 +93,78 @@ pub fn json_of(engine: &Engine, expr: &str) -> serde_json::Value {
     serde_json::from_str(&text).unwrap()
 }
 
+/// The helpers of a member test: `n` is the native object, `h(id)` the handle of a node, `mk(tag)`
+/// a handle of a new element under the root, `loose(tag)` one with no parent, `txt(data)` a text
+/// node under the root and `free(handle)` frees the node of a handle.
+const MEMBER_PRELUDE: &str = r"
+    const n = __inca_native__;
+    const h = (id) => n.nodeHandle(id)[0];
+    const mk = (tag) => {
+        const id = n.createNode(tag);
+        n.appendChild(n.rootNodeId(), id);
+        return h(id);
+    };
+    const loose = (tag) => h(n.createNode(tag));
+    const txt = (data) => {
+        const id = n.createNode('#text');
+        n.setCharacterData(id, data);
+        n.appendChild(n.rootNodeId(), id);
+        return h(id);
+    };
+    const free = (handle) => n.destroyNode(handle.__node_id);
+    ";
+
+/// The body `code` of a member test, which `return`s a value, run over the helpers of
+/// [`MEMBER_PRELUDE`] in a new engine, and the value read back as JSON.
+///
+/// # Panics
+///
+/// Panics when the body throws or its value has no JSON form.
+#[must_use]
+pub fn member_json(code: &str) -> (serde_json::Value, Rc<RefCell<Host>>) {
+    let (engine, host) = engine_with_bindings();
+    let text: String = engine
+        .eval(&format!(
+            r"
+            (() => {{
+                {MEMBER_PRELUDE}
+                return JSON.stringify((() => {{
+                    {code}
+                }})());
+            }})()
+            "
+        ))
+        .unwrap();
+    (serde_json::from_str(&text).unwrap(), host)
+}
+
+/// The `name` of what the body `code` of a member test throws, or `'none'`.
+///
+/// # Panics
+///
+/// Panics when the engine fails to evaluate the body.
+#[must_use]
+pub fn member_error(code: &str) -> String {
+    let (engine, _host) = engine_with_bindings();
+    engine
+        .eval(&format!(
+            r"
+            (() => {{
+                {MEMBER_PRELUDE}
+                try {{
+                    (() => {{
+                        {code}
+                    }})();
+                    return 'none';
+                }} catch (e) {{
+                    return e.name;
+                }}
+            }})()
+            "
+        ))
+        .unwrap()
+}
+
 /// An engine over a host whose clock the test moves.
 pub struct Clocked {
     /// The engine, with the bindings and an empty global `log` array.

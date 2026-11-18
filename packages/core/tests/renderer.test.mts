@@ -7,7 +7,6 @@ import type { Ref } from "@vue/runtime-core";
 
 import { document } from "../src/document.mts";
 import { htmlCollectionOf, namedNodeMapOf, nodeListOf } from "../src/element/collections.mts";
-import { rectOf } from "../src/element/geometry.mts";
 import { createEventTarget } from "../src/eventTarget.mts";
 import { createNode, rootNodeId } from "../src/ffi/index.mts";
 import { createIncaApp } from "../src/vue/index.mts";
@@ -195,22 +194,12 @@ function installFakeNative(): Map<NodeId, FakeNode> {
         return siblings[siblings.indexOf(nodeId) + (link === "next" ? 1 : -1)] ?? null;
       },
       childNodeIds: (nodeId: NodeId) => [...requireNode(nodeId).children],
-      isConnected(nodeId: NodeId): boolean {
-        let at: NodeId | null = nodeId;
-        while (at !== null && at !== documentId) at = requireNode(at).parent;
-        return at === documentId;
-      },
       textContent: (nodeId: NodeId) => requireNode(nodeId).data,
       setCharacterData(nodeId: NodeId, data: string): void {
         requireNode(nodeId).data = data;
       },
-      wholeText: () => "",
-      substringData: () => "",
-      replaceData() {},
       splitText: () => 0,
-      matches: () => false,
       closest: () => null,
-      checkSelector: () => {},
       querySelector: () => null,
       querySelectorAll: () => [],
       attributeNames(nodeId: NodeId): string[] {
@@ -270,8 +259,6 @@ function installFakeNative(): Map<NodeId, FakeNode> {
         return [released, ids];
       },
       templateContent: () => null,
-      innerHtml: () => "",
-      outerHtml: () => "",
       setInnerHtml: () => undefined,
       setOuterHtml: () => false,
       insertAdjacentHtml: () => undefined,
@@ -286,9 +273,6 @@ function installFakeNative(): Map<NodeId, FakeNode> {
         return true;
       },
       click(): void {},
-      setPointerCapture(): void {},
-      releasePointerCapture(): void {},
-      hasPointerCapture: () => false,
     }),
   );
 
@@ -360,7 +344,6 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       localName: "div",
       namespaceURI: "http://www.w3.org/1999/xhtml",
       prefix: null,
-      matches: () => false,
       closest: () => null,
       querySelector: () => null,
       querySelectorAll: () => nodeListOf(() => []),
@@ -385,13 +368,14 @@ describe("incajs/vue renderer, driven end to end through real core internals", (
       nextElementSibling: null,
       children: htmlCollectionOf(() => []),
       contains: () => false,
+      matches: () => false,
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
       hasPointerCapture: () => false,
       addEventListener: target.addEventListener.bind(target),
       removeEventListener: target.removeEventListener.bind(target),
       dispatchEvent: target.dispatchEvent.bind(target),
-      getBoundingClientRect: () => rectOf(null),
+      getBoundingClientRect: () => new DOMRect(),
       clientWidth: 0,
       clientHeight: 0,
       clientLeft: 0,

@@ -5,25 +5,16 @@ import {
   attributeKey,
   attributeNames,
   getAttribute as readAttribute,
-  removeAttribute as dropAttribute,
   setAttribute as writeAttribute,
 } from "../ffi/index.mts";
-import { requireArguments, attributeText } from "./arguments.mts";
+import { attributeText } from "./arguments.mts";
 import { namedNodeMapOf } from "./collections.mts";
-import { isDestroyed, receiverNode, receiverOf, ELEMENT_RULE } from "./lifecycle.mts";
+import { isDestroyed, receiverOf, ELEMENT_RULE } from "./lifecycle.mts";
 import type { NodeId } from "../types.mts";
 import type { Attr, Element, NamedNodeMap } from "./types.mts";
 
 /** The members {@link attributeMembers} builds. */
-export type AttributeMembers = Pick<
-  Element,
-  | "getAttribute"
-  | "setAttribute"
-  | "hasAttribute"
-  | "removeAttribute"
-  | "getAttributeNames"
-  | "attributes"
->;
+export type AttributeMembers = Pick<Element, "attributes">;
 
 /**
  * An attribute that reads its value from the element on each access. It detaches when the element
@@ -173,46 +164,11 @@ function attributesOf(self: unknown): { element: Element; store: AttributeStore 
 }
 
 /**
- * Builds the attribute members and `id` of `Element`. A node the host freed reads no attribute and
- * ignores writes.
- * @returns the members, with `attributes` and `id` as accessors
+ * Builds `attributes` of `Element`. The host defines the other attribute members.
+ * @returns the members, with `attributes` as an accessor
  */
-export function attributeMembers(): AttributeMembers & Pick<Element, "id"> {
+export function attributeMembers(): AttributeMembers {
   return {
-    get id() {
-      const node = receiverNode(this, ELEMENT_RULE);
-      return isDestroyed(node) ? "" : String(readAttribute(node.__node_id, "id") ?? "");
-    },
-    set id(value: string) {
-      const node = receiverNode(this, ELEMENT_RULE);
-      if (!isDestroyed(node)) writeAttribute(node.__node_id, "id", String(value));
-    },
-    getAttribute(qualifiedName: string) {
-      const { element, store } = attributesOf(this);
-      requireArguments(arguments, 1, "getAttribute");
-      return isDestroyed(element) ? null : store.read(attributeText(qualifiedName));
-    },
-    setAttribute(qualifiedName: string, value: string) {
-      const { element } = attributesOf(this);
-      requireArguments(arguments, 2, "setAttribute");
-      const name = attributeText(qualifiedName);
-      const text = attributeText(value);
-      if (!isDestroyed(element)) writeAttribute(element.__node_id, name, text);
-    },
-    hasAttribute(qualifiedName: string) {
-      const { element, store } = attributesOf(this);
-      requireArguments(arguments, 1, "hasAttribute");
-      return !isDestroyed(element) && store.read(attributeText(qualifiedName)) !== null;
-    },
-    removeAttribute(qualifiedName: string) {
-      const { element } = attributesOf(this);
-      requireArguments(arguments, 1, "removeAttribute");
-      const name = attributeText(qualifiedName);
-      if (!isDestroyed(element)) dropAttribute(element.__node_id, name);
-    },
-    getAttributeNames() {
-      return attributesOf(this).store.names();
-    },
     get attributes() {
       return attributesOf(this).store.map();
     },

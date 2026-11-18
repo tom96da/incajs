@@ -186,7 +186,7 @@ describe("the tree of the root container", () => {
 
     const found = rootElement().firstChild as Element;
 
-    expect((found.firstChild as Text).text).toBe("old");
+    expect((found.firstChild as Text).textContent).toBe("old");
   });
 });
 

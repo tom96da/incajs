@@ -66,8 +66,7 @@ export interface Node extends EventTarget {
    * The data of a text node or a comment, and the data of the text nodes below an
    * element in tree order, comments left out. Assigning `null` or `undefined` stores `""`
    * and any other value stores its string. Assigning to an element replaces its children with one
-   * text node, or with none for `""`. A freed node reads `""` or its last data and ignores the
-   * assignment.
+   * text node, or with none for `""`. A freed node reads `""` and ignores the assignment.
    */
   textContent: string | null;
   /** Whether the node has a child. */

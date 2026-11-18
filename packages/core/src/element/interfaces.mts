@@ -10,11 +10,11 @@ import { datasetMembers } from "./dataset.mts";
 import { documentMembers } from "./documentMembers.mts";
 import { nonDocumentTypeChildNodeMembers, parentNodeMembers } from "./elementTree.mts";
 import { handlerMembers } from "./eventHandlers.mts";
-import { layoutMembers, offsetMembers } from "./geometry.mts";
+import { offsetMembers } from "./geometry.mts";
 import { htmlMembers } from "./html.mts";
 import { styleMembers } from "./inlineStyle.mts";
 import { childNodeMutationMembers, parentNodeMutationMembers } from "./insertionMembers.mts";
-import { clickMembers, focusMembers, pointerCaptureMembers } from "./interaction.mts";
+import { focusMembers } from "./interaction.mts";
 import {
   DOCUMENT_RULE,
   HTML_OR_SVG_RULE,
@@ -25,19 +25,27 @@ import {
 import { nodeMutationMembers } from "./nodeMutation.mts";
 import { nodeRelationMembers } from "./nodeRelations.mts";
 import { nodeTreeMembers } from "./nodeTree.mts";
-import { scrollMembers } from "./scroll.mts";
 import { queryMembers, selectorMembers } from "./selectors.mts";
-import { characterDataMembers, textMembers } from "./text.mts";
+import { textMembers } from "./text.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
 
 /**
  * Defines `members` on `proto`. A method is writable, enumerable and configurable, and an accessor
- * is enumerable and configurable, so a second evaluation of core defines them again.
+ * is enumerable and configurable, so a second evaluation of core defines them again. A member that
+ * has a setter and no getter takes the getter of the prototype's own accessor of that name, which
+ * the host defines.
  * @param proto - the prototype
  * @param members - an object literal that holds the members
  */
 export function defineMembers(proto: object, members: object): void {
-  Object.defineProperties(proto, Object.getOwnPropertyDescriptors(members));
+  const descriptors = Object.getOwnPropertyDescriptors(members);
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (descriptor.set === undefined || descriptor.get !== undefined) continue;
+    const own = Object.getOwnPropertyDescriptor(proto, key);
+    // oxlint-disable-next-line typescript/unbound-method
+    if (own?.get !== undefined) descriptor.get = own.get;
+  }
+  Object.defineProperties(proto, descriptors);
 }
 
 /**
@@ -98,7 +106,6 @@ export function installInterfaces(builders: HandleBuilders): void {
   defineMembers(all.Node, nodeMutationMembers(builders));
   defineMembers(all.Node, nodeRelationMembers(builders));
 
-  defineMembers(all.CharacterData, characterDataMembers());
   defineMembers(all.CharacterData, nonDocumentTypeChildNodeMembers(builders));
   defineInsertionMembers(all.CharacterData, childNodeMutationMembers(builders));
 
@@ -110,10 +117,7 @@ export function installInterfaces(builders: HandleBuilders): void {
   defineMembers(all.Element, attributeMembers());
   defineMembers(all.Element, classMembers());
   defineMembers(all.Element, htmlMembers());
-  defineMembers(all.Element, layoutMembers());
-  defineMembers(all.Element, scrollMembers());
   defineMembers(all.Element, selectorMembers(builders));
-  defineMembers(all.Element, pointerCaptureMembers());
   defineMembers(all.Element, nonDocumentTypeChildNodeMembers(builders));
   parentNode(all.Element);
   defineInsertionMembers(
@@ -123,7 +127,6 @@ export function installInterfaces(builders: HandleBuilders): void {
   );
   defineKind(all.Element, "element");
 
-  defineMembers(all.HTMLElement, clickMembers());
   defineMembers(all.HTMLElement, offsetMembers(builders));
   shared(all.HTMLElement);
   shared(all.ForeignElement);

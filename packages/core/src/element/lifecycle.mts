@@ -26,9 +26,13 @@ export interface HandleBuilders {
    * handle of the root container when that handle was collected, and gives `undefined` for an id
    * the host no longer has.
    * @param id - the native node's id
-   * @param data - the data of a text node, when the caller knows it
    */
-  node: (id: NodeId, data?: string) => HandleNode | undefined;
+  node: (id: NodeId) => HandleNode | undefined;
+  /**
+   * The handle of a node the host just created, which has no live handle and no parent.
+   * @param id - the native node's id
+   */
+  adopt: (id: NodeId) => HandleNode;
 }
 
 /** The prototypes of the host, read at the first call. */
@@ -104,30 +108,29 @@ export const NO_EVENTS: readonly string[] = [];
  * prototype.
  * @param handle - the new handle, with its `__node_id`
  * @param passive - the event names whose listeners are passive by default
- * @returns `handle`
+ * @returns the state record of `handle`
  */
-export function withState<T extends object>(
-  handle: T,
-  passive: readonly string[],
-): T & { readonly __node_id: NodeId } {
+export function withState(handle: object, passive: readonly string[]): NodeState {
   const all = prototypes();
   const proto = Object.getPrototypeOf(handle);
-  const [kind, ns] =
-    proto === all.HTMLElement
-      ? (["element", NS_HTML] as const)
-      : proto === all.ForeignElement
-        ? (["element", NS_FOREIGN] as const)
-        : proto === all.Element
-          ? (["element", NS_OTHER] as const)
-          : proto === all.Text
-            ? (["text", NS_ALL] as const)
-            : proto === all.Comment
-              ? (["comment", NS_ALL] as const)
-              : proto === all.DocumentFragment
-                ? (["fragment", NS_ALL] as const)
-                : (["document", NS_ALL] as const);
-  brand.set(handle, { kind, bit: KIND_BITS[kind], ns, passive });
-  return handle as T & { readonly __node_id: NodeId };
+  let kind: RecordKind = "document";
+  let ns = NS_ALL;
+  if (proto === all.HTMLElement) {
+    kind = "element";
+    ns = NS_HTML;
+  } else if (proto === all.Text) kind = "text";
+  else if (proto === all.ForeignElement) {
+    kind = "element";
+    ns = NS_FOREIGN;
+  } else if (proto === all.Comment) kind = "comment";
+  else if (proto === all.DocumentFragment) kind = "fragment";
+  else if (proto === all.Element) {
+    kind = "element";
+    ns = NS_OTHER;
+  }
+  const state: NodeState = { kind, bit: KIND_BITS[kind], ns, passive };
+  brand.set(handle, state);
+  return state;
 }
 
 /**
@@ -302,6 +305,13 @@ export function registerRoot(node: Element): void {
 }
 
 /**
+ * @returns the id of the root container once its handle has been built, `undefined` before
+ */
+export function knownRootId(): NodeId | undefined {
+  return rootId;
+}
+
+/**
  * Makes the handle of `node` strong, so it lives while the node has a parent. The handles below a
  * removed node keep their weak entries when the node enters a parent again: the node's handle
  * keeps them alive. The root container stays weak.
@@ -424,7 +434,7 @@ const removed = new WeakSet<Node>();
 
 /**
  * Whether `node` left the tree for good, removed or freed. A removed node stays in the host and
- * its members read real values. Its listeners are gone.
+ * its listeners are gone.
  * @param node - the handle to check
  * @returns `true` after {@link markRemoved} reached `node`, or when the host freed it
  */

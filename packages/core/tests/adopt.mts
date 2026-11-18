@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { adoptHandle } from "../src/element/handle.mts";
-import { declareNode } from "./setup.mts";
+import { declareData, declareNode } from "./setup.mts";
 import type {
   Comment,
   DocumentFragment,
@@ -39,7 +39,8 @@ export function adoptElement(
  */
 export function adoptText(id: number, data: string): Text {
   declareNode(id, { kind: "text" });
-  return adoptHandle(id, undefined, data) as Text;
+  declareData(id, data);
+  return adoptHandle(id) as Text;
 }
 
 /**

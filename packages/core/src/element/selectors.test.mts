@@ -7,16 +7,14 @@ import { adoptElement } from "../../tests/adopt.mts";
 import { keep } from "../../tests/keep.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import { rootElement } from "./handle.mts";
-import { markFreed, markRemoved } from "./lifecycle.mts";
+import { markRemoved } from "./lifecycle.mts";
 
 describe("element selectors", () => {
-  /** A fake host whose `matches` and `closest` answer `found`; the queries find nothing. */
-  function installSelectors(found: number | null = null, matched = false) {
+  /** A fake host whose `closest` answers `found`; the queries find nothing. */
+  function installSelectors(found: number | null = null) {
     const host = {
       rootNodeId: vi.fn<() => number>(() => 0),
-      matches: vi.fn<(nodeId: number, selector: string) => boolean>(() => matched),
       closest: vi.fn<(nodeId: number, selector: string) => number | null>(() => found),
-      checkSelector: vi.fn<(selector: string) => void>(),
       querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
       querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
     };
@@ -30,15 +28,7 @@ describe("element selectors", () => {
     return { outer: outer!, inner: inner!, leaf: leaf! };
   }
 
-  it("calls matches with the node id and the selector", () => {
-    const host = installSelectors(null, true);
-    const { leaf } = chain();
-
-    expect(leaf.matches(".a")).toBe(true);
-    expect(host.matches).toHaveBeenCalledWith(3, ".a");
-  });
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
+  it.each(["closest", "querySelector", "querySelectorAll"] as const)(
     "%s converts a number to text",
     (method) => {
       const host = installSelectors();
@@ -50,7 +40,7 @@ describe("element selectors", () => {
     },
   );
 
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
+  it.each(["closest", "querySelector", "querySelectorAll"] as const)(
     "%s throws a TypeError for a Symbol",
     (method) => {
       installSelectors();
@@ -94,81 +84,6 @@ describe("element selectors", () => {
 
     expect(chain().leaf.closest("p")).toBeNull();
   });
-
-  it.each([
-    ["matches", false],
-    ["closest", null],
-    ["querySelector", null],
-  ] as const)("%s answers %s for a freed handle without a host call", (method, expected) => {
-    const host = installSelectors(1, true);
-    const { leaf } = chain();
-    markFreed([leaf.__node_id]);
-
-    expect(leaf[method]("div")).toBe(expected);
-    expect(host[method]).not.toHaveBeenCalled();
-  });
-
-  it("querySelectorAll answers an empty list for a freed handle without a host call", () => {
-    const host = installSelectors();
-    const { leaf } = chain();
-    markFreed([leaf.__node_id]);
-
-    expect([leaf.querySelectorAll("div").length, host.querySelectorAll.mock.calls]).toEqual([
-      0,
-      [],
-    ]);
-  });
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s throws SyntaxError on a freed element",
-    (method) => {
-      const host = installSelectors();
-      host.checkSelector.mockImplementation(() => {
-        throw new DOMException("the selector is not valid", "SyntaxError");
-      });
-      const { leaf } = chain();
-      markFreed([leaf.__node_id]);
-
-      expect(() => leaf[method]("div >")).toThrow(expect.objectContaining({ name: "SyntaxError" }));
-    },
-  );
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s throws TypeError for a missing argument on a freed element",
-    (method) => {
-      const host = installSelectors();
-      const { leaf } = chain();
-      markFreed([leaf.__node_id]);
-
-      expect(() => (leaf[method] as () => unknown)()).toThrow(TypeError);
-      expect(host.checkSelector).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s throws TypeError for a Symbol on a freed element",
-    (method) => {
-      const host = installSelectors();
-      const { leaf } = chain();
-      markFreed([leaf.__node_id]);
-
-      expect(() => leaf[method](Symbol("s") as unknown as string)).toThrow(TypeError);
-      expect(host.checkSelector).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
-    "%s sends the converted selector text to checkSelector",
-    (method) => {
-      const host = installSelectors();
-      const { leaf } = chain();
-      markFreed([leaf.__node_id]);
-
-      leaf[method](1 as unknown as string);
-
-      expect(host.checkSelector).toHaveBeenCalledWith("1");
-    },
-  );
 
   it("querySelector returns the handle of the id", () => {
     const host = installSelectors();
@@ -268,16 +183,7 @@ describe("element selectors", () => {
     },
   );
 
-  it("still asks the host for a removed handle", () => {
-    const host = installSelectors(null, true);
-    const { leaf } = chain();
-    markRemoved([leaf.__node_id]);
-
-    expect(leaf.matches("div")).toBe(true);
-    expect(host.matches).toHaveBeenCalledTimes(1);
-  });
-
-  it.each(["matches", "closest", "querySelector", "querySelectorAll"] as const)(
+  it.each(["closest", "querySelector", "querySelectorAll"] as const)(
     "%s throws a TypeError for no argument",
     (method) => {
       installSelectors();

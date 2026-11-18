@@ -15,21 +15,16 @@ use super::Natives;
 use super::convert::{Flag, JsNodeId, existing_node, or_null, throw_tree_error, unsigned};
 use super::host::Host;
 
-/// `linkedNode`, `childNodeIds`, `isConnected`, the relation natives `rootOf`,
-/// `compareNodePosition` and `isEqualNode`, and the text natives `textContent`, `setCharacterData`,
-/// `wholeText`, `substringData`, `replaceData` and `splitText`.
+/// `linkedNode`, `childNodeIds`, the relation natives `rootOf`, `compareNodePosition` and
+/// `isEqualNode`, and the text natives `textContent`, `setCharacterData` and `splitText`.
 pub(super) fn install_node(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("linkedNode", linked_node)?;
     n.set("childNodeIds", child_node_ids)?;
-    n.set("isConnected", is_connected)?;
     n.set("rootOf", root_of)?;
     n.set("compareNodePosition", compare_node_position)?;
     n.set("isEqualNode", is_equal_node)?;
     n.set("textContent", text_content)?;
     n.set("setCharacterData", set_character_data)?;
-    n.set("wholeText", whole_text)?;
-    n.set("substringData", substring_data)?;
-    n.set("replaceData", replace_data)?;
     n.set("splitText", split_text)
 }
 
@@ -75,14 +70,6 @@ fn child_node_ids<'js>(
         Ok(host
             .tree
             .child_ids(node_id, element_only.0.flatten() == Some(true)))
-    }
-}
-
-fn is_connected<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<bool> {
-    move |ctx, JsNodeId(node_id)| {
-        let host = host.borrow();
-        existing_node(&ctx, &host.tree, node_id)?;
-        Ok(host.tree.in_document(node_id))
     }
 }
 
@@ -139,37 +126,6 @@ fn set_character_data<'js>(
     }
 }
 
-fn whole_text<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<String> {
-    move |ctx, JsNodeId(node_id)| {
-        let host = host.borrow();
-        host.tree
-            .whole_text(node_id)
-            .map_err(|err| throw_tree_error(&ctx, err))
-    }
-}
-
-fn substring_data<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>, Coerced<i32>) -> JsResult<String> {
-    move |ctx, JsNodeId(node_id), offset, count| {
-        let host = host.borrow();
-        host.tree
-            .substring_data(node_id, unsigned(offset), unsigned(count))
-            .map_err(|err| throw_tree_error(&ctx, err))
-    }
-}
-
-fn replace_data<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>, Coerced<i32>, String) -> JsResult<()> {
-    move |ctx, JsNodeId(node_id), offset, count, data| {
-        let mut host = host.borrow_mut();
-        host.tree
-            .replace_data(node_id, unsigned(offset), unsigned(count), &data)
-            .map_err(|err| throw_tree_error(&ctx, err))
-    }
-}
-
 fn split_text<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>) -> JsResult<NodeId> {
@@ -209,12 +165,8 @@ mod tests {
     #[case::linked_node_of_elements("linkedNode(999, 'next', true)")]
     #[case::child_node_ids("childNodeIds(999)")]
     #[case::child_node_ids_of_elements("childNodeIds(999, true)")]
-    #[case::is_connected("isConnected(999)")]
     #[case::text_content("textContent(999)")]
     #[case::set_character_data("setCharacterData(999, '')")]
-    #[case::whole_text("wholeText(999)")]
-    #[case::substring_data("substringData(999, 0, 0)")]
-    #[case::replace_data("replaceData(999, 0, 0, '')")]
     #[case::split_text("splitText(999, 0)")]
     #[case::root_of("rootOf(999)")]
     #[case::compare_unknown_node("compareNodePosition(999, __inca_native__.rootNodeId())")]
@@ -429,46 +381,7 @@ mod tests {
         assert!(empty);
     }
 
-    #[test]
-    fn is_connected_follows_the_path_to_the_document() {
-        let (engine, _host) = engine_with_bindings();
-
-        let reads: Vec<bool> = engine
-            .eval(
-                r"
-                const n = __inca_native__;
-                const mid = n.createNode('div');
-                const leaf = n.createNode('div');
-                n.appendChild(mid, leaf);
-                const detached = n.isConnected(leaf);
-                n.appendChild(n.rootNodeId(), mid);
-                [detached, n.isConnected(leaf), n.isConnected(n.rootNodeId())];
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(reads, [false, true, true]);
-    }
-
-    #[test]
-    fn is_connected_of_the_element_of_a_copied_document_is_true() {
-        let (engine, _host) = engine_with_bindings();
-
-        let connected: bool = engine
-            .eval(
-                r"
-                const n = __inca_native__;
-                n.isConnected(n.childNodeIds(n.cloneNode(n.documentNodeId(), true))[0]);
-                ",
-            )
-            .unwrap();
-
-        assert!(connected);
-    }
-
     #[rstest]
-    #[case::substring_data("substringData(t, 9, 0)")]
-    #[case::replace_data("replaceData(t, 9, 0, '')")]
     #[case::split_text("splitText(t, 9)")]
     fn an_offset_beyond_the_data_throws_index_size_error(#[case] call: &str) {
         let (engine, _host) = engine_with_bindings();
@@ -490,9 +403,6 @@ mod tests {
 
     #[rstest]
     #[case::text_content("n.textContent(parent)", "abcd")]
-    #[case::whole_text("n.wholeText(t)", "abcd")]
-    #[case::substring_data("n.substringData(t, 1, 2)", "bc")]
-    #[case::replace_data("n.replaceData(t, 1, 2, 'XY'); n.textContent(t)", "aXYd")]
     #[case::split_text("n.textContent(n.splitText(t, 3))", "d")]
     fn a_text_native_reads_or_edits_the_data(#[case] call: &str, #[case] want: &str) {
         let (engine, _host) = engine_with_bindings();
@@ -570,7 +480,6 @@ mod tests {
     }
 
     #[rstest]
-    #[case::whole_text("wholeText(c)")]
     #[case::split_text("splitText(c, 0)")]
     fn a_text_native_throws_type_error_for_a_comment(#[case] call: &str) {
         let (engine, _host) = engine_with_bindings();
@@ -608,23 +517,5 @@ mod tests {
             .unwrap();
 
         assert!(after);
-    }
-
-    #[test]
-    fn an_offset_converts_to_an_unsigned_integer() {
-        let (engine, _host) = engine_with_bindings();
-
-        let read: String = engine
-            .eval(
-                r"
-                const n = __inca_native__;
-                const t = n.createNode('#text');
-                n.setCharacterData(t, 'abc');
-                n.substringData(t, 2 ** 32 + 1, 1);
-                ",
-            )
-            .unwrap();
-
-        assert_eq!(read, "b");
     }
 }

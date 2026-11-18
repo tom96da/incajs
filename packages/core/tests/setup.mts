@@ -82,20 +82,182 @@ function partsOf(id: number): [string, string | null, string | null, string] {
   return typeof name === "string" ? [name, HTML, null, name.toUpperCase()] : name;
 }
 
+/** The data of the text nodes and comments by node id, made once per realm. */
+const DATA_KEY = Symbol.for("incajs.test.data");
+
+function dataStore(): Map<number, string> {
+  const shared = globalThis as { [DATA_KEY]?: Map<number, string> };
+  return (shared[DATA_KEY] ??= new Map());
+}
+
+beforeEach(() => dataStore().clear());
+
 /**
- * The stand-in for the name members the host defines on `Element`.
- * @param proto - the stand-in prototype of `Element`
+ * Sets the data of a text node or comment that a test builds without a host.
+ * @param id - the node id
+ * @param data - the data
  */
-function defineNameMembers(proto: object): void {
+export function declareData(id: number, data: string): void {
+  dataStore().set(id, data);
+}
+
+/** The text of a value, as a host member converts an argument. */
+function asText(value: unknown): string {
+  // oxlint-disable-next-line typescript/no-base-to-string
+  return String(value ?? "");
+}
+
+/** The native object a stand-in member reads through. */
+function natives(): Record<string, ((...args: never[]) => unknown) | undefined> {
+  return globalThis.__inca_native__ as never;
+}
+
+/** Defines the getter `key` of `proto`, enumerable and configurable. */
+function defineGetter(proto: object, key: string, get: (this: { __node_id: number }) => unknown) {
+  Object.defineProperty(proto, key, { get, enumerable: true, configurable: true });
+}
+
+/** Defines the accessor `key` of `proto`. */
+function defineAccessor(
+  proto: object,
+  key: string,
+  get: (this: { __node_id: number }) => unknown,
+  set: (this: { __node_id: number }, value: never) => void,
+) {
+  Object.defineProperty(proto, key, { get, set, enumerable: true, configurable: true });
+}
+
+/** Defines the method `key` of `proto`. */
+function defineMethod(proto: object, key: string, run: (id: number, args: unknown[]) => unknown) {
+  Object.defineProperty(proto, key, {
+    value(this: { __node_id: number }, ...args: unknown[]) {
+      return run(this.__node_id, args);
+    },
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+/**
+ * The stand-in for the members the host defines on the node interfaces. A test of one of these
+ * members runs in Rust over the real host. These keep the members that other tests use to read a
+ * node.
+ * @param chain - the stand-in prototypes
+ */
+function defineHostMembers(chain: InterfaceChain): void {
   const members = { localName: 0, namespaceURI: 1, prefix: 2, tagName: 3 } as const;
   for (const [key, index] of Object.entries(members)) {
-    Object.defineProperty(proto, key, {
-      get(this: { __node_id: number }) {
-        return partsOf(this.__node_id)[index];
-      },
-      enumerable: true,
-      configurable: true,
+    defineGetter(chain.Element, key, function () {
+      return partsOf(this.__node_id)[index];
     });
+  }
+  const read = (id: number, name: string): string | null => {
+    const value = natives().getAttribute?.(id as never, name as never) as unknown;
+    return value === null || value === undefined ? null : asText(value);
+  };
+  const data = (id: number): string => asText(natives().textContent?.(id as never));
+  defineGetter(chain.Node, "nodeType", function () {
+    const declared = declaredOf(this.__node_id);
+    return { element: 1, text: 3, comment: 8, fragment: 11, document: 9 }[declared.kind];
+  });
+  defineGetter(chain.Node, "nodeName", function () {
+    const declared = declaredOf(this.__node_id);
+    if (declared.kind === "element") return partsOf(this.__node_id)[3];
+    return declared.kind === "fragment" ? "#document-fragment" : `#${declared.kind}`;
+  });
+  defineAccessor(
+    chain.Node,
+    "nodeValue",
+    function () {
+      const kind = declaredOf(this.__node_id).kind;
+      return kind === "text" || kind === "comment" ? data(this.__node_id) : null;
+    },
+    function (value: unknown) {
+      const kind = declaredOf(this.__node_id).kind;
+      if (kind !== "text" && kind !== "comment") return;
+      natives().setCharacterData?.(this.__node_id as never, asText(value) as never);
+    },
+  );
+  defineGetter(chain.Node, "textContent", function () {
+    const kind = declaredOf(this.__node_id).kind;
+    if (kind === "document") return null;
+    return data(this.__node_id);
+  });
+  defineGetter(chain.Node, "isConnected", function () {
+    const n = natives();
+    return (n.rootOf?.(this.__node_id as never) as unknown) === (n.documentNodeId?.() as unknown);
+  });
+  defineMethod(chain.Node, "hasChildNodes", (id) => {
+    const children = natives().childNodeIds?.(id as never) as unknown[] | undefined;
+    return (children?.length ?? 0) > 0;
+  });
+  defineAccessor(
+    chain.CharacterData,
+    "data",
+    function () {
+      return data(this.__node_id);
+    },
+    function (value: unknown) {
+      const text = value === null ? "" : asText(value);
+      natives().setCharacterData?.(this.__node_id as never, text as never);
+    },
+  );
+  defineGetter(chain.CharacterData, "length", function () {
+    return data(this.__node_id).length;
+  });
+  defineGetter(chain.Text, "wholeText", function () {
+    return data(this.__node_id);
+  });
+  defineAccessor(
+    chain.Element,
+    "id",
+    function () {
+      return read(this.__node_id, "id") ?? "";
+    },
+    function (value: unknown) {
+      natives().setAttribute?.(this.__node_id as never, "id" as never, asText(value) as never);
+    },
+  );
+  defineAccessor(
+    chain.Element,
+    "className",
+    function () {
+      return read(this.__node_id, "class") ?? "";
+    },
+    function (value: unknown) {
+      natives().setAttribute?.(this.__node_id as never, "class" as never, asText(value) as never);
+    },
+  );
+  defineMethod(chain.Element, "getAttribute", (id, [name]) => read(id, String(name)));
+  defineMethod(chain.Element, "hasAttribute", (id, [name]) => read(id, String(name)) !== null);
+  defineMethod(chain.Element, "setAttribute", (id, [name, value]) =>
+    natives().setAttribute?.(id as never, String(name) as never, asText(value) as never),
+  );
+  defineMethod(chain.Element, "removeAttribute", (id, [name]) =>
+    natives().removeAttribute?.(id as never, String(name) as never),
+  );
+  defineMethod(
+    chain.Element,
+    "getAttributeNames",
+    (id) => natives().attributeNames?.(id as never) ?? [],
+  );
+  defineMethod(chain.Element, "matches", () => false);
+  defineGetter(chain.Element, "innerHTML", () => "");
+  defineGetter(chain.Element, "outerHTML", () => "");
+  defineGetter(chain.Element, "childElementCount", function () {
+    const children = natives().childNodeIds?.(this.__node_id as never, true as never);
+    return (children as unknown[] | undefined)?.length ?? 0;
+  });
+  defineMethod(chain.HTMLElement, "click", (id) => natives().click?.(id as never));
+  for (const proto of [chain.HTMLElement, chain.ForeignElement]) {
+    defineMethod(proto, "focus", (id, [options]) =>
+      natives().focusNode?.(
+        id as never,
+        Boolean((options as { preventScroll?: boolean } | undefined)?.preventScroll) as never,
+      ),
+    );
+    defineMethod(proto, "blur", (id) => natives().blurNode?.(id as never));
   }
 }
 
@@ -151,7 +313,7 @@ function interfaceChain(): InterfaceChain {
     }
     chain[name] = prototype;
   }
-  defineNameMembers(chain.Element!);
+  defineHostMembers(chain as unknown as InterfaceChain);
   return (shared[CHAIN_KEY] = chain as InterfaceChain);
 }
 
@@ -275,7 +437,8 @@ export function nativeStub(extra: Partial<Native> = {}): Native {
     releaseNode: () => undefined,
     holdNode: () => undefined,
     rootNodeId: () => -1,
-    textContent: () => "",
+    textContent: (id) => dataStore().get(id) ?? "",
+    setCharacterData: (id, data) => void dataStore().set(id, data),
     registerUncloneable: () => undefined,
     windowTargetId: () => "window-target",
     signalId: (value) => signalKit().ids.get(value as object) ?? null,

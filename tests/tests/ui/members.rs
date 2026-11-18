@@ -45,6 +45,13 @@ fn probe(cx: &mut TestAppContext) -> Value {
 #[case::child_nodes_length("childNodesLength", json!(2))]
 #[case::next_sibling_node_name("nextSiblingNodeName", json!("LI"))]
 #[case::text_content_joins_nested_text("textContent", json!("onetwo"))]
+#[case::data("data", json!("two"))]
+#[case::inner_html("innerHTML", json!("two"))]
+#[case::bounding_client_rect_is_a_dom_rect("rectIsDomRect", json!(true))]
+#[case::scroll_top("scrollTop", json!(0))]
+#[case::offset_width("offsetWidth", json!(50))]
+#[case::offset_width_of_a_removed_element("offsetWidthRemoved", json!(0))]
+#[case::rect_width_of_a_removed_element("rectWidthRemoved", json!(0))]
 fn the_element_members_answer_on_the_real_host(
     cx: &mut TestAppContext,
     #[case] key: &str,

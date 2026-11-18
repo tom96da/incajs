@@ -7,10 +7,10 @@ import type { NodeBox, NodeScroll } from "./native.mts";
 
 /**
  * Returns the box `nodeId` was drawn at in the last frame, in window logical
- * pixels, or `null` if the node has no recorded box.
+ * pixels, or `null` if the node has no recorded box. A node that is not connected has none,
+ * whatever the last frame recorded, and neither has an id that names no node.
  * @param nodeId - the node to read
  * @returns the box, or `null`
- * @throws {TypeError} when `nodeId` names no node
  */
 export function layoutOf(nodeId: NodeId): NodeBox | null {
   return native().layoutOf(nodeId);

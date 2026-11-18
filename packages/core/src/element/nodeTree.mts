@@ -7,11 +7,9 @@ import {
   appendChild,
   childNodeIds,
   createNode,
-  isConnected,
   linkedNode,
   removeChild,
   setCharacterData,
-  textContent,
 } from "../ffi/index.mts";
 import { nullableText } from "./arguments.mts";
 import { nodeListOf } from "./collections.mts";
@@ -26,10 +24,6 @@ import type { Element, DocumentFragment } from "./types.mts";
 /** The members {@link nodeTreeMembers} builds. */
 export type NodeTreeMembers = { textContent: string | null } & Pick<
   Node,
-  | "nodeType"
-  | "nodeName"
-  | "nodeValue"
-  | "isConnected"
   | "ownerDocument"
   | "parentNode"
   | "firstChild"
@@ -37,35 +31,8 @@ export type NodeTreeMembers = { textContent: string | null } & Pick<
   | "previousSibling"
   | "nextSibling"
   | "childNodes"
-  | "hasChildNodes"
   | "parentElement"
 >;
-
-const NODE_TYPES = { element: 1, text: 3, comment: 8, document: 9, fragment: 11 } as const;
-
-/**
- * Reads the data of a text node or comment. A freed node keeps the last data of a text
- * node and reads `""` for a comment.
- * @param node - the text node or comment
- * @returns the data
- */
-export function readData(node: HandleNode): string {
-  if (isDestroyed(node)) return node.kind === "text" ? node.text : "";
-  return textContent(node.__node_id);
-}
-
-/**
- * Stores the data of a text node or comment. An element, the document and a freed node
- * ignore it.
- * @param node - the text node or comment
- * @param data - the new data
- */
-export function writeData(node: HandleNode, data: string): void {
-  if (node.kind === "element" || node.kind === "fragment" || node.kind === "document") return;
-  if (isDestroyed(node)) return;
-  setCharacterData(node.__node_id, data);
-  if (node.kind === "text") node.text = data;
-}
 
 /**
  * Replaces all children of `parent` with at most a single text child holding `text`. The old
@@ -86,11 +53,12 @@ export function replaceWithText(parent: Node, text: string, builders: HandleBuil
   if (textId === undefined) return;
 
   appendChild(parent.__node_id, textId);
-  builders.node(textId, text);
+  builders.node(textId);
 }
 
 /**
- * Builds the node members of `Node`. Each read asks the host tree again.
+ * Builds the members of `Node` that return a handle, and the setter of `textContent`. The host
+ * defines the other members and the getter of `textContent`.
  * @param builders - the lookups of the document handle and of a handle by node id
  * @returns the members, as getters
  */
@@ -104,51 +72,18 @@ export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
   const liveChildren = (node: HandleNode): HandleNode[] =>
     isDestroyed(node) ? [] : childNodeIds(node.__node_id).map((child) => builders.node(child)!);
   return {
-    get nodeType() {
-      return NODE_TYPES[receiverNode(this, NODE_RULE).kind];
-    },
-    get nodeName() {
-      const node = receiverNode(this, NODE_RULE);
-      if (node.kind === "element") return node.tagName;
-      return node.kind === "fragment" ? "#document-fragment" : `#${node.kind}`;
-    },
-    get nodeValue() {
-      const node = receiverNode(this, NODE_RULE);
-      return node.kind === "element" || node.kind === "fragment" || node.kind === "document"
-        ? null
-        : readData(node);
-    },
-    set nodeValue(value: string | null) {
-      writeData(receiverNode(this, NODE_RULE), String(value ?? ""));
-    },
-    get textContent() {
-      const node = receiverNode(this, NODE_RULE);
-      switch (node.kind) {
-        case "text":
-        case "comment":
-          return readData(node);
-        case "document":
-          return null;
-        default:
-          return isDestroyed(node) ? "" : textContent(node.__node_id);
-      }
-    },
     set textContent(value: string | null) {
       const node = receiverNode(this, NODE_RULE);
       switch (node.kind) {
         case "text":
         case "comment":
-          writeData(node, nullableText(value));
+          if (!isDestroyed(node)) setCharacterData(node.__node_id, nullableText(value));
           return;
         case "document":
           return;
         default:
           if (!isDestroyed(node)) replaceWithText(node, nullableText(value), builders);
       }
-    },
-    get isConnected() {
-      const node = receiverNode(this, NODE_RULE);
-      return !isDestroyed(node) && isConnected(node.__node_id);
     },
     get ownerDocument() {
       return receiverNode(this, NODE_RULE).kind === "document" ? null : builders.document();
@@ -175,9 +110,6 @@ export function nodeTreeMembers(builders: HandleBuilders): NodeTreeMembers {
       const state = receiverOf(this, NODE_RULE);
       const node = this as unknown as HandleNode;
       return (state.childNodes ??= nodeListOf(() => liveChildren(node)));
-    },
-    hasChildNodes() {
-      return liveChildren(receiverNode(this, NODE_RULE)).length > 0;
     },
   };
 }
