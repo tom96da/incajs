@@ -69,18 +69,18 @@ describe("rectOf", () => {
     expect([rect.left, rect.top, rect.right, rect.bottom]).toEqual([10.5, 20.25, 41.25, 60.25]);
   });
 
-  it("returns the plain values from toJSON", () => {
+  it("returns the eight values from toJSON in order", () => {
     const rect = rectOf([1, 2, 3, 4, 0, 0, 0, 0, 0]);
-    expect(rect.toJSON()).toEqual({
-      x: 1,
-      y: 2,
-      width: 3,
-      height: 4,
-      top: 2,
-      left: 1,
-      right: 4,
-      bottom: 6,
-    });
+    expect(Object.entries(rect.toJSON())).toEqual([
+      ["x", 1],
+      ["y", 2],
+      ["width", 3],
+      ["height", 4],
+      ["top", 2],
+      ["right", 4],
+      ["bottom", 6],
+      ["left", 1],
+    ]);
   });
 
   it("gives all zeros for a null layout", () => {

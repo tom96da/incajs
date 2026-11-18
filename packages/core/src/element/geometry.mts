@@ -85,9 +85,6 @@ export interface DOMRect extends DOMRectReadOnly {
   height: number;
 }
 
-/** The members of a rect that hold values. */
-type RectParts = Omit<DOMRectReadOnly, "toJSON">;
-
 /**
  * Builds a rect from a node's box. Values stay unrounded.
  * @param layout - the box from {@link NodeBox}, or `null` for no record
@@ -95,17 +92,7 @@ type RectParts = Omit<DOMRectReadOnly, "toJSON">;
  */
 export function rectOf(layout: NodeBox | null): DOMRect {
   const [x, y, width, height] = layout ?? [0, 0, 0, 0, 0];
-  const values: RectParts = {
-    x,
-    y,
-    width,
-    height,
-    top: y,
-    left: x,
-    right: x + width,
-    bottom: y + height,
-  };
-  return { ...values, toJSON: () => ({ ...values }) };
+  return new DOMRect(x, y, width, height);
 }
 
 /**
