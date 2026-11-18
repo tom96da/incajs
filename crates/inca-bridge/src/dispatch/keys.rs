@@ -12,6 +12,7 @@ use crate::EventTargetId;
 use context_menu::shift_f10_opens_context_menu;
 
 mod context_menu;
+mod link;
 mod space;
 
 impl EventDispatcher {
@@ -112,7 +113,7 @@ impl EventDispatcher {
                 if button.is_some() {
                     self.state.space_down.set(None);
                 }
-                button
+                button.or_else(|| self.focused_link(window, cx))
             }
             ("space", false) => {
                 self.state
@@ -698,5 +699,48 @@ mod tests {
         s.key(cx, key, up, false);
         let got = s.engine.eval::<String>("globalThis.modifiers").unwrap();
         assert_eq!(got, want);
+    }
+
+    /// Presses Tab, with `removeAttribute(link, name)` run by the `keydown` listener of the link.
+    #[gpui::test]
+    fn removing_href_in_the_keydown_of_a_tab_press_moves_focus_past_the_link(
+        cx: &mut TestAppContext,
+    ) {
+        let s = scene(cx);
+        let link = s.add_link(crate::test_support::HTML, "a", &[("href", "u")]);
+        s.engine
+            .eval::<()>(&format!(
+                r"
+                __inca_test_listen__({link}, 'keydown', () => {{
+                    __inca_native__.removeAttribute({link}, 'href');
+                }});
+                "
+            ))
+            .unwrap();
+        s.focus(cx, link);
+        s.key(cx, "tab", false, false);
+        assert_eq!(s.focused(cx), Some(s.field));
+    }
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::href(crate::test_support::HTML, "href")]
+    #[case::svg_xlink_href(crate::test_support::SVG, "xlink:href")]
+    fn removing_the_link_attribute_blurs_the_focused_a_on_the_next_frame(
+        cx: &mut TestAppContext,
+        namespace: &str,
+        attribute: &str,
+    ) {
+        let s = scene(cx);
+        let link = s.add_link(namespace, "a", &[(attribute, "u")]);
+        s.focus(cx, link);
+        s.engine
+            .eval::<()>(&format!(
+                "__inca_native__.removeAttribute({link}, '{attribute}');"
+            ))
+            .unwrap();
+        assert_eq!(s.focused(cx), Some(link));
+        s.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
+        assert_eq!(s.focused(cx), None);
     }
 }

@@ -186,7 +186,7 @@ pub fn js_number_text(value: f64) -> String {
 /// attribute.
 #[must_use]
 pub fn is_disabled_control(node: &VirtualNode) -> bool {
-    node.is_focusable_by_default() && node.attributes().contains_key("disabled")
+    node.is_form_control() && node.attributes().contains_key("disabled")
 }
 
 /// The inline style props of a node, in the order they were set. Setting a key that exists keeps
@@ -566,6 +566,7 @@ mod tests {
     #[case::input("input", &["disabled"], true)]
     #[case::div("div", &["disabled"], false)]
     #[case::enabled_button("button", &[], false)]
+    #[case::link_with_href("a", &["href", "disabled"], false)]
     fn is_disabled_control_needs_a_control_tag_and_the_disabled_attribute(
         #[case] tag: &str,
         #[case] attributes: &[&str],

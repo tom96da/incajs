@@ -50,9 +50,7 @@ impl Node<'_> {
     pub(super) fn is_in_state(&self, class: &PseudoClass) -> bool {
         match class {
             PseudoClass::Disabled => is_disabled_control(self.node),
-            PseudoClass::Enabled => {
-                self.node.is_focusable_by_default() && !is_disabled_control(self.node)
-            }
+            PseudoClass::Enabled => self.node.is_form_control() && !is_disabled_control(self.node),
             PseudoClass::ReadWrite => self.is_editable(),
             PseudoClass::ReadOnly => self.node.in_html_namespace() && !self.is_editable(),
             _ => false,
@@ -117,6 +115,18 @@ mod tests {
         }
 
         assert_eq!(f.matches(node, selector), expected);
+    }
+
+    #[rstest]
+    #[case::disabled(":disabled")]
+    #[case::enabled(":enabled")]
+    fn a_link_matches_neither_disabled_nor_enabled(#[case] selector: &str) {
+        let mut f = Fixture::new();
+        let node = f.add(f.root, "a", "n");
+        f.attr(node, "href", "u");
+        f.attr(node, "disabled", "");
+
+        assert!(!f.matches(node, selector));
     }
 
     /// An element of `namespace` named `local_name` under the root.
