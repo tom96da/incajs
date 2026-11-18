@@ -276,3 +276,77 @@ describe("patchProp on a handler property key", () => {
     expect(log).toEqual(["vue", "property"]);
   });
 });
+
+describe("aria properties", () => {
+  /** An element whose `ariaLabel` and `ariaLabelledByElements` are plain properties. */
+  const withAria = (label: string | null): Element =>
+    ({ __node_id: 1, ariaLabel: label, ariaLabelledByElements: null }) as unknown as Element;
+
+  it("assigns a string to the property", () => {
+    const target = withAria(null);
+
+    patchProp(target, "ariaLabel", null, "x", undefined, null);
+
+    expect(target.ariaLabel).toBe("x");
+    expect(core.setAttribute).not.toHaveBeenCalled();
+  });
+
+  it.each([null, undefined])(
+    "assigns an empty string for %s to a property that reads text",
+    (value) => {
+      const target = withAria("x");
+
+      patchProp(target, "ariaLabel", "x", value, undefined, null);
+
+      expect(target.ariaLabel).toBe("");
+    },
+  );
+
+  it("assigns null for an absent value to a property that reads null", () => {
+    const target = withAria(null);
+
+    patchProp(target, "ariaLabel", null, undefined, undefined, null);
+
+    expect(target.ariaLabel).toBeNull();
+  });
+
+  it("assigns a list to a list property", () => {
+    const target = withAria(null);
+    const list = [target];
+
+    patchProp(target, "ariaLabelledByElements", null, list, undefined, null);
+
+    expect(target.ariaLabelledByElements).toBe(list);
+  });
+
+  it("assigns the property of a MathML element", () => {
+    const target = withAria(null);
+
+    patchProp(target, "ariaLabel", null, "x", "mathml", null);
+
+    expect(target.ariaLabel).toBe("x");
+  });
+
+  it("sends the key of an SVG element to the attribute path", () => {
+    const target = withAria(null);
+
+    patchProp(target, "ariaLabel", null, "x", "svg", null);
+
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "ariaLabel", "x");
+    expect(target.ariaLabel).toBeNull();
+  });
+
+  it("sends a key the element lacks to the attribute path", () => {
+    patchProp(el, "ariaFoo", null, "x", undefined, null);
+
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "ariaFoo", "x");
+  });
+
+  it.each(["role", "aria-label"])("keeps %s on the attribute path", (key) => {
+    const target = { ...withAria(null), role: null, "aria-label": null } as unknown as Element;
+
+    patchProp(target, key, null, "x", undefined, null);
+
+    expect(core.setAttribute).toHaveBeenCalledExactlyOnceWith(1, key, "x");
+  });
+});

@@ -111,6 +111,29 @@ export function datasetTarget(): object {
 }
 
 /**
+ * Reads the elements that the attribute `attribute` of `nodeId` refers to.
+ * @param nodeId - the node to read
+ * @param attribute - an attribute of an element member of the ARIA table, such as `aria-owns`
+ * @returns the ids in order, or `null` for an absent attribute and a freed node
+ * @throws {TypeError} when `attribute` refers to no element
+ */
+export function ariaElements(nodeId: NodeId, attribute: string): NodeId[] | null {
+  return native().ariaElements(nodeId, attribute);
+}
+
+/**
+ * Keeps `ids` as the elements that the attribute `attribute` of `nodeId` refers to and sets the
+ * attribute to the empty text. `null` removes the attribute. A freed node ignores the write.
+ * @param nodeId - the node to update
+ * @param attribute - an attribute of an element member of the ARIA table, such as `aria-owns`
+ * @param ids - the ids in order, or `null`
+ * @throws {TypeError} when `attribute` refers to no element, or an id is malformed
+ */
+export function setAriaElements(nodeId: NodeId, attribute: string, ids: NodeId[] | null): void {
+  native().setAriaElements(nodeId, attribute, ids);
+}
+
+/**
  * Removes an attribute/prop from `nodeId`. Removing an attribute
  * that isn't set does nothing.
  * @param nodeId - the node to update

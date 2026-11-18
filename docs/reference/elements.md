@@ -81,6 +81,10 @@ or `<component is="style">`.
   focusable element or a rule that names them.
 - `:focus-visible` and the other interactive pseudo-classes never match.
 
+### Accessibility
+
+`role` and the `aria-*` attributes reach no assistive technology. `ariaNotify()` is missing.
+
 ## Recognized style keys
 
 `:style` takes an object or a string. Only the keys below are read.

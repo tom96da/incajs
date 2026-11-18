@@ -1937,6 +1937,14 @@ A fixed entry is deleted and its ID is never reused.
   The standard lists the MathML `a` (WebKit and Firefox read 0). Fix: remove the MathML `a` from
   the default list in `semantics/tab_index.rs` when the standard drops it.
 
+- **B-363 A detached element resolves no element set from script, Chromium resolves it**
+  `Units: node · Size: S · Impact: Low`
+
+  The host resolves the elements set through an ARIA property such as `ariaLabelledByElements` only
+  for an element that has a parent (WebKit reads `null` and `[]`). Chromium resolves them inside a
+  detached subtree. Fix: resolve inside the subtree of a detached element in
+  `VirtualTree::aria_elements` when the standard does.
+
 - **B-364 `HTMLCollection.namedItem()` returns the first match in tree order**
   `Units: node,core · Size: S · Impact: Low`
 

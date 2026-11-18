@@ -17,6 +17,9 @@ const isOn = (key: string): boolean => /^on[^a-z]/.test(key);
 /** Whether a prop could be an element's handler property, such as `onclick`. */
 const isNativeOn = (key: string): boolean => /^on[a-z]/.test(key);
 
+/** A key of the form `aria` plus an upper case letter, such as `ariaLabel`. */
+const ARIA_PROPERTY = /^aria[A-Z]/;
+
 /**
  * The suffix Vue's SFC compiler appends per event modifier: `@click.once`
  * becomes `onClickOnce`, `@click.once.capture` becomes `onClickOnceCapture`.
@@ -378,6 +381,13 @@ const BOOLEAN_ATTRIBUTES = new Set([
  * The key assigns the `value` property of an element that has one (an `<input>`). `null` and
  * `undefined` give `""`, and any other value gives its string.
  *
+ * ### `aria` properties
+ *
+ * A key of the form `aria` plus an upper case letter that the element has as a property, such as
+ * `ariaLabel`, on an element outside the SVG namespace, assigns that property. `null` and
+ * `undefined` assign `""` to a property that reads a string and `null` to any other. A key the
+ * element lacks and a key on an SVG element go to the attribute path below.
+ *
  * ### Other props
  *
  * A truthy value or `""` for a boolean attribute (`disabled`, `hidden`, `inert` and the names Vue
@@ -399,7 +409,7 @@ export function createPatchProp(
     key: string,
     _prevValue: unknown,
     nextValue: unknown,
-    _namespace?: unknown,
+    namespace?: unknown,
     parentComponent?: ComponentInternalInstance | null,
   ): void => {
     // A component's `v-model` update event; Vue binds nothing for it on an element.
@@ -417,6 +427,18 @@ export function createPatchProp(
       }
     } else if (key === "value" && "value" in el) {
       Reflect.set(el, key, nextValue ?? "");
+    } else if (namespace !== "svg" && ARIA_PROPERTY.test(key) && key in el) {
+      // The current value tells a text member from an element member; only a cleared value needs it.
+      const clears = nextValue === null || nextValue === undefined;
+      try {
+        Reflect.set(
+          el,
+          key,
+          clears ? (typeof Reflect.get(el, key) === "string" ? "" : null) : nextValue,
+        );
+      } catch {
+        // An element member throws for a value that is no element; the throw is ignored.
+      }
     } else if (BOOLEAN_ATTRIBUTES.has(key)) {
       if (key === "hidden" && typeof nextValue === "string" && /^until-found$/i.test(nextValue)) {
         core.setAttribute(el.__node_id, key, nextValue);

@@ -4,6 +4,7 @@
 // Defines each member of a node once, on the prototype of the interface that has it.
 
 import { eventTargetMembers } from "../eventTarget.mts";
+import { ariaElementMembers } from "./aria.mts";
 import { attributeMembers } from "./attributes.mts";
 import { classMembers } from "./classList.mts";
 import { datasetMembers } from "./dataset.mts";
@@ -113,6 +114,7 @@ export function installInterfaces(builders: HandleBuilders): void {
   defineKind(all.Comment, "comment");
 
   defineMembers(all.Element, attributeMembers());
+  defineMembers(all.Element, ariaElementMembers(builders));
   defineMembers(all.Element, classMembers());
   defineMembers(all.Element, htmlMembers());
   defineMembers(all.Element, selectorMembers(builders));

@@ -7,6 +7,7 @@
 //! write the text of an input, and free what it no longer needs. It defines
 //! the timer and frame callback functions of the global object.
 
+mod aria;
 mod attributes;
 mod capture;
 pub(crate) mod convert;
@@ -38,6 +39,7 @@ use std::rc::Rc;
 use rquickjs::function::IntoJsFunc;
 use rquickjs::{Ctx, Function, Object, Result as JsResult};
 
+use aria::install_aria;
 use capture::install_capture;
 use dataset::install_dataset;
 use focus::install_focus;
@@ -85,6 +87,7 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     install_token_list(&natives)?;
     install_style(&natives)?;
     install_dataset(&natives)?;
+    install_aria(&natives)?;
     install_events(&natives)?;
     install_focus(&natives)?;
     install_capture(&natives)?;

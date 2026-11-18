@@ -215,6 +215,8 @@ pub struct VirtualNode {
     content: Option<NodeId>,
     /// The template that owns this fragment.
     owner: Option<NodeId>,
+    /// The elements set from script for an ARIA attribute, keyed by the attribute name.
+    pub(crate) aria_refs: HashMap<&'static str, Vec<NodeId>>,
 }
 
 impl VirtualNode {
@@ -238,6 +240,7 @@ impl VirtualNode {
             children: Vec::new(),
             content: None,
             owner: None,
+            aria_refs: HashMap::new(),
         }
     }
 

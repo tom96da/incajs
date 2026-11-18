@@ -3,6 +3,7 @@
 
 import type {
   AddEventListenerOptions as AddEventListenerOptionsType,
+  ARIAMixin as ARIAMixinType,
   Attr as AttrType,
   CSSStyleDeclaration as CSSStyleDeclarationType,
   CharacterData as CharacterDataType,
@@ -67,6 +68,17 @@ type ParentMembers = NodeMembers & Pick<Document, "childElementCount">;
 
 /** The members the host defines on the prototype of elements. */
 type ElementMembers = ParentMembers &
+  Omit<
+    ARIAMixinType,
+    | "ariaActiveDescendantElement"
+    | "ariaControlsElements"
+    | "ariaDescribedByElements"
+    | "ariaDetailsElements"
+    | "ariaErrorMessageElements"
+    | "ariaFlowToElements"
+    | "ariaLabelledByElements"
+    | "ariaOwnsElements"
+  > &
   Pick<
     Element,
     | "id"
