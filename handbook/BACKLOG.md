@@ -105,13 +105,6 @@ A fixed entry is deleted and its ID is never reused.
   never auto-resizes. Those text nodes are also real flex children, so
   `gap` adds space around every `v-for`.
 
-- **B-053 `focus`/`blur` listeners that call `focusNode` may not take effect**
-  `Units: bridge,host · Size: S–M · Impact: Medium`
-
-  `focus` and `blur` listeners run inside `render()`, where GPUI ignores
-  `window.refresh()` (`third_party/zed/crates/gpui/src/window.rs:2178`), so
-  the request may wait for an unrelated redraw. Unconfirmed.
-
 - **B-059 The host sets no time limit, and nothing follows a stop by an engine limit**
   `Units: jsenv,host · Size: M · Impact: Medium`
 

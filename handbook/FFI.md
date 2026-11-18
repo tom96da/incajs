@@ -607,7 +607,8 @@ its number, or `null` for a value that is no signal.
 - A modifier change bubbles `keydown` or `keyup` named `Shift`, `Control`, `Alt` or `Meta`, in that
   order, from the focused node, else the document element, else the document. The host measures the
   change against the modifiers it reads from the window on the first frame and on every activation.
-- `focusNode`/`blurNode` queue and apply in order on the next frame. A focus
+- `focusNode`/`blurNode` queue and apply in order on the next frame. A request
+  queued by a listener of a focus change applies on the next frame. A focus
   change dispatches `blur`, `focusout`, `focus`, `focusin` in that order, and
   the `focusin`/`focusout` walk has `target` the node. Changes to `tabindex`
   (key compared case-insensitively), `disabled` on a button or input,

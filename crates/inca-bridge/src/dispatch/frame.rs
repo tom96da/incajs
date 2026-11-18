@@ -15,8 +15,8 @@ impl EventDispatcher {
     /// Runs the work a window owes before it draws a frame: prints the warnings of the `<style>`
     /// sheets, syncs the modifier keys, applies a requested focus, writes the focus that style
     /// rules read and fires the resulting `focus`/`blur` events, frees the nodes nothing reaches,
-    /// reveals the focused node and fires pending `scroll` events. Call it first in the window's
-    /// render.
+    /// reveals the focused node and fires pending `scroll` events, and requests another frame
+    /// while a focus request waits. Call it first in the window's render.
     pub fn begin_frame(&self, window: &mut Window, cx: &mut App) {
         self.warn_style_sheets();
         self.sync_modifiers(window, false);
@@ -33,6 +33,11 @@ impl EventDispatcher {
         self.release_orphans(window, cx);
         self.host.borrow_mut().reveal_focus(window);
         self.fire_scrolls(window, cx);
+        // A refresh requested while drawing has no effect, so a listener's own focus changes need
+        // the next frame.
+        if self.host.borrow().focus.has_queued_work() {
+            window.request_animation_frame();
+        }
     }
 
     /// Prints each warning of the sheets parsed since the last frame, prefixed with `<style>: `.
@@ -105,8 +110,6 @@ impl EventDispatcher {
         for node in moved {
             self.fire(node, "scroll", &EventPayload::None, window, cx);
         }
-        // A refresh requested while drawing has no effect, so a listener's own
-        // writes need the next frame.
         if any {
             window.request_animation_frame();
         }
@@ -527,5 +530,99 @@ mod tests {
         draw(cx, window);
 
         assert!(!is_focused(&host.borrow(), node));
+    }
+
+    /// A scene with `count` focusable nodes, settled by one draw.
+    fn settled(cx: &mut TestAppContext, count: usize) -> (Scene, Vec<u32>) {
+        let scene = scene(cx, "");
+        let nodes = (0..count)
+            .map(|_| focusable_node(&scene.dispatcher, &scene.host))
+            .collect();
+        draw(cx, scene.window);
+        scene.requested_frames(cx);
+        (scene, nodes)
+    }
+
+    #[gpui::test]
+    fn a_focus_requested_in_a_focus_listener_applies_on_the_next_frame(cx: &mut TestAppContext) {
+        let (scene, nodes) = settled(cx, 2);
+        let (first, second) = (nodes[0], nodes[1]);
+        scene.js(&format!(
+            r"
+            __inca_test_listen__({first}, 'focus', () => {{
+                __inca_native__.focusNode({second}, true);
+            }}, false, false);
+            "
+        ));
+        scene.host.borrow_mut().focus.request_focus(first, false);
+
+        draw(cx, scene.window);
+        assert!(!is_focused(&scene.host.borrow(), second));
+        assert_eq!(scene.requested_frames(cx), 1);
+        draw(cx, scene.window);
+
+        assert!(is_focused(&scene.host.borrow(), second));
+    }
+
+    #[gpui::test]
+    fn listeners_focusing_each_other_move_the_focus_once_per_frame(cx: &mut TestAppContext) {
+        let (scene, nodes) = settled(cx, 2);
+        let (first, second) = (nodes[0], nodes[1]);
+        scene.js(&format!(
+            r"
+            __inca_test_listen__({first}, 'focus', () => {{
+                __inca_native__.focusNode({second}, true);
+            }}, false, false);
+            __inca_test_listen__({second}, 'focus', () => {{
+                __inca_native__.focusNode({first}, true);
+            }}, false, false);
+            "
+        ));
+        scene.host.borrow_mut().focus.request_focus(first, false);
+
+        draw(cx, scene.window);
+        assert!(is_focused(&scene.host.borrow(), first));
+        assert!(!is_focused(&scene.host.borrow(), second));
+        // Running a requested frame draws it, and each draw requests one frame in turn.
+        assert_eq!(scene.requested_frames(cx), 1);
+        assert!(is_focused(&scene.host.borrow(), second));
+        assert_eq!(scene.requested_frames(cx), 1);
+
+        assert!(is_focused(&scene.host.borrow(), first));
+    }
+
+    #[gpui::test]
+    fn a_settled_frame_with_no_owed_work_requests_no_frame(cx: &mut TestAppContext) {
+        let (scene, nodes) = settled(cx, 1);
+        scene.host.borrow_mut().focus.request_focus(nodes[0], false);
+
+        draw(cx, scene.window);
+        scene.requested_frames(cx);
+        draw(cx, scene.window);
+
+        assert_eq!(scene.requested_frames(cx), 0);
+    }
+
+    #[gpui::test]
+    fn a_tabindex_removed_in_a_focus_listener_blurs_the_node_on_the_next_frame(
+        cx: &mut TestAppContext,
+    ) {
+        let (scene, nodes) = settled(cx, 1);
+        let node = nodes[0];
+        scene.js(&format!(
+            r"
+            __inca_test_listen__({node}, 'focus', () => {{
+                __inca_native__.removeAttribute({node}, 'tabindex');
+            }}, false, false);
+            "
+        ));
+        scene.host.borrow_mut().focus.request_focus(node, false);
+
+        draw(cx, scene.window);
+        assert!(is_focused(&scene.host.borrow(), node));
+        assert_eq!(scene.requested_frames(cx), 1);
+        draw(cx, scene.window);
+
+        assert!(!is_focused(&scene.host.borrow(), node));
     }
 }
