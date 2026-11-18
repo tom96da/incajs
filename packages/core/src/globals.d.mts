@@ -48,6 +48,58 @@ import type {
   Window as WindowType,
 } from "incajs";
 
+/** The members the host defines on the prototype of every node interface. */
+type NodeMembers = NodeConstants &
+  Pick<
+    Node,
+    "nodeType" | "nodeName" | "nodeValue" | "textContent" | "isConnected" | "hasChildNodes"
+  >;
+
+/** The members the host defines on the prototypes of text and comments. */
+type CharacterDataMembers = NodeMembers &
+  Pick<
+    CharacterData,
+    "data" | "length" | "appendData" | "insertData" | "deleteData" | "replaceData" | "substringData"
+  >;
+
+/** The members the host defines on the prototypes of documents, fragments and shadow roots. */
+type ParentMembers = NodeMembers & Pick<Document, "childElementCount">;
+
+/** The members the host defines on the prototype of elements. */
+type ElementMembers = ParentMembers &
+  Pick<
+    Element,
+    | "id"
+    | "className"
+    | "tagName"
+    | "localName"
+    | "namespaceURI"
+    | "prefix"
+    | "getAttribute"
+    | "setAttribute"
+    | "hasAttribute"
+    | "removeAttribute"
+    | "getAttributeNames"
+    | "matches"
+    | "innerHTML"
+    | "outerHTML"
+    | "getBoundingClientRect"
+    | "clientWidth"
+    | "clientHeight"
+    | "clientLeft"
+    | "clientTop"
+    | "scrollLeft"
+    | "scrollTop"
+    | "scrollWidth"
+    | "scrollHeight"
+    | "scrollTo"
+    | "scrollBy"
+    | "scrollIntoView"
+    | "setPointerCapture"
+    | "releasePointerCapture"
+    | "hasPointerCapture"
+  >;
+
 // The host defines these globals before the app runs. This file carries their types.
 declare global {
   /** The document of the app. The build adds its import to every module that names it. */
@@ -176,57 +228,59 @@ declare global {
 
   /** The interface object of nodes, which a script cannot construct. */
   var Node: NodeConstants & {
-    readonly prototype: NodeConstants;
+    readonly prototype: NodeMembers;
     [Symbol.hasInstance](value: unknown): value is Node;
   };
 
   /** The interface object of text and comments, which a script cannot construct. */
   var CharacterData: {
-    readonly prototype: NodeConstants;
+    readonly prototype: CharacterDataMembers;
     [Symbol.hasInstance](value: unknown): value is CharacterData;
   };
 
   /** The interface object of text nodes, which a script cannot construct. */
   var Text: {
-    readonly prototype: NodeConstants;
+    readonly prototype: CharacterDataMembers & Pick<Text, "wholeText">;
     [Symbol.hasInstance](value: unknown): value is Text;
   };
 
   /** The interface object of comments, which a script cannot construct. */
   var Comment: {
-    readonly prototype: NodeConstants;
+    readonly prototype: CharacterDataMembers;
     [Symbol.hasInstance](value: unknown): value is Comment;
   };
 
   /** The interface object of elements, which a script cannot construct. */
   var Element: {
-    readonly prototype: NodeConstants &
-      Pick<Element, "tagName" | "localName" | "namespaceURI" | "prefix">;
+    readonly prototype: ElementMembers;
     [Symbol.hasInstance](value: unknown): value is Element;
   };
 
   /** The interface object of HTML elements, which a script cannot construct. */
   var HTMLElement: {
-    readonly prototype: NodeConstants &
-      Pick<Element, "tagName" | "localName" | "namespaceURI" | "prefix">;
+    readonly prototype: ElementMembers &
+      Pick<
+        HTMLElement,
+        "click" | "offsetWidth" | "offsetHeight" | "offsetLeft" | "offsetTop" | "focus" | "blur"
+      >;
     [Symbol.hasInstance](value: unknown): value is HTMLElement;
   };
 
   /** The interface object of fragments, which a script cannot construct. */
   var DocumentFragment: {
-    readonly prototype: NodeConstants;
+    readonly prototype: ParentMembers;
     [Symbol.hasInstance](value: unknown): value is DocumentFragment;
   };
 
   /** The interface object of `document`. */
   var Document: {
-    readonly prototype: NodeConstants;
+    readonly prototype: ParentMembers;
     [Symbol.hasInstance](value: unknown): value is Document;
   };
 
   /** The interface object of the HTML document, which a script cannot construct. */
   var HTMLDocument: {
-    readonly prototype: NodeConstants;
+    readonly prototype: ParentMembers;
     [Symbol.hasInstance](value: unknown): value is Document;
   };
 
@@ -234,7 +288,7 @@ declare global {
   var DOMStringMap: { readonly prototype: DOMStringMap };
 
   /** The interface object of shadow roots, which the host never creates. */
-  var ShadowRoot: { readonly prototype: NodeConstants };
+  var ShadowRoot: { readonly prototype: ParentMembers };
 
   /** The interface object of token lists. It cannot be called or constructed. */
   var DOMTokenList: { readonly prototype: DOMTokenList };

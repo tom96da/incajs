@@ -7,7 +7,8 @@ use std::rc::Rc;
 use gpui::px;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
-use inca_node::is_scroll_container;
+use inca_node::scroll::Align;
+use inca_node::{NodeId, is_scroll_container};
 
 use super::Natives;
 use super::convert::{JsAlign, JsNodeId, existing_node, or_null};
@@ -23,18 +24,7 @@ fn scroll_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsR
     move |ctx, JsNodeId(node_id)| {
         let host = host.borrow();
         existing_node(&ctx, &host.tree, node_id)?;
-        let rect = is_scroll_container(&host.tree, node_id).then(|| {
-            let handle = host.scroll_handle(node_id);
-            let (offset, max) = (handle.offset(), handle.max_offset());
-            // gpui clamps on the next draw; report the same value.
-            [
-                -clamped_offset(offset.x, max.x),
-                -clamped_offset(offset.y, max.y),
-                max.x,
-                max.y,
-            ]
-            .map(|px: gpui::Pixels| f64::from(f32::from(px)))
-        });
+        let rect = node_scroll(&host, node_id);
         or_null(&ctx, rect.as_ref().map(<[f64; 4]>::as_slice))
     }
 }
@@ -45,30 +35,7 @@ fn scroll_node<'js>(
     move |ctx, JsNodeId(node_id), left, top| {
         let host = host.borrow();
         existing_node(&ctx, &host.tree, node_id)?;
-        if !is_scroll_container(&host.tree, node_id) {
-            return Ok(());
-        }
-        let handle = host.scroll_handle(node_id);
-        let mut offset = handle.offset();
-        // Narrowing is fine for pixel offsets; the upper clamp is gpui's.
-        #[allow(clippy::cast_possible_truncation)]
-        let negated = |v: f64| px(-(v.max(0.0) as f32));
-        if let Some(left) = left {
-            offset.x = negated(left);
-        }
-        if let Some(top) = top {
-            offset.y = negated(top);
-        }
-        let (before, max) = (handle.offset(), handle.max_offset());
-        let clamped = |v, max| -f32::from(clamped_offset(v, max));
-        handle.set_offset(offset);
-        // Recorded boxes follow the new offset, so a reveal in the same tick
-        // starts from where the content now is.
-        host.shift_descendants(
-            node_id,
-            clamped(offset.x, max.x) - clamped(before.x, max.x),
-            clamped(offset.y, max.y) - clamped(before.y, max.y),
-        );
+        scroll_to(&host, node_id, left, top);
         Ok(())
     }
 }
@@ -79,10 +46,60 @@ fn scroll_into_view_node<'js>(
     move |ctx, JsNodeId(node_id), JsAlign(block), JsAlign(inline)| {
         let mut host = host.borrow_mut();
         existing_node(&ctx, &host.tree, node_id)?;
-        if !host.reveal(node_id, block, inline) {
-            host.scroll_fresh.push((node_id, block, inline));
-        }
+        scroll_into_view(&mut host, node_id, block, inline);
         Ok(())
+    }
+}
+
+/// The scroll offset of the node `id` and its maximum as of the last drawn frame: `left`, `top`,
+/// `max left` and `max top`. A node that scrolls nothing has none.
+pub(super) fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
+    is_scroll_container(&host.tree, id).then(|| {
+        let handle = host.scroll_handle(id);
+        let (offset, max) = (handle.offset(), handle.max_offset());
+        // gpui clamps on the next draw; report the same value.
+        [
+            -clamped_offset(offset.x, max.x),
+            -clamped_offset(offset.y, max.y),
+            max.x,
+            max.y,
+        ]
+        .map(|px: gpui::Pixels| f64::from(f32::from(px)))
+    })
+}
+
+/// Moves the scroll offset of the node `id` on the given axes. A negative value counts as `0`.
+pub(super) fn scroll_to(host: &Host, id: NodeId, left: Option<f64>, top: Option<f64>) {
+    if !is_scroll_container(&host.tree, id) {
+        return;
+    }
+    let handle = host.scroll_handle(id);
+    let mut offset = handle.offset();
+    // Narrowing is fine for pixel offsets; the upper clamp is gpui's.
+    #[allow(clippy::cast_possible_truncation)]
+    let negated = |v: f64| px(-(v.max(0.0) as f32));
+    if let Some(left) = left {
+        offset.x = negated(left);
+    }
+    if let Some(top) = top {
+        offset.y = negated(top);
+    }
+    let (before, max) = (handle.offset(), handle.max_offset());
+    let clamped = |v, max| -f32::from(clamped_offset(v, max));
+    handle.set_offset(offset);
+    // Recorded boxes follow the new offset, so a reveal in the same tick
+    // starts from where the content now is.
+    host.shift_descendants(
+        id,
+        clamped(offset.x, max.x) - clamped(before.x, max.x),
+        clamped(offset.y, max.y) - clamped(before.y, max.y),
+    );
+}
+
+/// Reveals the node `id` now, or at the next frame when it has no box yet.
+pub(super) fn scroll_into_view(host: &mut Host, id: NodeId, block: Align, inline: Align) {
+    if !host.reveal(id, block, inline) {
+        host.scroll_fresh.push((id, block, inline));
     }
 }
 
@@ -90,11 +107,12 @@ fn scroll_into_view_node<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use crate::test_support::engine_with_bindings;
     use gpui::{Bounds, point};
 
-    #[test]
-    fn scroll_node_writes_only_the_given_axes_negated() {
+    use crate::test_support::engine_with_bindings;
+
+    /// A node with `overflow: scroll`, the global `n`, and its id.
+    fn scroller() -> (inca_jsenv::Engine, Rc<RefCell<Host>>, u32) {
         let (engine, host) = engine_with_bindings();
         let node: u32 = engine
             .eval("globalThis.n = __inca_native__.createNode('div')")
@@ -102,43 +120,41 @@ mod tests {
         engine
             .eval::<()>("__inca_native__.setStyle(n, 'overflow', 'scroll')")
             .unwrap();
-        let offset = |host: &Rc<RefCell<Host>>| {
-            let offset = host.borrow().scroll_handle(node).offset();
-            (f32::from(offset.x), f32::from(offset.y))
-        };
+        (engine, host, node)
+    }
+
+    fn offset(host: &Rc<RefCell<Host>>, node: u32) -> (f32, f32) {
+        let offset = host.borrow().scroll_handle(node).offset();
+        (f32::from(offset.x), f32::from(offset.y))
+    }
+
+    #[test]
+    fn scroll_node_writes_only_the_given_axes_negated() {
+        let (engine, host, node) = scroller();
 
         engine
             .eval::<()>("__inca_native__.scrollNode(n, 5, 7)")
             .unwrap();
-        assert_eq!(offset(&host), (-5., -7.));
+        assert_eq!(offset(&host, node), (-5., -7.));
         engine
             .eval::<()>("__inca_native__.scrollNode(n, null, 9)")
             .unwrap();
-        assert_eq!(offset(&host), (-5., -9.));
+        assert_eq!(offset(&host, node), (-5., -9.));
         engine
             .eval::<()>("__inca_native__.scrollNode(n, 3, undefined)")
             .unwrap();
-        assert_eq!(offset(&host), (-3., -9.));
+        assert_eq!(offset(&host, node), (-3., -9.));
     }
 
     #[test]
     fn scroll_node_clamps_a_negative_value_to_zero() {
-        let (engine, host) = engine_with_bindings();
-        let node: u32 = engine
-            .eval("globalThis.n = __inca_native__.createNode('div')")
-            .unwrap();
-        engine
-            .eval::<()>("__inca_native__.setStyle(n, 'overflow', 'scroll')")
-            .unwrap();
-        let offset = |host: &Rc<RefCell<Host>>| {
-            let offset = host.borrow().scroll_handle(node).offset();
-            (f32::from(offset.x), f32::from(offset.y))
-        };
+        let (engine, host, node) = scroller();
 
         engine
             .eval::<()>("__inca_native__.scrollNode(n, -4, -1)")
             .unwrap();
-        assert_eq!(offset(&host), (0., 0.));
+
+        assert_eq!(offset(&host, node), (0., 0.));
     }
 
     #[test]

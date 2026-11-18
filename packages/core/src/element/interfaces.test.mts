@@ -6,19 +6,15 @@ import { describe, expect, it, vi } from "vitest";
 import { adoptComment, adoptElement, adoptFragment, adoptText } from "../../tests/adopt.mts";
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage } from "../../tests/gc.mts";
-import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
-import { HTML_NAMESPACE } from "../ffi/index.mts";
 import { window } from "../window.mts";
 import { HANDLER_EVENTS } from "./eventHandlers.mts";
 import { rootElement } from "./handle.mts";
+import { defineMembers } from "./interfaces.mts";
 import { prototypes } from "./lifecycle.mts";
 import { insert, remove } from "./treeOps.mts";
 import type { ElementName } from "../ffi/index.mts";
 
-const SVG = "http://www.w3.org/2000/svg";
-const svgName: ElementName = ["g", SVG, null, "g"];
-const plainName: ElementName = ["x", null, null, "x"];
 const otherName: ElementName = ["a", "urn:x", null, "a"];
 
 const handlers = HANDLER_EVENTS.map((event) => `on${event}`);
@@ -26,23 +22,72 @@ const parentNode = [
   "children",
   "firstElementChild",
   "lastElementChild",
-  "childElementCount",
   "querySelector",
   "querySelectorAll",
 ];
 const parentInsertion = ["append", "prepend", "replaceChildren"];
 const childInsertion = ["before", "after", "replaceWith", "remove"];
 const siblings = ["previousElementSibling", "nextElementSibling"];
-const shared = ["focus", "blur", "tabIndex", "style", "dataset", ...handlers];
+const shared = ["tabIndex", "style", "dataset", ...handlers];
+
+/** The members the host defines. The stand-in prototypes of the tests hold some of them, and the Rust tests of the bridge pin the real set. */
+const HOST_MEMBERS = new Set([
+  "nodeType",
+  "nodeName",
+  "nodeValue",
+  "isConnected",
+  "hasChildNodes",
+  "data",
+  "length",
+  "substringData",
+  "appendData",
+  "insertData",
+  "deleteData",
+  "replaceData",
+  "wholeText",
+  "id",
+  "className",
+  "tagName",
+  "localName",
+  "namespaceURI",
+  "prefix",
+  "getAttribute",
+  "setAttribute",
+  "hasAttribute",
+  "removeAttribute",
+  "getAttributeNames",
+  "matches",
+  "innerHTML",
+  "outerHTML",
+  "getBoundingClientRect",
+  "clientWidth",
+  "clientHeight",
+  "clientLeft",
+  "clientTop",
+  "scrollLeft",
+  "scrollTop",
+  "scrollWidth",
+  "scrollHeight",
+  "scrollTo",
+  "scrollBy",
+  "scrollIntoView",
+  "setPointerCapture",
+  "releasePointerCapture",
+  "hasPointerCapture",
+  "click",
+  "offsetWidth",
+  "offsetHeight",
+  "offsetLeft",
+  "offsetTop",
+  "focus",
+  "blur",
+  "childElementCount",
+]);
 
 const MEMBERS: Record<string, string[]> = {
   EventTarget: ["addEventListener", "removeEventListener", "dispatchEvent"],
   Node: [
-    "nodeType",
-    "nodeName",
-    "nodeValue",
     "textContent",
-    "isConnected",
     "ownerDocument",
     "parentNode",
     "parentElement",
@@ -51,7 +96,6 @@ const MEMBERS: Record<string, string[]> = {
     "previousSibling",
     "nextSibling",
     "childNodes",
-    "hasChildNodes",
     "appendChild",
     "insertBefore",
     "removeChild",
@@ -63,68 +107,21 @@ const MEMBERS: Record<string, string[]> = {
     "isSameNode",
     "isEqualNode",
   ],
-  CharacterData: [
-    "data",
-    "length",
-    "substringData",
-    "appendData",
-    "insertData",
-    "deleteData",
-    "replaceData",
-    ...childInsertion,
-    ...siblings,
-  ],
-  Text: ["wholeText", "splitText", "kind"],
+  CharacterData: [...childInsertion, ...siblings],
+  Text: ["splitText", "kind"],
   Comment: ["kind"],
   Element: [
-    "id",
-    "className",
     "classList",
-    "tagName",
-    "localName",
-    "namespaceURI",
-    "prefix",
-    "getAttribute",
-    "setAttribute",
-    "hasAttribute",
-    "removeAttribute",
-    "getAttributeNames",
     "attributes",
-    "matches",
     "closest",
-    "innerHTML",
-    "outerHTML",
     "insertAdjacentHTML",
-    "getBoundingClientRect",
-    "clientWidth",
-    "clientHeight",
-    "clientLeft",
-    "clientTop",
-    "scrollLeft",
-    "scrollTop",
-    "scrollWidth",
-    "scrollHeight",
-    "scrollTo",
-    "scrollBy",
-    "scrollIntoView",
-    "setPointerCapture",
-    "releasePointerCapture",
-    "hasPointerCapture",
     ...parentNode,
     ...parentInsertion,
     ...childInsertion,
     ...siblings,
     "kind",
   ],
-  HTMLElement: [
-    "click",
-    "offsetWidth",
-    "offsetHeight",
-    "offsetLeft",
-    "offsetTop",
-    "offsetParent",
-    ...shared,
-  ],
+  HTMLElement: ["offsetParent", ...shared],
   ForeignElement: shared,
   DocumentFragment: [...parentNode, ...parentInsertion, "kind"],
   Document: [
@@ -161,7 +158,9 @@ describe("the members of each prototype", () => {
   it.each(Object.entries(MEMBERS))("%s holds the members of the standard", (name, expected) => {
     const proto = (prototypes() as unknown as Record<string, object>)[name]!;
 
-    expect(Object.getOwnPropertyNames(proto).sort()).toEqual([...expected].sort());
+    const own = Object.getOwnPropertyNames(proto).filter((key) => !HOST_MEMBERS.has(key));
+
+    expect(own.sort()).toEqual([...expected].sort());
   });
 
   it("gives window the handler properties as own members", () => {
@@ -170,7 +169,7 @@ describe("the members of each prototype", () => {
 
   it.each([
     ["an element", () => adoptElement(21), ["__node_id"]],
-    ["a text node", () => adoptText(22, "x"), ["__node_id", "text"]],
+    ["a text node", () => adoptText(22, "x"), ["__node_id"]],
     ["an HTML input", () => adoptElement(23, "input"), ["__node_id", "value"]],
     ["an HTML template", () => document.createElement("template"), ["__node_id", "content"]],
   ] as const)("gives %s only its own state as keys", (_kind, make, keys) => {
@@ -204,7 +203,6 @@ describe("the length of a method", () => {
     ["EventTarget", "addEventListener", 2],
     ["EventTarget", "removeEventListener", 2],
     ["EventTarget", "dispatchEvent", 1],
-    ["Node", "hasChildNodes", 0],
     ["Node", "appendChild", 1],
     ["Node", "insertBefore", 2],
     ["Node", "removeChild", 1],
@@ -215,34 +213,13 @@ describe("the length of a method", () => {
     ["Node", "compareDocumentPosition", 1],
     ["Node", "isSameNode", 1],
     ["Node", "isEqualNode", 1],
-    ["CharacterData", "substringData", 2],
-    ["CharacterData", "appendData", 1],
-    ["CharacterData", "insertData", 2],
-    ["CharacterData", "deleteData", 2],
-    ["CharacterData", "replaceData", 3],
     ["Text", "splitText", 1],
     ["Element", "querySelector", 1],
     ["Element", "querySelectorAll", 1],
     ["DocumentFragment", "querySelector", 1],
     ["Document", "querySelectorAll", 1],
-    ["Element", "getAttribute", 1],
-    ["Element", "setAttribute", 2],
-    ["Element", "hasAttribute", 1],
-    ["Element", "removeAttribute", 1],
-    ["Element", "getAttributeNames", 0],
-    ["Element", "matches", 1],
     ["Element", "closest", 1],
     ["Element", "insertAdjacentHTML", 2],
-    ["Element", "getBoundingClientRect", 0],
-    ["Element", "scrollTo", 0],
-    ["Element", "scrollBy", 0],
-    ["Element", "scrollIntoView", 0],
-    ["Element", "setPointerCapture", 1],
-    ["Element", "releasePointerCapture", 1],
-    ["Element", "hasPointerCapture", 1],
-    ["HTMLElement", "click", 0],
-    ["HTMLElement", "focus", 0],
-    ["HTMLElement", "blur", 0],
     ["Document", "createElement", 1],
     ["Document", "createElementNS", 2],
     ["Document", "createTextNode", 1],
@@ -277,10 +254,9 @@ describe("the members of a mixin", () => {
 describe("the receiver check", () => {
   const all = prototypes();
   const text = () => adoptText(31, "x");
-  const svg = () => adoptElement(32, svgName);
 
   it.each([
-    ["a Node member on a plain object", () => call(all.Node, "hasChildNodes", {}), "a Node"],
+    ["a Node member on a plain object", () => call(all.Node, "appendChild", {}, {}), "a Node"],
     [
       "an EventTarget member on a plain object",
       () => call(all.EventTarget, "dispatchEvent", {}, {}),
@@ -288,21 +264,10 @@ describe("the receiver check", () => {
     ],
     [
       "an Element member on a text node",
-      () => call(all.Element, "getAttribute", text(), "a"),
+      () => call(all.Element, "closest", text(), "a"),
       "an Element",
     ],
-    ["click on an SVG element", () => call(all.HTMLElement, "click", svg()), "an HTMLElement"],
-    [
-      "a CharacterData member on an element",
-      () => call(all.CharacterData, "appendData", adoptElement(33), "x"),
-      "a CharacterData",
-    ],
     ["splitText on a comment", () => call(all.Text, "splitText", adoptComment(34), 0), "a Text"],
-    [
-      "focus on an element of no namespace",
-      () => call(all.HTMLElement, "focus", adoptElement(35, plainName)),
-      "an HTML, SVG or MathML element",
-    ],
     [
       "previousElementSibling on document",
       () => read(all.CharacterData, "previousElementSibling", document),
@@ -324,24 +289,18 @@ describe("the receiver check", () => {
       "an Element, Document or DocumentFragment",
     ],
     [
-      "click on an element of another namespace",
-      () => call(all.HTMLElement, "click", adoptElement(39, otherName)),
-      "an HTMLElement",
+      "a getter read on the prototype itself",
+      () => read(all.Node, "ownerDocument", all.Node),
+      "a Node",
     ],
-    [
-      "focus on an element of another namespace",
-      () => call(all.HTMLElement, "focus", adoptElement(40, otherName)),
-      "an HTML, SVG or MathML element",
-    ],
-    ["a getter read on the prototype itself", () => read(all.Node, "nodeType", all.Node), "a Node"],
     [
       "a member called on a forged object",
-      () => call(all.Node, "hasChildNodes", Object.create(all.HTMLElement)),
+      () => call(all.Node, "appendChild", Object.create(all.HTMLElement), {}),
       "a Node",
     ],
     [
       "a member called on an object that inherits a handle",
-      () => call(all.Node, "hasChildNodes", Object.create(adoptElement(38))),
+      () => call(all.Node, "appendChild", Object.create(adoptElement(38)), {}),
       "a Node",
     ],
   ])("throws for %s", (_row, run, name) => {
@@ -350,29 +309,6 @@ describe("the receiver check", () => {
     expect(run).toThrow(
       new TypeError(`the receiver is not ${name}. call the method on an instance`),
     );
-  });
-
-  it("runs click on an element that createElementNS made in the HTML namespace", () => {
-    const click = vi.fn<(id: number) => void>();
-    installFakeHost({ click });
-    const element = document.createElementNS(HTML_NAMESPACE, "div");
-
-    call(all.HTMLElement, "click", element);
-
-    expect(click).toHaveBeenCalledExactlyOnceWith(element.__node_id);
-  });
-
-  it.each([
-    ["an SVG element", () => svg()],
-    ["an element of an HTML namespace", () => adoptElement(42, ["a", HTML_NAMESPACE, null, "A"])],
-  ])("runs focus on %s", (_row, make) => {
-    const focus = vi.fn<(id: number, preventScroll: boolean) => void>();
-    vi.stubGlobal("__inca_native__", nativeStub({ focusNode: focus } as never));
-    const element = make();
-
-    call(all.HTMLElement, "focus", element);
-
-    expect(focus).toHaveBeenCalledOnce();
   });
 
   it("runs the children getter of Document.prototype on document", () => {
@@ -413,15 +349,10 @@ describe("the receiver check before the argument count", () => {
 
   it.each([
     ["a creation member of Document", () => call(all.Document, "createElement", {}), "a Document"],
-    ["an attribute member of Element", () => call(all.Element, "getAttribute", {}), "an Element"],
+    ["a selector member of Element", () => call(all.Element, "closest", {}), "an Element"],
     ["a markup member of Element", () => call(all.Element, "insertAdjacentHTML", {}), "an Element"],
     ["a mutation member of Node", () => call(all.Node, "appendChild", {}), "a Node"],
     ["a relation member of Node", () => call(all.Node, "compareDocumentPosition", {}), "a Node"],
-    [
-      "a data member of CharacterData",
-      () => call(all.CharacterData, "substringData", {}),
-      "a CharacterData",
-    ],
     ["splitText of Text", () => call(all.Text, "splitText", {}), "a Text"],
   ])("throws the receiver error for %s called with no arguments", (_row, run, name) => {
     expect(run).toThrow(
@@ -539,8 +470,73 @@ describe("a second evaluation of core", () => {
     vi.resetModules();
     await import("./handle.mts");
 
-    expect(() => before.nodeName).toThrow(
+    expect(() => before.parentNode).toThrow(
       new TypeError("the receiver is not a Node. call the method on an instance"),
     );
+  });
+});
+
+describe("defineMembers", () => {
+  /** A prototype with the host getter of `value`, and the members `set` writes to `written`. */
+  function setup() {
+    const written: unknown[] = [];
+    const proto = {};
+    const hostGetter = () => "host";
+    Object.defineProperty(proto, "value", {
+      get: hostGetter,
+      enumerable: true,
+      configurable: true,
+    });
+    const members = {
+      set value(next: unknown) {
+        written.push(next);
+      },
+    };
+    return { proto, hostGetter, members, written };
+  }
+
+  it("keeps the getter of the prototype beside a setter", () => {
+    const { proto, hostGetter, members } = setup();
+
+    defineMembers(proto, members);
+
+    expect(Object.getOwnPropertyDescriptor(proto, "value")).toMatchObject({
+      get: hostGetter,
+      enumerable: true,
+      configurable: true,
+    });
+  });
+
+  it("calls the setter of the members", () => {
+    const { proto, members, written } = setup();
+    defineMembers(proto, members);
+
+    (proto as { value: unknown }).value = 5;
+
+    expect(written).toEqual([5]);
+  });
+
+  it("keeps the getter after a second evaluation", () => {
+    const { proto, hostGetter, members } = setup();
+    defineMembers(proto, members);
+    defineMembers(proto, {
+      set value(_next: unknown) {},
+    });
+
+    // oxlint-disable-next-line typescript/unbound-method
+    expect(Object.getOwnPropertyDescriptor(proto, "value")!.get).toBe(hostGetter);
+  });
+
+  it("leaves a member with its own getter alone", () => {
+    const { proto } = setup();
+
+    defineMembers(proto, {
+      get value() {
+        return "own";
+      },
+      set value(_next: unknown) {},
+    });
+
+    expect((proto as { value: unknown }).value).toBe("own");
   });
 });

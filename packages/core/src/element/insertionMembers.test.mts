@@ -106,7 +106,7 @@ describe("the call to the host", () => {
     },
   );
 
-  it("gives a new text handle the id of the host and the string as data", () => {
+  it("gives a new text handle the id of the host", () => {
     const id = host.create("#text");
     const parent = div();
     host.natives.appendChild!(parent.__node_id, id);
@@ -114,7 +114,7 @@ describe("the call to the host", () => {
 
     parent.append("s");
 
-    expect(nodeOf(id)).toMatchObject({ __node_id: id, text: "s" });
+    expect(nodeOf(id)).toMatchObject({ __node_id: id, kind: "text" });
   });
 
   it.each([...PARENT_MEMBERS, ...CHILD_MEMBERS])("%s returns undefined", (name) => {

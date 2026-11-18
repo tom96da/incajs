@@ -268,7 +268,6 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
       while (nodeOf(at).parent !== null) at = nodeOf(at).parent!;
       return at;
     },
-    isConnected: (id) => nodeOf(natives.rootOf!(id)).tag === "#document",
     closest(id, tag) {
       for (let at: number | null = id; at !== null; at = nodeOf(at).parent) {
         if (nodeOf(at).tag === tag) return at;

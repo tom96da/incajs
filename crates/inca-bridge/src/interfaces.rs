@@ -427,7 +427,9 @@ mod tests {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
         let got = eval_json(
             &dispatcher,
-            &format!("Object.fromEntries(Object.entries({owner}))"),
+            &format!(
+                "Object.fromEntries(Object.keys({owner}).filter((key) => key === key.toUpperCase()).map((key) => [key, {owner}[key]]))"
+            ),
         );
         assert_eq!(
             got,
@@ -513,13 +515,13 @@ mod tests {
     }
 
     #[test]
-    fn the_foreign_element_prototype_has_no_own_key() {
+    fn the_foreign_element_prototype_has_only_the_focus_members() {
         let (dispatcher, _host, _reported) = dispatcher_with_engine();
         let got = eval_json(
             &dispatcher,
             "Reflect.ownKeys(__inca_native__.interfacePrototypes().ForeignElement)",
         );
-        assert_eq!(got, serde_json::json!([]));
+        assert_eq!(got, serde_json::json!(["focus", "blur"]));
     }
 
     #[test]

@@ -319,9 +319,9 @@ export interface HtmlMembers {
  * An element, a node with a tag, attributes and children.
  *
  * A removed node keeps its attributes and its position in its own subtree, and its members read
- * them. Its listeners are dropped. `addEventListener()` and `removeEventListener()` ignore the
- * call, an assignment to a handler property does nothing, and `dispatchEvent()` runs no listener
- * on it.
+ * them. Its layout reads give `0`. Its listeners are dropped. `addEventListener()` and
+ * `removeEventListener()` ignore the call, an assignment to a handler property does nothing, and
+ * `dispatchEvent()` runs no listener on it.
  */
 export interface Element extends ParentNode, ChildNode, NonDocumentTypeChildNode, HtmlMembers {
   readonly nodeType: 1;
@@ -540,10 +540,6 @@ export interface Text extends CharacterData, ChildNode, NonDocumentTypeChildNode
   readonly nodeType: 3;
   /** @internal */
   readonly kind: "text";
-  /**
-   * The text content, mirroring the value pushed to the native node.
-   */
-  text: string;
 }
 
 /**

@@ -73,8 +73,6 @@ function installCreationHost() {
     linkedNode: vi.fn<() => null>(() => null),
     childNodeIds: vi.fn<() => number[]>(() => []),
     textContent: vi.fn<() => string>(() => ""),
-    innerHtml: vi.fn<() => string>(() => ""),
-    outerHtml: vi.fn<() => string>(() => ""),
     layoutOf: vi.fn<() => null>(() => null),
     scrollOf: vi.fn<() => null>(() => null),
     addEventListener: vi.fn<(nodeId: number) => number>(() => 0),
@@ -317,13 +315,6 @@ describe("element after the node is removed", () => {
     return { host, el };
   }
 
-  it("reads its id from the host", () => {
-    const { host, el } = removed("a");
-
-    expect(el.id).toBe("a");
-    expect(host.getAttribute).toHaveBeenCalledWith(1, "id");
-  });
-
   it("reads its tabindex from the host", () => {
     expect(removed("4").el.tabIndex).toBe(4);
   });
@@ -340,15 +331,12 @@ describe("element after the node is removed", () => {
     expect((el as HTMLInputElement).value).toBe("abc");
   });
 
-  it.each<["id" | "tabIndex", unknown, [number, string, unknown]]>([
-    ["id", "b", [1, "id", "b"]],
-    ["tabIndex", 3, [1, "tabindex", 3]],
-  ])("writes %s through the host", (member, value, call) => {
+  it("writes tabIndex through the host", () => {
     const { host, el } = removed();
 
-    (el as unknown as Record<string, unknown>)[member] = value;
+    el.tabIndex = 3;
 
-    expect(host.setAttribute).toHaveBeenCalledExactlyOnceWith(...call);
+    expect(host.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "tabindex", 3);
   });
 
   it("writes the text of an input through the host", () => {
@@ -378,46 +366,6 @@ describe("element after the node is removed", () => {
 
     expect(() => el.dispatchEvent({} as never)).toThrow(TypeError);
     expect(host.dispatchEvent).toHaveBeenCalledWith(1, {});
-  });
-
-  it.each([
-    ["focus", "focusNode"],
-    ["click", "click"],
-    ["scrollIntoView", "scrollIntoViewNode"],
-  ] as const)("ignores %s", (method, call) => {
-    const { host, el } = removed();
-
-    el[method]();
-
-    expect(host[call]).not.toHaveBeenCalled();
-  });
-
-  it("reads zero box members without asking the host", () => {
-    const host = installHost(null, { 1: [10, 20, 30, 40, 2, 0, 0, 0, 0] });
-    const el = adoptElement(1, "div");
-    markRemoved([el.__node_id]);
-
-    expect([el.offsetWidth, el.clientHeight, el.offsetLeft]).toEqual([0, 0, 0]);
-    expect(host.layoutOf).not.toHaveBeenCalled();
-  });
-
-  it("reads zero scroll members without asking the host", () => {
-    const host = installHost(null, {}, [5, 6, 7, 8]);
-    const el = adoptElement(1, "div");
-    markRemoved([el.__node_id]);
-
-    expect([el.scrollTop, el.scrollWidth]).toEqual([0, 0]);
-    expect(host.scrollOf).not.toHaveBeenCalled();
-  });
-
-  it("ignores scrollTo", () => {
-    const host = installHost(null, {}, [5, 6, 7, 8]);
-    const el = adoptElement(1, "div");
-    markRemoved([el.__node_id]);
-
-    el.scrollTo(1, 2);
-
-    expect(host.scrollNode).not.toHaveBeenCalled();
   });
 });
 
@@ -452,162 +400,7 @@ describe("element dataset", () => {
   });
 });
 
-describe("element destroyed attributes", () => {
-  it("ignores setAttribute with an invalid name on a destroyed element", () => {
-    const host = installHost();
-    const el = adoptElement(8, "div");
-    markFreed([el.__node_id]);
-
-    expect(() => el.setAttribute("a b", "v")).not.toThrow();
-    expect(host.setAttribute).not.toHaveBeenCalled();
-  });
-});
-
-describe("element focus and scrollIntoView", () => {
-  it.each([
-    ["no options", undefined, false],
-    ["a truthy preventScroll", { preventScroll: 1 }, true],
-  ])("passes preventScroll as a boolean for %s", (_name, options, expected) => {
-    const host = installHost();
-    const el = adoptElement(3, "div");
-
-    el.focus(options as { preventScroll?: boolean } | undefined);
-    expect(host.focusNode).toHaveBeenLastCalledWith(3, expected);
-  });
-
-  it("forwards the normalised alignments of scrollIntoView to the host", () => {
-    const host = installHost();
-    const el = adoptElement(3, "div");
-
-    el.scrollIntoView({ block: "center", inline: "end", behavior: "smooth" });
-    expect(host.scrollIntoViewNode).toHaveBeenLastCalledWith(3, "center", "end");
-  });
-
-  it("ignores focus and scrollIntoView once freed", () => {
-    const host = installHost();
-    const el = adoptElement(3, "div");
-    markFreed([el.__node_id]);
-
-    el.focus({ preventScroll: true });
-    el.scrollIntoView(false);
-    expect(host.focusNode).not.toHaveBeenCalled();
-    expect(host.scrollIntoViewNode).not.toHaveBeenCalled();
-  });
-});
-
-describe("element blur and click", () => {
-  it("forwards blur of a freed element to the host", () => {
-    const host = installHost();
-    const el = adoptElement(4, "button");
-    markFreed([el.__node_id]);
-
-    el.blur();
-    expect(host.blurNode).toHaveBeenCalledWith(4);
-  });
-
-  it("ignores click once freed", () => {
-    const host = installHost();
-    const el = adoptElement(4, "button");
-    markFreed([el.__node_id]);
-
-    el.click();
-    expect(host.click).not.toHaveBeenCalled();
-  });
-});
-
-describe("element pointer capture", () => {
-  const methods = ["setPointerCapture", "releasePointerCapture", "hasPointerCapture"] as const;
-
-  it.each(methods)("forwards %s to native with the node id and the pointer id", (method) => {
-    const host = installHost();
-    const el = adoptElement(4, "div");
-
-    el[method](1);
-
-    expect(host[method]).toHaveBeenCalledWith(4, 1);
-  });
-
-  it("returns what the host answers to hasPointerCapture", () => {
-    const host = installHost();
-    host.hasPointerCapture.mockReturnValue(true);
-
-    expect(adoptElement(4, "div").hasPointerCapture(1)).toBe(true);
-  });
-
-  describe("after the element is freed", () => {
-    function freed() {
-      const host = installHost();
-      const el = adoptElement(4, "div");
-      markFreed([el.__node_id]);
-      return { host, el };
-    }
-
-    it("still throws the host's error from setPointerCapture", () => {
-      const { host, el } = freed();
-      host.setPointerCapture.mockImplementation(() => {
-        throw new DOMException("gone", "InvalidStateError");
-      });
-
-      expect(() => el.setPointerCapture(1)).toThrow(
-        expect.objectContaining({ name: "InvalidStateError" }),
-      );
-      expect(host.setPointerCapture).toHaveBeenCalledWith(4, 1);
-    });
-
-    it("answers hasPointerCapture with the host's answer", () => {
-      const { host, el } = freed();
-      host.hasPointerCapture.mockReturnValue(false);
-
-      expect(el.hasPointerCapture(1)).toBe(false);
-      expect(host.hasPointerCapture).toHaveBeenCalledWith(4, 1);
-    });
-
-    it("still forwards releasePointerCapture without throwing", () => {
-      const { host, el } = freed();
-
-      expect(() => el.releasePointerCapture(1)).not.toThrow();
-      expect(host.releasePointerCapture).toHaveBeenCalledWith(4, 1);
-    });
-  });
-});
-
 describe("element id", () => {
-  it.each([
-    [null, ""],
-    ["a", "a"],
-    [5, "5"],
-  ] as const)("reads a stored %j as %j", (stored, expected) => {
-    const host = installHost(stored);
-    expect(adoptElement(1, "div").id).toBe(expected);
-    expect(host.getAttribute).toHaveBeenCalledWith(1, "id");
-  });
-
-  it.each([
-    [7, "7"],
-    [null, "null"],
-  ] as const)("writes %j as the attribute %j", (value, expected) => {
-    const host = installHost();
-    const el = adoptElement(1, "div");
-    el.id = value as unknown as string;
-    expect(host.setAttribute).toHaveBeenLastCalledWith(1, "id", expected);
-  });
-
-  it("reads an empty string after the node is freed", () => {
-    const host = installHost("a");
-    const el = adoptElement(1, "div");
-    markFreed([el.__node_id]);
-    expect(el.id).toBe("");
-    expect(host.getAttribute).not.toHaveBeenCalled();
-  });
-
-  it("ignores an id write after the node is freed", () => {
-    const host = installHost();
-    const el = adoptElement(1, "div");
-    markFreed([el.__node_id]);
-    el.id = "b";
-    expect(host.setAttribute).not.toHaveBeenCalled();
-  });
-
   it("keeps the node id in a read-only, non-enumerable __node_id", () => {
     installHost();
     const el = adoptElement(9, "div");

@@ -18,31 +18,63 @@ pub(super) fn set_attribute<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, Value<'js>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), key, raw| {
         let value = attribute_value_from_js(&ctx, &raw)?;
-        if !valid_attribute_name(&key) {
-            return Err(Exception::throw_dom(
-                &ctx,
-                "InvalidCharacterError",
-                "the attribute name is not valid. pass a name such as data-id",
-            ));
-        }
-        let mut host = host.borrow_mut();
-        let key = folded_key(&ctx, &host, node_id, &key)?;
-        if key == "style" {
-            let warnings = host
-                .tree
-                .set_style_text(node_id, &value.text())
-                .map_err(|err| throw_tree_error(&ctx, err))?;
-            for line in &warnings {
-                print_style_warning(&mut host, node_id, line);
-            }
-        } else {
-            host.tree
-                .set_attribute(node_id, key.clone(), value)
-                .map_err(|err| throw_tree_error(&ctx, err))?;
-        }
-        mark_focus_dirty_for(&mut host, node_id, &key);
-        Ok(())
+        check_attribute_name(&ctx, &key)?;
+        store_attribute(&ctx, &mut host.borrow_mut(), node_id, &key, value)
     }
+}
+
+/// Throws `InvalidCharacterError` for a name that is no attribute name.
+pub(super) fn check_attribute_name(ctx: &Ctx<'_>, name: &str) -> JsResult<()> {
+    if valid_attribute_name(name) {
+        return Ok(());
+    }
+    Err(Exception::throw_dom(
+        ctx,
+        "InvalidCharacterError",
+        "the attribute name is not valid. pass a name such as data-id",
+    ))
+}
+
+/// Stores the attribute `name` of the node `node_id`: folds the key, writes the style text for
+/// `style` and prints its warnings, and queues the focus re-check the key needs.
+pub(super) fn store_attribute(
+    ctx: &Ctx<'_>,
+    host: &mut Host,
+    node_id: NodeId,
+    name: &str,
+    value: AttributeValue,
+) -> JsResult<()> {
+    let key = folded_key(ctx, host, node_id, name)?;
+    if key == "style" {
+        let warnings = host
+            .tree
+            .set_style_text(node_id, &value.text())
+            .map_err(|err| throw_tree_error(ctx, err))?;
+        for line in &warnings {
+            print_style_warning(host, node_id, line);
+        }
+    } else {
+        host.tree
+            .set_attribute(node_id, key.clone(), value)
+            .map_err(|err| throw_tree_error(ctx, err))?;
+    }
+    mark_focus_dirty_for(host, node_id, &key);
+    Ok(())
+}
+
+/// Removes the attribute `name` of the node `node_id` and queues the focus re-check the key needs.
+pub(super) fn drop_attribute(
+    ctx: &Ctx<'_>,
+    host: &mut Host,
+    node_id: NodeId,
+    name: &str,
+) -> JsResult<()> {
+    let key = folded_key(ctx, host, node_id, name)?;
+    host.tree
+        .remove_attribute(node_id, &key)
+        .map_err(|err| throw_tree_error(ctx, err))?;
+    mark_focus_dirty_for(host, node_id, &key);
+    Ok(())
 }
 
 pub(super) fn get_attribute<'js>(
@@ -59,15 +91,7 @@ pub(super) fn get_attribute<'js>(
 pub(super) fn remove_attribute<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
-    move |ctx, JsNodeId(node_id), key| {
-        let mut host = host.borrow_mut();
-        let key = folded_key(&ctx, &host, node_id, &key)?;
-        host.tree
-            .remove_attribute(node_id, &key)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        mark_focus_dirty_for(&mut host, node_id, &key);
-        Ok(())
-    }
+    move |ctx, JsNodeId(node_id), key| drop_attribute(&ctx, &mut host.borrow_mut(), node_id, &key)
 }
 
 /// The key `name` has on the node `node_id`.
@@ -142,7 +166,7 @@ pub(super) fn remove_style<'js>(
 }
 
 /// Queues the focus re-check an attribute change needs.
-fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
+pub(super) fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
     match key {
         "tabindex" | "disabled" => host.focus.mark_tab_dirty(node_id),
         "hidden" | "inert" | "style" => host.mark_focus_dirty(node_id),
@@ -167,7 +191,7 @@ fn attribute_value_from_js<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<
 }
 
 /// A missing key converts to `null`.
-fn attribute_value_to_js<'js>(
+pub(super) fn attribute_value_to_js<'js>(
     ctx: &Ctx<'js>,
     value: Option<&AttributeValue>,
 ) -> JsResult<Value<'js>> {

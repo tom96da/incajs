@@ -56,13 +56,13 @@ export function documentMembers(builders: HandleBuilders): DocumentMembers {
     },
     createDocumentFragment() {
       receiverOf(this, DOCUMENT_RULE);
-      return held(builders.node(createNode("#fragment")));
+      return held(builders.adopt(createNode("#fragment")));
     },
     createElement(localName: string) {
       receiverOf(this, DOCUMENT_RULE);
       requireArguments(arguments, 1, "createElement");
       const entry = createHostElement(attributeText(localName));
-      return held(builders.node(entry[0]));
+      return held(builders.adopt(entry[0]));
     },
     createElementNS(namespace: string | null, qualifiedName: string) {
       receiverOf(this, DOCUMENT_RULE);
@@ -77,14 +77,14 @@ export function documentMembers(builders: HandleBuilders): DocumentMembers {
       const id = createNode("#text");
       const text = attributeText(data);
       setCharacterData(id, text);
-      return held(builders.node(id, text));
+      return held(builders.adopt(id));
     },
     createComment(data: string) {
       receiverOf(this, DOCUMENT_RULE);
       requireArguments(arguments, 1, "createComment");
       const id = createNode("#comment");
       setCharacterData(id, attributeText(data));
-      return held(builders.node(id));
+      return held(builders.adopt(id));
     },
   };
 }

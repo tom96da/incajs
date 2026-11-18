@@ -27,7 +27,7 @@ function probe() {
   } catch (error) {
     badQuery = error.name;
   }
-  result.value = JSON.stringify({
+  const out = {
     tagName: list.value.tagName,
     attributeNames: list.value.getAttributeNames(),
     attribute: list.value.getAttribute("data-kind"),
@@ -54,7 +54,16 @@ function probe() {
     childNodesLength: list.value.childNodes.length,
     nextSiblingNodeName: list.value.firstChild.nextSibling.nodeName,
     textContent: list.value.textContent,
-  });
+    data: second.value.firstChild.data,
+    innerHTML: second.value.innerHTML,
+    rectIsDomRect: list.value.getBoundingClientRect() instanceof DOMRect,
+    scrollTop: list.value.scrollTop,
+    offsetWidth: second.value.offsetWidth,
+  };
+  list.value.removeChild(second.value);
+  out.offsetWidthRemoved = second.value.offsetWidth;
+  out.rectWidthRemoved = second.value.getBoundingClientRect().width;
+  result.value = JSON.stringify(out);
 }
 </script>
 

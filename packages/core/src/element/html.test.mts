@@ -36,8 +36,6 @@ function clear(container: number): void {
 const containerOf = (id: number): number => fake.nodes.get(id)!.content ?? id;
 
 const host = {
-  innerHtml: vi.fn<(nodeId: number) => string>(() => "<i></i>"),
-  outerHtml: vi.fn<(nodeId: number) => string>(() => "<p><i></i></p>"),
   setInnerHtml: vi.fn<(nodeId: number, html: string) => void>(),
   setOuterHtml: vi.fn<(nodeId: number, html: string) => boolean>(),
   insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => void>(),
@@ -246,7 +244,7 @@ describe("the handles of the parsed nodes", () => {
 
     const p = kids(el)[0] as Element;
     const b = kids(p)[0] as Element;
-    expect([kids(el).length, b.tagName, (kids(b)[0] as Text).text]).toEqual([1, "B", "t"]);
+    expect([kids(el).length, b.tagName, (kids(b)[0] as Text).textContent]).toEqual([1, "B", "t"]);
   });
 
   it("reaches the content of a parsed template", () => {
@@ -271,25 +269,7 @@ describe("the handles of the parsed nodes", () => {
   });
 });
 
-describe("reads", () => {
-  it.each([
-    ["innerHTML", "<i></i>"],
-    ["outerHTML", "<p><i></i></p>"],
-  ] as const)("%s asks the host", (member, markup) => {
-    const el = createElementNode("div");
-
-    expect(el[member]).toBe(markup);
-  });
-});
-
 describe("a freed element", () => {
-  it.each(["innerHTML", "outerHTML"] as const)("reads an empty %s", (member) => {
-    const el = createElementNode("div");
-    markFreed([el.__node_id]);
-
-    expect(el[member]).toBe("");
-  });
-
   it.each([
     ["innerHTML", (el: Element): void => void (el.innerHTML = "<b></b>"), () => host.setInnerHtml],
     ["outerHTML", (el: Element): void => void (el.outerHTML = "<b></b>"), () => host.setOuterHtml],

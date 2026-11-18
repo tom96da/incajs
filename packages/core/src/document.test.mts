@@ -417,7 +417,6 @@ describe("created nodes", () => {
   it("creates a parentless text node", () => {
     expect(document.createTextNode("t")).toMatchObject({
       kind: "text",
-      text: "t",
       parentNode: null,
     });
   });
@@ -524,13 +523,6 @@ describe("createDocumentFragment", () => {
 
   it("reads textContent from the host", () => {
     expect(document.createDocumentFragment().textContent).toBe("joined");
-  });
-
-  it("reads an empty textContent once the host freed it", () => {
-    const fragment = document.createDocumentFragment();
-    markFreed([fragment.__node_id]);
-
-    expect(fragment.textContent).toBe("");
   });
 
   it("replaces its children with one text node when textContent is assigned", () => {

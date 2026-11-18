@@ -43,112 +43,6 @@ function setup(initial: Record<string, Stored> = {}, name: ElementName = "div") 
   return { host, el, store };
 }
 
-describe("getAttribute", () => {
-  it("returns a number as a string", () => {
-    expect(setup({ tabindex: 2 }).el.getAttribute("tabindex")).toBe("2");
-  });
-
-  it("returns a boolean as a string", () => {
-    expect(setup({ flag: true }).el.getAttribute("flag")).toBe("true");
-  });
-
-  it("returns null for an unset name", () => {
-    expect(setup().el.getAttribute("missing")).toBeNull();
-  });
-
-  it("returns an empty string for an empty value", () => {
-    expect(setup({ hidden: "" }).el.getAttribute("hidden")).toBe("");
-  });
-
-  it.each(["getAttribute", "hasAttribute", "removeAttribute"] as const)(
-    "%s throws a TypeError without an argument",
-    (method) => {
-      const { el } = setup();
-
-      expect(() => (el[method] as () => unknown)()).toThrow(TypeError);
-    },
-  );
-});
-
-describe("setAttribute", () => {
-  it.each<[string, unknown, string]>([
-    ["an object", { a: 1 }, "[object Object]"],
-    ["false", false, "false"],
-    ["a number", 3, "3"],
-  ])("stores %s as its string form", (_name, value, expected) => {
-    const { host, el } = setup();
-
-    el.setAttribute("a", value as string);
-
-    expect(host.setAttribute).toHaveBeenCalledExactlyOnceWith(1, "a", expected);
-  });
-
-  it("throws a TypeError for a Symbol value", () => {
-    const { host, el } = setup();
-
-    expect(() => el.setAttribute("a", Symbol("s") as unknown as string)).toThrow(TypeError);
-    expect(host.setAttribute).not.toHaveBeenCalled();
-  });
-
-  it("propagates the error the native throws for an invalid name", () => {
-    const { host, el } = setup();
-    host.setAttribute.mockImplementation(() => {
-      throw new DOMException("refused", "InvalidCharacterError");
-    });
-
-    expect(() => el.setAttribute("a b", "v")).toThrow(
-      expect.objectContaining({ name: "InvalidCharacterError" }),
-    );
-  });
-
-  it.each([["a:b"], ["é"], ["data-x"], ["1a"], ["×"]])("accepts the name %j", (name) => {
-    const { host, el } = setup();
-
-    el.setAttribute(name, "v");
-
-    expect(host.setAttribute).toHaveBeenCalledExactlyOnceWith(1, name, "v");
-  });
-
-  it("throws a TypeError for too few arguments", () => {
-    const { host, el } = setup();
-
-    expect(() => (el.setAttribute as (name: string) => void)("a")).toThrow(TypeError);
-    expect(host.setAttribute).not.toHaveBeenCalled();
-  });
-});
-
-describe("hasAttribute", () => {
-  it("is true for an empty value", () => {
-    expect(setup({ hidden: "" }).el.hasAttribute("hidden")).toBe(true);
-  });
-
-  it("is false for an unset name", () => {
-    expect(setup().el.hasAttribute("hidden")).toBe(false);
-  });
-});
-
-describe("removeAttribute", () => {
-  it("removes a set attribute", () => {
-    const { el } = setup({ a: "1" });
-
-    el.removeAttribute("a");
-
-    expect(el.hasAttribute("a")).toBe(false);
-  });
-
-  it("ignores an unset name", () => {
-    const { el } = setup();
-
-    expect(() => el.removeAttribute("missing")).not.toThrow();
-  });
-});
-
-describe("getAttributeNames", () => {
-  it("lists the names of the host in its order", () => {
-    expect(setup({ id: "x", a: 1 }).el.getAttributeNames()).toEqual(["id", "a"]);
-  });
-});
-
 describe("attributes", () => {
   it("lists the attributes in the order of the host", () => {
     const { el } = setup({ id: "x", b: 1, a: 2 });
@@ -466,20 +360,6 @@ describe("an Attr", () => {
 });
 
 describe("a freed node", () => {
-  it("reads no attribute", () => {
-    const { el } = setup({ a: "1" });
-    markFreed([el.__node_id]);
-
-    expect([el.getAttribute("a"), el.hasAttribute("a")]).toEqual([null, false]);
-  });
-
-  it("lists no attribute", () => {
-    const { el } = setup({ a: "1" });
-    markFreed([el.__node_id]);
-
-    expect([el.attributes.length, el.getAttributeNames()]).toEqual([0, []]);
-  });
-
   it("gives an empty attributes map without a host call", () => {
     const { el, host } = setup({ a: "1" });
     markFreed([el.__node_id]);
@@ -529,24 +409,6 @@ describe("a freed node", () => {
     attr.value = "2";
 
     expect(host.setAttribute).not.toHaveBeenCalled();
-  });
-
-  it("ignores setAttribute", () => {
-    const { host, el } = setup();
-    markFreed([el.__node_id]);
-
-    el.setAttribute("b", "2");
-
-    expect(host.setAttribute).not.toHaveBeenCalled();
-  });
-
-  it("ignores removeAttribute", () => {
-    const { host, el } = setup({ a: "1" });
-    markFreed([el.__node_id]);
-
-    el.removeAttribute("a");
-
-    expect(host.removeAttribute).not.toHaveBeenCalled();
   });
 });
 

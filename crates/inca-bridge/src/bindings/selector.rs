@@ -7,38 +7,19 @@ use std::rc::Rc;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
 use inca_node::{
-    NodeId, check_selector, closest_selector, matches_selector, query_selector, query_selector_all,
+    NodeId, SelectorError, check_selector, closest_selector, query_selector, query_selector_all,
 };
 
 use super::Natives;
-use super::convert::{JsNodeId, existing_node, or_null};
+use super::convert::{JsNodeId, or_null};
 use super::host::Host;
 
-/// `matches`, `closest`, `checkSelector`, `querySelector` and `querySelectorAll`: selector
+/// `closest`, `querySelector` and `querySelectorAll`: selector
 /// matching over the retained tree.
 pub(super) fn install_selector(n: &Natives<'_, '_>) -> JsResult<()> {
-    n.set("matches", matches)?;
     n.set("closest", closest)?;
-    n.set("checkSelector", check)?;
     n.set("querySelector", query)?;
     n.set("querySelectorAll", query_all)
-}
-
-fn check<'js>(_host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsResult<()> {
-    move |ctx, selector| {
-        check_selector(&selector)
-            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))
-    }
-}
-
-fn matches<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<bool> {
-    move |ctx, JsNodeId(node_id), selector| {
-        let mut host = host.borrow_mut();
-        host.sync_focus_style();
-        existing_node(&ctx, &host.tree, node_id)?;
-        matches_selector(&host.tree, node_id, &selector)
-            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))
-    }
 }
 
 fn closest<'js>(
@@ -47,9 +28,13 @@ fn closest<'js>(
     move |ctx, JsNodeId(node_id), selector| {
         let mut host = host.borrow_mut();
         host.sync_focus_style();
-        existing_node(&ctx, &host.tree, node_id)?;
-        let found = closest_selector(&host.tree, node_id, &selector)
-            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))?;
+        let syntax =
+            |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
+        if host.tree.get(node_id).is_none() {
+            check_selector(&selector).map_err(syntax)?;
+            return Ok(Value::new_null(ctx.clone()));
+        }
+        let found = closest_selector(&host.tree, node_id, &selector).map_err(syntax)?;
         or_null(&ctx, found)
     }
 }
@@ -60,9 +45,13 @@ fn query<'js>(
     move |ctx, JsNodeId(node_id), selector| {
         let mut host = host.borrow_mut();
         host.sync_focus_style();
-        existing_node(&ctx, &host.tree, node_id)?;
-        let found = query_selector(&host.tree, node_id, &selector)
-            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))?;
+        let syntax =
+            |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
+        if host.tree.get(node_id).is_none() {
+            check_selector(&selector).map_err(syntax)?;
+            return Ok(Value::new_null(ctx.clone()));
+        }
+        let found = query_selector(&host.tree, node_id, &selector).map_err(syntax)?;
         or_null(&ctx, found)
     }
 }
@@ -73,9 +62,13 @@ fn query_all<'js>(
     move |ctx, JsNodeId(node_id), selector| {
         let mut host = host.borrow_mut();
         host.sync_focus_style();
-        existing_node(&ctx, &host.tree, node_id)?;
-        query_selector_all(&host.tree, node_id, &selector)
-            .map_err(|err| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string()))
+        let syntax =
+            |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
+        if host.tree.get(node_id).is_none() {
+            check_selector(&selector).map_err(syntax)?;
+            return Ok(Vec::new());
+        }
+        query_selector_all(&host.tree, node_id, &selector).map_err(syntax)
     }
 }
 
@@ -109,7 +102,7 @@ mod tests {
             .eval(&format!(
                 r"
                 {TREE}
-                n.matches({node}, '{selector}');
+                n.nodeHandle({node})[0].matches('{selector}');
                 "
             ))
             .unwrap();
@@ -203,44 +196,44 @@ mod tests {
     }
 
     #[rstest]
-    #[case::matches("matches(inner, 'div >')")]
+    #[case::matches("nodeHandle(inner)[0].matches('div >')")]
     #[case::closest("closest(inner, '')")]
-    #[case::check_selector("checkSelector('div >')")]
     #[case::query_selector("querySelector(outer, 'div >')")]
     #[case::query_selector_all("querySelectorAll(outer, '')")]
     fn a_parse_error_throws_a_syntax_error(#[case] call: &str) {
         let (engine, _host) = engine_with_bindings();
         engine.eval::<()>(TREE).unwrap();
 
-        assert_eq!(
-            error_name(&engine, &format!("__inca_native__.{call}")),
-            "SyntaxError"
-        );
+        assert_eq!(error_name(&engine, &format!("n.{call}")), "SyntaxError");
     }
 
     #[rstest]
-    #[case::matches("matches")]
+    #[case::closest("closest", "null")]
+    #[case::query_selector("querySelector", "null")]
+    #[case::query_selector_all("querySelectorAll", "[]")]
+    fn a_freed_node_gives_the_empty_result(#[case] binding: &str, #[case] expected: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let got: String = engine
+            .eval(&format!(
+                "JSON.stringify(__inca_native__.{binding}(999, 'div'))"
+            ))
+            .unwrap();
+
+        assert_eq!(got, expected);
+    }
+
+    #[rstest]
     #[case::closest("closest")]
     #[case::query_selector("querySelector")]
     #[case::query_selector_all("querySelectorAll")]
-    fn an_unknown_node_throws_a_type_error(#[case] binding: &str) {
+    fn a_freed_node_still_checks_the_selector(#[case] binding: &str) {
         let (engine, _host) = engine_with_bindings();
 
         assert_eq!(
-            error_name(&engine, &format!("__inca_native__.{binding}(999, 'div')")),
-            "TypeError"
+            error_name(&engine, &format!("__inca_native__.{binding}(999, 'div >')")),
+            "SyntaxError"
         );
-    }
-
-    #[test]
-    fn check_selector_returns_for_a_valid_selector() {
-        let (engine, _host) = engine_with_bindings();
-
-        let got: bool = engine
-            .eval("__inca_native__.checkSelector('p') === undefined")
-            .unwrap();
-
-        assert!(got);
     }
 
     #[test]
@@ -253,7 +246,7 @@ mod tests {
                 {TREE}
                 n.appendChild(n.rootNodeId(), outer);
                 n.removeChild(n.rootNodeId(), outer);
-                n.matches(inner, 'div > span');
+                n.nodeHandle(inner)[0].matches('div > span');
                 "
             ))
             .unwrap();
@@ -271,9 +264,12 @@ mod tests {
         ";
 
     #[rstest]
-    #[case::matches_after_focus("n.focusNode(field); n.matches(field, ':focus')", true)]
+    #[case::matches_after_focus(
+        "n.focusNode(field); n.nodeHandle(field)[0].matches(':focus')",
+        true
+    )]
     #[case::matches_after_blur(
-        "n.focusNode(field); n.blurNode(field); n.matches(field, ':focus')",
+        "n.focusNode(field); n.blurNode(field); n.nodeHandle(field)[0].matches(':focus')",
         false
     )]
     #[case::closest_after_focus("n.focusNode(field); n.closest(field, ':focus') === field", true)]
@@ -316,7 +312,7 @@ mod tests {
                 r"
                 {FIELD}
                 n.focusNode(field);
-                n.matches(card, ':focus-within') && !n.matches(card, ':focus');
+                n.nodeHandle(card)[0].matches(':focus-within') && !n.nodeHandle(card)[0].matches(':focus');
                 "
             ))
             .unwrap();
@@ -334,9 +330,9 @@ mod tests {
                 {FIELD}
                 n.focusNode(field);
                 n.removeChild(card, field);
-                const removed = n.matches(field, ':focus');
+                const removed = n.nodeHandle(field)[0].matches(':focus');
                 n.appendChild(card, field);
-                [removed, n.matches(field, ':focus')];
+                [removed, n.nodeHandle(field)[0].matches(':focus')];
                 "
             ))
             .unwrap();

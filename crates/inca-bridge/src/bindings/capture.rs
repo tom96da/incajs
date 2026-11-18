@@ -7,6 +7,8 @@ use std::rc::Rc;
 use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, Exception, Result as JsResult};
 
+use inca_node::NodeId;
+
 use super::Natives;
 use super::convert::JsNodeId;
 use super::host::Host;
@@ -33,46 +35,65 @@ fn known_pointer(ctx: &Ctx<'_>, pointer_id: i32) -> JsResult<()> {
     ))
 }
 
+/// Captures the mouse pointer for `node` while a button is held. A node that is not connected
+/// throws `InvalidStateError`.
+pub(super) fn set_capture(
+    ctx: &Ctx<'_>,
+    host: &Rc<RefCell<Host>>,
+    node: NodeId,
+    pointer_id: i32,
+) -> JsResult<()> {
+    known_pointer(ctx, pointer_id)?;
+    let mut host = host.borrow_mut();
+    if !host.tree.is_connected(node) {
+        return Err(Exception::throw_dom(
+            ctx,
+            "InvalidStateError",
+            "the node is not in the mounted tree. mount it before capturing the pointer",
+        ));
+    }
+    if host.held_buttons != 0 {
+        host.capture_pending = Some(node);
+    }
+    Ok(())
+}
+
+/// Whether `node` has the capture of the pointer.
+pub(super) fn has_capture(host: &Host, node: NodeId, pointer_id: i32) -> bool {
+    pointer_id == MOUSE_POINTER
+        && host.capture_pending == Some(node)
+        && host.tree.is_connected(node)
+}
+
+/// Releases the capture of the pointer when `node` has it.
+pub(super) fn release_capture(
+    ctx: &Ctx<'_>,
+    host: &Rc<RefCell<Host>>,
+    node: NodeId,
+    pointer_id: i32,
+) -> JsResult<()> {
+    known_pointer(ctx, pointer_id)?;
+    let mut host = host.borrow_mut();
+    if host.capture_pending == Some(node) {
+        host.capture_pending = None;
+    }
+    Ok(())
+}
+
 fn set_pointer_capture<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>) -> JsResult<()> {
-    move |ctx, JsNodeId(node), Coerced(pointer_id)| {
-        known_pointer(&ctx, pointer_id)?;
-        let mut host = host.borrow_mut();
-        if !host.tree.is_connected(node) {
-            return Err(Exception::throw_dom(
-                &ctx,
-                "InvalidStateError",
-                "the node is not in the mounted tree. mount it before capturing the pointer",
-            ));
-        }
-        if host.held_buttons != 0 {
-            host.capture_pending = Some(node);
-        }
-        Ok(())
-    }
+    move |ctx, JsNodeId(node), Coerced(pointer_id)| set_capture(&ctx, &host, node, pointer_id)
 }
 
 fn has_pointer_capture(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId, Coerced<i32>) -> bool {
-    move |JsNodeId(node), Coerced(pointer_id)| {
-        let host = host.borrow();
-        pointer_id == MOUSE_POINTER
-            && host.capture_pending == Some(node)
-            && host.tree.is_connected(node)
-    }
+    move |JsNodeId(node), Coerced(pointer_id)| has_capture(&host.borrow(), node, pointer_id)
 }
 
 fn release_pointer_capture<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>) -> JsResult<()> {
-    move |ctx, JsNodeId(node), Coerced(pointer_id)| {
-        known_pointer(&ctx, pointer_id)?;
-        let mut host = host.borrow_mut();
-        if host.capture_pending == Some(node) {
-            host.capture_pending = None;
-        }
-        Ok(())
-    }
+    move |ctx, JsNodeId(node), Coerced(pointer_id)| release_capture(&ctx, &host, node, pointer_id)
 }
 
 #[cfg(test)]

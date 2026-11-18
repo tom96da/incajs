@@ -32,65 +32,6 @@ function setup(initial: Record<string, Stored> = {}) {
   return { host, el, store, lists };
 }
 
-describe("className", () => {
-  it("reads an empty string when the attribute is absent", () => {
-    expect(setup().el.className).toBe("");
-  });
-
-  it("reads the text of the class attribute", () => {
-    expect(setup({ class: "a  b" }).el.className).toBe("a  b");
-  });
-
-  it("reads a number attribute as its text", () => {
-    expect(setup({ class: 5 }).el.className).toBe("5");
-  });
-
-  it.each([
-    [null, "null"],
-    [undefined, "undefined"],
-    [5, "5"],
-  ])("writes %s as the text %s", (value, text) => {
-    const { el, host } = setup();
-
-    el.className = value as unknown as string;
-
-    expect(host.setAttribute).toHaveBeenCalledWith(1, "class", text);
-  });
-
-  it("throws a TypeError when a symbol is written", () => {
-    const { el } = setup();
-
-    expect(() => {
-      el.className = Symbol("c") as unknown as string;
-    }).toThrow(TypeError);
-  });
-
-  it("throws a TypeError when a symbol is written to a freed element", () => {
-    const { el } = setup();
-    markFreed([el.__node_id]);
-
-    expect(() => {
-      el.className = Symbol("c") as unknown as string;
-    }).toThrow(TypeError);
-  });
-
-  it("reads an empty string on a freed element", () => {
-    const { el } = setup({ class: "a" });
-    markFreed([el.__node_id]);
-
-    expect(el.className).toBe("");
-  });
-
-  it("ignores a write on a freed element", () => {
-    const { el, host } = setup();
-    markFreed([el.__node_id]);
-
-    el.className = "a";
-
-    expect(host.setAttribute).not.toHaveBeenCalled();
-  });
-});
-
 describe("classList", () => {
   it("returns the same list on each read", () => {
     const { el } = setup();

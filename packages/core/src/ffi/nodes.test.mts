@@ -6,37 +6,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nativeStub } from "../../tests/setup.mts";
 import {
   appendChild,
-  checkSelector,
   childNodeIds,
   cloneNode,
   compareNodePosition,
   createElementNS,
-  innerHtml,
   insertAdjacentHtml,
   insertBefore,
   insertNodes,
   interfacePrototypes,
-  isConnected,
   isEqualNode,
   linkedNode,
   nodeHandle,
-  outerHtml,
   queryNode,
   queryNodes,
   registerUncloneable,
   removeChild,
   removeNode,
   replaceChild,
-  replaceData,
   rootOf,
   setCharacterData,
   setInnerHtml,
   setOuterHtml,
   splitText,
-  substringData,
   templateContent,
   textContent,
-  wholeText,
 } from "./nodes.mts";
 import type { ElementEntry, InsertionPlace, InterfacePrototypes, NodeLink } from "./native.mts";
 
@@ -68,24 +61,17 @@ const native = {
   isEqualNode: vi.fn<(nodeId: number, otherId: number) => boolean>(() => false),
   removeNode: vi.fn<(nodeId: number) => [number[], number[]]>(() => [[], []]),
   templateContent: vi.fn<(nodeId: number) => number | null>(() => null),
-  innerHtml: vi.fn<(nodeId: number) => string>(() => ""),
-  outerHtml: vi.fn<(nodeId: number) => string>(() => ""),
   setInnerHtml: vi.fn<(nodeId: number, html: string) => void>(),
   setOuterHtml: vi.fn<(nodeId: number, html: string) => boolean>(() => false),
   insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => void>(),
-  checkSelector: vi.fn<(selector: string) => void>(),
   querySelector: vi.fn<(nodeId: number, selector: string) => number | null>(() => null),
   querySelectorAll: vi.fn<(nodeId: number, selector: string) => number[]>(() => []),
   linkedNode: vi.fn<(nodeId: number, link: NodeLink, elementOnly?: boolean) => number | null>(
     () => null,
   ),
   childNodeIds: vi.fn<(nodeId: number, elementOnly?: boolean) => number[]>(() => []),
-  isConnected: vi.fn<(nodeId: number) => boolean>(() => true),
   textContent: vi.fn<(nodeId: number) => string>(() => ""),
   setCharacterData: vi.fn<(nodeId: number, data: string) => void>(),
-  wholeText: vi.fn<(nodeId: number) => string>(() => ""),
-  substringData: vi.fn<(nodeId: number, offset: number, count: number) => string>(() => ""),
-  replaceData: vi.fn<(nodeId: number, offset: number, count: number, data: string) => void>(),
   splitText: vi.fn<(nodeId: number, offset: number) => number>(() => 0),
 };
 
@@ -143,15 +129,6 @@ describe("wrapper functions forward to __inca_native__", () => {
     native.cloneNode.mockReturnValueOnce(7);
     expect(cloneNode(1, true)).toBe(7);
     expect(native.cloneNode).toHaveBeenCalledWith(1, true);
-  });
-
-  it.each([
-    ["innerHtml", () => innerHtml(1), "<b></b>"],
-    ["outerHtml", () => outerHtml(1), "<p><b></b></p>"],
-  ] as const)("%s", (name, call, result) => {
-    native[name].mockReturnValueOnce(result);
-    expect(call()).toBe(result);
-    expect(native[name]).toHaveBeenCalledWith(1);
   });
 
   it("setInnerHtml", () => {
@@ -215,41 +192,24 @@ describe("wrapper functions forward to __inca_native__", () => {
     expect(native.childNodeIds).toHaveBeenCalledWith(1, true);
   });
 
-  it.each([
-    ["textContent", () => textContent(1), "text", [1]],
-    ["wholeText", () => wholeText(1), "whole", [1]],
-    ["substringData", () => substringData(1, 2, 3), "part", [1, 2, 3]],
-  ] as const)("%s", (name, call, result, args) => {
-    native[name].mockReturnValueOnce(result);
-    expect(call()).toBe(result);
-    expect(native[name]).toHaveBeenCalledWith(...args);
-  });
+  it.each([["textContent", () => textContent(1), "text", [1]]] as const)(
+    "%s",
+    (name, call, result, args) => {
+      native[name].mockReturnValueOnce(result);
+      expect(call()).toBe(result);
+      expect(native[name]).toHaveBeenCalledWith(...args);
+    },
+  );
 
   it("setCharacterData", () => {
     setCharacterData(1, "d");
     expect(native.setCharacterData).toHaveBeenCalledWith(1, "d");
   });
 
-  it("replaceData", () => {
-    replaceData(1, 2, 3, "d");
-    expect(native.replaceData).toHaveBeenCalledWith(1, 2, 3, "d");
-  });
-
   it("splitText", () => {
     native.splitText.mockReturnValueOnce(7);
     expect(splitText(1, 2)).toBe(7);
     expect(native.splitText).toHaveBeenCalledWith(1, 2);
-  });
-
-  it("isConnected", () => {
-    native.isConnected.mockReturnValueOnce(false);
-    expect(isConnected(1)).toBe(false);
-    expect(native.isConnected).toHaveBeenCalledWith(1);
-  });
-
-  it("the checkSelector wrapper forwards the selector", () => {
-    checkSelector("div > p");
-    expect(native.checkSelector).toHaveBeenCalledWith("div > p");
   });
 
   it("the queryNode wrapper forwards the id and the selector", () => {

@@ -11,9 +11,7 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult};
 
-use inca_node::{
-    AttributeValue, HtmlScope, NodeId, ParsedHtml, TreeError, VirtualNode, VirtualTree,
-};
+use inca_node::{AttributeValue, NodeId, ParsedHtml, TreeError, VirtualNode, VirtualTree};
 
 use super::Natives;
 use super::attributes::print_style_warning;
@@ -21,8 +19,6 @@ use super::convert::{JsNodeId, existing_node, throw_tree_error};
 use super::host::Host;
 
 pub(super) fn install_html(n: &Natives<'_, '_>) -> JsResult<()> {
-    n.set("innerHtml", inner_html)?;
-    n.set("outerHtml", outer_html)?;
     n.set("setInnerHtml", set_inner_html)?;
     n.set("setOuterHtml", set_outer_html)?;
     n.set("insertAdjacentHtml", insert_adjacent_html)
@@ -54,26 +50,6 @@ impl Position {
             )),
         }
     }
-}
-
-fn serialize(
-    ctx: &Ctx<'_>,
-    host: &Rc<RefCell<Host>>,
-    node_id: NodeId,
-    scope: HtmlScope,
-) -> JsResult<String> {
-    host.borrow()
-        .tree
-        .serialize_html(node_id, scope)
-        .map_err(|err| throw_tree_error(ctx, err))
-}
-
-fn inner_html<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<String> {
-    move |ctx, JsNodeId(node_id)| serialize(&ctx, &host, node_id, HtmlScope::Inner)
-}
-
-fn outer_html<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<String> {
-    move |ctx, JsNodeId(node_id)| serialize(&ctx, &host, node_id, HtmlScope::Outer)
 }
 
 /// Replaces all children of `node_id`, or of its content for a template, with the nodes `markup`
@@ -298,7 +274,7 @@ mod tests {
             walk(root, -1);
             return out;
         };
-        const html = (id) => n.innerHtml(id);
+        const html = (id) => n.nodeHandle(id)[0].innerHTML;
         ";
 
     fn engine() -> (Engine, Rc<RefCell<Host>>) {
@@ -476,7 +452,7 @@ mod tests {
             &engine,
             r"
             const loose = n.createNode('p');
-            return [n.setOuterHtml(loose, '<i></i>'), n.outerHtml(loose)];
+            return [n.setOuterHtml(loose, '<i></i>'), n.nodeHandle(loose)[0].outerHTML];
             ",
         );
 
@@ -765,24 +741,5 @@ mod tests {
         let (engine, _host) = engine();
 
         assert_eq!(error_name(&engine, "n.setInnerHtml(999, '')"), "TypeError");
-    }
-
-    #[rstest]
-    #[case::inner("html(host)", "<b>x</b>")]
-    #[case::outer("n.outerHtml(host)", "<div><b>x</b></div>")]
-    fn the_html_getters_read_the_markup_of_a_node(#[case] read: &str, #[case] expected: &str) {
-        let (engine, _host) = engine();
-
-        let got = eval(
-            &engine,
-            &format!(
-                r"
-                n.setInnerHtml(host, '<b>x</b>');
-                return {read};
-                "
-            ),
-        );
-
-        assert_eq!(got, format!("\"{expected}\""));
     }
 }

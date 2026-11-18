@@ -7,7 +7,7 @@ import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
-import { createCommentNode, createElementNode, createTextNode, setElementText } from "./handle.mts";
+import { createElementNode, createTextNode, setElementText } from "./handle.mts";
 import { elementOf, markFreed, nodeOf } from "./lifecycle.mts";
 import { setText } from "./text.mts";
 import { insert } from "./treeOps.mts";
@@ -29,9 +29,6 @@ const host = {
   getAttribute: vi.fn<(nodeId: number, key: string) => string | null>(),
   textContent: vi.fn<(nodeId: number) => string>(() => ""),
   setCharacterData: vi.fn<(nodeId: number, data: string) => void>(),
-  wholeText: vi.fn<(nodeId: number) => string>(() => ""),
-  substringData: vi.fn<(nodeId: number, offset: number, count: number) => string>(() => ""),
-  replaceData: vi.fn<(nodeId: number, offset: number, count: number, data: string) => void>(),
   splitText: vi.fn<(nodeId: number, offset: number) => number>(),
 };
 
@@ -47,32 +44,7 @@ beforeEach(() => {
   vi.stubGlobal("__inca_native__", nativeStub({ ...fake.natives, ...host } as never));
 });
 
-describe("data", () => {
-  it("reads the data from the host", () => {
-    const text = createTextNode("first");
-    fake.nodes.get(text.__node_id)!.data = "second";
-
-    expect(text.data).toBe("second");
-  });
-
-  it.each([
-    [null, ""],
-    [undefined, "undefined"],
-    ["x", "x"],
-  ] as const)("stores %s as %j", (value, stored) => {
-    const text = createTextNode("first");
-
-    text.data = value as string;
-
-    expect(dataOf(text)).toBe(stored);
-  });
-});
-
 describe("textContent of a text node", () => {
-  it("reads the data", () => {
-    expect(createTextNode("t").textContent).toBe("t");
-  });
-
   it.each([
     [null, ""],
     [undefined, ""],
@@ -83,83 +55,6 @@ describe("textContent of a text node", () => {
     text.textContent = value as string;
 
     expect(dataOf(text)).toBe(stored);
-  });
-});
-
-describe("textContent of a comment", () => {
-  it("reads the data", () => {
-    expect(createCommentNode("note").textContent).toBe("note");
-  });
-});
-
-describe("length", () => {
-  it("counts UTF-16 code units", () => {
-    expect(createTextNode("a😀b").length).toBe(4);
-  });
-});
-
-describe("substringData", () => {
-  it("asks the host for the range", () => {
-    const text = createTextNode("abc");
-    host.substringData.mockReturnValueOnce("b");
-
-    expect(text.substringData(1, 1)).toBe("b");
-    expect(host.substringData).toHaveBeenCalledWith(text.__node_id, 1, 1);
-  });
-
-  it("reads the range of the last data of a freed node", () => {
-    const text = createTextNode("abcd");
-    markFreed([text.__node_id]);
-
-    expect(text.substringData(1, 2)).toBe("bc");
-  });
-});
-
-describe("the editing methods", () => {
-  it.each([
-    ["appendData", (text: Text) => text.appendData("X"), [3, 0, "X"]],
-    ["insertData", (text: Text) => text.insertData(1, "X"), [1, 0, "X"]],
-    ["deleteData", (text: Text) => text.deleteData(1, 2), [1, 2, ""]],
-    ["replaceData", (text: Text) => text.replaceData(1, 2, "X"), [1, 2, "X"]],
-  ] as const)("%s sends one replacement to the host", (_, call, args) => {
-    const text = createTextNode("abc");
-
-    call(text);
-
-    expect(host.replaceData).toHaveBeenCalledWith(text.__node_id, ...args);
-  });
-
-  it("mirror the data the host holds in the text field", () => {
-    const text = createTextNode("abc");
-    host.replaceData.mockImplementationOnce((id) => {
-      fake.nodes.get(id)!.data = "aXc";
-    });
-
-    text.replaceData(1, 1, "X");
-
-    expect(text.text).toBe("aXc");
-  });
-
-  it("send nothing to the host for a freed node", () => {
-    const text = createTextNode("abc");
-    markFreed([text.__node_id]);
-
-    text.appendData("X");
-
-    expect(host.replaceData).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ["substringData", []],
-    ["appendData", []],
-    ["insertData", [0]],
-    ["deleteData", [0]],
-    ["replaceData", [0, 0]],
-    ["splitText", []],
-  ] as const)("%s throws a TypeError without its arguments", (method, args) => {
-    const call = createTextNode("abc")[method] as (...given: unknown[]) => unknown;
-
-    expect(() => call(...args)).toThrow(TypeError);
   });
 });
 
@@ -175,19 +70,7 @@ describe("splitText", () => {
     const tail = text.splitText(2);
 
     expect(tail.__node_id).toBe(host.splitText.mock.results[0]!.value);
-    expect(tail.text).toBe("cd");
-  });
-
-  it("keeps the head in the text field", () => {
-    const text = createTextNode("abcd");
-    host.splitText.mockImplementationOnce((id, offset) => {
-      fake.nodes.get(id)!.data = "ab";
-      return fake.natives.splitText!(id, offset);
-    });
-
-    text.splitText(2);
-
-    expect(text.text).toBe("ab");
+    expect(tail.textContent).toBe("cd");
   });
 
   it("places the tail after the node in its parent", () => {
@@ -221,46 +104,14 @@ describe("splitText", () => {
   });
 });
 
-describe("wholeText", () => {
-  it("asks the host", () => {
-    const text = createTextNode("a");
-    host.wholeText.mockReturnValueOnce("abc");
-
-    expect(text.wholeText).toBe("abc");
-    expect(host.wholeText).toHaveBeenCalledWith(text.__node_id);
-  });
-
-  it("reads the last data of a freed node", () => {
-    const text = createTextNode("a");
-    markFreed([text.__node_id]);
-
-    expect(text.wholeText).toBe("a");
-  });
-});
-
 describe("textContent of an element", () => {
-  it("asks the host", () => {
-    const el = createElementNode("div");
-    host.textContent.mockReturnValueOnce("abc");
-
-    expect(el.textContent).toBe("abc");
-    expect(host.textContent).toHaveBeenCalledWith(el.__node_id);
-  });
-
-  it("reads an empty text for a freed element", () => {
-    const el = createElementNode("div");
-    markFreed([el.__node_id]);
-
-    expect(el.textContent).toBe("");
-  });
-
   it("replaces the children with one text node", () => {
     const el = createElementNode("div");
     insert(createTextNode("old"), el);
 
     el.textContent = "new";
 
-    expect(kids(el).map((child) => (child as Text).text)).toEqual(["new"]);
+    expect(kids(el).map((child) => child.textContent)).toEqual(["new"]);
   });
 
   it.each([null, undefined, ""] as const)("removes the children for %j", (value) => {
@@ -298,7 +149,7 @@ describe("createText", () => {
     const node = createTextNode("hello");
     expect(host.createNode).toHaveBeenCalledWith("#text");
     expect(host.setCharacterData).toHaveBeenCalledWith(node.__node_id, "hello");
-    expect(node).toMatchObject({ kind: "text", text: "hello" });
+    expect(node).toMatchObject({ kind: "text", textContent: "hello" });
     expect("id" in node).toBe(false);
   });
 });
@@ -308,7 +159,7 @@ describe("setText", () => {
     const node = createTextNode("old") as Text;
     setText(node, "new");
     expect(host.setCharacterData).toHaveBeenCalledWith(node.__node_id, "new");
-    expect(node.text).toBe("new");
+    expect(node.textContent).toBe("new");
   });
 });
 
@@ -323,7 +174,7 @@ describe("setElementText", () => {
     expect(fake.spies.removeChild).toHaveBeenCalledWith(el.__node_id, oldChild.__node_id);
     expect(oldChild.parentNode).toBeNull();
     expect(kids(el)).toHaveLength(1);
-    expect(kids(el)[0]).toMatchObject({ kind: "text", text: "hello" });
+    expect(kids(el)[0]).toMatchObject({ kind: "text", textContent: "hello" });
   });
 
   it.each<[string, (el: Node) => void]>([
