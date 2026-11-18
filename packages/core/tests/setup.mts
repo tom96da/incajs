@@ -58,6 +58,40 @@ for (const [name] of NODE_INTERFACES) {
   });
 }
 
+/** A minimal `DOMRect` for the tests, defined when the global is missing. */
+class DOMRectStandIn {
+  constructor(
+    public x = 0,
+    public y = 0,
+    public width = 0,
+    public height = 0,
+  ) {}
+  get top() {
+    return Math.min(this.y, this.y + this.height);
+  }
+  get right() {
+    return Math.max(this.x, this.x + this.width);
+  }
+  get bottom() {
+    return Math.max(this.y, this.y + this.height);
+  }
+  get left() {
+    return Math.min(this.x, this.x + this.width);
+  }
+  toJSON() {
+    const { x, y, width, height, top, right, bottom, left } = this;
+    return { x, y, width, height, top, right, bottom, left };
+  }
+}
+
+if (!("DOMRect" in globalThis)) {
+  Object.defineProperty(globalThis, "DOMRect", {
+    value: DOMRectStandIn,
+    writable: true,
+    configurable: true,
+  });
+}
+
 const SIGNAL_KEY = Symbol.for("incajs.test.abortSignal");
 
 /** The stand-in `AbortSignal` and the ids of its instances. */
