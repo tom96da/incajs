@@ -37,6 +37,12 @@ export type InsertionPlace =
   | "replaceWith"
   | "replaceChildren";
 
+/**
+ * The subtrees a call left without a parent: one array for each such node, with the ids of its
+ * subtree in pre-order and the node first.
+ */
+export type RemovedSubtrees = NodeId[][];
+
 /** The namespace of the elements `createElement()` makes. */
 export const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
@@ -133,18 +139,19 @@ interface NativeBindings {
   attributeKey(nodeId: NodeId, name: string): string;
   appendChild(parentId: NodeId, nodeId: NodeId): number;
   insertBefore(parentId: NodeId, nodeId: NodeId, refId: NodeId | null): number;
-  removeChild(parentId: NodeId, childId: NodeId): void;
-  replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number;
+  removeChild(parentId: NodeId, childId: NodeId): RemovedSubtrees;
+  replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): RemovedSubtrees;
+  replaceWithText(nodeId: NodeId, text: string): [textId: NodeId | null, removed: RemovedSubtrees];
   insertNodes(
     nodeId: NodeId,
     place: InsertionPlace,
     nodes: (NodeId | string)[],
-  ): [textIds: NodeId[], removedIds: NodeId[]] | null;
+  ): [textIds: NodeId[], removed: RemovedSubtrees] | null;
   cloneNode(nodeId: NodeId, deep: boolean): NodeId;
   nodeHandle(nodeId: NodeId): NodeHandleResult | null;
   templateContent(nodeId: NodeId): NodeId | null;
-  setInnerHtml(nodeId: NodeId, html: string): void;
-  setOuterHtml(nodeId: NodeId, html: string): boolean;
+  setInnerHtml(nodeId: NodeId, html: string): RemovedSubtrees;
+  setOuterHtml(nodeId: NodeId, html: string): RemovedSubtrees;
   insertAdjacentHtml(nodeId: NodeId, position: string, html: string): void;
   rootOf(nodeId: NodeId): NodeId;
   compareNodePosition(nodeId: NodeId, otherId: NodeId): number;

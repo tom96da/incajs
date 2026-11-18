@@ -107,7 +107,7 @@ export function installInterfaces(builders: HandleBuilders): void {
   defineMembers(all.Node, nodeRelationMembers(builders));
 
   defineMembers(all.CharacterData, nonDocumentTypeChildNodeMembers(builders));
-  defineInsertionMembers(all.CharacterData, childNodeMutationMembers(builders));
+  defineInsertionMembers(all.CharacterData, childNodeMutationMembers());
 
   defineMembers(all.Text, textMembers(builders));
   defineKind(all.Text, "text");
@@ -120,11 +120,7 @@ export function installInterfaces(builders: HandleBuilders): void {
   defineMembers(all.Element, selectorMembers(builders));
   defineMembers(all.Element, nonDocumentTypeChildNodeMembers(builders));
   parentNode(all.Element);
-  defineInsertionMembers(
-    all.Element,
-    parentNodeMutationMembers(builders),
-    childNodeMutationMembers(builders),
-  );
+  defineInsertionMembers(all.Element, parentNodeMutationMembers(), childNodeMutationMembers());
   defineKind(all.Element, "element");
 
   defineMembers(all.HTMLElement, offsetMembers(builders));
@@ -132,12 +128,12 @@ export function installInterfaces(builders: HandleBuilders): void {
   shared(all.ForeignElement);
 
   parentNode(all.DocumentFragment);
-  defineInsertionMembers(all.DocumentFragment, parentNodeMutationMembers(builders));
+  defineInsertionMembers(all.DocumentFragment, parentNodeMutationMembers());
   defineKind(all.DocumentFragment, "fragment");
 
   defineMembers(all.Document, documentMembers(builders));
   parentNode(all.Document);
-  defineInsertionMembers(all.Document, parentNodeMutationMembers(builders));
+  defineInsertionMembers(all.Document, parentNodeMutationMembers());
   defineMembers(
     all.Document,
     handlerMembers((self) => receiverOf(self, DOCUMENT_RULE)),

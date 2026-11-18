@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
+import { keep } from "../../tests/keep.mts";
 import { nativeStub } from "../../tests/setup.mts";
 import { document } from "../document.mts";
 import { createElementNode, createTextNode, setElementText } from "./handle.mts";
@@ -14,6 +15,8 @@ import { insert } from "./treeOps.mts";
 import type { FakeHost } from "../../tests/fakeHost.mts";
 import type { Node } from "./nodeTypes.mts";
 import type { Text } from "./types.mts";
+
+type Native = typeof globalThis.__inca_native__;
 
 let fake: FakeHost;
 
@@ -30,6 +33,7 @@ const host = {
   textContent: vi.fn<(nodeId: number) => string>(() => ""),
   setCharacterData: vi.fn<(nodeId: number, data: string) => void>(),
   splitText: vi.fn<(nodeId: number, offset: number) => number>(),
+  replaceWithText: vi.fn<Native["replaceWithText"]>(),
 };
 
 beforeEach(() => {
@@ -41,6 +45,7 @@ beforeEach(() => {
   host.textContent.mockImplementation(fake.natives.textContent!);
   host.setCharacterData.mockImplementation(fake.natives.setCharacterData!);
   host.splitText.mockImplementation(fake.natives.splitText!);
+  host.replaceWithText.mockImplementation(fake.natives.replaceWithText!);
   vi.stubGlobal("__inca_native__", nativeStub({ ...fake.natives, ...host } as never));
 });
 
@@ -171,7 +176,7 @@ describe("setElementText", () => {
 
     setElementText(el, "hello");
 
-    expect(fake.spies.removeChild).toHaveBeenCalledWith(el.__node_id, oldChild.__node_id);
+    expect(host.replaceWithText).toHaveBeenCalledWith(el.__node_id, "hello");
     expect(oldChild.parentNode).toBeNull();
     expect(kids(el)).toHaveLength(1);
     expect(kids(el)[0]).toMatchObject({ kind: "text", textContent: "hello" });
@@ -189,7 +194,7 @@ describe("setElementText", () => {
     const el = createElementNode("div");
     const oldChild = createElementNode("div");
     insert(oldChild, el);
-    host.setCharacterData.mockImplementationOnce(() => {
+    host.replaceWithText.mockImplementationOnce(() => {
       throw new TypeError("the text has a lone surrogate");
     });
 
@@ -205,6 +210,40 @@ describe("setElementText", () => {
     setElementText(el, "");
 
     expect(kids(el)).toHaveLength(0);
+  });
+});
+
+describe("the handles below a child textContent replaces", () => {
+  it("lives while the handle of the child lives", async () => {
+    const el = createElementNode("div");
+    const top = keep(createElementNode("div"));
+    const inner = (() => {
+      const child = createElementNode("div");
+      insert(top, el);
+      insert(child, top);
+      return new WeakRef(child);
+    })();
+
+    el.textContent = "x";
+    await collectSentinel();
+
+    expect(inner.deref()).toBeDefined();
+  });
+
+  it("is collected with the handle of the child", async () => {
+    const el = createElementNode("div");
+    const inner = (() => {
+      const top = createElementNode("div");
+      const child = createElementNode("div");
+      insert(top, el);
+      insert(child, top);
+      el.textContent = "x";
+      return new WeakRef(child);
+    })();
+
+    await collectGarbage(() => inner.deref() === undefined);
+
+    expect(inner.deref()).toBeUndefined();
   });
 });
 
@@ -283,12 +322,11 @@ describe("the handles after the textContent setter", () => {
     expect(old.deref()).toBeUndefined();
   });
 
-  it("keeps the handle of the new text node after a collection", async () => {
+  it("builds no handle for the new text node", () => {
     const el = createElementNode("div");
 
     el.textContent = "new";
-    await collectSentinel();
 
-    expect(nodeOf(fake.nodes.get(el.__node_id)!.children[0]!)).toBeDefined();
+    expect(nodeOf(fake.nodes.get(el.__node_id)!.children[0]!)).toBeUndefined();
   });
 });

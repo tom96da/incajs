@@ -9,6 +9,7 @@ import type {
   InterfacePrototypes,
   NodeHandleResult,
   NodeLink,
+  RemovedSubtrees,
 } from "./native.mts";
 
 /**
@@ -130,11 +131,12 @@ export function insertBefore(parentId: NodeId, nodeId: NodeId, refId: NodeId | n
  * with {@link holdNode} by then. An unknown `childId` does nothing.
  * @param parentId - the current container
  * @param childId - the node being detached
+ * @returns the subtree of `childId`, or none for an unknown `childId`
  * @throws {DOMException} `NotFoundError` when `childId` is a node that is not a child of `parentId`
  * @throws {TypeError} when `parentId` names no node
  */
-export function removeChild(parentId: NodeId, childId: NodeId): void {
-  native().removeChild(parentId, childId);
+export function removeChild(parentId: NodeId, childId: NodeId): RemovedSubtrees {
+  return native().removeChild(parentId, childId);
 }
 
 /**
@@ -144,12 +146,12 @@ export function removeChild(parentId: NodeId, childId: NodeId): void {
  * @param parentId - the container that holds `childId`
  * @param nodeId - the node being attached, or a fragment whose children are attached
  * @param childId - the child being replaced
- * @returns the position of the first attached node among the children of `parentId`
+ * @returns the subtree of `childId`, or none when `nodeId` is `childId`
  * @throws {DOMException} `HierarchyRequestError` and `NotFoundError` as {@link insertBefore} does,
  *   with `childId` as the node that has to be a child
  * @throws {TypeError} when an id names no node
  */
-export function replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): number {
+export function replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId): RemovedSubtrees {
   return native().replaceChild(parentId, nodeId, childId);
 }
 
@@ -163,7 +165,7 @@ export function replaceChild(parentId: NodeId, nodeId: NodeId, childId: NodeId):
  * @param nodeId - the node that names the place
  * @param place - where the nodes go
  * @param nodes - the node ids and the strings, in order
- * @returns the ids of the new text nodes in order and the ids of the nodes the call removed
+ * @returns the ids of the new text nodes in order and the subtree of each node the call removed
  *   from the tree, and `null` when `place` is next to a node that has no parent
  * @throws {DOMException} `HierarchyRequestError` when the insertion would give a text node or a
  *   comment a child, put a node inside itself, or give the document text or a second element;
@@ -174,8 +176,26 @@ export function insertNodes(
   nodeId: NodeId,
   place: InsertionPlace,
   nodes: (NodeId | string)[],
-): [textIds: NodeId[], removedIds: NodeId[]] | null {
+): [textIds: NodeId[], removed: RemovedSubtrees] | null {
   return native().insertNodes(nodeId, place, nodes);
+}
+
+/**
+ * Replaces the children of `nodeId` with one text node holding `text`, or with none for an empty
+ * `text`. The old children keep their listeners and are freed at the start of the next frame
+ * unless held.
+ * @param nodeId - the node whose children are replaced
+ * @param text - the data of the new text node
+ * @returns the id of the new text node, or `null` for an empty `text`, and the subtree of each
+ *   removed child
+ * @throws {TypeError} when `nodeId` names no node or `text` holds a lone surrogate, and changes
+ *   nothing
+ */
+export function replaceWithText(
+  nodeId: NodeId,
+  text: string,
+): [textId: NodeId | null, removed: RemovedSubtrees] {
+  return native().replaceWithText(nodeId, text);
 }
 
 /**
@@ -197,21 +217,22 @@ export function cloneNode(nodeId: NodeId, deep: boolean): NodeId {
  * frame unless held.
  * @param nodeId - the node whose children are replaced
  * @param html - the markup
+ * @returns the subtree of each removed child
  * @throws {TypeError} when `nodeId` names no node
  */
-export function setInnerHtml(nodeId: NodeId, html: string): void {
-  native().setInnerHtml(nodeId, html);
+export function setInnerHtml(nodeId: NodeId, html: string): RemovedSubtrees {
+  return native().setInnerHtml(nodeId, html);
 }
 
 /**
  * Parses `html` in the context of the parent of a node and replaces the node with the result.
  * @param nodeId - the node to replace
  * @param html - the markup
- * @returns `true` when the node was replaced, `false` and no change for a node without a parent
+ * @returns the subtree of the replaced node, or none and no change for a node without a parent
  * @throws {DOMException} `NoModificationAllowedError` for a node whose parent is the document
  * @throws {TypeError} when `nodeId` names no node
  */
-export function setOuterHtml(nodeId: NodeId, html: string): boolean {
+export function setOuterHtml(nodeId: NodeId, html: string): RemovedSubtrees {
   return native().setOuterHtml(nodeId, html);
 }
 

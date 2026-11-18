@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { installFakeHost } from "../../tests/fakeHost.mts";
 import { collectGarbage, collectSentinel } from "../../tests/gc.mts";
+import { keep } from "../../tests/keep.mts";
 import { declareNode } from "../../tests/setup.mts";
 import { createElementNode } from "./handle.mts";
 import { markFreed, nodeOf } from "./lifecycle.mts";
@@ -26,39 +27,36 @@ function parsed(container: number, at: number, ids: number[]): void {
 }
 
 /** Takes the children of a container out of it, as a parse that replaces them does. */
-function clear(container: number): void {
-  for (const child of fake.nodes.get(container)!.children.slice()) {
-    fake.natives.removeChild!(container, child);
-  }
+function clear(container: number): number[][] {
+  const children = fake.nodes.get(container)!.children.slice();
+  return children.flatMap((child) => fake.natives.removeChild!(container, child));
 }
 
 /** The node whose children a markup call replaces: the content of a template, else the node. */
 const containerOf = (id: number): number => fake.nodes.get(id)!.content ?? id;
 
 const host = {
-  setInnerHtml: vi.fn<(nodeId: number, html: string) => void>(),
-  setOuterHtml: vi.fn<(nodeId: number, html: string) => boolean>(),
+  setInnerHtml: vi.fn<(nodeId: number, html: string) => number[][]>(),
+  setOuterHtml: vi.fn<(nodeId: number, html: string) => number[][]>(),
   insertAdjacentHtml: vi.fn<(nodeId: number, position: string, html: string) => void>(),
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   fake = installFakeHost(host as never);
-  host.setInnerHtml.mockImplementation((id) => {
-    clear(containerOf(id));
-  });
-  host.setOuterHtml.mockImplementation((id) => {
-    fake.natives.removeChild!(fake.nodes.get(id)!.parent!, id);
-    return true;
-  });
+  host.setInnerHtml.mockImplementation((id) => clear(containerOf(id)));
+  host.setOuterHtml.mockImplementation((id) =>
+    fake.natives.removeChild!(fake.nodes.get(id)!.parent!, id),
+  );
   host.insertAdjacentHtml.mockImplementation(() => undefined);
 });
 
 /** Makes the next `innerHTML` assignment parse into `ids`. */
 const willParseInner = (ids: number[]): void =>
   void host.setInnerHtml.mockImplementationOnce((id) => {
-    clear(containerOf(id));
+    const removed = clear(containerOf(id));
     parsed(containerOf(id), 0, ids);
+    return removed;
   });
 
 const withChild = (): [Element, Element] => {
@@ -185,9 +183,9 @@ describe("the tree after a replacement", () => {
     insert(target, parent);
     const made = entry("i");
     host.setOuterHtml.mockImplementationOnce((id) => {
-      fake.natives.removeChild!(parent.__node_id, id);
+      const removed = fake.natives.removeChild!(parent.__node_id, id);
       parsed(parent.__node_id, 1, [made]);
-      return true;
+      return removed;
     });
 
     target.outerHTML = "<i></i>";
@@ -221,7 +219,7 @@ describe("the tree after a replacement", () => {
 
   it("changes nothing for an outerHTML the host declines", () => {
     const [parent, child] = withChild();
-    host.setOuterHtml.mockReturnValueOnce(false);
+    host.setOuterHtml.mockReturnValueOnce([]);
 
     child.outerHTML = "<i></i>";
 
@@ -292,9 +290,9 @@ describe("the handles after a markup member", () => {
   /** Makes the next `outerHTML` assignment replace the node by `entries` at `at` of `parent`. */
   const willParseOuter = (parent: Element, ids: number[]): void =>
     void host.setOuterHtml.mockImplementationOnce((id) => {
-      fake.natives.removeChild!(parent.__node_id, id);
+      const removed = fake.natives.removeChild!(parent.__node_id, id);
       parsed(parent.__node_id, 0, ids);
-      return true;
+      return removed;
     });
 
   it("lets the old children of innerHTML be collected", async () => {
@@ -362,5 +360,37 @@ describe("the handles after a markup member", () => {
     await collectSentinel();
 
     expect(nodeOf(made)).toBeDefined();
+  });
+
+  it("keeps a handle below an old child of innerHTML while the handle of the child lives", async () => {
+    const parent = createElementNode("div");
+    const top = keep(createElementNode("span"));
+    const inner = (() => {
+      const child = createElementNode("b");
+      insert(top, parent);
+      insert(child, top);
+      return new WeakRef(child);
+    })();
+
+    parent.innerHTML = "";
+    await collectSentinel();
+
+    expect(inner.deref()).toBeDefined();
+  });
+
+  it("lets a handle below an old child of innerHTML be collected with the child", async () => {
+    const parent = createElementNode("div");
+    const inner = (() => {
+      const top = createElementNode("span");
+      const child = createElementNode("b");
+      insert(top, parent);
+      insert(child, top);
+      parent.innerHTML = "";
+      return new WeakRef(child);
+    })();
+
+    await collectGarbage(() => inner.deref() === undefined);
+
+    expect(inner.deref()).toBeUndefined();
   });
 });

@@ -235,11 +235,12 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
     ),
     removeChild: vi.fn<Native["removeChild"]>((parentId, childId) => {
       nodeOf(parentId);
-      if (!nodes.has(childId)) return;
+      if (!nodes.has(childId)) return [];
       if (nodeOf(childId).parent !== parentId) {
         throw new DOMException("not a child", "NotFoundError");
       }
       detach(childId);
+      return [subtree(childId)];
     }),
   };
 
@@ -261,7 +262,18 @@ export function installFakeHost(extra: Partial<Native> = {}): FakeHost {
       let ref = nextOf(childId);
       if (ref === nodeId) ref = nextOf(nodeId);
       detach(childId);
-      return place(parentId, nodeId, ref);
+      place(parentId, nodeId, ref);
+      return nodeOf(childId).parent === null ? [subtree(childId)] : [];
+    },
+    replaceWithText(id, text) {
+      const old = [...nodeOf(id).children];
+      const textId = text === "" ? null : create("#text");
+      if (textId !== null) {
+        nodeOf(textId).data = text;
+        place(id, textId, null);
+      }
+      for (const child of old) detach(child);
+      return [textId, old.map((child) => subtree(child))];
     },
     rootOf(id) {
       let at = id;

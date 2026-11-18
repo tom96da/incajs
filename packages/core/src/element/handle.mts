@@ -151,7 +151,7 @@ export function createTextNode(text: string): Text {
  * @param text - the new text content
  */
 export function setElementText(el: ParentNode, text: string): void {
-  replaceWithText(el, text, builders);
+  replaceWithText(el, text);
 }
 
 /**

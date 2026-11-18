@@ -1704,21 +1704,6 @@ A fixed entry is deleted and its ID is never reused.
   nodes a second reaches it in about 50 days. Browsers have no such limit. Fix: reuse a freed id
   once no handle, callback or table entry can name it, or widen the id to 53 bits on both sides.
 
-- **B-325 A node removed through a member keeps the handles of its subtree until a frame**
-  `Units: bridge,core · Size: M · Impact: Low`
-
-  `removeChild`, `replaceChild`, `remove()`, `replaceWith()`, `replaceChildren()`, `innerHTML` and
-  `outerHTML` release the handle of the removed top nodes only. The handles of its descendants are
-  strong table entries until the host reports them freed, which happens at a frame, after the
-  handle of the top is collected. An app that removes large subtrees through these members in one
-  task without yielding to a frame keeps every descendant handle alive, and a run that does so
-  long enough runs out of memory. A descendant that refers to the removed top, through a property
-  or the closure of a listener, keeps the top alive as well: the host never frees that subtree.
-  The nodes Vue removes are not affected: the renderer removes through a call that returns the
-  subtree. Fix: let the host return the ids of the subtree from `removeChild`, `replaceChild`,
-  `insertNodes` and the markup setters, as `removeNode` does, and follow `leftHeld`: weak entries
-  for the descendants and a keeper list on the handle of the top.
-
 - **B-326 `run_jobs` reports a stopped module without the limit**
   `Units: jsenv · Size: S · Impact: Low`
 

@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The natives behind `innerHTML`, `outerHTML` and `insertAdjacentHTML`. A write parses the markup
-//! in the tree and puts the nodes in place. `setInnerHtml` and `insertAdjacentHtml` return nothing,
-//! and `setOuterHtml` returns whether it replaced the node. The tests of these natives sit in the
-//! same file.
+//! in the tree and puts the nodes in place. `setInnerHtml` and `setOuterHtml` return the removed
+//! subtrees, and `insertAdjacentHtml` returns nothing. The tests of these natives sit in the same
+//! file.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rquickjs::{Ctx, Exception, Result as JsResult};
+use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 
 use inca_node::{AttributeValue, NodeId, ParsedHtml, TreeError, VirtualNode, VirtualTree};
 
@@ -17,6 +17,7 @@ use super::Natives;
 use super::attributes::print_style_warning;
 use super::convert::{JsNodeId, existing_node, throw_tree_error};
 use super::host::Host;
+use super::mutation::removed_subtrees;
 
 pub(super) fn install_html(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("setInnerHtml", set_inner_html)?;
@@ -53,10 +54,10 @@ impl Position {
 }
 
 /// Replaces all children of `node_id`, or of its content for a template, with the nodes `markup`
-/// parses to in the context of the node.
+/// parses to in the context of the node. Returns the removed subtrees.
 fn set_inner_html<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
         let (container, parsed) = {
             let mut host = host.borrow_mut();
@@ -72,7 +73,7 @@ fn set_inner_html<'js>(
         lose_focus_in(&ctx, &host, &old);
         let mut host = host.borrow_mut();
         let old = children_of(&host.tree, container);
-        for child in old {
+        for &child in &old {
             let left = host.leaving(&[child]);
             host.tree
                 .remove_child(container, child)
@@ -80,21 +81,21 @@ fn set_inner_html<'js>(
             host.settle(&left);
         }
         insert_parsed(&ctx, &mut host, &parsed, container, None)?;
-        Ok(())
+        removed_subtrees(&ctx, &host.tree, &old)
     }
 }
 
 /// Replaces `node_id` with the nodes `markup` parses to in the context of its parent and returns
-/// `true`. A node without a parent changes nothing and gives `false`. A node whose parent is a
-/// document throws.
+/// the removed subtrees. A node without a parent changes nothing and gives none. A node whose
+/// parent is a document throws.
 fn set_outer_html<'js>(
     host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<bool> {
+) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
         let parsed = {
             let mut host = host.borrow_mut();
             let Some(parent) = existing_node(&ctx, &host.tree, node_id)?.parent() else {
-                return Ok(false);
+                return Array::new(ctx.clone());
             };
             if host.tree.get(parent).is_some_and(VirtualNode::is_document) {
                 return Err(throw_tree_error(&ctx, TreeError::DocumentParent(node_id)));
@@ -110,7 +111,7 @@ fn set_outer_html<'js>(
             .get(node_id)
             .and_then(inca_node::VirtualNode::parent)
         else {
-            return Ok(false);
+            return Array::new(ctx.clone());
         };
         let mut left = host.leaving(&[node_id]);
         left.extend(host.leaving(&host.tree.nodes_to_move(parsed.fragment)));
@@ -119,7 +120,7 @@ fn set_outer_html<'js>(
             .map_err(|err| throw_tree_error(&ctx, err))?;
         host.settle(&left);
         finish(&mut host, &parsed);
-        Ok(true)
+        removed_subtrees(&ctx, &host.tree, &[node_id])
     }
 }
 
@@ -429,23 +430,62 @@ mod tests {
     }
 
     #[test]
-    fn set_outer_html_replaces_the_node_and_returns_true() {
+    fn set_outer_html_replaces_the_node_and_returns_its_subtree() {
         let (engine, _host) = engine();
 
         let got = eval(
             &engine,
             r"
-            n.setInnerHtml(host, '<a></a><b></b>');
+            n.setInnerHtml(host, '<a></a><b><s></s></b>');
             const b = n.childNodeIds(host)[1];
-            return [n.setOuterHtml(b, '<i></i><u></u>'), html(host)];
+            const s = n.childNodeIds(b)[0];
+            const removed = n.setOuterHtml(b, '<i></i><u></u>');
+            return [removed.map((ids) => ids.map((id) => [b, s].indexOf(id))), html(host)];
             ",
         );
 
-        assert_eq!(got, r#"[true,"<a></a><i></i><u></u>"]"#);
+        assert_eq!(got, r#"[[[0,1]],"<a></a><i></i><u></u>"]"#);
     }
 
     #[test]
-    fn set_outer_html_on_a_parentless_node_returns_false_and_changes_nothing() {
+    fn set_inner_html_returns_the_subtree_of_each_old_child() {
+        let (engine, _host) = engine();
+
+        let got = eval(
+            &engine,
+            r"
+            n.setInnerHtml(host, '<a><s></s></a><b></b>');
+            const [a, b] = n.childNodeIds(host);
+            const s = n.childNodeIds(a)[0];
+            const removed = n.setInnerHtml(host, '<i></i>');
+            return removed.map((ids) => ids.map((id) => [a, s, b].indexOf(id)));
+            ",
+        );
+
+        assert_eq!(got, "[[0,1],[2]]");
+    }
+
+    #[test]
+    fn set_inner_html_on_a_template_returns_the_subtrees_of_its_content_children() {
+        let (engine, _host) = engine();
+
+        let got = eval(
+            &engine,
+            r"
+            const t = n.createNode('template');
+            n.appendChild(host, t);
+            n.setInnerHtml(t, '<b>x</b>');
+            const b = n.childNodeIds(n.templateContent(t))[0];
+            const removed = n.setInnerHtml(t, '');
+            return removed.map((ids) => ids.map((id) => id === b ? 'b' : 'text'));
+            ",
+        );
+
+        assert_eq!(got, r#"[["b","text"]]"#);
+    }
+
+    #[test]
+    fn set_outer_html_on_a_parentless_node_returns_no_subtree_and_changes_nothing() {
         let (engine, _host) = engine();
 
         let got = eval(
@@ -456,7 +496,7 @@ mod tests {
             ",
         );
 
-        assert_eq!(got, r#"[false,"<p></p>"]"#);
+        assert_eq!(got, r#"[[],"<p></p>"]"#);
     }
 
     /// The error name of `call` and how many ids the next `createNode` skips after it.
@@ -725,13 +765,13 @@ mod tests {
         assert!(lines[1].contains("(i)"), "{lines:?}");
     }
 
-    #[rstest]
-    #[case::set_inner_html("n.setInnerHtml(host, '<i></i>')")]
-    #[case::insert_adjacent_html("n.insertAdjacentHtml(host, 'beforeend', '<i></i>')")]
-    fn an_html_write_returns_undefined(#[case] call: &str) {
+    #[test]
+    fn insert_adjacent_html_returns_undefined() {
         let (engine, _host) = engine();
 
-        let got: bool = engine.eval(&format!("{call} === undefined")).unwrap();
+        let got: bool = engine
+            .eval("n.insertAdjacentHtml(host, 'beforeend', '<i></i>') === undefined")
+            .unwrap();
 
         assert!(got);
     }

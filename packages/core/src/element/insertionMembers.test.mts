@@ -26,8 +26,8 @@ beforeEach(() => {
 
 const div = () => createElementNode("div");
 const fragment = () => adoptFragment(host.create("#fragment"));
-/** The reply of the native: the new text ids and the removed ids. */
-const reply = (texts: number[] = [], removed: number[] = []) =>
+/** The reply of the native: the new text ids and the removed subtrees. */
+const reply = (texts: number[] = [], removed: number[][] = []) =>
   insertNodes.mockReturnValue([texts, removed]);
 /** Calls the member `name` of `target`. */
 const call = (target: object, name: string, ...args: unknown[]): unknown =>
@@ -106,7 +106,7 @@ describe("the call to the host", () => {
     },
   );
 
-  it("gives a new text handle the id of the host", () => {
+  it("builds no handle for a new text", () => {
     const id = host.create("#text");
     const parent = div();
     host.natives.appendChild!(parent.__node_id, id);
@@ -114,7 +114,7 @@ describe("the call to the host", () => {
 
     parent.append("s");
 
-    expect(nodeOf(id)).toMatchObject({ __node_id: id, kind: "text" });
+    expect(nodeOf(id)).toBeUndefined();
   });
 
   it.each([...PARENT_MEMBERS, ...CHILD_MEMBERS])("%s returns undefined", (name) => {
@@ -135,17 +135,6 @@ describe("the call to the host", () => {
 
 describe("the node table", () => {
   it.each([
-    [
-      "a new text handle",
-      () => {
-        const id = host.create("#text");
-        const parent = div();
-        host.natives.appendChild!(parent.__node_id, id);
-        reply([id]);
-        parent.append("s");
-        return id;
-      },
-    ],
     [
       "an inserted node",
       () => {
@@ -190,7 +179,7 @@ describe("the node table", () => {
     const [ref, id] = (() => {
       const child = make();
       parent.appendChild(child);
-      reply([], [child.__node_id]);
+      reply([], [[child.__node_id]]);
       run(child, parent);
       return [new WeakRef(child), child.__node_id] as const;
     })();
@@ -200,11 +189,28 @@ describe("the node table", () => {
     expect([ref.deref(), host.spies.holdNode.mock.calls]).toEqual([undefined, [[id]]]);
   });
 
+  it("keeps the handle of a grandchild that replaceChildren moves up from a removed child", async () => {
+    const parent = div();
+    const [id, removed] = (() => {
+      const child = div();
+      const grandchild = div();
+      parent.appendChild(child);
+      child.appendChild(grandchild);
+      reply([], [[child.__node_id]]);
+      parent.replaceChildren(grandchild);
+      return [grandchild.__node_id, new WeakRef(child)] as const;
+    })();
+
+    await collectGarbage(() => removed.deref() === undefined);
+
+    expect([removed.deref(), nodeOf(id)?.__node_id]).toEqual([undefined, id]);
+  });
+
   it.each([
     ["an id nobody has a handle for", () => host.create("div")],
     ["the collected mount container", () => host.ROOT],
   ])("skips %s among the removed nodes", (_name, id) => {
-    reply([], [id()]);
+    reply([], [[id()]]);
 
     div().remove();
 

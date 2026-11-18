@@ -10,6 +10,20 @@ const result = ref("");
 const box = ref(null);
 const paragraph = ref(null);
 const shown = ref(false);
+const reattached = ref("");
+const holder = ref(null);
+let removedTop = null;
+
+function removeTop() {
+  holder.value.innerHTML = "<ul><li>x</li></ul>";
+  removedTop = holder.value.firstChild;
+  holder.value.removeChild(removedTop);
+}
+
+function reattach() {
+  holder.value.appendChild(removedTop);
+  reattached.value = holder.value.textContent;
+}
 
 function probe() {
   const fragment = document.createDocumentFragment();
@@ -48,5 +62,9 @@ function probe() {
     </div>
     <div id="probe" :style="{ width: 50, height: 20 }" @mousedown.prevent @click="probe" />
     <div id="result">{{ result }}</div>
+    <div ref="holder" />
+    <div id="removeTop" :style="{ width: 50, height: 20 }" @mousedown.prevent @click="removeTop" />
+    <div id="reattach" :style="{ width: 50, height: 20 }" @mousedown.prevent @click="reattach" />
+    <div id="reattached">{{ reattached }}</div>
   </div>
 </template>

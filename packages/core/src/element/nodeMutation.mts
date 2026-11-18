@@ -7,7 +7,7 @@
 import { appendChild, insertBefore, removeChild, replaceChild } from "../ffi/index.mts";
 import { nodeArgument, requireArguments } from "./arguments.mts";
 import { cloneNode } from "./clone.mts";
-import { entered, isDestroyed, left, NODE_RULE, receiverNode } from "./lifecycle.mts";
+import { entered, isDestroyed, leftSubtrees, NODE_RULE, receiverNode } from "./lifecycle.mts";
 import type { HandleNode } from "./handleNode.mts";
 import type { HandleBuilders } from "./lifecycle.mts";
 import type { Node } from "./nodeTypes.mts";
@@ -64,8 +64,7 @@ export function nodeMutationMembers(builders: HandleBuilders): NodeMutationMembe
       requireArguments(arguments, 1, "removeChild");
       const removed = nodeArgument(child, 1);
       if (isDestroyed(removed)) throw notFound();
-      removeChild(self.__node_id, removed.__node_id);
-      left(removed);
+      leftSubtrees(removeChild(self.__node_id, removed.__node_id));
       return removed;
     },
     replaceChild(node: HandleNode, child: HandleNode) {
@@ -74,9 +73,9 @@ export function nodeMutationMembers(builders: HandleBuilders): NodeMutationMembe
       const inserted = nodeArgument(node, 1);
       const old = nodeArgument(child, 2);
       if (isDestroyed(old)) throw notFound();
-      replaceChild(self.__node_id, inserted.__node_id, old.__node_id);
+      const removed = replaceChild(self.__node_id, inserted.__node_id, old.__node_id);
       enter(inserted);
-      if (old !== inserted) left(old);
+      leftSubtrees(removed);
       return old;
     },
     cloneNode(...rest: [deep?: boolean]) {

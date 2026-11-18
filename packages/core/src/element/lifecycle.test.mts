@@ -4,6 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { adoptElement } from "../../tests/adopt.mts";
+import { installFakeHost } from "../../tests/fakeHost.mts";
+import { collectGarbage } from "../../tests/gc.mts";
 import { declareNode, nativeStub, standInNodeHandle } from "../../tests/setup.mts";
 import { adoptHandle, createElementNode, handleOf } from "./handle.mts";
 import {
@@ -15,6 +17,7 @@ import {
   PARENT_NODE_RULE,
   TEXT_RULE,
   entered,
+  leftSubtrees,
   receiverOf,
   stateOf,
   isDestroyed,
@@ -303,5 +306,32 @@ describe("the release of a removed node", () => {
     leftHeld(el, [el.__node_id]);
 
     expect(registered.get(el)).toBe(1);
+  });
+});
+
+describe("the subtrees a host call removed", () => {
+  it("lets the handles below a removed node without a handle be collected", async () => {
+    const host = installFakeHost();
+    const top = host.create("div");
+    const inner = (() => {
+      const handle = createElementNode("div");
+      host.natives.appendChild!(top, handle.__node_id);
+      entered(handle);
+      leftSubtrees([[top, handle.__node_id]]);
+      return new WeakRef(handle);
+    })();
+
+    await collectGarbage(() => inner.deref() === undefined);
+
+    expect(inner.deref()).toBeUndefined();
+  });
+
+  it("holds no node for a removed top without a handle", () => {
+    const host = installFakeHost();
+    const top = host.create("div");
+
+    leftSubtrees([[top]]);
+
+    expect(host.spies.holdNode).not.toHaveBeenCalledWith(top);
   });
 });

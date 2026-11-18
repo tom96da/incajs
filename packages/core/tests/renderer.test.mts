@@ -89,6 +89,10 @@ function installFakeNative(): Map<NodeId, FakeNode> {
     return id;
   }
 
+  function subtree(id: NodeId): NodeId[] {
+    return [id, ...requireNode(id).children.flatMap(subtree)];
+  }
+
   function detach(id: NodeId): void {
     const node = nodes.get(id);
     if (!node || node.parent === null) return;
@@ -137,7 +141,7 @@ function installFakeNative(): Map<NodeId, FakeNode> {
         child.parent = parentId;
         return parent.children.indexOf(childId);
       },
-      replaceChild(): number {
+      replaceChild(): NodeId[][] {
         throw new Error("not used here");
       },
       cloneNode(): NodeId {
@@ -154,13 +158,24 @@ function installFakeNative(): Map<NodeId, FakeNode> {
       isEqualNode(): boolean {
         throw new Error("not used here");
       },
-      removeChild(parentId: NodeId, childId: NodeId): void {
+      removeChild(parentId: NodeId, childId: NodeId): NodeId[][] {
         requireNode(parentId);
-        if (!nodes.has(childId)) return;
+        if (!nodes.has(childId)) return [];
         if (nodes.get(childId)?.parent !== parentId) {
           throw new DOMException("not a child", "NotFoundError");
         }
         detach(childId);
+        return [subtree(childId)];
+      },
+      replaceWithText(nodeId: NodeId, text: string): [NodeId | null, NodeId[][]] {
+        const old = [...requireNode(nodeId).children];
+        for (const child of old) detach(child);
+        const textId = text === "" ? null : allocate("#text");
+        if (textId !== null) {
+          requireNode(textId).data = text;
+          globalThis.__inca_native__.appendChild(nodeId, textId);
+        }
+        return [textId, old.map((child) => subtree(child))];
       },
       setAttribute(nodeId: NodeId, key: string, value: unknown): void {
         requireNode(nodeId).attributes.set(key, value);
@@ -259,8 +274,8 @@ function installFakeNative(): Map<NodeId, FakeNode> {
         return [released, ids];
       },
       templateContent: () => null,
-      setInnerHtml: () => undefined,
-      setOuterHtml: () => false,
+      setInnerHtml: () => [],
+      setOuterHtml: () => [],
       insertAdjacentHtml: () => undefined,
       holdNode(): void {},
       releaseNode(): void {},

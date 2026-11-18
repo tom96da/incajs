@@ -68,9 +68,12 @@ The host keeps a retained tree of nodes. JS names each node by a `u32` id.
   every rule. The host prints each dropped rule, at-rule and declaration through `warn` as `<style>:
   <line>`.
 - `appendChild`, `insertBefore`, `replaceChild` and `insertNodes` detach each node first, so they
-  also move a node. A `#fragment` moves its children in order and stays empty. `appendChild`,
-  `insertBefore` and `replaceChild` return the position of the first inserted node among the
-  children of `parentId`.
+  also move a node. A `#fragment` moves its children in order and stays empty. `appendChild` and
+  `insertBefore` return the position of the first inserted node among the children of `parentId`.
+- `removeChild`, `replaceChild`, `insertNodes`, `setInnerHtml`, `setOuterHtml` and `replaceWithText`
+  return the removed subtrees: one array for each node the call left without a parent, with the ids
+  of its subtree in pre-order and the node first. A node that the call inserts is never listed, and
+  neither is a descendant it moves out of a removed node.
 - Detaching, moving, replacing or destroying a node drops the focus its subtree
   holds at the call. Detaching, moving or replacing a node sets the scroll offsets of its subtree
   to 0.
@@ -185,15 +188,16 @@ be passed, and `undefined` there counts as `null`.
 | `attributeKey` | `(nodeId: number, name: string) => string` | The key an attribute called `name` has on `nodeId`: ASCII lower case for an HTML element and `name` as given for any other node. Throws a `TypeError` for an unknown node. |
 | `appendChild` | `(parentId: number, nodeId: number) => number` | Attach a node at the end of `parentId`'s children. Same as `insertBefore` with no reference. Returns the position of the first inserted node. |
 | `insertBefore` | `(parentId: number, nodeId: number, refId: number \| null) => number` | Attach a node before `refId`, or at the end if `null` or `undefined`. Returns the position of the first inserted node. |
-| `removeChild` | `(parentId: number, childId: number) => void` | Detach a child node. Throws `NotFoundError` for a known node that is not a child. Freed at the next frame unless re-inserted or held, see [Retained virtual tree](#retained-virtual-tree). |
-| `replaceChild` | `(parentId: number, nodeId: number, childId: number) => number` | Put a node where `childId` was and detach `childId`. Returns the position of the first inserted node. |
-| `insertNodes` | `(nodeId: number, place: "append" \| "prepend" \| "before" \| "after" \| "replaceWith" \| "replaceChildren", nodes: (number \| string)[]) => [number[], number[]] \| null` | Insert `nodes` at `place` of `nodeId`: `append` and `prepend` into `nodeId`, `before`, `after` and `replaceWith` next to it, `replaceChildren` as its only children. A number names a node, and a string makes a new `#text` node with the string as its data. `before`, `after` and `replaceWith` take the parent of `nodeId` and return `null` without a change for a node without one. Returns the ids of the new text nodes in order and the ids of the nodes it removed from the tree (a node that moves is not listed). A removed node is freed at the next frame unless re-inserted or held, see [Retained virtual tree](#retained-virtual-tree). Throws the errors of the list below the table, and a failure changes nothing and creates no node. |
+| `removeChild` | `(parentId: number, childId: number) => number[][]` | Detach a child node and return the removed subtrees. An unknown `childId` changes nothing and returns none. Throws `NotFoundError` for a known node that is not a child. Freed at the next frame unless re-inserted or held, see [Retained virtual tree](#retained-virtual-tree). |
+| `replaceChild` | `(parentId: number, nodeId: number, childId: number) => number[][]` | Put a node where `childId` was and detach `childId`. Returns the removed subtrees, none when `nodeId` is `childId`. |
+| `replaceWithText` | `(nodeId: number, text: string) => [number \| null, number[][]]` | Replace all children of `nodeId` with one new `#text` node holding `text`, or with none for an empty `text`. Returns the id of the new node, or `null` for none, and the removed subtrees. Throws a `TypeError` for a `text` with a lone surrogate and changes nothing. |
+| `insertNodes` | `(nodeId: number, place: "append" \| "prepend" \| "before" \| "after" \| "replaceWith" \| "replaceChildren", nodes: (number \| string)[]) => [number[], number[][]] \| null` | Insert `nodes` at `place` of `nodeId`: `append` and `prepend` into `nodeId`, `before`, `after` and `replaceWith` next to it, `replaceChildren` as its only children. A number names a node, and a string makes a new `#text` node with the string as its data. `before`, `after` and `replaceWith` take the parent of `nodeId` and return `null` without a change for a node without one. Returns the ids of the new text nodes in order and the removed subtrees. A removed node is freed at the next frame unless re-inserted or held, see [Retained virtual tree](#retained-virtual-tree). Throws the errors of the list below the table, and a failure changes nothing and creates no node. |
 | `linkedNode` | `(nodeId: number, link: "parent" \| "first" \| "last" \| "previous" \| "next", elementOnly?: boolean) => number \| null` | The id of the parent, first child, last child, previous sibling or next sibling of `nodeId`, or `null` when there is none. With `elementOnly` true, the nearest element in that direction: the parent when it is an element, the first or last element child, the nearest element sibling. Throws a `TypeError` for an unknown node or another `link`. |
 | `nodeHandle` | `(nodeId: number) => [object, boolean, "input" \| "template" \| null] \| null` | Make the handle of a node: a new instance of the host class `NodeHandle`, on the stored prototype of the interface of the node (`HTMLElement` for an HTML element, the foreign element prototype for an SVG or MathML element, `Element` for any other element, `Text`, `Comment`, `DocumentFragment`, `HTMLDocument`), with the own property `__node_id`, which is read-only, hidden and fixed. Returns the handle, whether the node has a parent and `"input"` or `"template"` for an HTML `input` or `template`, `null` otherwise. Makes no entry and no hold. `null` for an unknown node. |
 | `childNodeIds` | `(nodeId: number, elementOnly?: boolean) => number[]` | The ids of the children of `nodeId` in order. With `elementOnly` true, only the element children. Throws a `TypeError` for an unknown node. |
 | `cloneNode` | `(nodeId: number, deep: boolean) => number` | Copy a node with its name, attributes, style props and data, and its descendants when `deep` is truthy. A falsy `deep` clones only the node. Returns the id of the copy of `nodeId`. The copy of a template has a copy of its content, with the content descendants when `deep` is truthy. The copies have no listeners, focus or scroll offset, and the root copy has no parent. An HTML `input` copy has the typed text of its original. Throws a `TypeError` for an unknown node. |
-| `setInnerHtml` | `(nodeId: number, html: string) => undefined` | Parse `html` in the context of `nodeId` and replace all its children, or the children of its content for a template. The old children stay in the host as orphans with their listeners. Throws a `TypeError` for an unknown node. |
-| `setOuterHtml` | `(nodeId: number, html: string) => boolean` | Parse `html` in the context of the parent of `nodeId` and replace the node with the result. Returns `true` when it replaced the node, and `false` with no change for a node without a parent. Throws `NoModificationAllowedError` for a node whose parent is a document and a `TypeError` for an unknown node. |
+| `setInnerHtml` | `(nodeId: number, html: string) => number[][]` | Parse `html` in the context of `nodeId` and replace all its children, or the children of its content for a template. Returns the removed subtrees. The old children stay in the host as orphans with their listeners. Throws a `TypeError` for an unknown node. |
+| `setOuterHtml` | `(nodeId: number, html: string) => number[][]` | Parse `html` in the context of the parent of `nodeId` and replace the node with the result. Returns the removed subtrees, and none with no change for a node without a parent. Throws `NoModificationAllowedError` for a node whose parent is a document and a `TypeError` for an unknown node. |
 | `insertAdjacentHtml` | `(nodeId: number, position: string, html: string) => undefined` | Parse `html` and insert the nodes at `position` (`beforebegin`, `afterbegin`, `beforeend` or `afterend`, matched ignoring ASCII case) of `nodeId`. The context is the container the nodes enter, and `body` for an `html` element. Throws `SyntaxError` for another position, `NoModificationAllowedError` for `beforebegin` or `afterend` on a node without a parent or a node whose parent is a document, and a `TypeError` for an unknown node. |
 | `compareNodePosition` | `(nodeId: number, otherId: number) => number` | The position of `otherId` relative to `nodeId` as a bit mask: `1` disconnected, `2` preceding, `4` following, `8` contains, `16` contained by, `32` implementation specific. Equal ids give `0`. Nodes of different trees give `1 \| 32` plus `2` or `4`. Throws a `TypeError` for an unknown node. |
 | `rootOf` | `(nodeId: number) => number` | The top of the parent chain of `nodeId`. A connected node gives the document. Throws a `TypeError` for an unknown node. |
@@ -295,9 +299,9 @@ a failure changes nothing and creates no node.
 
 ### Parsed markup
 
-`setInnerHtml`, `setOuterHtml` and `insertAdjacentHtml` return no node. A `style` attribute applies
-as style props and its warnings print through `warn`. An `input` takes the typed text of its `value`
-attribute.
+The natives `setInnerHtml`, `setOuterHtml` and `insertAdjacentHtml` return no node of the parsed
+markup. A `style` attribute applies as style props and its warnings print through `warn`. An `input`
+takes the typed text of its `value` attribute.
 
 ### Token lists
 
