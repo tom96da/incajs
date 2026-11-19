@@ -18,11 +18,12 @@ pub(super) fn next_stop(
     backward: bool,
 ) -> Option<NodeId> {
     // (sort key, tree position, node)
-    let mut ordered: Vec<(i32, usize, NodeId)> = stops
+    let mut ordered: Vec<((bool, i32), usize, NodeId)> = stops
         .iter()
         .enumerate()
         .filter(|(_, (_, index))| *index >= 0)
-        .map(|(pos, &(id, index))| (if index > 0 { index } else { i32::MAX }, pos, id))
+        // A single integer key gives 0 and the largest positive index the same key.
+        .map(|(pos, &(id, index))| ((index == 0, index), pos, id))
         .collect();
     ordered.sort_by_key(|&(key, ..)| key);
     let at = current.and_then(|id| ordered.iter().position(|&(_, _, node)| node == id));
@@ -84,8 +85,8 @@ mod tests {
     use super::*;
     use rstest::rstest;
 
-    // Nodes 1 to 6 have tabindex 3, 1, 0, 0, -1 and 2.
-    const STOPS: [(NodeId, i32); 6] = [(1, 3), (2, 1), (3, 0), (4, 0), (5, -1), (6, 2)];
+    // Nodes 1 to 6 have tabindex 3, 1, 0, 0, -1 and the largest value.
+    const STOPS: [(NodeId, i32); 6] = [(1, 3), (2, 1), (3, 0), (4, 0), (5, -1), (6, i32::MAX)];
 
     fn walk(stops: &[(NodeId, i32)], start: Option<NodeId>, backward: bool) -> Vec<Option<NodeId>> {
         let mut current = start;
@@ -104,13 +105,13 @@ mod tests {
             walk(&STOPS, None, false),
             [
                 Some(2),
-                Some(6),
                 Some(1),
+                Some(6),
                 Some(3),
                 Some(4),
                 None,
                 Some(2),
-                Some(6)
+                Some(1)
             ]
         );
         assert_eq!(
@@ -118,8 +119,8 @@ mod tests {
             [
                 Some(4),
                 Some(3),
-                Some(1),
                 Some(6),
+                Some(1),
                 Some(2),
                 None,
                 Some(4),
