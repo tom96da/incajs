@@ -14,18 +14,24 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 - `DOMRect`, `DOMRectReadOnly` and `SVGRect` are available ([31680dfe](https://github.com/tom96da/incajs/commit/31680dfe), [6328c498](https://github.com/tom96da/incajs/commit/6328c498))
 - `Event` and `CustomEvent` have global types, and `dispatchEvent()` takes an event object ([5dab1f3a](https://github.com/tom96da/incajs/commit/5dab1f3a))
+- `role` and the ARIA properties of elements, such as `ariaLabel`, are available ([477672cc](https://github.com/tom96da/incajs/commit/477672cc))
+- Tab and Enter reach an `a` element with `href` ([e51336eb](https://github.com/tom96da/incajs/commit/e51336eb))
+- `dev.hmr` in `inca.config.ts` turns HMR off for `inca dev`, and it is on by default ([597c6451](https://github.com/tom96da/incajs/commit/597c6451))
 
 ### Changed
 
 - the types have their Web standard names, such as `Element`, and are globals from `incajs/globals` ([cfb288a4](https://github.com/tom96da/incajs/commit/cfb288a4))
 - `getBoundingClientRect()` returns a `DOMRect`, whose edges follow an assigned size or position ([d6f3ff88](https://github.com/tom96da/incajs/commit/d6f3ff88))
 - reading `children` and `childNodes` of a large list costs far less ([d565bc4b](https://github.com/tom96da/incajs/commit/d565bc4b))
+- `tabIndex` reads the default of each element kind, such as 0 for `a` ([ba21a57b](https://github.com/tom96da/incajs/commit/ba21a57b))
+- `--experimental-hmr` and `INCA_EXPERIMENTAL_HMR` are removed ([c1cc2ce6](https://github.com/tom96da/incajs/commit/c1cc2ce6))
 
 ### Fixed
 
 - a `focus()` call in a `focus` or `blur` listener takes effect on the next frame ([1dc35fe8](https://github.com/tom96da/incajs/commit/1dc35fe8))
 - the layout reads of a removed element, such as `getBoundingClientRect()`, give 0 ([5e1dda86](https://github.com/tom96da/incajs/commit/5e1dda86))
 - removing a subtree through a node method releases its nodes without waiting for a frame ([39dd7da4](https://github.com/tom96da/incajs/commit/39dd7da4))
+- an edit saved right after a failed first load of the app is applied ([a80744c0](https://github.com/tom96da/incajs/commit/a80744c0))
 
 ## [0.0.34] - 2026-11-17
 
