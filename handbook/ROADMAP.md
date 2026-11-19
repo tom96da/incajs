@@ -185,7 +185,7 @@ send.
 
 ## Phase 5: Accessibility (in progress)
 
-Items 1 and 4 start in v0.0.35: `role` and the `aria-*` attributes reflect on
+Items 1 and 4 began in v0.0.35: `role` and the `aria-*` attributes reflect on
 elements. The accessible name follows in v0.0.36 to v0.0.37 and AccessKit in
 v0.0.38. A screen reader reads a focus path, so Phase 4's focus model comes
 first.

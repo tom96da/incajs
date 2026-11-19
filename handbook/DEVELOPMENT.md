@@ -20,21 +20,18 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### Recently done
 
-- **Node interfaces**: nodes have interface objects, so `instanceof` works, and the members that
-  insert, replace and remove nodes in one call are there.
-- **Built-ins**: `crypto`, `structuredClone` and `AbortController`.
-- **Scrollbars**: the thumb follows the platform setting and can be dragged.
-- **Test channel**: a development build that a test can click, snapshot and wait on from outside.
-- **Node tree**: the host tree is the only tree. Every link and every read of the tree comes from the
-  host, and the calls into the host sit in one directory. `document.cloneNode()` copies the
-  document.
-- **Document and window**: `window` needs no import, as `document` needs none, and both are
-  defined the same way.
-- **Style values**: `opacity` takes a percentage. A number above the largest value applies at the
-  largest value.
-- **CLI output**: warnings go to stderr and information to stdout.
-- **Host bundle**: the host takes the location of `bundle.js` from its launcher when none sits beside
-  it.
+- **Standard type names**: the node, element and event types carry their Web standard names, and
+  `incajs/globals` declares them.
+- **Geometry**: `DOMRect` and `DOMRectReadOnly` exist, and `getBoundingClientRect()` returns a
+  `DOMRect`.
+- **Native nodes**: each node is an instance of a native class. Its members, the traversal and the
+  reads of a collection run natively, and a removed subtree releases its nodes at once.
+- **Comments**: a comment is a node of its own kind and takes no part in layout.
+- **Accessibility, first step**: `role` and the `aria` properties reflect on elements, `tabIndex`
+  reads the default of each element kind, and Tab and Enter reach a link.
+- **Focus**: a focus request made in a focus listener applies on the next frame.
+- **HMR**: `dev.hmr` turns HMR off, the experimental flag is gone and a failed first load is
+  retried.
 
 ### In progress
 
@@ -45,6 +42,7 @@ None at the moment.
 - `textarea`, word-wise editing, undo and redo, and the selection API.
 - `position` and `z-index`.
 - The `html` and `body` elements and a global `window`.
+- The accessible name, and AccessKit for the platform accessibility APIs.
 - React and other frontends. Vue 3 has to be stable first.
 
 ### Foundation
