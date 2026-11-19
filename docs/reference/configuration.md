@@ -159,7 +159,7 @@ How an error's stack names a source file. `"relative"` gives the path from
 the app's root, `"absolute"` the full path. Only `inca dev` applies it. Built
 and packaged apps always use `"relative"`.
 
-### dev.hmr <Badge type="warning" text="unreleased"/>
+### dev.hmr
 
 - Type: `boolean`
 - Default: `true`
