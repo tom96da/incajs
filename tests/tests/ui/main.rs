@@ -16,7 +16,6 @@ mod disabled;
 mod event_flags;
 mod event_target;
 mod focus;
-mod focus_scroll;
 mod geometry;
 mod hover;
 mod input;
