@@ -429,6 +429,35 @@ mod tests {
             listen(n.windowTargetId(), 'blur', 0);
         ";
 
+    /// A focused `box` with `focus` and `focusin` listeners that log `type`.
+    const FOCUSED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.setAttribute(box, 'tabindex', '0');
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(e.type);
+                },
+            };
+            listen(box, 'focus', 0);
+            listen(box, 'focusin', 0);
+            n.focusNode(box);
+        ";
+
+    #[gpui::test]
+    fn activate_window_refocuses_the_focused_node(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, FOCUSED);
+        assert_eq!(log(&h), "focus,focusin");
+
+        h.activate_window();
+
+        assert_eq!(log(&h), "focus,focusin,focus,focusin");
+    }
+
     #[gpui::test]
     fn keystrokes_press_each_key_in_order_and_release_none(cx: &mut TestAppContext) {
         let mut h = load_listening(cx, KEYED);
