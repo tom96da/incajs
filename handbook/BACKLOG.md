@@ -1945,3 +1945,12 @@ A fixed entry is deleted and its ID is never reused.
   a held key: the `gpui` test platform reports none. Nearest tests:
   `activate_window_reports_no_modifier_key_held`, `deactivate_window_reports_no_modifier_key_held`.
   Fix: add a test when the test platform can report a held modifier.
+
+- **B-366 The `editable` flag of the input handler has no test through the platform**
+  `Units: host · Size: S · Impact: Low`
+
+  The input element passes its `editable` flag to the platform text input handler at paint. No
+  `Harness` operation reads the platform text input configuration or sends character input, so no
+  test reaches the flag the paint passes in. The `inca-gpui` tests pin the answer of a handler
+  built with a given flag. Fix: a `Harness` operation that sends character input once `gpui`
+  exposes the test window.

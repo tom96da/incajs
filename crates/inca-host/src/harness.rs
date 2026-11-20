@@ -32,6 +32,7 @@ pub struct Harness {
 }
 
 mod pointer;
+mod text;
 
 impl Harness {
     /// Mounts the bundle `source`, read from `entry_path`, in a window of
@@ -356,7 +357,7 @@ mod tests {
     }
 
     /// A focused 100x50 `box` whose `keydown` and `keyup` listeners log `type:key:metaKey`.
-    const KEYED: &str = r"
+    pub(super) const KEYED: &str = r"
             const n = __inca_native__;
             const box = n.createNode('div');
             n.setStyle(box, 'width', 100);
