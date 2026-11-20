@@ -2037,3 +2037,12 @@ A fixed entry is deleted and its ID is never reused.
   `a_thumb_drag_release_fires_boundary_events_at_the_node_under_the_pointer` in
   `tests/tests/ui/scrollbar.rs` pins the host value. Fix: end the drag without
   firing them and let the next pointer move report the change.
+
+- **B-375 `compositionupdate` and `compositionend` are cancelable**
+  `Units: gpui,bridge · Size: S · Impact: Low`
+
+  The host fires both events as cancelable, so `preventDefault()` sets `defaultPrevented` on them.
+  UI Events defines both as not cancelable. The test
+  `composition_events_carry_their_bubbles_cancelable_and_composed_flags` pins the host flags.
+  Fix: give the `compositionupdate` and `compositionend` rows of `EVENTS` in
+  `event_sink/spec.rs` the flags of the standard, then update that test.

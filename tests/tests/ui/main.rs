@@ -13,6 +13,7 @@ mod click_order;
 mod clipboard;
 mod common;
 mod components;
+mod composition;
 mod contains;
 mod context_menu;
 mod disabled;
