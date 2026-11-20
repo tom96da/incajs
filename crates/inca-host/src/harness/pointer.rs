@@ -45,7 +45,7 @@ impl Harness {
         click_count: usize,
     ) {
         let position = self.center_of(id);
-        self.move_pointer(position);
+        self.move_to(position, None, Modifiers::none());
         self.cx.simulate_event(MouseDownEvent {
             position,
             button,
@@ -71,13 +71,13 @@ impl Harness {
     /// Panics under the same conditions as [`Harness::click`].
     pub fn hover(&mut self, id: NodeId) {
         let at = self.center_of(id);
-        self.move_pointer(at);
+        self.move_to(at, None, Modifiers::none());
     }
 
     /// Moves the pointer to a point outside every node, so each node it was
     /// over receives `mouseleave`.
     pub fn unhover(&mut self) {
-        self.move_pointer(point(px(-1.0), px(-1.0)));
+        self.move_to(point(px(-1.0), px(-1.0)), None, Modifiers::none());
     }
 
     /// Scrolls with a pixel wheel event of (`dx`, `dy`) over node `id`,
@@ -96,9 +96,60 @@ impl Harness {
         self.settle();
     }
 
-    pub(super) fn move_pointer(&mut self, at: Point<Pixels>) {
-        self.cx.simulate_mouse_move(at, None, Modifiers::none());
+    /// Moves the pointer to `at` with `modifiers` held, as one platform
+    /// mouse-move event on every call, also when the pointer is already at
+    /// `at`. `pressed` is the button the platform reports held during the
+    /// move. With `None` the move ends the `:active` state of a held press and
+    /// a scrollbar thumb drag. The `buttons` an app reads is the host's own
+    /// record of the presses, so `pressed` does not change it.
+    pub fn move_to(
+        &mut self,
+        at: Point<Pixels>,
+        pressed: Option<MouseButton>,
+        modifiers: Modifiers,
+    ) {
+        self.cx.simulate_mouse_move(at, pressed, modifiers);
         self.settle();
+    }
+
+    /// Presses `button` at `at` with `modifiers` held, as a single click.
+    /// When the pointer is not at `at`, a move to `at` with no pressed button
+    /// comes first, also while a button is held from an earlier press. The
+    /// pointer starts at `(0, 0)` after [`Harness::load`], so a press there
+    /// sends no move.
+    pub fn mouse_down(&mut self, at: Point<Pixels>, button: MouseButton, modifiers: Modifiers) {
+        if self.pointer() != at {
+            self.move_to(at, None, modifiers);
+        }
+        self.cx.simulate_event(MouseDownEvent {
+            position: at,
+            button,
+            modifiers,
+            click_count: 1,
+            first_mouse: false,
+        });
+        self.settle();
+    }
+
+    /// Releases `button` at `at` with `modifiers` held. When the pointer is
+    /// not at `at`, a move to `at` with `button` pressed comes first. It
+    /// expects an earlier [`Harness::mouse_down`] of `button` and does not
+    /// check.
+    pub fn mouse_up(&mut self, at: Point<Pixels>, button: MouseButton, modifiers: Modifiers) {
+        if self.pointer() != at {
+            self.move_to(at, Some(button), modifiers);
+        }
+        self.cx.simulate_event(MouseUpEvent {
+            position: at,
+            button,
+            modifiers,
+            click_count: 1,
+        });
+        self.settle();
+    }
+
+    fn pointer(&mut self) -> Point<Pixels> {
+        self.cx.update(|window, _| window.mouse_position())
     }
 
     pub(super) fn bounds_of(&mut self, id: NodeId) -> Option<Bounds> {
@@ -124,7 +175,7 @@ mod tests {
     #![allow(clippy::float_cmp, clippy::unwrap_used)]
 
     use super::*;
-    use crate::tests::{TEST_ENTRY_PATH, eval_f64, id_where, log, node};
+    use crate::tests::{TEST_ENTRY_PATH, eval_f64, id_where, load_listening, log, node};
     use gpui::TestAppContext;
 
     /// A 100x50 box holding a text leaf, with a click listener that counts.
@@ -356,5 +407,239 @@ mod tests {
         assert_eq!((b.width, b.height), (0.0, 0.0));
 
         assert_eq!(h.center_of(z.id), point(px(b.x), px(b.y)));
+    }
+
+    /// A 100x50 `box` that logs `type:button:buttons:shiftKey` for `mousemove`, `mousedown` and
+    /// `mouseup`.
+    const POINTED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(`${e.type}:${e.button}:${e.buttons}:${e.shiftKey}`);
+                },
+            };
+            listen(box, 'mousemove', 0);
+            listen(box, 'mousedown', 0);
+            listen(box, 'mouseup', 0);
+        ";
+
+    /// `POINTED` logging `type:detail` for `mousedown` only.
+    const COUNTED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(`${e.type}:${e.detail}`);
+                },
+            };
+            listen(box, 'mousedown', 0);
+        ";
+
+    /// A 100x100 `box` with a vertical scrollbar over a 300x300 `inner`.
+    const THUMBED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 100);
+            n.setStyle(box, 'overflow_x', 'hidden');
+            n.setStyle(box, 'overflow_y', 'scroll');
+            n.appendChild(n.rootNodeId(), box);
+            const inner = n.createNode('div');
+            n.setStyle(inner, 'width', 300);
+            n.setStyle(inner, 'height', 300);
+            n.appendChild(box, inner);
+            globalThis.inner = inner;
+        ";
+
+    fn box_bounds(h: &mut Harness) -> Bounds {
+        h.snapshot().children[0].bounds.unwrap()
+    }
+
+    fn center(h: &mut Harness) -> Point<Pixels> {
+        box_bounds(h).center()
+    }
+
+    /// The point on the thumb of a borderless container scrolled to 0, with a classic bar.
+    fn thumb(h: &mut Harness) -> Point<Pixels> {
+        let b = box_bounds(h);
+        point(px(b.x + b.width - 8.0), px(b.y + 10.0))
+    }
+
+    fn below(at: Point<Pixels>, by: f32) -> Point<Pixels> {
+        point(at.x, at.y + px(by))
+    }
+
+    fn y_inner(h: &mut Harness) -> f32 {
+        let inner = node(h, "inner");
+        h.snapshot()
+            .find(&|n| n.id == inner)
+            .unwrap()
+            .bounds
+            .unwrap()
+            .y
+    }
+
+    #[gpui::test]
+    fn mouse_down_from_elsewhere_moves_then_presses(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let c = center(&mut h);
+
+        h.mouse_down(c, MouseButton::Left, Modifiers::none());
+
+        assert_eq!(log(&h), "mousemove:0:0:false,mousedown:0:1:false");
+    }
+
+    #[gpui::test]
+    fn mouse_down_at_the_pointer_sends_no_move(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let c = center(&mut h);
+        h.move_to(c, None, Modifiers::none());
+
+        h.mouse_down(c, MouseButton::Left, Modifiers::none());
+
+        assert_eq!(log(&h), "mousemove:0:0:false,mousedown:0:1:false");
+    }
+
+    #[gpui::test]
+    fn mouse_down_passes_its_button_and_modifiers(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let c = center(&mut h);
+
+        h.mouse_down(c, MouseButton::Right, Modifiers::shift());
+
+        assert_eq!(log(&h), "mousemove:0:0:true,mousedown:2:2:true");
+    }
+
+    #[gpui::test]
+    fn mouse_up_releases_the_button(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let c = center(&mut h);
+        h.mouse_down(c, MouseButton::Left, Modifiers::none());
+
+        h.mouse_up(c, MouseButton::Left, Modifiers::none());
+
+        assert_eq!(
+            log(&h),
+            "mousemove:0:0:false,mousedown:0:1:false,mouseup:0:0:false"
+        );
+    }
+
+    #[gpui::test]
+    fn mouse_up_elsewhere_moves_with_the_button_pressed(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, THUMBED);
+        let t = thumb(&mut h);
+        let before = y_inner(&mut h);
+        h.mouse_down(t, MouseButton::Left, Modifiers::none());
+
+        h.mouse_up(below(t, 20.0), MouseButton::Left, Modifiers::none());
+
+        assert!(y_inner(&mut h) < before);
+    }
+
+    #[gpui::test]
+    fn mouse_up_passes_its_button_and_modifiers(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let c = center(&mut h);
+        h.mouse_down(c, MouseButton::Right, Modifiers::shift());
+
+        h.mouse_up(c, MouseButton::Right, Modifiers::shift());
+
+        assert_eq!(
+            log(&h),
+            "mousemove:0:0:true,mousedown:2:2:true,mouseup:2:0:true"
+        );
+    }
+
+    #[gpui::test]
+    fn move_to_with_a_pressed_button_drags_the_thumb(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, THUMBED);
+        let t = thumb(&mut h);
+        let before = y_inner(&mut h);
+        h.mouse_down(t, MouseButton::Left, Modifiers::none());
+
+        h.move_to(below(t, 20.0), Some(MouseButton::Left), Modifiers::none());
+
+        assert!(y_inner(&mut h) < before);
+    }
+
+    #[gpui::test]
+    fn mouse_down_elsewhere_moves_with_no_button_pressed(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, THUMBED);
+        let t = thumb(&mut h);
+        let before = y_inner(&mut h);
+        h.mouse_down(t, MouseButton::Left, Modifiers::none());
+
+        h.mouse_down(below(t, 20.0), MouseButton::Right, Modifiers::none());
+
+        assert_eq!(y_inner(&mut h), before);
+    }
+
+    #[gpui::test]
+    fn move_to_passes_its_modifiers(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let c = center(&mut h);
+
+        h.move_to(c, None, Modifiers::shift());
+
+        assert_eq!(log(&h), "mousemove:0:0:true");
+    }
+
+    #[gpui::test]
+    fn move_to_the_same_point_moves_again(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let c = center(&mut h);
+
+        h.move_to(c, None, Modifiers::none());
+        h.move_to(c, None, Modifiers::none());
+
+        assert_eq!(log(&h), "mousemove:0:0:false,mousemove:0:0:false");
+    }
+
+    #[gpui::test]
+    fn mouse_down_sends_a_single_click(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, COUNTED);
+        let c = center(&mut h);
+
+        h.mouse_down(c, MouseButton::Left, Modifiers::none());
+
+        assert_eq!(log(&h), "mousedown:1");
+    }
+
+    #[gpui::test]
+    fn mouse_up_elsewhere_moves_with_its_modifiers(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let c = center(&mut h);
+        h.mouse_down(c, MouseButton::Left, Modifiers::none());
+
+        h.mouse_up(
+            point(c.x + px(10.0), c.y),
+            MouseButton::Left,
+            Modifiers::shift(),
+        );
+
+        assert_eq!(
+            log(&h),
+            "mousemove:0:0:false,mousedown:0:1:false,mousemove:0:1:true,mouseup:0:0:true"
+        );
+    }
+
+    #[gpui::test]
+    fn mouse_down_at_the_start_point_sends_no_move(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let b = box_bounds(&mut h);
+        assert_eq!((b.x, b.y), (0.0, 0.0));
+
+        h.mouse_down(Point::default(), MouseButton::Left, Modifiers::none());
+
+        assert_eq!(log(&h), "mousedown:0:1:false");
     }
 }
