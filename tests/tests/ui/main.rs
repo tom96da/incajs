@@ -22,7 +22,6 @@ mod focus_scroll;
 mod geometry;
 mod handler_property;
 mod handlers;
-mod held_keys;
 mod hover;
 mod id_attribute;
 mod inner_html;
