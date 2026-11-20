@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The focus a script and a focus listener request, read through `document.activeElement` and the focus events.
+//! The focus a script and a focus listener request, read through `document.activeElement` and
+//! the focus events.
 
 use super::common::{appended, click, load, settled, text_of};
 use gpui::TestAppContext;

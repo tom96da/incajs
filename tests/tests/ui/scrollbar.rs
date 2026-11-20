@@ -11,6 +11,9 @@ use inca_host::harness::{Harness, Scrollbars};
 use inca_test_macros::gpui_cases;
 use std::time::Duration;
 
+const OBOX_MENU: &str =
+    "pointerdown@obox mousedown@obox contextmenu@obox pointerup@obox mouseup@obox";
+
 fn thumb(h: &mut Harness) -> gpui::Point<gpui::Pixels> {
     inset(h, "box", 7.5, 10.0)
 }
@@ -35,6 +38,20 @@ fn drag_thumb_onto_field(h: &mut Harness) {
 fn mark_at(h: &mut Harness, at: gpui::Point<gpui::Pixels>) {
     h.move_to(at, None, Modifiers::none());
     h.keystrokes("f9");
+}
+
+/// Right-presses and releases the thumb spot of `#obox` after `wait` on the fake clock.
+fn right_press_on_obox_after(cx: &mut TestAppContext, wait: Duration) -> String {
+    let mut h = load(cx, "scrollbar");
+    h.scrollbars(Scrollbars::Overlay);
+    h.advance_clock(wait);
+    let at = inset(&mut h, "obox", 7.5, 10.0);
+    mark_at(&mut h, at);
+
+    h.mouse_down(at, MouseButton::Right, Modifiers::none());
+    h.mouse_up(at, MouseButton::Right, Modifiers::none());
+
+    text_of(&mut h, "log")
 }
 
 #[gpui::test]
@@ -347,23 +364,6 @@ fn a_horizontal_overlay_thumb_dragged_past_the_end_scrolls_to_the_end(cx: &mut T
     h.keystrokes("e");
 
     assert_eq!(text_of(&mut h, "h-at-end"), "true");
-}
-
-const OBOX_MENU: &str =
-    "pointerdown@obox mousedown@obox contextmenu@obox pointerup@obox mouseup@obox";
-
-/// Right-presses and releases the thumb spot of `#obox` after `wait` on the fake clock.
-fn right_press_on_obox_after(cx: &mut TestAppContext, wait: Duration) -> String {
-    let mut h = load(cx, "scrollbar");
-    h.scrollbars(Scrollbars::Overlay);
-    h.advance_clock(wait);
-    let at = inset(&mut h, "obox", 7.5, 10.0);
-    mark_at(&mut h, at);
-
-    h.mouse_down(at, MouseButton::Right, Modifiers::none());
-    h.mouse_up(at, MouseButton::Right, Modifiers::none());
-
-    text_of(&mut h, "log")
 }
 
 #[gpui::test]

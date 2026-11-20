@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The styles a real `.vue` app applies: `<style>` elements and blocks, stylesheet imports and the `style` member.
+//! The styles a real `.vue` app applies: `<style>` elements and blocks, stylesheet imports and the
+//! `style` member.
 
 #![allow(clippy::unwrap_used)]
 

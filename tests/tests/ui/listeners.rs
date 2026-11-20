@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The listeners a template binds: handler arrays, `.once`, the `onclick` property and the event and key modifiers.
+//! The listeners a template binds: handler arrays, `.once`, the `onclick` property and the event
+//! and key modifiers.
 
 #![allow(clippy::unwrap_used)]
 

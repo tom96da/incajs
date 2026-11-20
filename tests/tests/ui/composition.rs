@@ -9,17 +9,17 @@ use super::common::{click, load, text_of};
 use gpui::{Modifiers, TestAppContext};
 use inca_host::harness::Harness;
 
+const MARK_K: &str = concat!(
+    "compositionstart: compositionupdate:k ",
+    "beforeinput:insertCompositionText:k:true:false input:insertCompositionText:k:true:false"
+);
+
 /// Mounts the fixture and focuses the input `id`, with the caret at its end.
 fn composing(cx: &mut TestAppContext, id: &str) -> Harness {
     let mut h = load(cx, "composition");
     click(&mut h, id);
     h
 }
-
-const MARK_K: &str = concat!(
-    "compositionstart: compositionupdate:k ",
-    "beforeinput:insertCompositionText:k:true:false input:insertCompositionText:k:true:false"
-);
 
 #[gpui::test]
 fn a_first_mark_starts_the_composition(cx: &mut TestAppContext) {

@@ -163,15 +163,27 @@ fn a_canceled_pointerdown_still_fires_contextmenu_on_a_right_press(cx: &mut Test
 #[case::ctrl(Modifiers::control(), CTRL_CLICK_MODS)]
 #[case::alt(
     Modifiers::alt(),
-    concat!("pointerdown:false:true:false:false mousedown:false:true:false:false ", "pointerup:false:true:false:false mouseup:false:true:false:false ", "click:false:true:false:false")
+    concat!(
+        "pointerdown:false:true:false:false mousedown:false:true:false:false ",
+        "pointerup:false:true:false:false mouseup:false:true:false:false ",
+        "click:false:true:false:false"
+    )
 )]
 #[case::shift(
     Modifiers::shift(),
-    concat!("pointerdown:false:false:true:false mousedown:false:false:true:false ", "pointerup:false:false:true:false mouseup:false:false:true:false ", "click:false:false:true:false")
+    concat!(
+        "pointerdown:false:false:true:false mousedown:false:false:true:false ",
+        "pointerup:false:false:true:false mouseup:false:false:true:false ",
+        "click:false:false:true:false"
+    )
 )]
 #[case::cmd(
     Modifiers::command(),
-    concat!("pointerdown:false:false:false:true mousedown:false:false:false:true ", "pointerup:false:false:false:true mouseup:false:false:false:true ", "click:false:false:false:true")
+    concat!(
+        "pointerdown:false:false:false:true mousedown:false:false:false:true ",
+        "pointerup:false:false:false:true mouseup:false:false:false:true ",
+        "click:false:false:false:true"
+    )
 )]
 fn a_modified_click_carries_the_held_modifier_on_every_press_event(
     cx: &mut TestAppContext,

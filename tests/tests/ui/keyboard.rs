@@ -163,7 +163,10 @@ fn two_modifiers_in_one_change_fire_shift_before_control(cx: &mut TestAppContext
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "keydown:Shift:false:true:true:false:false:16 keydown:Control:false:true:true:false:false:17"
+        concat!(
+            "keydown:Shift:false:true:true:false:false:16 ",
+            "keydown:Control:false:true:true:false:false:17"
+        )
     );
 }
 

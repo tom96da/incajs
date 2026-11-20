@@ -30,6 +30,12 @@ fn log(h: &mut Harness, id: &str) -> Vec<String> {
     sorted_unique(&text_of(h, id))
 }
 
+fn input_run(h: &mut Harness) {
+    click(h, "field");
+    h.keystrokes("a");
+    click(h, "plain");
+}
+
 #[gpui::test]
 fn mouse_events_carry_their_bubbles_cancelable_and_composed_flags(cx: &mut TestAppContext) {
     let mut h = load(cx, "event-flags");
@@ -126,12 +132,6 @@ fn scroll_events_carry_their_bubbles_cancelable_and_composed_flags(cx: &mut Test
     scroll_run(&mut h);
 
     assert_eq!(log(&mut h, "scroll"), ["scroll:false:false:false"]);
-}
-
-fn input_run(h: &mut Harness) {
-    click(h, "field");
-    h.keystrokes("a");
-    click(h, "plain");
 }
 
 #[gpui::test]

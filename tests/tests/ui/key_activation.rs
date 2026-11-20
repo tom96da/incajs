@@ -21,7 +21,8 @@ fn press_release(h: &mut Harness, before: &str, keys: &str) -> String {
     appended(before, &text_of(h, "log")).to_owned()
 }
 
-/// Tabs to an SVG link of `key-activation-namespaces`, presses Enter and returns what that added to `#log`.
+/// Tabs to an SVG link of `key-activation-namespaces`, presses Enter and returns what that added
+/// to `#log`.
 fn enter_on_svg_link(cx: &mut TestAppContext, tabs: &str) -> String {
     let mut h = load(cx, "key-activation-namespaces");
     h.keystrokes(tabs);

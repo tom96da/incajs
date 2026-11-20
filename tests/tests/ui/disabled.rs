@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! A disabled `button` and `input`: their pointer events, the focus a press on them moves and the `disabled` binding.
+//! A disabled `button` and `input`: their pointer events, the focus a press on them moves
+//! and the `disabled` binding.
 
 #![allow(clippy::unwrap_used)]
 

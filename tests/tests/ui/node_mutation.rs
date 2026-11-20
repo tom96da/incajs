@@ -1,7 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The tree changes a script makes and the node relations it reads: mutation methods, `innerHTML`, removed nodes and `contains()`.
+//! The tree changes a script makes and the node relations it reads: mutation methods,
+//! `innerHTML`, removed nodes and `contains()`.
 
 #![allow(clippy::unwrap_used)]
 
@@ -65,7 +66,10 @@ fn every_path_ancestor_contains_the_target_after_moves_and_removals(cx: &mut Tes
     }
     assert_eq!(
         text_of(&mut h, "log"),
-        "leaf:true reverse:true a:true b:true hide:true after:true switch:true switch:true tally:true"
+        concat!(
+            "leaf:true reverse:true a:true b:true ",
+            "hide:true after:true switch:true switch:true tally:true"
+        )
     );
 }
 
