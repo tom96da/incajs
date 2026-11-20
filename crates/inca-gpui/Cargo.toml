@@ -25,7 +25,7 @@ name = "gpui_hello_world"
 path = "examples/gpui/hello_world.rs"
 
 [features]
-# Exposes registry internals that a dependent crate's tests read.
+# Exposes registry internals and the scrollbar setting that a dependent crate's tests read.
 test-support = []
 
 [dependencies]

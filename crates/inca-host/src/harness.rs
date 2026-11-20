@@ -14,6 +14,7 @@ use gpui::{
     VisualTestContext, WindowHandle,
 };
 use inca_bridge::Host;
+pub use inca_gpui::Scrollbars;
 use inca_jsenv::stderr_reporter;
 use inca_node::NodeId;
 
@@ -198,6 +199,13 @@ impl Harness {
             })
             .expect("the window is open");
         self.cx.update(|window, cx| window.draw(cx).clear(cx));
+    }
+
+    /// Makes every render after this call take `mode` as the platform's scrollbar setting, until the
+    /// next call, then settles. The test platform shows classic bars until this is called.
+    pub fn scrollbars(&mut self, mode: Scrollbars) {
+        self.cx.update(|_, cx| Scrollbars::set_for_tests(cx, mode));
+        self.settle();
     }
 
     /// Moves the fake clock forward by `by`, runs the timers that fall due, then
@@ -657,5 +665,45 @@ mod tests {
         assert_eq!(eval_f64(&h, "globalThis.frames"), 1.0);
         h.settle();
         assert_eq!(eval_f64(&h, "globalThis.frames"), 1.0);
+    }
+
+    const BARRED: &str = r"
+            const n = __inca_native__;
+            const c = n.createNode('div');
+            n.setStyle(c, 'width', 100);
+            n.setStyle(c, 'height', 50);
+            n.setStyle(c, 'overflow_y', 'scroll');
+            n.appendChild(n.rootNodeId(), c);
+            const inner = n.createNode('div');
+            n.setStyle(inner, 'width', 50);
+            n.setStyle(inner, 'height', 300);
+            n.appendChild(c, inner);
+            globalThis.bar = c;
+        ";
+
+    fn client(h: &Harness) -> f64 {
+        eval_f64(
+            h,
+            "__inca_native__.nodeHandle(globalThis.bar)[0].clientWidth",
+        )
+    }
+
+    #[gpui::test]
+    fn scrollbars_overlay_reserves_no_strip(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, TEST_ENTRY_PATH, BARRED);
+
+        h.scrollbars(Scrollbars::Overlay);
+
+        assert_eq!(client(&h), 100.0);
+    }
+
+    #[gpui::test]
+    fn scrollbars_classic_after_overlay_reserves_the_strip(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, TEST_ENTRY_PATH, BARRED);
+        h.scrollbars(Scrollbars::Overlay);
+
+        h.scrollbars(Scrollbars::Classic);
+
+        assert_eq!(client(&h), 85.0);
     }
 }

@@ -65,7 +65,26 @@ impl Scrollbars {
     /// The setting of the platform of `cx`. Read it once per render.
     #[must_use]
     pub fn of(cx: &App) -> Self {
+        #[cfg(feature = "test-support")]
+        if let Some(setting) = cx.try_global::<ScrollbarsSetting>() {
+            return setting.0;
+        }
         Self::from_auto_hide(cx.should_auto_hide_scrollbars())
+    }
+}
+
+/// The mode a test stored with [`Scrollbars::set_for_tests`].
+#[cfg(feature = "test-support")]
+struct ScrollbarsSetting(Scrollbars);
+
+#[cfg(feature = "test-support")]
+impl gpui::Global for ScrollbarsSetting {}
+
+#[cfg(feature = "test-support")]
+impl Scrollbars {
+    /// Makes [`Scrollbars::of`] answer `mode` on `cx`, whatever the platform says.
+    pub fn set_for_tests(cx: &mut App, mode: Self) {
+        cx.set_global(ScrollbarsSetting(mode));
     }
 }
 
