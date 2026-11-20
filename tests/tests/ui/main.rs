@@ -5,6 +5,7 @@
 //! One test target, so the fixtures are bundled once per run.
 
 mod abort_signal;
+mod activation;
 mod active;
 mod button;
 mod button_keys;

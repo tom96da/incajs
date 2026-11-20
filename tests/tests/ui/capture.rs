@@ -3,16 +3,11 @@
 
 //! Pointer capture, read through a real `.vue` app.
 
-use super::common::{by_id, center, height, load, near, text_of};
-use gpui::{Modifiers, MouseButton, Pixels, Point, TestAppContext, point, px};
+use super::common::{by_id, center, height, load, near, nudge, text_of};
+use gpui::{Modifiers, MouseButton, Pixels, Point, TestAppContext};
 use inca_host::harness::Harness;
 
 const LEFT: Option<MouseButton> = Some(MouseButton::Left);
-
-/// The point 2 px right of and below `p`.
-fn nudge(p: Point<Pixels>) -> Point<Pixels> {
-    p + point(px(2.0), px(2.0))
-}
 
 /// Presses Left on `#a` and moves 2 px held, so `#a` holds the capture.
 /// Returns the point of the pointer.
@@ -322,5 +317,19 @@ fn capture_events_carry_their_bubbles_cancelable_and_composed_flags(cx: &mut Tes
     assert_eq!(
         text_of(&mut h, "cflags"),
         "gotpointercapture:true:false:true:false lostpointercapture:true:false:true:false"
+    );
+}
+
+#[gpui::test]
+fn deactivating_the_window_ends_the_capture(cx: &mut TestAppContext) {
+    let mut h = load(cx, "capture");
+    h.activate_window();
+    capture_a(&mut h);
+
+    h.deactivate_window();
+
+    assert_eq!(
+        text_of(&mut h, "caps"),
+        "gotpointercapture@a lostpointercapture@a"
     );
 }

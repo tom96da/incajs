@@ -114,6 +114,11 @@ pub fn height(h: &mut Harness, id: &str) -> f32 {
     by_id(&h.snapshot(), id).bounds.unwrap().height
 }
 
+/// The point 2 px right of and below `p`.
+pub fn nudge(p: Point<Pixels>) -> Point<Pixels> {
+    p + point(px(2.0), px(2.0))
+}
+
 /// The center of the node with `id`.
 pub fn center(h: &mut Harness, id: &str) -> Point<Pixels> {
     let b = by_id(&h.snapshot(), id).bounds.unwrap();

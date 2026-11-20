@@ -2046,3 +2046,28 @@ A fixed entry is deleted and its ID is never reused.
   `composition_events_carry_their_bubbles_cancelable_and_composed_flags` pins the host flags.
   Fix: give the `compositionupdate` and `compositionend` rows of `EVENTS` in
   `event_sink/spec.rs` the flags of the standard, then update that test.
+
+- **B-376 A window deactivation ends the pointer capture**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The host ends the capture with `lostpointercapture` when the window loses focus. Chromium keeps
+  the capture and fires `lostpointercapture` after `mouseup` at the release. The test
+  `deactivating_the_window_ends_the_capture` in `tests/tests/ui/capture.rs` pins the host value.
+  Fix: keep the capture across the deactivation and end it at the release.
+
+- **B-377 A press held across a window deactivation clicks nothing at its release**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The host forgets the press at the deactivation, so the release fires no `click`. Chromium fires
+  one `click` at the release. The test `deactivating_during_a_press_drops_its_click` in
+  `tests/tests/ui/activation.rs` pins the host value. Fix: keep the press record across the
+  deactivation.
+
+- **B-378 A Space held across a window deactivation clicks nothing at its release**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The `blur` of the deactivation clears the Space press, so the `keyup` fires no `click`. Chromium
+  fires one `click` at the `keyup`. The test
+  `a_space_held_across_a_deactivation_clicks_nothing_at_its_release` in
+  `tests/tests/ui/activation.rs` pins the host value. Fix: keep the Space press across the `blur`
+  of a deactivation.
