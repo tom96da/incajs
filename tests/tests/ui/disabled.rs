@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The pointer events of a disabled `button` and `input` in a real `.vue` app.
+//! A disabled `button` and `input`: their pointer events, the focus a press on them moves and the `disabled` binding.
 
 #![allow(clippy::unwrap_used)]
 
@@ -124,4 +124,30 @@ fn a_press_on_a_disabled_button_with_no_focusable_ancestor_blurs_the_focus(
     click(&mut h, "read");
 
     assert_eq!(text_of(&mut h, "active"), "");
+}
+
+#[gpui::test]
+fn disabled_false_enables_the_button_and_true_disables_it_again(cx: &mut TestAppContext) {
+    let mut h = load(cx, "button");
+    let before = text_of(&mut h, "log");
+    click(&mut h, "off");
+    assert_eq!(text_of(&mut h, "log"), before);
+
+    click(&mut h, "toggle");
+    click(&mut h, "off");
+    let enabled = text_of(&mut h, "log");
+    for event in [
+        "off:mousedown",
+        "off-wrap:mouseup",
+        "off:click",
+        "off-wrap:click",
+        "off:focus",
+    ] {
+        assert!(enabled.contains(event), "{event} missing from {enabled}");
+    }
+
+    click(&mut h, "toggle");
+    click(&mut h, "off");
+
+    assert_eq!(text_of(&mut h, "log"), enabled);
 }
