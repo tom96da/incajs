@@ -62,7 +62,7 @@ fn the_aria_members_reflect_the_attributes_of_a_template_on_the_real_host(
     #[case] key: &str,
     #[case] expected: Value,
 ) {
-    let got = probe(cx, "aria");
+    let got = probe(cx, "interfaces-aria");
 
     assert_eq!(got[key], expected);
 }

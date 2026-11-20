@@ -10,7 +10,7 @@ use gpui::TestAppContext;
 
 #[gpui::test]
 fn a_row_places_children_after_the_padding_with_gaps_between(cx: &mut TestAppContext) {
-    let snap = load(cx, "row").snapshot();
+    let snap = load(cx, "layout-row").snapshot();
     let row = by_id(&snap, "row").bounds.unwrap();
     let a = by_id(&snap, "a").bounds.unwrap();
     let b = by_id(&snap, "b").bounds.unwrap();
@@ -27,7 +27,7 @@ fn a_row_places_children_after_the_padding_with_gaps_between(cx: &mut TestAppCon
 
 #[gpui::test]
 fn a_row_child_with_flex_grow_takes_the_remaining_width(cx: &mut TestAppContext) {
-    let snap = load(cx, "row").snapshot();
+    let snap = load(cx, "layout-row").snapshot();
     let row = by_id(&snap, "row").bounds.unwrap();
     let b = by_id(&snap, "b").bounds.unwrap();
     let c = by_id(&snap, "c").bounds.unwrap();
@@ -39,7 +39,7 @@ fn a_row_child_with_flex_grow_takes_the_remaining_width(cx: &mut TestAppContext)
 
 #[gpui::test]
 fn a_column_stacks_children_below_the_padding_with_gaps(cx: &mut TestAppContext) {
-    let snap = load(cx, "column").snapshot();
+    let snap = load(cx, "layout-column").snapshot();
     let column = by_id(&snap, "column").bounds.unwrap();
     let a = by_id(&snap, "a").bounds.unwrap();
     let b = by_id(&snap, "b").bounds.unwrap();
@@ -52,7 +52,7 @@ fn a_column_stacks_children_below_the_padding_with_gaps(cx: &mut TestAppContext)
 
 #[gpui::test]
 fn column_children_split_the_free_height_by_flex_grow(cx: &mut TestAppContext) {
-    let snap = load(cx, "column").snapshot();
+    let snap = load(cx, "layout-column").snapshot();
     let column = by_id(&snap, "column").bounds.unwrap();
     let b = by_id(&snap, "b").bounds.unwrap();
     let c = by_id(&snap, "c").bounds.unwrap();

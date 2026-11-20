@@ -10,7 +10,7 @@ use gpui::TestAppContext;
 
 #[gpui::test]
 fn the_child_renders_the_prop_and_the_slotted_content(cx: &mut TestAppContext) {
-    let snap = load(cx, "compose").snapshot();
+    let snap = load(cx, "components").snapshot();
 
     assert_eq!(text(by_id(&snap, "title")), "First");
     assert_eq!(text(by_id(&snap, "slotted")), "Slotted");
@@ -18,7 +18,7 @@ fn the_child_renders_the_prop_and_the_slotted_content(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_slot_box_sits_below_the_title_and_holds_the_slotted_content(cx: &mut TestAppContext) {
-    let snap = load(cx, "compose").snapshot();
+    let snap = load(cx, "components").snapshot();
     let title = by_id(&snap, "title").bounds.unwrap();
     let slot = by_id(&snap, "slot").bounds.unwrap();
     let slotted = by_id(&snap, "slotted").bounds.unwrap();
@@ -31,7 +31,7 @@ fn the_slot_box_sits_below_the_title_and_holds_the_slotted_content(cx: &mut Test
 
 #[gpui::test]
 fn a_changed_parent_value_reaches_the_child_prop(cx: &mut TestAppContext) {
-    let mut h = load(cx, "compose");
+    let mut h = load(cx, "components");
 
     click(&mut h, "rename");
 
@@ -40,7 +40,7 @@ fn a_changed_parent_value_reaches_the_child_prop(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn an_emit_after_a_click_updates_the_parent_state(cx: &mut TestAppContext) {
-    let mut h = load(cx, "compose");
+    let mut h = load(cx, "components");
     assert_eq!(text_of(&mut h, "total"), "0");
 
     click(&mut h, "bump");
@@ -53,7 +53,7 @@ fn an_emit_after_a_click_updates_the_parent_state(cx: &mut TestAppContext) {
 fn a_kept_alive_component_keeps_its_state_and_its_click_after_reactivation(
     cx: &mut TestAppContext,
 ) {
-    let mut h = load(cx, "keepalive");
+    let mut h = load(cx, "components-keepalive");
     click(&mut h, "tally");
     click(&mut h, "switch");
     assert!(!has_id(&h.snapshot(), "tally"));

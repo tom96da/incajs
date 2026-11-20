@@ -10,7 +10,7 @@ use gpui::TestAppContext;
 
 #[gpui::test]
 fn a_click_runs_the_child_handler_before_the_parent_handler(cx: &mut TestAppContext) {
-    let mut h = load(cx, "bubble");
+    let mut h = load(cx, "propagation");
 
     click(&mut h, "inner");
 
@@ -19,7 +19,7 @@ fn a_click_runs_the_child_handler_before_the_parent_handler(cx: &mut TestAppCont
 
 #[gpui::test]
 fn a_click_on_the_parent_alone_skips_the_child_handler(cx: &mut TestAppContext) {
-    let mut h = load(cx, "bubble");
+    let mut h = load(cx, "propagation");
     let id = node_id(&mut h, "outer");
 
     // The center of `outer` lies right of `inner`.
@@ -30,7 +30,7 @@ fn a_click_on_the_parent_alone_skips_the_child_handler(cx: &mut TestAppContext) 
 
 #[gpui::test]
 fn stop_propagation_keeps_the_parent_handler_from_running(cx: &mut TestAppContext) {
-    let mut h = load(cx, "stop");
+    let mut h = load(cx, "propagation-stop");
 
     click(&mut h, "inner");
 
