@@ -7,6 +7,7 @@
 mod abort_signal;
 mod active;
 mod button;
+mod click_order;
 mod common;
 mod components;
 mod contains;
