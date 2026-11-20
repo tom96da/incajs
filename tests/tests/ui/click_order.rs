@@ -8,26 +8,34 @@ use gpui::{Modifiers, MouseButton, TestAppContext};
 use inca_test_macros::gpui_cases;
 
 /// The log of one left click on `box`.
-const LEFT_CLICK: &str = "box:pointerdown:0:0:1 box:mousedown:1:0:1 box:pointerup:0:0:0 \
-                          box:mouseup:1:0:0 box:click:1:0:0";
+const LEFT_CLICK: &str = concat!(
+    "box:pointerdown:0:0:1 box:mousedown:1:0:1 box:pointerup:0:0:0 ",
+    "box:mouseup:1:0:0 box:click:1:0:0"
+);
 
 /// What a left click with Control logs on the platform: macOS opens the
 /// context menu on the press and completes no `click`.
 const CTRL_CLICK_LOG: &str = if cfg!(target_os = "macos") {
-    "box:pointerdown:0:0:1 box:mousedown:1:0:1 box:contextmenu:0:0:1 box:pointerup:0:0:0 \
-     box:mouseup:1:0:0"
+    concat!(
+        "box:pointerdown:0:0:1 box:mousedown:1:0:1 box:contextmenu:0:0:1 box:pointerup:0:0:0 ",
+        "box:mouseup:1:0:0"
+    )
 } else {
     LEFT_CLICK
 };
 
 /// The `#mods` tokens of a left click with Control on the platform.
 const CTRL_CLICK_MODS: &str = if cfg!(target_os = "macos") {
-    "pointerdown:true:false:false:false mousedown:true:false:false:false \
-     pointerup:true:false:false:false mouseup:true:false:false:false"
+    concat!(
+        "pointerdown:true:false:false:false mousedown:true:false:false:false ",
+        "pointerup:true:false:false:false mouseup:true:false:false:false"
+    )
 } else {
-    "pointerdown:true:false:false:false mousedown:true:false:false:false \
-     pointerup:true:false:false:false mouseup:true:false:false:false \
-     click:true:false:false:false"
+    concat!(
+        "pointerdown:true:false:false:false mousedown:true:false:false:false ",
+        "pointerup:true:false:false:false mouseup:true:false:false:false ",
+        "click:true:false:false:false"
+    )
 };
 
 #[gpui::test]
@@ -49,8 +57,11 @@ fn a_second_click_of_a_double_click_ends_with_dblclick(cx: &mut TestAppContext) 
     assert_eq!(
         text_of(&mut h, "log"),
         format!(
-            "{LEFT_CLICK} box:pointerdown:0:0:1 box:mousedown:2:0:1 box:pointerup:0:0:0 \
-             box:mouseup:2:0:0 box:click:2:0:0 box:dblclick:2:0:0"
+            "{LEFT_CLICK} {}",
+            concat!(
+                "box:pointerdown:0:0:1 box:mousedown:2:0:1 box:pointerup:0:0:0 ",
+                "box:mouseup:2:0:0 box:click:2:0:0 box:dblclick:2:0:0"
+            )
         )
     );
 }
@@ -63,8 +74,10 @@ fn a_right_click_fires_contextmenu_between_mousedown_and_mouseup(cx: &mut TestAp
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "box:pointerdown:0:2:2 box:mousedown:1:2:2 box:contextmenu:0:2:2 box:pointerup:0:2:0 \
-         box:mouseup:1:2:0 box:auxclick:1:2:0"
+        concat!(
+            "box:pointerdown:0:2:2 box:mousedown:1:2:2 box:contextmenu:0:2:2 box:pointerup:0:2:0 ",
+            "box:mouseup:1:2:0 box:auxclick:1:2:0"
+        )
     );
 }
 
@@ -76,8 +89,10 @@ fn a_middle_click_ends_with_auxclick(cx: &mut TestAppContext) {
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "box:pointerdown:0:1:4 box:mousedown:1:1:4 box:pointerup:0:1:0 box:mouseup:1:1:0 \
-         box:auxclick:1:1:0"
+        concat!(
+            "box:pointerdown:0:1:4 box:mousedown:1:1:4 box:pointerup:0:1:0 box:mouseup:1:1:0 ",
+            "box:auxclick:1:1:0"
+        )
     );
 }
 
@@ -89,8 +104,10 @@ fn a_canceled_mousedown_still_clicks(cx: &mut TestAppContext) {
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "box2:pointerdown:0:0:1 box2:mousedown:1:0:1 box2:pointerup:0:0:0 box2:mouseup:1:0:0 \
-         box2:click:1:0:0"
+        concat!(
+            "box2:pointerdown:0:0:1 box2:mousedown:1:0:1 box2:pointerup:0:0:0 box2:mouseup:1:0:0 ",
+            "box2:click:1:0:0"
+        )
     );
 }
 
@@ -146,21 +163,15 @@ fn a_canceled_pointerdown_still_fires_contextmenu_on_a_right_press(cx: &mut Test
 #[case::ctrl(Modifiers::control(), CTRL_CLICK_MODS)]
 #[case::alt(
     Modifiers::alt(),
-    "pointerdown:false:true:false:false mousedown:false:true:false:false \
-     pointerup:false:true:false:false mouseup:false:true:false:false \
-     click:false:true:false:false"
+    concat!("pointerdown:false:true:false:false mousedown:false:true:false:false ", "pointerup:false:true:false:false mouseup:false:true:false:false ", "click:false:true:false:false")
 )]
 #[case::shift(
     Modifiers::shift(),
-    "pointerdown:false:false:true:false mousedown:false:false:true:false \
-     pointerup:false:false:true:false mouseup:false:false:true:false \
-     click:false:false:true:false"
+    concat!("pointerdown:false:false:true:false mousedown:false:false:true:false ", "pointerup:false:false:true:false mouseup:false:false:true:false ", "click:false:false:true:false")
 )]
 #[case::cmd(
     Modifiers::command(),
-    "pointerdown:false:false:false:true mousedown:false:false:false:true \
-     pointerup:false:false:false:true mouseup:false:false:false:true \
-     click:false:false:false:true"
+    concat!("pointerdown:false:false:false:true mousedown:false:false:false:true ", "pointerup:false:false:false:true mouseup:false:false:false:true ", "click:false:false:false:true")
 )]
 fn a_modified_click_carries_the_held_modifier_on_every_press_event(
     cx: &mut TestAppContext,

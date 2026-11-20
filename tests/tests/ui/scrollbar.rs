@@ -261,8 +261,10 @@ fn a_thumb_drag_release_fires_boundary_events_at_the_node_under_the_pointer(
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "pointerup@box mouseup@box pointerout@box pointerleave@box pointerover@field \
-         pointerenter@field mouseout@box mouseleave@box mouseover@field mouseenter@field"
+        concat!(
+            "pointerup@box mouseup@box pointerout@box pointerleave@box pointerover@field ",
+            "pointerenter@field mouseout@box mouseleave@box mouseover@field mouseenter@field"
+        )
     );
 }
 

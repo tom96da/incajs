@@ -66,8 +66,10 @@ fn the_last_release_of_a_capture_fires_lostpointercapture_before_click(cx: &mut 
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "pointerup@a mouseup@a lostpointercapture@a click@a pointerout@a pointerleave@a \
-         pointerover@b pointerenter@b mouseout@a mouseleave@a mouseover@b mouseenter@b"
+        concat!(
+            "pointerup@a mouseup@a lostpointercapture@a click@a pointerout@a pointerleave@a ",
+            "pointerover@b pointerenter@b mouseout@a mouseleave@a mouseover@b mouseenter@b"
+        )
     );
 }
 
@@ -83,8 +85,10 @@ fn a_capture_of_another_node_sends_the_click_there(cx: &mut TestAppContext) {
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "pointerup@b mouseup@b lostpointercapture@b click@b pointerout@b pointerleave@b \
-         pointerover@c pointerenter@c mouseout@b mouseleave@b mouseover@c mouseenter@c"
+        concat!(
+            "pointerup@b mouseup@b lostpointercapture@b click@b pointerout@b pointerleave@b ",
+            "pointerover@c pointerenter@c mouseout@b mouseleave@b mouseover@c mouseenter@c"
+        )
     );
 }
 
@@ -110,8 +114,10 @@ fn a_released_capture_ends_at_the_next_move_before_its_boundary_events(cx: &mut 
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "lostpointercapture@a pointerout@a pointerleave@a pointerover@b pointerenter@b \
-         mouseout@a mouseleave@a mouseover@b mouseenter@b pointermove@b mousemove@b"
+        concat!(
+            "lostpointercapture@a pointerout@a pointerleave@a pointerover@b pointerenter@b ",
+            "mouseout@a mouseleave@a mouseover@b mouseenter@b pointermove@b mousemove@b"
+        )
     );
 }
 

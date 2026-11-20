@@ -116,8 +116,10 @@ fn a_canceled_enter_key_up_still_clicks(cx: &mut TestAppContext) {
 
     assert_eq!(
         press_release(&mut h, &before, "enter"),
-        "up-stop:keydown:Enter up-stop:keypress:Enter \
-         up-stop:click:0:0:false:false:false:false up-stop:keyup:Enter"
+        concat!(
+            "up-stop:keydown:Enter up-stop:keypress:Enter ",
+            "up-stop:click:0:0:false:false:false:false up-stop:keyup:Enter"
+        )
     );
 }
 
@@ -141,8 +143,10 @@ fn a_canceled_space_keypress_still_clicks_on_key_up(cx: &mut TestAppContext) {
 
     assert_eq!(
         press_release(&mut h, &before, "space"),
-        "press-stop:keydown:Space press-stop:keypress:Space press-stop:keyup:Space \
-         press-stop:click:0:0:false:false:false:false"
+        concat!(
+            "press-stop:keydown:Space press-stop:keypress:Space press-stop:keyup:Space ",
+            "press-stop:click:0:0:false:false:false:false"
+        )
     );
 }
 

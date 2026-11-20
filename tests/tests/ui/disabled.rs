@@ -8,8 +8,10 @@
 use super::common::{appended, click, click_with, hover, load, text_of};
 use gpui::{Modifiers, MouseButton, TestAppContext};
 
-const OFF_PTR: &str = "pointerdown@off(off) pointerdown@wrap(off) \
-                       pointerup@off(off) pointerup@wrap(off)";
+const OFF_PTR: &str = concat!(
+    "pointerdown@off(off) pointerdown@wrap(off) ",
+    "pointerup@off(off) pointerup@wrap(off)"
+);
 
 #[gpui::test]
 fn a_left_click_on_a_disabled_button_fires_only_pointer_events(cx: &mut TestAppContext) {
@@ -75,8 +77,10 @@ fn a_disabled_button_keeps_hover_events_under_the_pointer(cx: &mut TestAppContex
 
     assert_eq!(
         appended(&before, &text_of(&mut h, "hover")),
-        "mouseover@off(off) mouseover@wrap(off) mouseenter@wrap(wrap) \
-         mouseenter@off(off) mousemove@off(off) mousemove@wrap(off)"
+        concat!(
+            "mouseover@off(off) mouseover@wrap(off) mouseenter@wrap(wrap) ",
+            "mouseenter@off(off) mousemove@off(off) mousemove@wrap(off)"
+        )
     );
 }
 
@@ -89,8 +93,10 @@ fn a_click_on_a_disabled_input_fires_no_mouse_event(cx: &mut TestAppContext) {
     assert_eq!(text_of(&mut h, "mouse"), "");
     assert_eq!(
         text_of(&mut h, "ptr"),
-        "pointerdown@off-input(off-input) pointerdown@wrap(off-input) \
-         pointerup@off-input(off-input) pointerup@wrap(off-input)"
+        concat!(
+            "pointerdown@off-input(off-input) pointerdown@wrap(off-input) ",
+            "pointerup@off-input(off-input) pointerup@wrap(off-input)"
+        )
     );
 }
 

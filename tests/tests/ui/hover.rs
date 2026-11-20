@@ -23,9 +23,11 @@ fn entering_a_nested_node_fires_over_up_the_path_then_enter_down_it(cx: &mut Tes
 
     assert_eq!(
         last_move(&mut h, &["home", "c"]),
-        "mouseout@home(home)<c mouseleave@home(home)<c mouseover@c(c)<home \
-         mouseover@b(c)<home mouseover@a(c)<home mouseenter@a(a)<home \
-         mouseenter@b(b)<home mouseenter@c(c)<home"
+        concat!(
+            "mouseout@home(home)<c mouseleave@home(home)<c mouseover@c(c)<home ",
+            "mouseover@b(c)<home mouseover@a(c)<home mouseenter@a(a)<home ",
+            "mouseenter@b(b)<home mouseenter@c(c)<home"
+        )
     );
 }
 
@@ -35,8 +37,10 @@ fn moving_to_a_sibling_fires_out_and_leave_before_over_and_enter(cx: &mut TestAp
 
     assert_eq!(
         last_move(&mut h, &["home", "c", "d"]),
-        "mouseout@c(c)<d mouseout@b(c)<d mouseout@a(c)<d mouseleave@c(c)<d \
-         mouseover@d(d)<c mouseover@b(d)<c mouseover@a(d)<c mouseenter@d(d)<c"
+        concat!(
+            "mouseout@c(c)<d mouseout@b(c)<d mouseout@a(c)<d mouseleave@c(c)<d ",
+            "mouseover@d(d)<c mouseover@b(d)<c mouseover@a(d)<c mouseenter@d(d)<c"
+        )
     );
 }
 
@@ -46,8 +50,10 @@ fn leaving_a_subtree_fires_leave_from_the_innermost_node_outward(cx: &mut TestAp
 
     assert_eq!(
         last_move(&mut h, &["home", "d", "e"]),
-        "mouseout@d(d)<e mouseout@b(d)<e mouseout@a(d)<e mouseleave@d(d)<e \
-         mouseleave@b(b)<e mouseleave@a(a)<e mouseover@e(e)<d mouseenter@e(e)<d"
+        concat!(
+            "mouseout@d(d)<e mouseout@b(d)<e mouseout@a(d)<e mouseleave@d(d)<e ",
+            "mouseleave@b(b)<e mouseleave@a(a)<e mouseover@e(e)<d mouseenter@e(e)<d"
+        )
     );
 }
 
@@ -57,8 +63,10 @@ fn entering_a_child_from_its_parent_fires_enter_on_the_child_only(cx: &mut TestA
 
     assert_eq!(
         last_move(&mut h, &["home", "b", "c"]),
-        "mouseout@b(b)<c mouseout@a(b)<c mouseover@c(c)<b mouseover@b(c)<b \
-         mouseover@a(c)<b mouseenter@c(c)<b"
+        concat!(
+            "mouseout@b(b)<c mouseout@a(b)<c mouseover@c(c)<b mouseover@b(c)<b ",
+            "mouseover@a(c)<b mouseenter@c(c)<b"
+        )
     );
 }
 
@@ -68,8 +76,10 @@ fn leaving_a_child_for_its_parent_fires_leave_on_the_child_only(cx: &mut TestApp
 
     assert_eq!(
         last_move(&mut h, &["home", "c", "b"]),
-        "mouseout@c(c)<b mouseout@b(c)<b mouseout@a(c)<b mouseleave@c(c)<b \
-         mouseover@b(b)<c mouseover@a(b)<c"
+        concat!(
+            "mouseout@c(c)<b mouseout@b(c)<b mouseout@a(c)<b mouseleave@c(c)<b ",
+            "mouseover@b(b)<c mouseover@a(b)<c"
+        )
     );
 }
 
@@ -105,8 +115,10 @@ fn a_pointer_move_fires_pointer_events_before_mouse_events_and_moves_last(cx: &m
 
     assert_eq!(
         last_move(&mut h, &["a", "b"]),
-        "pointerout@a<b pointerleave@a<b pointerover@b<a pointerenter@b<a mouseout@a<b \
-         mouseleave@a<b mouseover@b<a mouseenter@b<a pointermove@b<null mousemove@b<null"
+        concat!(
+            "pointerout@a<b pointerleave@a<b pointerover@b<a pointerenter@b<a mouseout@a<b ",
+            "mouseleave@a<b mouseover@b<a mouseenter@b<a pointermove@b<null mousemove@b<null"
+        )
     );
 }
 
@@ -121,8 +133,10 @@ fn leaving_every_node_fires_out_and_leave_from_the_innermost_node_outward(cx: &m
 
     assert_eq!(
         appended(&before, &text_of(&mut h, "log")),
-        "mouseout@c(c)<null mouseout@b(c)<null mouseout@a(c)<null mouseleave@c(c)<null \
-         mouseleave@b(b)<null mouseleave@a(a)<null"
+        concat!(
+            "mouseout@c(c)<null mouseout@b(c)<null mouseout@a(c)<null mouseleave@c(c)<null ",
+            "mouseleave@b(b)<null mouseleave@a(a)<null"
+        )
     );
 }
 
@@ -138,8 +152,10 @@ fn hovering_a_node_again_after_unhover_fires_the_enter_events_again(cx: &mut Tes
 
     assert_eq!(
         appended(&before, &text_of(&mut h, "log")),
-        "mouseover@c(c)<null mouseover@b(c)<null mouseover@a(c)<null \
-         mouseenter@a(a)<null mouseenter@b(b)<null mouseenter@c(c)<null"
+        concat!(
+            "mouseover@c(c)<null mouseover@b(c)<null mouseover@a(c)<null ",
+            "mouseenter@a(a)<null mouseenter@b(b)<null mouseenter@c(c)<null"
+        )
     );
 }
 
@@ -174,8 +190,10 @@ fn a_move_after_the_shift_leaves_from_the_node_that_took_the_removed_place(
 
     assert_eq!(
         appended(&before, &text_of(&mut h, "log")),
-        "mouseout@d(d)<e mouseout@b(d)<e mouseout@a(d)<e mouseleave@d(d)<e \
-         mouseleave@b(b)<e mouseleave@a(a)<e mouseover@e(e)<d mouseenter@e(e)<d"
+        concat!(
+            "mouseout@d(d)<e mouseout@b(d)<e mouseout@a(d)<e mouseleave@d(d)<e ",
+            "mouseleave@b(b)<e mouseleave@a(a)<e mouseover@e(e)<d mouseenter@e(e)<d"
+        )
     );
 }
 

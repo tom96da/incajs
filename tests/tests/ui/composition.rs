@@ -16,8 +16,10 @@ fn composing(cx: &mut TestAppContext, id: &str) -> Harness {
     h
 }
 
-const MARK_K: &str = "compositionstart: compositionupdate:k \
-    beforeinput:insertCompositionText:k:true:false input:insertCompositionText:k:true:false";
+const MARK_K: &str = concat!(
+    "compositionstart: compositionupdate:k ",
+    "beforeinput:insertCompositionText:k:true:false input:insertCompositionText:k:true:false"
+);
 
 #[gpui::test]
 fn a_first_mark_starts_the_composition(cx: &mut TestAppContext) {
@@ -39,8 +41,10 @@ fn a_second_mark_updates_the_composition(cx: &mut TestAppContext) {
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "compositionupdate:か \
-         beforeinput:insertCompositionText:か:true:false input:insertCompositionText:か:true:false"
+        concat!(
+            "compositionupdate:か ",
+            "beforeinput:insertCompositionText:か:true:false input:insertCompositionText:か:true:false"
+        )
     );
 }
 
@@ -54,9 +58,11 @@ fn a_commit_ends_the_composition(cx: &mut TestAppContext) {
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "compositionupdate:か \
-         beforeinput:insertCompositionText:か:true:false input:insertCompositionText:か:true:false \
-         compositionend:か"
+        concat!(
+            "compositionupdate:か ",
+            "beforeinput:insertCompositionText:か:true:false input:insertCompositionText:か:true:false ",
+            "compositionend:か"
+        )
     );
 }
 
@@ -70,8 +76,10 @@ fn an_empty_mark_ends_the_composition_with_no_text(cx: &mut TestAppContext) {
 
     assert_eq!(
         text_of(&mut h, "log"),
-        "compositionupdate: beforeinput:insertCompositionText::true:false \
-         input:insertCompositionText:null:true:false compositionend:"
+        concat!(
+            "compositionupdate: beforeinput:insertCompositionText::true:false ",
+            "input:insertCompositionText:null:true:false compositionend:"
+        )
     );
 }
 
@@ -226,7 +234,9 @@ fn composition_events_carry_their_bubbles_cancelable_and_composed_flags(cx: &mut
 
     assert_eq!(
         text_of(&mut h, "flags"),
-        "compositionstart:true:true:true:true compositionupdate:true:true:true:true \
-         compositionupdate:true:true:true:true compositionend:true:true:true:true"
+        concat!(
+            "compositionstart:true:true:true:true compositionupdate:true:true:true:true ",
+            "compositionupdate:true:true:true:true compositionend:true:true:true:true"
+        )
     );
 }

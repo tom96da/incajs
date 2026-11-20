@@ -81,8 +81,10 @@ fn backspace_removes_the_character_before_the_caret(cx: &mut TestAppContext) {
 
     assert_eq!(
         added_by(&mut h, "backspace"),
-        "f:keydown:Backspace f:beforeinput:deleteContentBackward:null \
-         f:input:deleteContentBackward:null"
+        concat!(
+            "f:keydown:Backspace f:beforeinput:deleteContentBackward:null ",
+            "f:input:deleteContentBackward:null"
+        )
     );
     assert_eq!(text_of(&mut h, "value"), "a");
 }
@@ -104,8 +106,10 @@ fn delete_removes_the_character_after_the_caret(cx: &mut TestAppContext) {
 
     assert_eq!(
         added_by(&mut h, "delete"),
-        "f:keydown:Delete f:beforeinput:deleteContentForward:null \
-         f:input:deleteContentForward:null"
+        concat!(
+            "f:keydown:Delete f:beforeinput:deleteContentForward:null ",
+            "f:input:deleteContentForward:null"
+        )
     );
     assert_eq!(text_of(&mut h, "value"), "b");
 }
@@ -161,8 +165,10 @@ fn typing_over_a_shift_left_selection_replaces_it(cx: &mut TestAppContext) {
 
     assert_eq!(
         added_by(&mut h, "shift-left x"),
-        "f:keydown:ArrowLeft f:keydown:x f:keypress:x f:beforeinput:insertText:x \
-         f:input:insertText:x"
+        concat!(
+            "f:keydown:ArrowLeft f:keydown:x f:keypress:x f:beforeinput:insertText:x ",
+            "f:input:insertText:x"
+        )
     );
     assert_eq!(text_of(&mut h, "value"), "abx");
 }
