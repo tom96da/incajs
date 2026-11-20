@@ -155,3 +155,11 @@ pub fn left_in(h: &mut Harness, id: &str, container: &str) -> f32 {
     let root = h.snapshot();
     by_id(&root, id).bounds.unwrap().x - by_id(&root, container).bounds.unwrap().x
 }
+
+/// The distinct whitespace-separated tokens of `log`, sorted.
+pub fn sorted_unique(log: &str) -> Vec<String> {
+    let mut tokens: Vec<String> = log.split_whitespace().map(str::to_owned).collect();
+    tokens.sort();
+    tokens.dedup();
+    tokens
+}
