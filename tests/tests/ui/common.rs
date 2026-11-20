@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
-use gpui::TestAppContext;
+use gpui::{Pixels, Point, TestAppContext, point, px};
 use inca_host::harness::Harness;
 use inca_host::snapshot::Node;
 use inca_node::NodeId;
@@ -102,6 +102,29 @@ pub fn click(h: &mut Harness, id: &str) {
 /// The top edge of the node with `id`.
 pub fn y(h: &mut Harness, id: &str) -> f32 {
     by_id(&h.snapshot(), id).bounds.unwrap().y
+}
+
+/// The width of the node with `id`.
+pub fn width(h: &mut Harness, id: &str) -> f32 {
+    by_id(&h.snapshot(), id).bounds.unwrap().width
+}
+
+/// The height of the node with `id`.
+pub fn height(h: &mut Harness, id: &str) -> f32 {
+    by_id(&h.snapshot(), id).bounds.unwrap().height
+}
+
+/// The center of the node with `id`.
+pub fn center(h: &mut Harness, id: &str) -> Point<Pixels> {
+    let b = by_id(&h.snapshot(), id).bounds.unwrap();
+    point(px(b.x + b.width / 2.0), px(b.y + b.height / 2.0))
+}
+
+/// The point `from_right` left of the right edge and `from_top` below the
+/// top edge of the node with `id`.
+pub fn inset(h: &mut Harness, id: &str, from_right: f32, from_top: f32) -> Point<Pixels> {
+    let b = by_id(&h.snapshot(), id).bounds.unwrap();
+    point(px(b.x + b.width - from_right), px(b.y + from_top))
 }
 
 /// Asserts `a` and `b` differ by less than 0.01.

@@ -5,13 +5,8 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, load, near};
+use super::common::{by_id, load, near, width};
 use gpui::TestAppContext;
-use inca_host::harness::Harness;
-
-fn width(h: &mut Harness, id: &str) -> f32 {
-    by_id(&h.snapshot(), id).bounds.unwrap().width
-}
 
 #[gpui::test]
 fn hovering_a_box_without_listeners_applies_its_hover_rule_until_unhover(cx: &mut TestAppContext) {

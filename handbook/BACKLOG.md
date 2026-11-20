@@ -1977,3 +1977,16 @@ A fixed entry is deleted and its ID is never reused.
   apply the request inside the call that makes it. Tests:
   `a_focus_moved_by_a_focus_listener_fires_after_the_listener_returns` and
   `a_blur_requested_by_a_focus_listener_fires_after_the_listener_returns`.
+
+- **B-369 A release after a key press targets the root container until the pointer moves**
+  `Units: gpui · Size: M · Impact: Low`
+
+  The `:hover` state that gates a container's mouse-up listener is off after a key press, until
+  the next pointer move. A `mouseup` at an unmoved pointer, with or without a press before, then
+  reaches no container: `pointerup` and `mouseup` fire at the root container and the `click` of
+  the press goes there too. UI Events targets `mouseup` at the topmost element under the pointer.
+  Example: hold the mouse on a `button`, press and release Space, release the mouse. The tests
+  `a_release_with_no_press_fires_pointerup_and_mouseup_alone` and
+  `the_mouse_release_after_a_space_click_clicks_again` in `tests/tests/ui/press.rs` move the pointer
+  after F9 to avoid it. Fix: let the release use the hit test of the pointer position whatever the
+  last input was, then drop that move from both tests.
