@@ -2027,3 +2027,13 @@ A fixed entry is deleted and its ID is never reused.
   `a_captured_double_click_fires_dblclick_at_the_capture_target` in `tests/tests/ui/capture.rs`
   pins the host value. Fix: fire `dblclick` at the common ancestor of the pressed and the
   released node.
+
+- **B-374 A thumb drag release fires boundary events at the node under the pointer**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The release at the end of a thumb drag fires `pointerout`, `pointerleave`, `pointerover`,
+  `pointerenter` and the mouse counterparts at the node under the pointer, after `pointerup` and
+  `mouseup`. Chromium fires no boundary event at the release. The test
+  `a_thumb_drag_release_fires_boundary_events_at_the_node_under_the_pointer` in
+  `tests/tests/ui/scrollbar.rs` pins the host value. Fix: end the drag without
+  firing them and let the next pointer move report the change.
