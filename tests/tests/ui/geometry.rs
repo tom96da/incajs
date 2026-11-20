@@ -70,7 +70,7 @@ fn a_click_at_the_center_reads_the_offset_inside_the_box(cx: &mut TestAppContext
 
 #[gpui::test]
 fn scroll_height_after_an_append_reaches_the_bottom(cx: &mut TestAppContext) {
-    let mut h = load(cx, "scroll_position");
+    let mut h = load(cx, "scroll-position");
     click(&mut h, "append");
     click(&mut h, "bottom");
 
