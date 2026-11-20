@@ -10,6 +10,7 @@ mod button;
 mod button_keys;
 mod capture;
 mod click_order;
+mod clipboard;
 mod common;
 mod components;
 mod contains;
