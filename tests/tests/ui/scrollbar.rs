@@ -7,7 +7,9 @@
 
 use super::common::{center, click, inset, load, near, text_of};
 use gpui::{Modifiers, MouseButton, TestAppContext};
-use inca_host::harness::Harness;
+use inca_host::harness::{Harness, Scrollbars};
+use inca_test_macros::gpui_cases;
+use std::time::Duration;
 
 fn thumb(h: &mut Harness) -> gpui::Point<gpui::Pixels> {
     inset(h, "box", 7.5, 10.0)
@@ -299,5 +301,98 @@ fn a_bar_press_during_a_capture_goes_to_the_capturing_node(cx: &mut TestAppConte
     assert_eq!(
         text_of(&mut h, "log"),
         "mousedown@above contextmenu@above mouseup@above"
+    );
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::classic(Scrollbars::Classic, "85:100")]
+#[case::overlay(Scrollbars::Overlay, "100:100")]
+fn a_scroll_box_reports_the_client_width_its_scrollbars_leave(
+    cx: &mut TestAppContext,
+    #[case] mode: Scrollbars,
+    #[case] expected: &str,
+) {
+    let mut h = load(cx, "scrollbar");
+    h.scrollbars(mode);
+
+    click(&mut h, "measure");
+
+    assert_eq!(text_of(&mut h, "sizes"), expected);
+}
+
+#[gpui::test]
+fn an_overlay_thumb_dragged_past_the_end_scrolls_to_the_end(cx: &mut TestAppContext) {
+    let mut h = load(cx, "scrollbar");
+    h.scrollbars(Scrollbars::Overlay);
+    drag_thumb_onto_field(&mut h);
+
+    h.keystrokes("e");
+
+    assert_eq!(text_of(&mut h, "at-end"), "true");
+}
+
+#[gpui::test]
+fn a_horizontal_overlay_thumb_dragged_past_the_end_scrolls_to_the_end(cx: &mut TestAppContext) {
+    let mut h = load(cx, "scrollbar");
+    h.scrollbars(Scrollbars::Overlay);
+    let none = Modifiers::none();
+    let grab = inset(&mut h, "hbox", 90.0, 92.5);
+    let past = inset(&mut h, "hbox", -50.0, 92.5);
+    h.mouse_down(grab, MouseButton::Left, none);
+
+    h.move_to(past, Some(MouseButton::Left), none);
+    h.keystrokes("e");
+
+    assert_eq!(text_of(&mut h, "h-at-end"), "true");
+}
+
+const OBOX_MENU: &str =
+    "pointerdown@obox mousedown@obox contextmenu@obox pointerup@obox mouseup@obox";
+
+/// Right-presses and releases the thumb spot of `#obox` after `wait` on the fake clock.
+fn right_press_on_obox_after(cx: &mut TestAppContext, wait: Duration) -> String {
+    let mut h = load(cx, "scrollbar");
+    h.scrollbars(Scrollbars::Overlay);
+    h.advance_clock(wait);
+    let at = inset(&mut h, "obox", 7.5, 10.0);
+    mark_at(&mut h, at);
+
+    h.mouse_down(at, MouseButton::Right, Modifiers::none());
+    h.mouse_up(at, MouseButton::Right, Modifiers::none());
+
+    text_of(&mut h, "log")
+}
+
+#[gpui::test]
+fn a_right_press_on_a_shown_overlay_thumb_fires_contextmenu_at_the_container(
+    cx: &mut TestAppContext,
+) {
+    assert_eq!(right_press_on_obox_after(cx, Duration::ZERO), OBOX_MENU);
+}
+
+#[gpui::test]
+fn a_press_where_a_hidden_overlay_thumb_was_reaches_the_content(cx: &mut TestAppContext) {
+    let mut h = load(cx, "scrollbar");
+    h.scrollbars(Scrollbars::Overlay);
+    h.advance_clock(Duration::from_secs(1));
+    let none = Modifiers::none();
+    let at = inset(&mut h, "obox", 7.5, 10.0);
+    mark_at(&mut h, at);
+
+    h.mouse_down(at, MouseButton::Left, none);
+    h.mouse_up(at, MouseButton::Left, none);
+
+    assert_eq!(
+        text_of(&mut h, "log"),
+        "pointerdown@otall mousedown@otall pointerup@otall mouseup@otall click@otall"
+    );
+}
+
+#[gpui::test]
+fn an_overlay_thumb_still_takes_a_press_just_before_the_hide_delay(cx: &mut TestAppContext) {
+    assert_eq!(
+        right_press_on_obox_after(cx, Duration::from_millis(999)),
+        OBOX_MENU
     );
 }

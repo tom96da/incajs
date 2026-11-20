@@ -19,6 +19,7 @@ const scrollTop = ref("");
 const atEnd = ref("");
 const hAtEnd = ref("");
 const active = ref("");
+const sizes = ref("");
 let cancel = false;
 let capture = false;
 
@@ -112,6 +113,14 @@ onMounted(() => {
     <div id="both" :style="{ width: 100, height: 100, overflow: 'scroll' }">
       <div id="huge" :style="{ width: 1000, height: 1000 }" />
     </div>
+    <div id="obox" :style="{ width: 100, height: 100, overflow_y: 'scroll' }">
+      <div id="otall" :style="{ width: 100, height: 1000 }" />
+    </div>
+    <button
+      id="measure"
+      :style="{ width: 80, height: 30 }"
+      @click="sizes = `${box.clientWidth}:${box.offsetWidth}`"
+    />
     <div id="log">{{ log }}</div>
     <div id="moves">{{ moves }}</div>
     <div id="ups">{{ ups }}</div>
@@ -121,5 +130,6 @@ onMounted(() => {
     <div id="at-end">{{ atEnd }}</div>
     <div id="h-at-end">{{ hAtEnd }}</div>
     <div id="active">{{ active }}</div>
+    <div id="sizes">{{ sizes }}</div>
   </div>
 </template>
