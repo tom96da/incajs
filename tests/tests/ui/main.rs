@@ -44,5 +44,6 @@ mod style_member;
 mod style_sfc;
 mod tabindex;
 mod template;
+mod text_edit;
 mod timing;
 mod visual_state;
