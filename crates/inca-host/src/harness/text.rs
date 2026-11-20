@@ -59,6 +59,27 @@ impl Harness {
         self.cx.read_from_clipboard().and_then(|item| item.text())
     }
 
+    /// Sends `text` to the focused `input`, editable or not, as typed text. Sends
+    /// nothing when the focused node is no `input`.
+    pub(super) fn type_text(&mut self, text: &str) {
+        let Some((node, editable)) = self.focused_input() else {
+            return;
+        };
+        let mut handler = self.handler_for(node, editable);
+        self.cx
+            .update(|window, cx| handler.replace_text_in_range(None, text, window, cx));
+        self.cx.run_until_parked();
+    }
+
+    /// An input handler for `node`, wired to the dispatcher of the open window.
+    fn handler_for(&mut self, node: NodeId, editable: bool) -> TextInputHandler<EventDispatcher> {
+        let dispatcher = self
+            .window
+            .update(&mut self.cx, |app, _, _| app.session.dispatcher.clone())
+            .expect("the window is open");
+        TextInputHandler::new(dispatcher, node, editable)
+    }
+
     /// The focused node and whether it accepts text, when it is an `input`.
     pub(super) fn focused_input(&mut self) -> Option<(NodeId, bool)> {
         let host = Rc::clone(&self.host);
@@ -80,11 +101,7 @@ impl Harness {
         let Some((node, true)) = self.focused_input() else {
             panic!("no focused editable input");
         };
-        let dispatcher = self
-            .window
-            .update(&mut self.cx, |app, _, _| app.session.dispatcher.clone())
-            .expect("the window is open");
-        let mut handler = TextInputHandler::new(dispatcher, node, true);
+        let mut handler = self.handler_for(node, true);
         self.cx.update(|window, cx| call(&mut handler, window, cx));
         self.cx.run_until_parked();
         self.settle();
@@ -119,6 +136,12 @@ mod tests {
             listen(field, 'compositionupdate', 0);
             listen(field, 'compositionend', 0);
             n.focusNode(field);
+        ";
+
+    /// Cancels the `keydown` of the `input` of [`FIELD`].
+    const CANCELED: &str = r"
+            globalThis.cb[1] = (e) => e.preventDefault();
+            listen(field, 'keydown', 1);
         ";
 
     /// Makes the `input` of [`FIELD`] `readonly`.
@@ -161,6 +184,42 @@ mod tests {
         h.ime_unmark();
 
         assert_eq!(log(&h), "compositionupdate:か,compositionend:か");
+    }
+
+    #[gpui::test]
+    fn key_repeat_types_into_the_focused_input(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, FIELD);
+
+        h.key_repeat("a");
+
+        assert_eq!(value(&h), "a");
+    }
+
+    #[gpui::test]
+    fn key_repeat_sends_no_text_after_a_canceled_keydown(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, &format!("{FIELD}{CANCELED}"));
+
+        h.key_repeat("a");
+
+        assert_eq!(value(&h), "");
+    }
+
+    #[gpui::test]
+    fn key_repeat_sends_no_text_for_a_key_without_text(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, FIELD);
+
+        h.key_repeat("escape");
+
+        assert_eq!(value(&h), "");
+    }
+
+    #[gpui::test]
+    fn key_repeat_types_nothing_into_a_readonly_input(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, &format!("{FIELD}{LOCKED}"));
+
+        h.key_repeat("a");
+
+        assert_eq!(value(&h), "");
     }
 
     #[gpui_cases]

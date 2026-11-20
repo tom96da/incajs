@@ -9,7 +9,10 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{KeyUpEvent, Keystroke, Modifiers, TestAppContext, VisualTestContext, WindowHandle};
+use gpui::{
+    KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, PlatformInput, TestAppContext,
+    VisualTestContext, WindowHandle,
+};
 use inca_bridge::Host;
 use inca_jsenv::stderr_reporter;
 use inca_node::NodeId;
@@ -94,6 +97,37 @@ impl Harness {
             self.cx.simulate_event(KeyUpEvent {
                 keystroke: keystroke.expect("a parseable keystroke"),
             });
+        }
+        self.settle();
+    }
+
+    /// Sends space-separated keystrokes, such as `"a b"`, to the focused node
+    /// as keys the platform repeats. Each key-down has `repeat` true. When no
+    /// listener cancels it and the keystroke carries text, that text goes to the
+    /// focused `input`. No key-up is sent.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a keystroke does not parse.
+    pub fn key_repeat(&mut self, keys: &str) {
+        for keystroke in keys.split(' ').map(Keystroke::parse) {
+            let keystroke = keystroke
+                .expect("a parseable keystroke")
+                .with_simulated_ime();
+            let text = keystroke.key_char.clone();
+            let result = self.cx.update(|window, cx| {
+                window.dispatch_event(
+                    PlatformInput::KeyDown(KeyDownEvent {
+                        keystroke,
+                        is_held: true,
+                        prefer_character_input: false,
+                    }),
+                    cx,
+                )
+            });
+            if let (true, Some(text)) = (result.propagate, text) {
+                self.type_text(&text);
+            }
         }
         self.settle();
     }
@@ -457,6 +491,30 @@ mod tests {
         h.activate_window();
 
         assert_eq!(log(&h), "focus,focusin,focus,focusin");
+    }
+
+    #[gpui::test]
+    fn key_repeat_marks_each_key_as_a_repeat(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.key_repeat("a");
+
+        assert_eq!(log(&h), "keydown:a:true");
+    }
+
+    #[gpui::test]
+    #[should_panic(expected = "InvalidKeystrokeError")]
+    fn key_repeat_panics_on_an_unparseable_key(cx: &mut TestAppContext) {
+        Harness::load(cx, TEST_ENTRY_PATH, "").key_repeat("a-b");
+    }
+
+    #[gpui::test]
+    fn key_repeat_repeats_each_key_in_order(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.key_repeat("a b");
+
+        assert_eq!(log(&h), "keydown:a:true,keydown:b:true");
     }
 
     #[gpui::test]
