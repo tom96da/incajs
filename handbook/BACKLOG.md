@@ -1987,7 +1987,7 @@ A fixed entry is deleted and its ID is never reused.
   the press goes there too. UI Events targets `mouseup` at the topmost element under the pointer.
   Example: hold the mouse on a `button`, press and release Space, release the mouse. The tests
   `a_release_with_no_press_fires_pointerup_and_mouseup_alone` and
-  `the_mouse_release_after_a_space_click_clicks_again` in `tests/tests/ui/press.rs` move the pointer
+  `the_mouse_release_after_a_space_click_clicks_again` in `tests/tests/ui/click.rs` move the pointer
   after F9 to avoid it. Fix: let the release use the hit test of the pointer position whatever the
   last input was, then drop that move from both tests.
 
