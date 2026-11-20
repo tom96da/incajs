@@ -5,7 +5,7 @@
 
 use gpui::{
     Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point, ScrollDelta,
-    ScrollWheelEvent, point, px,
+    ScrollWheelEvent, TouchPhase, point, px,
 };
 use inca_gpui::debug_selector;
 use inca_node::NodeId;
@@ -92,6 +92,24 @@ impl Harness {
             position,
             delta: ScrollDelta::Pixels(point(px(dx), px(dy))),
             ..Default::default()
+        });
+        self.settle();
+    }
+
+    /// Scrolls with a wheel event of `delta`, in pixels or in lines, and
+    /// `modifiers` held, over node `id`, located as in [`Harness::click`]. A
+    /// negative `y` scrolls down.
+    ///
+    /// # Panics
+    ///
+    /// Panics under the same conditions as [`Harness::click`].
+    pub fn scroll_with(&mut self, id: NodeId, delta: ScrollDelta, modifiers: Modifiers) {
+        let position = self.center_of(id);
+        self.cx.simulate_event(ScrollWheelEvent {
+            position,
+            delta,
+            modifiers,
+            touch_phase: TouchPhase::Moved,
         });
         self.settle();
     }
@@ -641,5 +659,40 @@ mod tests {
         h.mouse_down(Point::default(), MouseButton::Left, Modifiers::none());
 
         assert_eq!(log(&h), "mousedown:0:1:false");
+    }
+
+    /// A 100x50 scrollable box holding a 100x200 child, with a wheel listener
+    /// that logs `deltaY > 0`, `ctrlKey` and `deltaMode`.
+    const WHEELED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.setStyle(box, 'overflow_y', 'scroll');
+            n.appendChild(n.rootNodeId(), box);
+            const child = n.createNode('div');
+            n.setStyle(child, 'width', 100);
+            n.setStyle(child, 'height', 200);
+            n.appendChild(box, child);
+            globalThis.box = box;
+            globalThis.log = [];
+            globalThis.cb[0] = (e) => {
+                globalThis.log.push(`${e.deltaY > 0}:${e.ctrlKey}:${e.deltaMode}`);
+            };
+            globalThis.listen(box, 'wheel', 0);
+        ";
+
+    #[gpui::test]
+    fn scroll_with_passes_its_delta_and_modifiers(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, WHEELED);
+        let boxed = node(&h, "box");
+
+        h.scroll_with(
+            boxed,
+            ScrollDelta::Lines(point(0.0, -2.0)),
+            Modifiers::control(),
+        );
+
+        assert_eq!(log(&h), "true:true:1");
     }
 }
