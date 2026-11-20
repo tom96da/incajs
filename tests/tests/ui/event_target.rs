@@ -9,8 +9,7 @@ use gpui::TestAppContext;
 const CLICK: &str =
     "click:inner>outer[inner,outer,app,root,document,window] this:true ref:true reactive:true";
 
-// Chromium, Firefox and WebKit: the path lists the elements, body, html, document and window. The
-// host lists its root container where browsers list body and html.
+// The path holds the root container `root` and no `body` or `html` element.
 #[gpui::test]
 fn a_script_click_carries_the_ref_objects_and_this(cx: &mut TestAppContext) {
     let mut h = load(cx, "event-target");
@@ -18,7 +17,6 @@ fn a_script_click_carries_the_ref_objects_and_this(cx: &mut TestAppContext) {
     assert_eq!(text_of(&mut h, "log"), CLICK);
 }
 
-// Chromium, Firefox and WebKit: target stays, currentTarget and path clear after dispatch.
 #[gpui::test]
 fn after_dispatch_target_stays_and_current_target_and_path_clear(cx: &mut TestAppContext) {
     let mut h = load(cx, "event-target");
@@ -30,7 +28,6 @@ fn after_dispatch_target_stays_and_current_target_and_path_clear(cx: &mut TestAp
     );
 }
 
-// Chromium, Firefox and WebKit: a dispatched event targets the element it was dispatched at.
 #[gpui::test]
 fn a_dispatched_event_targets_its_element(cx: &mut TestAppContext) {
     let mut h = load(cx, "event-target");
@@ -41,8 +38,6 @@ fn a_dispatched_event_targets_its_element(cx: &mut TestAppContext) {
     );
 }
 
-// Browsers report body as the target of a key with nothing focused; the host reports its root
-// container.
 #[gpui::test]
 fn a_key_with_nothing_focused_targets_the_root_container(cx: &mut TestAppContext) {
     let mut h = load(cx, "event-target");
@@ -53,7 +48,6 @@ fn a_key_with_nothing_focused_targets_the_root_container(cx: &mut TestAppContext
     );
 }
 
-// Chromium, Firefox and WebKit: a window key listener gets the focused element as target.
 #[gpui::test]
 fn a_key_on_a_focused_node_reaches_window_with_that_target(cx: &mut TestAppContext) {
     let mut h = load(cx, "event-target");
@@ -65,7 +59,6 @@ fn a_key_on_a_focused_node_reaches_window_with_that_target(cx: &mut TestAppConte
     );
 }
 
-// Chromium, Firefox and WebKit: target.id is its id attribute, currentTarget.id is empty.
 #[gpui::test]
 fn target_id_and_current_target_id_are_their_id_attributes(cx: &mut TestAppContext) {
     let mut h = load(cx, "event-target");
