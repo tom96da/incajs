@@ -14,6 +14,7 @@ mod components;
 mod contains;
 mod disabled;
 mod event_target;
+mod focus_chain;
 mod focus_scroll;
 mod geometry;
 mod handler_property;

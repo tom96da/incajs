@@ -1962,3 +1962,15 @@ A fixed entry is deleted and its ID is never reused.
   listener of that button. The host delivers `keypress` and omits `keyup`. Chromium delivers both
   and clicks nothing. Pinned by `a_button_disabled_by_its_key_down_listener_clicks_nothing`. Fix:
   keep the key target of a pressed key until its release.
+
+- **B-368 A focus request made inside a focus listener takes effect at the next frame**
+  `Units: gpui,bridge · Size: M · Impact: Low`
+
+  `focus()` or `blur()` called inside a `focus` listener moves the focus when the next frame
+  begins, so the listener returns first and the first node still gets `focusin`. Chromium moves the
+  focus before the listener returns and fires no `focusin` on the first node. Example: `a` focuses
+  `b` in its `focus` listener, the host logs `focus:a focusin:a blur:a focusout:a focus:b focusin:b`
+  and Chromium logs `focus:a blur:a focusout:a focus:b focusin:b`. Same mechanism as B-238. Fix:
+  apply the request inside the call that makes it. Tests:
+  `a_focus_moved_by_a_focus_listener_fires_after_the_listener_returns` and
+  `a_blur_requested_by_a_focus_listener_fires_after_the_listener_returns`.
