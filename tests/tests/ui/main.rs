@@ -36,6 +36,7 @@ mod propagation;
 mod reactivity;
 mod removed;
 mod scroll;
+mod scroll_events;
 mod style_element;
 mod style_member;
 mod style_sfc;
