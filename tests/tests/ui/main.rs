@@ -6,7 +6,6 @@
 
 mod abort_signal;
 mod activation;
-mod active;
 mod capture;
 mod click;
 mod clipboard;
@@ -18,7 +17,7 @@ mod context_menu;
 mod disabled;
 mod event_flags;
 mod event_target;
-mod focus_chain;
+mod focus;
 mod focus_scroll;
 mod geometry;
 mod handler_property;
