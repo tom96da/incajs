@@ -124,3 +124,22 @@ pub fn child_ids(node: &Node) -> Vec<String> {
         .filter_map(|c| c.attributes.get("id")?.as_str().map(str::to_owned))
         .collect()
 }
+
+/// The text of `now` after the prefix `before`.
+///
+/// # Panics
+///
+/// Panics when `before` is not a prefix of `now`.
+pub fn appended<'a>(before: &str, now: &'a str) -> &'a str {
+    now.strip_prefix(before)
+        .unwrap_or_else(|| panic!("{before:?} is not a prefix of {now:?}"))
+        .trim()
+}
+
+/// Settles `frames` times. A request that a listener or a frame callback
+/// makes lands one frame later, so a chain of `n` requests needs `n` frames.
+pub fn settled(h: &mut Harness, frames: usize) {
+    for _ in 0..frames {
+        h.settle();
+    }
+}
