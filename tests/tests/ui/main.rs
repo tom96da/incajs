@@ -12,6 +12,7 @@ mod click_order;
 mod common;
 mod components;
 mod contains;
+mod context_menu;
 mod disabled;
 mod event_target;
 mod focus_chain;
