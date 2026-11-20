@@ -695,4 +695,19 @@ mod tests {
 
         assert_eq!(log(&h), "true:true:1");
     }
+
+    #[gpui::test]
+    fn mouse_down_after_an_activation_moves_again(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, POINTED);
+        let c = center(&mut h);
+
+        h.move_to(c, None, Modifiers::none());
+        h.activate_window();
+        h.mouse_down(c, MouseButton::Left, Modifiers::none());
+
+        assert_eq!(
+            log(&h),
+            "mousemove:0:0:false,mousemove:0:0:false,mousedown:0:1:false"
+        );
+    }
 }

@@ -106,6 +106,39 @@ impl Harness {
         self.settle();
     }
 
+    /// Reports the window active. The app sees the activation: `window`
+    /// receives `focus`, and the focused node receives `focus` and `focusin`
+    /// again. The held modifier keys are reported released, with no key
+    /// event.
+    ///
+    /// [`Harness::load`] leaves the window inactive.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the window is already active.
+    pub fn activate_window(&mut self) {
+        assert!(!self.is_window_active(), "the window is already active");
+        self.cx.update(|window, _| window.activate_window());
+        self.settle();
+    }
+
+    /// Reports the window inactive. The app sees the deactivation: `window`
+    /// receives `blur`. The held modifier keys are reported released, with
+    /// no key event.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the window is not active.
+    pub fn deactivate_window(&mut self) {
+        assert!(self.is_window_active(), "the window is not active");
+        self.cx.deactivate_window();
+        self.settle();
+    }
+
+    fn is_window_active(&mut self) -> bool {
+        self.cx.update(|window, _| window.is_window_active())
+    }
+
     /// Runs one pass: the app's pending JS jobs, then queued work until none
     /// is left, then the frame callbacks the app requested, then a window
     /// draw, so [`Harness::snapshot`] reads current bounds. Jobs scheduled by
@@ -379,6 +412,23 @@ mod tests {
         assert_eq!(log(&h), "keydown:Shift:false,keyup:Shift:false");
     }
 
+    /// A `box` with `focus` and `blur` listeners on the window that log their type.
+    const WINDOWED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(e.type);
+                },
+            };
+            listen(n.windowTargetId(), 'focus', 0);
+            listen(n.windowTargetId(), 'blur', 0);
+        ";
+
     #[gpui::test]
     fn keystrokes_press_each_key_in_order_and_release_none(cx: &mut TestAppContext) {
         let mut h = load_listening(cx, KEYED);
@@ -395,6 +445,62 @@ mod tests {
         h.key_up("a cmd-b x");
 
         assert_eq!(log(&h), "keyup:a:false,keyup:b:true,keyup:x:false");
+    }
+
+    #[gpui::test]
+    fn activate_window_reports_the_window_active(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, WINDOWED);
+
+        h.activate_window();
+
+        assert_eq!(log(&h), "focus");
+    }
+
+    #[gpui::test]
+    fn deactivate_window_reports_the_window_inactive(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, WINDOWED);
+
+        h.activate_window();
+        h.deactivate_window();
+
+        assert_eq!(log(&h), "focus,blur");
+    }
+
+    #[gpui::test]
+    #[should_panic(expected = "the window is not active")]
+    fn deactivate_window_panics_on_an_inactive_window(cx: &mut TestAppContext) {
+        Harness::load(cx, TEST_ENTRY_PATH, "").deactivate_window();
+    }
+
+    #[gpui::test]
+    #[should_panic(expected = "the window is already active")]
+    fn activate_window_panics_on_an_active_window(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
+        h.activate_window();
+        h.activate_window();
+    }
+
+    #[gpui::test]
+    fn activate_window_reports_no_modifier_key_held(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.set_modifiers(Modifiers::shift());
+        h.activate_window();
+        h.set_modifiers(Modifiers::none());
+
+        assert_eq!(log(&h), "keydown:Shift:false");
+    }
+
+    #[gpui::test]
+    fn deactivate_window_reports_no_modifier_key_held(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.activate_window();
+        h.set_modifiers(Modifiers::shift());
+        h.deactivate_window();
+        h.set_modifiers(Modifiers::none());
+
+        assert_eq!(log(&h), "keydown:Shift:false");
     }
 
     #[gpui::test]

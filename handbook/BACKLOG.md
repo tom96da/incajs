@@ -1937,3 +1937,11 @@ A fixed entry is deleted and its ID is never reused.
   earlier child whose `name` matches. Example: for the children `<a name="x"></a><b id="x"></b>`,
   `namedItem("x")` gives the `a`, and Chromium and WebKit give the `b`. Fix: none while the DOM
   Standard keeps tree order, follow the standard if it changes.
+
+- **B-365 A modifier key held at an activation has no test**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The modifier keys an activation finds held become the baseline with no key event. No test reaches
+  a held key: the `gpui` test platform reports none. Nearest tests:
+  `activate_window_reports_no_modifier_key_held`, `deactivate_window_reports_no_modifier_key_held`.
+  Fix: add a test when the test platform can report a held modifier.
