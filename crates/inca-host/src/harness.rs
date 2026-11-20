@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{KeyUpEvent, Keystroke, TestAppContext, VisualTestContext, WindowHandle};
+use gpui::{KeyUpEvent, Keystroke, Modifiers, TestAppContext, VisualTestContext, WindowHandle};
 use inca_bridge::Host;
 use inca_jsenv::stderr_reporter;
 use inca_node::NodeId;
@@ -94,6 +94,15 @@ impl Harness {
                 keystroke: keystroke.expect("a parseable keystroke"),
             });
         }
+        self.settle();
+    }
+
+    /// Reports `modifiers` as the modifier keys held now, with caps lock off,
+    /// until the next activation or deactivation. [`Modifiers::none`] reports
+    /// every key released. No key event is sent apart from the ones the app
+    /// derives from the change.
+    pub fn set_modifiers(&mut self, modifiers: Modifiers) {
+        self.cx.simulate_modifiers_change(modifiers);
         self.settle();
     }
 
@@ -331,6 +340,44 @@ mod tests {
             listen(box, 'keyup', 0);
             n.focusNode(box);
         ";
+
+    /// `KEYED` with the listeners logging `type:key:repeat`.
+    const REPEATED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.setAttribute(box, 'tabindex', '0');
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(`${e.type}:${e.key}:${e.repeat}`);
+                },
+            };
+            listen(box, 'keydown', 0);
+            listen(box, 'keyup', 0);
+            n.focusNode(box);
+        ";
+
+    #[gpui::test]
+    fn set_modifiers_reports_the_held_modifier_keys(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.set_modifiers(Modifiers::shift());
+
+        assert_eq!(log(&h), "keydown:Shift:false");
+    }
+
+    #[gpui::test]
+    fn set_modifiers_none_releases_the_held_keys(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.set_modifiers(Modifiers::shift());
+        h.set_modifiers(Modifiers::none());
+
+        assert_eq!(log(&h), "keydown:Shift:false,keyup:Shift:false");
+    }
 
     #[gpui::test]
     fn keystrokes_press_each_key_in_order_and_release_none(cx: &mut TestAppContext) {
