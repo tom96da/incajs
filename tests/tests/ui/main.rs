@@ -37,6 +37,7 @@ mod reactivity;
 mod removed;
 mod scroll;
 mod scroll_events;
+mod scroll_into_view;
 mod style_element;
 mod style_member;
 mod style_sfc;

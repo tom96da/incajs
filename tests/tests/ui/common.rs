@@ -143,3 +143,15 @@ pub fn settled(h: &mut Harness, frames: usize) {
         h.settle();
     }
 }
+
+/// The top of the node with `id` minus the top of `container`, from one snapshot.
+pub fn top_in(h: &mut Harness, id: &str, container: &str) -> f32 {
+    let root = h.snapshot();
+    by_id(&root, id).bounds.unwrap().y - by_id(&root, container).bounds.unwrap().y
+}
+
+/// The left of the node with `id` minus the left of `container`, from one snapshot.
+pub fn left_in(h: &mut Harness, id: &str, container: &str) -> f32 {
+    let root = h.snapshot();
+    by_id(&root, id).bounds.unwrap().x - by_id(&root, container).bounds.unwrap().x
+}
