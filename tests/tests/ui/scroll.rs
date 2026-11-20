@@ -14,6 +14,10 @@ fn node(h: &mut Harness, id: &str) -> NodeId {
     by_id(&h.snapshot(), id).id
 }
 
+fn x(h: &mut Harness, id: &str) -> f32 {
+    by_id(&h.snapshot(), id).bounds.unwrap().x
+}
+
 #[gpui::test]
 fn scrolling_down_moves_the_children_up_by_the_delta(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll");
@@ -24,6 +28,17 @@ fn scrolling_down_moves_the_children_up_by_the_delta(cx: &mut TestAppContext) {
 
     near(y(&mut h, "first"), first - 30.0);
     near(y(&mut h, "second"), second - 30.0);
+}
+
+#[gpui::test]
+fn scrolling_right_moves_the_children_left(cx: &mut TestAppContext) {
+    let mut h = load(cx, "scroll");
+    let first = x(&mut h, "wide-first");
+    let wide = node(&mut h, "wide");
+
+    h.scroll(wide, -30.0, 0.0);
+
+    near(x(&mut h, "wide-first"), first - 30.0);
 }
 
 #[gpui::test]
