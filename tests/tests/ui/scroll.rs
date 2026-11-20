@@ -5,13 +5,8 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, near, node_id, text_of, y};
+use super::common::{click, load, near, node_id, text_of, x, y};
 use gpui::TestAppContext;
-use inca_host::harness::Harness;
-
-fn x(h: &mut Harness, id: &str) -> f32 {
-    by_id(&h.snapshot(), id).bounds.unwrap().x
-}
 
 #[gpui::test]
 fn scrolling_down_moves_the_children_up_by_the_delta(cx: &mut TestAppContext) {

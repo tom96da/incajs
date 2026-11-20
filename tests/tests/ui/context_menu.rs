@@ -3,7 +3,7 @@
 
 //! The Menu key and Shift+F10 open the context menu.
 
-use super::common::{appended, by_id, click, load, text_of};
+use super::common::{appended, click, load, text_of};
 use gpui::TestAppContext;
 
 /// What Shift+F10 logs on `box`: the menu opens everywhere but on macOS.
@@ -39,8 +39,7 @@ fn shift_f10_fires_contextmenu_where_the_platform_opens_it(cx: &mut TestAppConte
 #[gpui::test]
 fn a_canceled_menu_key_down_fires_no_contextmenu(cx: &mut TestAppContext) {
     let mut h = load(cx, "context-menu");
-    let stop = by_id(&h.snapshot(), "box-stop").id;
-    h.click(stop);
+    click(&mut h, "box-stop");
 
     h.keystrokes("menu");
 

@@ -5,17 +5,10 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{click, load, text_of};
+use super::common::{click, load, probe, text_of};
 use gpui::TestAppContext;
 use inca_test_macros::gpui_cases;
 use serde_json::{Value, json};
-
-/// Loads the fixture, runs its probe and returns the object it wrote.
-fn probe(cx: &mut TestAppContext) -> Value {
-    let mut h = load(cx, "interfaces");
-    click(&mut h, "probe");
-    serde_json::from_str(&text_of(&mut h, "result")).unwrap()
-}
 
 #[gpui_cases]
 #[gpui::test]
@@ -37,7 +30,7 @@ fn the_nodes_are_instances_of_their_interfaces_on_the_real_host(
     #[case] key: &str,
     #[case] expected: Value,
 ) {
-    assert_eq!(probe(cx)[key], expected);
+    assert_eq!(probe(cx, "interfaces")[key], expected);
 }
 
 #[gpui::test]
@@ -69,9 +62,7 @@ fn the_aria_members_reflect_the_attributes_of_a_template_on_the_real_host(
     #[case] key: &str,
     #[case] expected: Value,
 ) {
-    let mut h = load(cx, "aria");
-    click(&mut h, "probe");
-    let got: Value = serde_json::from_str(&text_of(&mut h, "result")).unwrap();
+    let got = probe(cx, "aria");
 
     assert_eq!(got[key], expected);
 }

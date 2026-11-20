@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, load, near, width};
+use super::common::{hover, load, near, width};
 use gpui::TestAppContext;
 
 #[gpui::test]
@@ -13,8 +13,7 @@ fn hovering_a_box_without_listeners_applies_its_hover_rule_until_unhover(cx: &mu
     let mut h = load(cx, "visual-hover");
     near(width(&mut h, "box"), 40.0);
 
-    let node = by_id(&h.snapshot(), "box").id;
-    h.hover(node);
+    hover(&mut h, "box");
     near(width(&mut h, "box"), 60.0);
 
     h.unhover();

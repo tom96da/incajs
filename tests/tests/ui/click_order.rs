@@ -3,9 +3,8 @@
 
 //! The events one click fires, in order, with their fields.
 
-use super::common::{by_id, click, load, settled, text_of};
+use super::common::{click, click_with, load, settled, text_of};
 use gpui::{Modifiers, MouseButton, TestAppContext};
-use inca_host::harness::Harness;
 use inca_test_macros::gpui_cases;
 
 /// The log of one left click on `box`.
@@ -30,11 +29,6 @@ const CTRL_CLICK_MODS: &str = if cfg!(target_os = "macos") {
      pointerup:true:false:false:false mouseup:true:false:false:false \
      click:true:false:false:false"
 };
-
-fn click_with(h: &mut Harness, id: &str, button: MouseButton, mods: Modifiers, count: usize) {
-    let node = by_id(&h.snapshot(), id).id;
-    h.click_with(node, button, mods, count);
-}
 
 #[gpui::test]
 fn a_left_click_fires_the_press_and_release_events_in_order(cx: &mut TestAppContext) {

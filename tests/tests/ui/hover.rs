@@ -3,14 +3,9 @@
 
 //! The boundary events of a pointer that moves over nested nodes.
 
-use super::common::{appended, by_id, click, load, settled, text_of};
+use super::common::{appended, click, hover, load, settled, text_of};
 use gpui::TestAppContext;
 use inca_host::harness::Harness;
-
-fn hover(h: &mut Harness, id: &str) {
-    let node = by_id(&h.snapshot(), id).id;
-    h.hover(node);
-}
 
 /// Hovers `ids` in order and returns what the last move added to `#log`.
 fn last_move(h: &mut Harness, ids: &[&str]) -> String {

@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, child_ids, click, has_id, load, near, text};
+use super::common::{by_id, child_ids, click, has_id, load, near, node_id, text};
 use gpui::TestAppContext;
 use inca_host::harness::Harness;
 
@@ -107,7 +107,7 @@ fn reversing_reorders_the_keyed_items(cx: &mut TestAppContext) {
 fn reversing_keeps_each_items_node(cx: &mut TestAppContext) {
     let mut h = load(cx, "list");
     let before: Vec<_> = ["item-1", "item-2", "item-3"]
-        .map(|id| by_id(&h.snapshot(), id).id)
+        .map(|id| node_id(&mut h, id))
         .into();
 
     click(&mut h, "reverse");
@@ -143,7 +143,7 @@ fn adding_after_reversing_appends_at_the_end(cx: &mut TestAppContext) {
 fn swapping_the_ends_moves_two_keyed_items(cx: &mut TestAppContext) {
     let mut h = load(cx, "list");
     let before: Vec<_> = ["item-1", "item-2", "item-3"]
-        .map(|id| by_id(&h.snapshot(), id).id)
+        .map(|id| node_id(&mut h, id))
         .into();
 
     click(&mut h, "swap");
@@ -169,8 +169,8 @@ fn swapping_after_an_add_moves_the_new_item_to_the_front(cx: &mut TestAppContext
 #[gpui::test]
 fn inserting_in_the_middle_keeps_the_neighbours(cx: &mut TestAppContext) {
     let mut h = load(cx, "list");
-    let first = by_id(&h.snapshot(), "item-1").id;
-    let last = by_id(&h.snapshot(), "item-3").id;
+    let first = node_id(&mut h, "item-1");
+    let last = node_id(&mut h, "item-3");
 
     click(&mut h, "insert");
 

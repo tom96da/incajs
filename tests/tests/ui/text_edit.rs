@@ -4,7 +4,7 @@
 //! The editing keys of an input: typing, deleting, moving the caret, selecting, the clipboard,
 //! `change` and the readonly input.
 
-use super::common::{appended, by_id, click, load, text_of};
+use super::common::{appended, click, click_with, load, text_of};
 use gpui::{Modifiers, MouseButton, TestAppContext};
 use inca_host::harness::Harness;
 
@@ -323,8 +323,7 @@ fn a_click_inside_an_input_places_the_caret(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_control_press_inside_a_selection_keeps_what_the_platform_keeps(cx: &mut TestAppContext) {
     let mut h = typed_in(cx, "f", "a b secondary-a");
-    let f = by_id(&h.snapshot(), "f").id;
-    h.click_with(f, MouseButton::Left, Modifiers::control(), 1);
+    click_with(&mut h, "f", MouseButton::Left, Modifiers::control(), 1);
     h.keystrokes("x");
 
     assert_eq!(text_of(&mut h, "value"), CTRL_PRESS_VALUE);

@@ -3,7 +3,7 @@
 
 //! Pointer capture, read through a real `.vue` app.
 
-use super::common::{by_id, center, height, load, near, nudge, text_of};
+use super::common::{center, height, load, near, node_id, nudge, text_of};
 use gpui::{Modifiers, MouseButton, Pixels, Point, TestAppContext};
 use inca_host::harness::Harness;
 
@@ -300,7 +300,7 @@ fn a_right_press_sends_contextmenu_to_the_pressed_node_before_its_capture_starts
 #[gpui::test]
 fn a_captured_double_click_fires_dblclick_at_the_capture_target(cx: &mut TestAppContext) {
     let mut h = load(cx, "capture");
-    let c = by_id(&h.snapshot(), "c").id;
+    let c = node_id(&mut h, "c");
 
     h.click_with(c, MouseButton::Left, Modifiers::none(), 2);
 

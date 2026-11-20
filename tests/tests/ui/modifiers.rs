@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, text_of};
+use super::common::{click, click_with, load, text_of};
 use gpui::{Modifiers, MouseButton, TestAppContext};
 
 #[gpui::test]
@@ -62,9 +62,8 @@ fn self_runs_only_for_the_node_itself_and_a_listener_reads_the_deep_target(
 #[gpui::test]
 fn contextmenu_prevent_runs_on_a_right_click(cx: &mut TestAppContext) {
     let mut h = load(cx, "pointer");
-    let boxed = by_id(&h.snapshot(), "box").id;
 
-    h.click_with(boxed, MouseButton::Right, Modifiers::none(), 1);
+    click_with(&mut h, "box", MouseButton::Right, Modifiers::none(), 1);
 
     assert_eq!(text_of(&mut h, "log"), "right menu:true");
 }

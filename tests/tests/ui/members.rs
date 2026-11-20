@@ -5,17 +5,10 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, text_of};
+use super::common::{by_id, click, load, probe};
 use gpui::TestAppContext;
 use inca_test_macros::gpui_cases;
 use serde_json::{Value, json};
-
-/// Loads the fixture, runs its probe and returns the object it wrote.
-fn probe(cx: &mut TestAppContext) -> Value {
-    let mut h = load(cx, "members");
-    click(&mut h, "probe");
-    serde_json::from_str(&text_of(&mut h, "result")).unwrap()
-}
 
 #[gpui_cases]
 #[gpui::test]
@@ -57,7 +50,7 @@ fn the_element_members_answer_on_the_real_host(
     #[case] key: &str,
     #[case] expected: Value,
 ) {
-    assert_eq!(probe(cx)[key], expected);
+    assert_eq!(probe(cx, "members")[key], expected);
 }
 
 #[gpui::test]

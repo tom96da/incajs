@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, text_of};
+use super::common::{appended, click, click_with, hover, load, text_of};
 use gpui::{Modifiers, MouseButton, TestAppContext};
 
 const OFF_PTR: &str = "pointerdown@off(off) pointerdown@wrap(off) \
@@ -36,10 +36,8 @@ fn a_listener_below_a_disabled_button_hears_the_mouse_events(cx: &mut TestAppCon
 #[gpui::test]
 fn a_double_click_on_a_disabled_button_fires_no_dblclick(cx: &mut TestAppContext) {
     let mut h = load(cx, "disabled");
-    let off = by_id(&h.snapshot(), "off").id;
-
-    h.click_with(off, MouseButton::Left, Modifiers::none(), 1);
-    h.click_with(off, MouseButton::Left, Modifiers::none(), 2);
+    click_with(&mut h, "off", MouseButton::Left, Modifiers::none(), 1);
+    click_with(&mut h, "off", MouseButton::Left, Modifiers::none(), 2);
 
     assert_eq!(text_of(&mut h, "mouse"), "");
     assert_eq!(text_of(&mut h, "ptr"), format!("{OFF_PTR} {OFF_PTR}"));
@@ -48,9 +46,7 @@ fn a_double_click_on_a_disabled_button_fires_no_dblclick(cx: &mut TestAppContext
 #[gpui::test]
 fn a_right_click_on_a_disabled_button_fires_the_menu_events(cx: &mut TestAppContext) {
     let mut h = load(cx, "disabled");
-    let off = by_id(&h.snapshot(), "off").id;
-
-    h.click_with(off, MouseButton::Right, Modifiers::none(), 1);
+    click_with(&mut h, "off", MouseButton::Right, Modifiers::none(), 1);
 
     assert_eq!(
         text_of(&mut h, "menu"),
@@ -61,9 +57,7 @@ fn a_right_click_on_a_disabled_button_fires_the_menu_events(cx: &mut TestAppCont
 #[gpui::test]
 fn a_middle_click_on_a_disabled_button_fires_auxclick(cx: &mut TestAppContext) {
     let mut h = load(cx, "disabled");
-    let off = by_id(&h.snapshot(), "off").id;
-
-    h.click_with(off, MouseButton::Middle, Modifiers::none(), 1);
+    click_with(&mut h, "off", MouseButton::Middle, Modifiers::none(), 1);
 
     assert_eq!(
         text_of(&mut h, "menu"),
@@ -74,17 +68,13 @@ fn a_middle_click_on_a_disabled_button_fires_auxclick(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_disabled_button_keeps_hover_events_under_the_pointer(cx: &mut TestAppContext) {
     let mut h = load(cx, "disabled");
-    let off = by_id(&h.snapshot(), "off").id;
     h.unhover();
     let before = text_of(&mut h, "hover");
 
-    h.hover(off);
+    hover(&mut h, "off");
 
-    let now = text_of(&mut h, "hover");
     assert_eq!(
-        now.strip_prefix(&before)
-            .expect("the baseline is a prefix of the log")
-            .trim_start(),
+        appended(&before, &text_of(&mut h, "hover")),
         "mouseover@off(off) mouseover@wrap(off) mouseenter@wrap(wrap) \
          mouseenter@off(off) mousemove@off(off) mousemove@wrap(off)"
     );

@@ -5,14 +5,14 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, load, near, y};
+use super::common::{load, near, node_id, y};
 use gpui::{Modifiers, ScrollDelta, TestAppContext, point};
 
 #[gpui::test]
 fn a_line_wheel_down_moves_the_content_up(cx: &mut TestAppContext) {
     let mut h = load(cx, "wheel-modes");
     let before = y(&mut h, "first");
-    let id = by_id(&h.snapshot(), "box").id;
+    let id = node_id(&mut h, "box");
 
     h.scroll_with(id, ScrollDelta::Lines(point(0.0, -1.0)), Modifiers::none());
 
@@ -23,7 +23,7 @@ fn a_line_wheel_down_moves_the_content_up(cx: &mut TestAppContext) {
 fn a_shift_wheel_scrolls_the_vertical_axis(cx: &mut TestAppContext) {
     let mut h = load(cx, "wheel-modes");
     let before = y(&mut h, "cell");
-    let id = by_id(&h.snapshot(), "grid").id;
+    let id = node_id(&mut h, "grid");
 
     h.scroll_with(
         id,

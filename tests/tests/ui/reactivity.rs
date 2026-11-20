@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, near, text, text_of};
+use super::common::{by_id, click, load, near, node_id, text, text_of};
 use gpui::TestAppContext;
 
 #[gpui::test]
@@ -18,7 +18,7 @@ fn a_ref_renders_its_initial_value(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_click_increments_the_rendered_ref(cx: &mut TestAppContext) {
     let mut h = load(cx, "counter");
-    let button = by_id(&h.snapshot(), "button").id;
+    let button = node_id(&mut h, "button");
 
     h.click(button);
 
@@ -28,7 +28,7 @@ fn a_click_increments_the_rendered_ref(cx: &mut TestAppContext) {
 #[gpui::test]
 fn clicking_twice_increments_twice(cx: &mut TestAppContext) {
     let mut h = load(cx, "counter");
-    let button = by_id(&h.snapshot(), "button").id;
+    let button = node_id(&mut h, "button");
 
     h.click(button);
     h.click(button);
@@ -39,18 +39,18 @@ fn clicking_twice_increments_twice(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_click_keeps_the_button_node(cx: &mut TestAppContext) {
     let mut h = load(cx, "counter");
-    let button = by_id(&h.snapshot(), "button").id;
+    let button = node_id(&mut h, "button");
 
     h.click(button);
 
-    assert_eq!(by_id(&h.snapshot(), "button").id, button);
+    assert_eq!(node_id(&mut h, "button"), button);
 }
 
 #[gpui::test]
 fn a_bound_style_resizes_the_box_on_click(cx: &mut TestAppContext) {
     let mut h = load(cx, "resizer");
     let before = by_id(&h.snapshot(), "box").bounds.unwrap();
-    let id = by_id(&h.snapshot(), "box").id;
+    let id = node_id(&mut h, "box");
     near(before.width, 100.0);
     near(before.height, 40.0);
 
@@ -66,7 +66,7 @@ fn a_bound_style_resizes_the_box_on_click(cx: &mut TestAppContext) {
 #[gpui::test]
 fn clicking_the_resized_box_again_restores_its_width(cx: &mut TestAppContext) {
     let mut h = load(cx, "resizer");
-    let id = by_id(&h.snapshot(), "box").id;
+    let id = node_id(&mut h, "box");
 
     h.click(id);
     h.click(id);
@@ -93,7 +93,7 @@ fn a_bound_style_changes_the_height_on_click(cx: &mut TestAppContext) {
 #[gpui::test]
 fn an_attribute_that_turns_undefined_is_removed_and_set_again(cx: &mut TestAppContext) {
     let mut h = load(cx, "attribute");
-    let id = by_id(&h.snapshot(), "box").id;
+    let id = node_id(&mut h, "box");
     assert_eq!(by_id(&h.snapshot(), "box").attributes["tag"], "on");
 
     click(&mut h, "box");

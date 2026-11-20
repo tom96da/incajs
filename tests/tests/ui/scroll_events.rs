@@ -3,7 +3,7 @@
 
 //! The `scroll` event of a script write and of a wheel step.
 
-use super::common::{appended, by_id, click, load, text_of};
+use super::common::{appended, click, load, node_id, text_of};
 use gpui::TestAppContext;
 
 #[gpui::test]
@@ -39,7 +39,7 @@ fn a_write_past_the_end_fires_scroll_with_the_clamped_offset(cx: &mut TestAppCon
 #[gpui::test]
 fn a_wheel_step_fires_scroll_with_the_new_offset(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll-events");
-    let box_ = by_id(&h.snapshot(), "box").id;
+    let box_ = node_id(&mut h, "box");
 
     h.scroll(box_, 0.0, -30.0);
 
@@ -49,7 +49,7 @@ fn a_wheel_step_fires_scroll_with_the_new_offset(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_wheel_step_at_the_end_fires_no_scroll(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll-events");
-    let box_ = by_id(&h.snapshot(), "box").id;
+    let box_ = node_id(&mut h, "box");
     h.scroll(box_, 0.0, -500.0);
     let before = text_of(&mut h, "log");
 

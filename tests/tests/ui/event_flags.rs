@@ -6,7 +6,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, sorted_unique, text_of};
+use super::common::{by_id, click, load, node_id, sorted_unique, text_of};
 use gpui::{Modifiers, MouseButton, TestAppContext};
 use inca_host::harness::Harness;
 
@@ -22,7 +22,7 @@ fn mouse_run(h: &mut Harness) {
 }
 
 fn scroll_run(h: &mut Harness) {
-    let scroller = by_id(&h.snapshot(), "scroller").id;
+    let scroller = node_id(h, "scroller");
     h.scroll(scroller, 0.0, -30.0);
 }
 

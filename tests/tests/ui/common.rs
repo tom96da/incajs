@@ -13,10 +13,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
-use gpui::{Pixels, Point, TestAppContext, point, px};
+use gpui::{Modifiers, MouseButton, Pixels, Point, TestAppContext, point, px};
 use inca_host::harness::Harness;
 use inca_host::snapshot::Node;
 use inca_node::NodeId;
+use serde_json::Value;
 
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
 
@@ -95,8 +96,39 @@ pub fn node_id(h: &mut Harness, id: &str) -> NodeId {
 
 /// Clicks the node with `id`.
 pub fn click(h: &mut Harness, id: &str) {
-    let node = by_id(&h.snapshot(), id).id;
+    let node = node_id(h, id);
     h.click(node);
+}
+
+/// Clicks the node with `id` with `button`, `modifiers` and `count`.
+pub fn click_with(
+    h: &mut Harness,
+    id: &str,
+    button: MouseButton,
+    modifiers: Modifiers,
+    count: usize,
+) {
+    let node = node_id(h, id);
+    h.click_with(node, button, modifiers, count);
+}
+
+/// Moves the pointer onto the node with `id`.
+pub fn hover(h: &mut Harness, id: &str) {
+    let node = node_id(h, id);
+    h.hover(node);
+}
+
+/// Mounts the fixture `name`, clicks its `#probe` and parses the JSON that
+/// the probe writes into `#result`.
+pub fn probe(cx: &mut TestAppContext, name: &str) -> Value {
+    let mut h = load(cx, name);
+    click(&mut h, "probe");
+    serde_json::from_str(&text_of(&mut h, "result")).unwrap()
+}
+
+/// The left edge of the node with `id`.
+pub fn x(h: &mut Harness, id: &str) -> f32 {
+    by_id(&h.snapshot(), id).bounds.unwrap().x
 }
 
 /// The top edge of the node with `id`.

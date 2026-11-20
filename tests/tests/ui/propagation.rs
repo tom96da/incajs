@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, text_of};
+use super::common::{click, load, node_id, text_of};
 use gpui::TestAppContext;
 
 #[gpui::test]
@@ -20,7 +20,7 @@ fn a_click_runs_the_child_handler_before_the_parent_handler(cx: &mut TestAppCont
 #[gpui::test]
 fn a_click_on_the_parent_alone_skips_the_child_handler(cx: &mut TestAppContext) {
     let mut h = load(cx, "bubble");
-    let id = by_id(&h.snapshot(), "outer").id;
+    let id = node_id(&mut h, "outer");
 
     // The center of `outer` lies right of `inner`.
     h.click(id);
