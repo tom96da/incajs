@@ -136,9 +136,8 @@ mod tests {
     #![allow(clippy::float_cmp, clippy::unwrap_used)]
 
     use super::*;
-    use crate::tests::{TEST_ENTRY_PATH, eval_f64, id_where, load_listening, log};
-    use gpui::{Pixels, Point, point, px};
-    use inca_gpui::EventSink;
+    use crate::tests::{TEST_ENTRY_PATH, eval_f64, id_where, load_listening, log, node};
+    use gpui::{point, px};
 
     #[gpui::test]
     fn settle_flushes_a_microtask_mount(cx: &mut TestAppContext) {
@@ -186,35 +185,45 @@ mod tests {
             n.setStyle(inner, 'width', 300);
             n.setStyle(inner, 'height', 300);
             n.appendChild(c, inner);
+            globalThis.inner = inner;
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(`${e.deltaX}:${e.deltaY}`);
+                },
+            };
+            listen(c, 'wheel', 0);
         ";
 
-    fn offset(h: &Harness, id: NodeId) -> Point<Pixels> {
-        h.window
-            .read_with(&h.cx, |app, _| {
-                app.session.dispatcher.scroll_handle(id).unwrap().offset()
-            })
+    fn id_y(h: &mut Harness, id: NodeId) -> f32 {
+        h.snapshot()
+            .find(&|n| n.id == id)
             .unwrap()
+            .bounds
+            .unwrap()
+            .y
     }
 
     #[gpui::test]
     fn scroll_on_a_text_leaf_scrolls_its_container(cx: &mut TestAppContext) {
-        let mut h = Harness::load(cx, TEST_ENTRY_PATH, SCROLLER);
-        let container = id_where(&mut h, |n| n.children.iter().any(|c| c.text.is_some()));
+        let mut h = load_listening(cx, SCROLLER);
         let leaf = id_where(&mut h, |n| n.text.is_some());
+        let inner = node(&h, "inner");
+        let before = id_y(&mut h, inner);
 
         h.scroll(leaf, 0.0, -20.0);
 
-        assert_eq!(offset(&h, container).y, px(-20.0));
+        assert_eq!(id_y(&mut h, inner), before - 20.0);
     }
 
     #[gpui::test]
-    fn scroll_moves_the_horizontal_offset(cx: &mut TestAppContext) {
-        let mut h = Harness::load(cx, TEST_ENTRY_PATH, SCROLLER);
+    fn scroll_passes_both_deltas_to_the_wheel_event(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, SCROLLER);
         let container = id_where(&mut h, |n| n.children.iter().any(|c| c.text.is_some()));
 
-        h.scroll(container, -25.0, 0.0);
+        h.scroll(container, -25.0, -20.0);
 
-        assert_eq!(offset(&h, container).x, px(-25.0));
+        assert_eq!(log(&h), "25:20");
     }
 
     #[gpui::test]
