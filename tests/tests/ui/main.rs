@@ -53,3 +53,4 @@ mod text_edit;
 mod timing;
 mod visual_state;
 mod wheel_chain;
+mod wheel_modes;
