@@ -1990,3 +1990,40 @@ A fixed entry is deleted and its ID is never reused.
   `the_mouse_release_after_a_space_click_clicks_again` in `tests/tests/ui/press.rs` move the pointer
   after F9 to avoid it. Fix: let the release use the hit test of the pointer position whatever the
   last input was, then drop that move from both tests.
+
+- **B-370 `:hover` follows the node under the pointer during a capture**
+  `Units: bridge · Size: S · Impact: Low`
+
+  While a node holds the pointer capture, the `:hover` rule stays on the node under the pointer.
+  Chromium matches `:hover` on the capture target. The test
+  `the_hover_rule_stays_on_the_node_under_the_pointer_during_a_capture` in
+  `tests/tests/ui/capture.rs` pins the host value. Fix: build the hover path from the capturing
+  node in `report_hover_with`.
+
+- **B-371 A capture outlives the release of one of two buttons**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The host keeps the capture until the last button is released.
+  Chromium ends it at the first move after the release of the other button. The test
+  `releasing_one_of_two_buttons_keeps_the_capture` in `tests/tests/ui/capture.rs` pins the host
+  value. Fix: none while the standard decides, follow it if it changes.
+
+- **B-372 `contextmenu` of a right press that sets a capture goes to the pressed node**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The `pointerdown` listener of a node sets the capture after the host stored that node as the
+  press target, so `contextmenu` fires at the pressed node. Chromium fires it at the node the
+  capture names. The test
+  `a_right_press_sends_contextmenu_to_the_pressed_node_before_its_capture_starts` in
+  `tests/tests/ui/capture.rs` pins the host value. Fix: process the pending capture before the
+  `contextmenu` target is chosen.
+
+- **B-373 `dblclick` of a captured release fires at the capture target**
+  `Units: bridge · Size: S · Impact: Low`
+
+  The release ends the capture and `dblclick` fires at the node that held it. Pointer Events 3
+  sends every event after the release of a capture, except `click`, `auxclick` and `contextmenu`,
+  to the hit-tested node (`specs/w3c/pointerevents/index.html:1374`, `:2669-2677`). The test
+  `a_captured_double_click_fires_dblclick_at_the_capture_target` in `tests/tests/ui/capture.rs`
+  pins the host value. Fix: fire `dblclick` at the common ancestor of the pressed and the
+  released node.

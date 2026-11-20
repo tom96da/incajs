@@ -8,6 +8,7 @@ mod abort_signal;
 mod active;
 mod button;
 mod button_keys;
+mod capture;
 mod click_order;
 mod common;
 mod components;
