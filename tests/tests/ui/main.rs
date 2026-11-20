@@ -47,3 +47,4 @@ mod template;
 mod text_edit;
 mod timing;
 mod visual_state;
+mod wheel_chain;

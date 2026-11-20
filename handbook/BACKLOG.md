@@ -409,7 +409,10 @@ A fixed entry is deleted and its ID is never reused.
 - **B-082 Wheel scrolling has `gpui`'s axis rules and no gesture latching**
   `Units: gpui · Size: M · Impact: Low`
 
-  A vertical wheel scrolls a container that scrolls only on x, and only the
+  A vertical wheel scrolls a container that scrolls only on x, and a
+  horizontal wheel scrolls a container that scrolls only on y, where Chromium
+  scrolls nothing. Pinned by
+  `a_horizontal_wheel_step_scrolls_a_vertical_only_container_down`. Only the
   dominant axis of a diagonal delta moves. The rules are `axis_step` in
   `crates/inca-gpui/src/element/wheel.rs`. The DOM latches a continuing
   gesture to the container it started on. Here a gesture moves to the parent

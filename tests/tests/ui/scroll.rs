@@ -5,14 +5,9 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, click, load, near, text_of, y};
+use super::common::{by_id, click, load, near, node_id, text_of, y};
 use gpui::TestAppContext;
 use inca_host::harness::Harness;
-use inca_node::NodeId;
-
-fn node(h: &mut Harness, id: &str) -> NodeId {
-    by_id(&h.snapshot(), id).id
-}
 
 fn x(h: &mut Harness, id: &str) -> f32 {
     by_id(&h.snapshot(), id).bounds.unwrap().x
@@ -22,7 +17,7 @@ fn x(h: &mut Harness, id: &str) -> f32 {
 fn scrolling_down_moves_the_children_up_by_the_delta(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll");
     let (first, second) = (y(&mut h, "first"), y(&mut h, "second"));
-    let box_ = node(&mut h, "box");
+    let box_ = node_id(&mut h, "box");
 
     h.scroll(box_, 0.0, -30.0);
 
@@ -34,7 +29,7 @@ fn scrolling_down_moves_the_children_up_by_the_delta(cx: &mut TestAppContext) {
 fn scrolling_right_moves_the_children_left(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll");
     let first = x(&mut h, "wide-first");
-    let wide = node(&mut h, "wide");
+    let wide = node_id(&mut h, "wide");
 
     h.scroll(wide, -30.0, 0.0);
 
@@ -45,7 +40,7 @@ fn scrolling_right_moves_the_children_left(cx: &mut TestAppContext) {
 fn scrolling_back_restores_the_children(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll");
     let first = y(&mut h, "first");
-    let box_ = node(&mut h, "box");
+    let box_ = node_id(&mut h, "box");
 
     h.scroll(box_, 0.0, -30.0);
     h.scroll(box_, 0.0, 30.0);
@@ -57,7 +52,7 @@ fn scrolling_back_restores_the_children(cx: &mut TestAppContext) {
 fn scrolling_stops_at_the_end_of_the_content(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll");
     let first = y(&mut h, "first");
-    let box_ = node(&mut h, "box");
+    let box_ = node_id(&mut h, "box");
 
     h.scroll(box_, 0.0, -500.0);
 
@@ -69,7 +64,7 @@ fn scrolling_stops_at_the_end_of_the_content(cx: &mut TestAppContext) {
 fn a_wheel_handler_sees_the_scroll_delta(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll");
     assert_eq!(text_of(&mut h, "seen"), "none");
-    let box_ = node(&mut h, "box");
+    let box_ = node_id(&mut h, "box");
 
     h.scroll(box_, 0.0, -30.0);
 
@@ -80,7 +75,7 @@ fn a_wheel_handler_sees_the_scroll_delta(cx: &mut TestAppContext) {
 fn prevent_default_on_wheel_keeps_the_container_from_scrolling(cx: &mut TestAppContext) {
     let mut h = load(cx, "scroll");
     let first = y(&mut h, "locked-first");
-    let locked = node(&mut h, "locked");
+    let locked = node_id(&mut h, "locked");
 
     h.scroll(locked, 0.0, -30.0);
 

@@ -16,6 +16,7 @@ use std::sync::OnceLock;
 use gpui::TestAppContext;
 use inca_host::harness::Harness;
 use inca_host::snapshot::Node;
+use inca_node::NodeId;
 
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
 
@@ -85,6 +86,11 @@ pub fn by_id<'a>(root: &'a Node, id: &str) -> &'a Node {
 /// Whether a node with `id` exists.
 pub fn has_id(root: &Node, id: &str) -> bool {
     find_id(root, id).is_some()
+}
+
+/// The id of the node whose `id` attribute is `id`, from a fresh snapshot.
+pub fn node_id(h: &mut Harness, id: &str) -> NodeId {
+    by_id(&h.snapshot(), id).id
 }
 
 /// Clicks the node with `id`.
