@@ -1,11 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The input method operations of the [`super::Harness`].
+//! The input method and clipboard operations of the [`super::Harness`].
 
 use std::rc::Rc;
 
-use gpui::InputHandler;
+use gpui::{ClipboardItem, InputHandler};
 use inca_bridge::EventDispatcher;
 use inca_gpui::TextInputHandler;
 use inca_node::{ElementTag, NodeId, build_spec};
@@ -46,6 +46,17 @@ impl Harness {
     /// Panics when the focused node is not an `input` that accepts text.
     pub fn ime_unmark(&mut self) {
         self.with_handler(InputHandler::unmark_text);
+    }
+
+    /// Replaces the platform clipboard with the plain text `text`.
+    pub fn set_clipboard(&mut self, text: &str) {
+        self.cx
+            .write_to_clipboard(ClipboardItem::new_string(text.to_owned()));
+    }
+
+    /// The text on the platform clipboard, `None` when it is empty or holds no text.
+    pub fn clipboard(&mut self) -> Option<String> {
+        self.cx.read_from_clipboard().and_then(|item| item.text())
     }
 
     /// The focused node and whether it accepts text, when it is an `input`.
@@ -208,5 +219,31 @@ mod tests {
         h.ime_commit("x");
 
         assert_eq!(value(&h), "x");
+    }
+
+    #[gpui::test]
+    fn clipboard_reads_what_the_app_copied(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, &format!("{FIELD}{ABC}"));
+
+        h.keystrokes("secondary-a secondary-c");
+
+        assert_eq!(h.clipboard().as_deref(), Some("abc"));
+    }
+
+    #[gpui::test]
+    fn set_clipboard_is_what_the_app_pastes(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, FIELD);
+
+        h.set_clipboard("pasted");
+        h.keystrokes("secondary-v");
+
+        assert_eq!(value(&h), "pasted");
+    }
+
+    #[gpui::test]
+    fn clipboard_is_none_before_any_write(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, FIELD);
+
+        assert_eq!(h.clipboard(), None);
     }
 }
