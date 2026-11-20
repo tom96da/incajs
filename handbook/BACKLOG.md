@@ -1954,3 +1954,11 @@ A fixed entry is deleted and its ID is never reused.
   test reaches the flag the paint passes in. The `inca-gpui` tests pin the answer of a handler
   built with a given flag. Fix: a `Harness` operation that sends character input once `gpui`
   exposes the test window.
+
+- **B-367 A button that its `keydown` listener disables hears no `keyup`, Chromium delivers it**
+  `Units: node,gpui · Size: S · Impact: Low`
+
+  After a `keydown` listener sets `disabled` on the focused button, the host sends the `keyup` to no
+  listener of that button. The host delivers `keypress` and omits `keyup`. Chromium delivers both
+  and clicks nothing. Pinned by `a_button_disabled_by_its_key_down_listener_clicks_nothing`. Fix:
+  keep the key target of a pressed key until its release.
