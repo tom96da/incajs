@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { build } from "vite";
-import type { RolldownWatcher } from "rolldown";
+import type { Rolldown } from "vite";
 
 import { toBuildOutput } from "./captureOutput.mts";
 import { resolveViteConfig } from "./config.mts";
@@ -47,7 +47,7 @@ export async function watch(
   // build() types its return as the non-watch output too, since a single
   // call signature covers both: watch: {} in the resolved config means
   // it's always this.
-  const watcher = result as RolldownWatcher;
+  const watcher = result as Rolldown.RolldownWatcher;
 
   watcher.on("change", (id) => {
     changed ??= { file: id, at: Date.now() };

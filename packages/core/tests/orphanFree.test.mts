@@ -146,7 +146,8 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     const tags = host.nodes
       .get(box.value!.__node_id)!
       .children.map((id) => host.nodes.get(id)!.tag);
-    expect(tags).toEqual(["#text"]);
+    // The start and the end anchor of the Teleport both move into the target.
+    expect(tags).toEqual(["#text", "#text"]);
   });
 
   it("keeps the resolved branch of a pending Suspense across frames", async () => {

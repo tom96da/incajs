@@ -1,8 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { RolldownError } from "rolldown";
-import type { Logger } from "vite";
+import type { Rolldown, Logger } from "vite";
 
 /** How rolldown opens the aggregated report it prints for a failed build. */
 const AGGREGATE_REPORT = "Build failed with ";
@@ -25,7 +24,7 @@ export function streamLogger(
   stderr: NodeJS.WritableStream,
   quiet = false,
 ): Logger {
-  const loggedErrors = new WeakSet<Error | RolldownError>();
+  const loggedErrors = new WeakSet<Error | Rolldown.RolldownError>();
   const warned = new Set<string>();
 
   const logger: Logger = {

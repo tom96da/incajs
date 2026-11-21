@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 
 import dedent from "ts-dedent";
 import { DevEnvironment, buildErrorMessage, createServer } from "vite";
-import type { RollupError } from "rolldown";
 import type {
   CustomPayload,
   HotChannel,
@@ -17,6 +16,7 @@ import type {
   HotPayload,
   Plugin,
   ViteDevServer,
+  Rolldown,
 } from "vite";
 
 import { CONFIG_FILE_NAME } from "./emitConfig.mts";
@@ -44,7 +44,7 @@ interface UpdateError {
  * `buildErrorMessage` follows the stack.
  */
 export function faultOfUpdate(core: AdapterCore, error: UpdateError): BuildFailure {
-  const detail = buildErrorMessage(error as unknown as RollupError, [], false);
+  const detail = buildErrorMessage(error as unknown as Rolldown.RollupError, [], false);
   const stack = [error.stack, detail].filter((line) => line).join("\n");
   return { ...core.bundlerFault(error.message), stack: stack || null };
 }
