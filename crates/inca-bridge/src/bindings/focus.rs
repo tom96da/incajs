@@ -38,7 +38,7 @@ fn blur_node(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) {
 fn focused_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>) -> JsResult<Value<'js>> {
     move |ctx| {
         let host = host.borrow();
-        or_null(&ctx, host.focus.active_node(&host.tree))
+        or_null(&ctx, host.focus.active_node(&host.tree, &host.style))
     }
 }
 

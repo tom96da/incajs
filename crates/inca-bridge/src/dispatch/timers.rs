@@ -393,7 +393,9 @@ mod tests {
                 let mut host = host.borrow_mut();
                 let host = &mut *host;
                 host.focus.mark_tab_dirty(node);
-                let _ = host.focus.apply_pending(&host.tree, window, cx);
+                let _ = host
+                    .focus
+                    .apply_pending(&host.tree, &host.style, window, cx);
                 host.focus.handle(node).unwrap().focus(window, cx);
             }
             dispatcher.start_timers(window.window_handle(), cx);

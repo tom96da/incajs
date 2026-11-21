@@ -168,7 +168,7 @@ mod tests {
     use super::*;
     use crate::spec::build_spec;
     use crate::tests::{num, style_and_warnings, text};
-    use crate::tree::VirtualTree;
+    use crate::tree::{StyleCache, VirtualTree};
 
     #[rstest]
     #[case::opaque(ColorSpec::opaque(0xff8000), "rgb(255, 128, 0)")]
@@ -197,7 +197,7 @@ mod tests {
         tree.set_style(id, "background", "#505050").unwrap();
         tree.set_style(id, "border_color", "#00f").unwrap();
 
-        let spec = build_spec(&tree, id).unwrap();
+        let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(spec.style.background, Some(ColorSpec::opaque(0x505050)));
         assert_eq!(
             spec.style.border_color,

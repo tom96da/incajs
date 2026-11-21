@@ -6,7 +6,7 @@
 mod index;
 mod order;
 
-use super::{App, FocusRegistry, NodeId, PendingFocus, Start, VirtualTree, Window};
+use super::{App, FocusRegistry, NodeId, PendingFocus, Start, StyleCache, VirtualTree, Window};
 
 impl FocusRegistry {
     /// Moves focus one tab stop forward, or `backward`. With no node focused,
@@ -21,6 +21,7 @@ impl FocusRegistry {
     pub fn tab_move(
         &mut self,
         tree: &VirtualTree,
+        cache: &StyleCache,
         root: NodeId,
         window: &mut Window,
         cx: &mut App,
@@ -38,7 +39,7 @@ impl FocusRegistry {
                 from_at = Some(stops.len());
             }
             if self.handles.contains_key(&id)
-                && let Some(index) = Self::tab_index_of(tree, id)
+                && let Some(index) = Self::tab_index_of(tree, cache, id)
             {
                 stops.push((id, index));
             }
@@ -106,10 +107,16 @@ mod tests {
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(id);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
-            assert_eq!(registry.tab_move(&tree, id, window, cx, false), Some(id));
-            let _ = registry.apply_pending(&tree, window, cx);
-            assert_eq!(registry.tab_move(&tree, id, window, cx, false), None);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
+            assert_eq!(
+                registry.tab_move(&tree, &StyleCache::new(), id, window, cx, false),
+                Some(id)
+            );
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
+            assert_eq!(
+                registry.tab_move(&tree, &StyleCache::new(), id, window, cx, false),
+                None
+            );
         });
     }
 
@@ -124,11 +131,14 @@ mod tests {
         registry.mark_tab_dirty(a);
         registry.mark_tab_dirty(b);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             registry.request_focus(a, true);
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             registry.retry_reveal(a);
-            assert_eq!(registry.tab_move(&tree, a, window, cx, false), Some(b));
+            assert_eq!(
+                registry.tab_move(&tree, &StyleCache::new(), a, window, cx, false),
+                Some(b)
+            );
             assert_eq!(registry.take_reveals(), (vec![], vec![]));
         });
     }
@@ -143,14 +153,14 @@ mod tests {
         registry.mark_tab_dirty(a);
         registry.mark_tab_dirty(b);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             registry.request_focus(a, true);
             registry.request_focus(b, true);
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             assert_eq!(registry.take_reveals(), (vec![], vec![b]));
             registry.request_focus(a, true);
             registry.request_focus(b, false);
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             assert_eq!(registry.take_reveals(), (vec![], vec![]));
         });
     }
@@ -179,7 +189,9 @@ mod tests {
         cx.update(|window, cx| registry.observe(window, cx));
         registry.drop_focus_in(&tree, ids[1]);
 
-        let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, false));
+        let moved = cx.update(|window, cx| {
+            registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, false)
+        });
 
         assert_eq!(moved, Some(ids[2]));
     }
@@ -199,7 +211,9 @@ mod tests {
         let mut registry = FocusRegistry::default();
         focus_all(cx, &mut registry, &tree, &ids, ids[1]);
 
-        let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, backward));
+        let moved = cx.update(|window, cx| {
+            registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, backward)
+        });
 
         assert_eq!(moved, Some(ids[want]));
     }
@@ -212,7 +226,7 @@ mod tests {
         focus_all(cx, &mut registry, &tree, &ids, ids[1]);
 
         let focused = cx.update(|window, cx| {
-            let _ = registry.tab_move(&tree, ROOT, window, cx, false);
+            let _ = registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, false);
             registry.focused_node(window, cx)
         });
 
@@ -252,11 +266,12 @@ mod tests {
             registry.mark_tab_dirty(id);
         }
         let visited = cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             (0..4)
                 .map(|_| {
-                    let moved = registry.tab_move(&tree, ROOT, window, cx, false);
-                    let _ = registry.apply_pending(&tree, window, cx);
+                    let moved =
+                        registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, false);
+                    let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
                     moved
                 })
                 .collect::<Vec<_>>()
@@ -272,7 +287,8 @@ mod tests {
         registry.mark_tab_dirty(ids[0]);
         registry.request_focus(ids[0], false);
 
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(transitions.is_empty());
     }
@@ -309,9 +325,11 @@ mod tests {
         focus_all(cx, &mut registry, &tree, &ids, ids[lost.0]);
         tree.remove_attribute(ids[lost.0], lost.1).unwrap();
         registry.mark_tab_dirty(ids[lost.0]);
-        cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
-        let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, backward));
+        let moved = cx.update(|window, cx| {
+            registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, backward)
+        });
 
         assert_eq!(moved, want.map(|at| ids[at]));
     }
@@ -324,12 +342,15 @@ mod tests {
         focus_all(cx, &mut registry, &tree, &ids, ids[1]);
         tree.remove_attribute(ids[1], "href").unwrap();
         registry.mark_tab_dirty(ids[1]);
-        cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         let moved = cx.update(|window, cx| {
-            let first = registry.tab_move(&tree, ROOT, window, cx, false);
-            let _ = registry.apply_pending(&tree, window, cx);
-            (first, registry.tab_move(&tree, ROOT, window, cx, false))
+            let first = registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, false);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
+            (
+                first,
+                registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, false),
+            )
         });
 
         assert_eq!(moved, (Some(ids[0]), None));
@@ -353,7 +374,9 @@ mod tests {
         let mut registry = FocusRegistry::default();
         focus_all(cx, &mut registry, &tree, &ids, ids[0]);
 
-        let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, backward));
+        let moved = cx.update(|window, cx| {
+            registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, backward)
+        });
 
         assert_eq!(moved, Some(ids[want]));
     }
@@ -369,7 +392,9 @@ mod tests {
         focus_all(cx, &mut registry, &tree, &ids, ids[1]);
         tree.remove_attribute(ids[1], "href").unwrap();
 
-        let moved = cx.update(|window, cx| registry.tab_move(&tree, ROOT, window, cx, false));
+        let moved = cx.update(|window, cx| {
+            registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, false)
+        });
 
         assert_eq!(moved, Some(ids[2]));
     }

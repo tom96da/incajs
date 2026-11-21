@@ -74,7 +74,7 @@ fn snapshot_of(window: WindowHandle<HostedApp>, cx: &mut App) -> Result<Node, Fa
     window
         .update(cx, |app, _, _| {
             let host = app.session.host.borrow();
-            snapshot(&host.tree, host.root(), &mut |id| {
+            snapshot(&host.tree, &host.style, host.root(), &mut |id| {
                 host.layout_of(id).map(|layout| Bounds::from(layout.bounds))
             })
             .expect("the host declares a root")

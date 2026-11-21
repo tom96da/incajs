@@ -32,7 +32,9 @@ impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.dispatcher.begin_frame(window, cx);
         let host = self.host.borrow();
-        let element = render_tree_with_events(&host.tree, 0, &self.dispatcher, self.mode).unwrap();
+        let element =
+            render_tree_with_events(&host.tree, &host.style, 0, &self.dispatcher, self.mode)
+                .unwrap();
         // The walk records only the children of node 0, which is 100x100.
         let bounds = Bounds::new(Point::default(), gpui::size(px(100.), px(100.)));
         let (border, scroll) = (px(0.), Point::default());

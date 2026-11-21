@@ -29,7 +29,7 @@ pub use spec::{
 };
 pub use tree::{
     AttributeValue, ClassListError, InsertArg, Inserted, Insertion, Link, NodeId, NodeKind,
-    Placement, StyleMap, TreeError, VirtualNode, VirtualTree, is_disabled_control,
+    Placement, StyleCache, StyleMap, TreeError, VirtualNode, VirtualTree, is_disabled_control,
     valid_attribute_name,
 };
 

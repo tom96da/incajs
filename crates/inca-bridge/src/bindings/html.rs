@@ -177,11 +177,13 @@ fn children_of(tree: &VirtualTree, id: NodeId) -> Vec<NodeId> {
 fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, roots: &[NodeId]) {
     let focused = {
         let host = host.borrow();
-        host.focus.visual_focus(&host.tree).filter(|&focused| {
-            host.tree
-                .ancestors(focused)
-                .any(|ancestor| roots.contains(&ancestor))
-        })
+        host.focus
+            .visual_focus(&host.tree, &host.style)
+            .filter(|&focused| {
+                host.tree
+                    .ancestors(focused)
+                    .any(|ancestor| roots.contains(&ancestor))
+            })
     };
     if let Some(focused) = focused {
         crate::event::lose_focus(ctx, host, focused);

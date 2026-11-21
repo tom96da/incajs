@@ -172,7 +172,9 @@ impl EventDispatcher {
     #[must_use]
     pub fn tracks_pointer(&self) -> bool {
         let host = self.host.borrow();
-        !host.listeners.is_empty() || host.focus.has_handles() || host.tree.uses_pointer_state()
+        !host.listeners.is_empty()
+            || host.focus.has_handles()
+            || host.style.uses_pointer_state(&host.tree)
     }
 
     /// Takes the window's current modifier keys as the baseline for the next
@@ -393,7 +395,9 @@ mod tests {
             let mut host = host.borrow_mut();
             let host = &mut *host;
             host.focus.mark_tab_dirty(node);
-            let _ = host.focus.apply_pending(&host.tree, window, cx);
+            let _ = host
+                .focus
+                .apply_pending(&host.tree, &host.style, window, cx);
             host.focus.handle(node).unwrap().focus(window, cx);
         });
         dispatcher

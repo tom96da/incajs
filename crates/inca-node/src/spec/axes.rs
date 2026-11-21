@@ -4,7 +4,7 @@
 //! The axes a wheel step can scroll.
 
 use super::{DisplaySpec, hidden_by_attribute, style_spec_from_props};
-use crate::tree::{NodeId, VirtualTree};
+use crate::tree::{NodeId, StyleCache, VirtualTree};
 
 /// The axes a wheel step can scroll.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,7 +21,7 @@ pub struct WheelAxes {
 /// overflow is `scroll` or `auto`; a container with any other overflow gives
 /// `Some(WheelAxes { x: false, y: false })`.
 #[must_use]
-pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<WheelAxes> {
+pub fn wheel_axes(tree: &VirtualTree, cache: &StyleCache, id: NodeId) -> Option<WheelAxes> {
     tree.get(id)?;
     if !tree.is_connected(id) {
         return None;
@@ -31,14 +31,15 @@ pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<WheelAxes> {
             return false;
         };
         node.is_template()
-            || hidden_by_attribute(tree, id)
+            || hidden_by_attribute(tree, cache, id)
             || node.attributes().contains_key("inert")
-            || style_spec_from_props(&tree.computed_style(id)).display == Some(DisplaySpec::None)
+            || style_spec_from_props(&cache.computed_style(tree, id)).display
+                == Some(DisplaySpec::None)
     });
     if out {
         return None;
     }
-    Some(style_spec_from_props(&tree.computed_style(id)).scroll_axes())
+    Some(style_spec_from_props(&cache.computed_style(tree, id)).scroll_axes())
 }
 
 #[cfg(test)]

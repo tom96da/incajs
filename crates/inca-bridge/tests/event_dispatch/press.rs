@@ -366,8 +366,14 @@ impl Render for BarRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.dispatcher.begin_frame(window, cx);
         let host = self.host.borrow();
-        render_tree_with_events(&host.tree, self.node, &self.dispatcher, Scrollbars::Classic)
-            .unwrap()
+        render_tree_with_events(
+            &host.tree,
+            &host.style,
+            self.node,
+            &self.dispatcher,
+            Scrollbars::Classic,
+        )
+        .unwrap()
     }
 }
 

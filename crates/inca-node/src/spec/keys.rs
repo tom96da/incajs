@@ -358,7 +358,7 @@ mod tests {
 
     use super::*;
     use crate::tests::*;
-    use crate::{ColorSpec, EdgesSpec, LengthSpec, VirtualTree, build_spec};
+    use crate::{ColorSpec, EdgesSpec, LengthSpec, StyleCache, VirtualTree, build_spec};
     use rstest::rstest;
 
     /// Values `kind` accepts, chosen so that a reader of another kind with the
@@ -385,7 +385,10 @@ mod tests {
         tree.remove_style(id, "gap").unwrap();
         tree.remove_style(id, "background").unwrap();
 
-        assert_eq!(build_spec(&tree, id).unwrap().style, StyleSpec::default());
+        assert_eq!(
+            build_spec(&tree, &StyleCache::new(), id).unwrap().style,
+            StyleSpec::default()
+        );
     }
 
     #[test]
@@ -409,7 +412,7 @@ mod tests {
             .unwrap();
         tree.set_style(id, "text_size", 20.0).unwrap();
 
-        let spec = build_spec(&tree, id).unwrap();
+        let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(
             spec.style,
             StyleSpec {
@@ -501,7 +504,13 @@ mod tests {
         tree.set_style(id, "margin", 1.0).unwrap();
         tree.set_style(id, "margin_x", 2.0).unwrap();
         tree.set_style(id, "margin_left", "auto").unwrap();
-        let left = |tree: &VirtualTree| build_spec(tree, id).unwrap().style.margin.left;
+        let left = |tree: &VirtualTree| {
+            build_spec(tree, &StyleCache::new(), id)
+                .unwrap()
+                .style
+                .margin
+                .left
+        };
         assert_eq!(left(&tree), Some(LengthSpec::Auto));
         tree.remove_style(id, "margin_left").unwrap();
         assert_eq!(left(&tree), Some(LengthSpec::Px(2.0)));
@@ -537,7 +546,10 @@ mod tests {
         let id = tree.create_node("div").unwrap();
         tree.set_style(id, "overflow", "scroll").unwrap();
         tree.remove_style(id, "overflow").unwrap();
-        assert_eq!(build_spec(&tree, id).unwrap().style, StyleSpec::default());
+        assert_eq!(
+            build_spec(&tree, &StyleCache::new(), id).unwrap().style,
+            StyleSpec::default()
+        );
     }
 
     #[test]

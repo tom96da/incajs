@@ -184,6 +184,7 @@ mod tests {
     use gpui::{
         MouseButton, ScrollDelta, ScrollEvent, TestAppContext, VisualTestContext, point, px,
     };
+    use inca_node::StyleCache;
     use inca_node::tree::VirtualTree;
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -483,7 +484,14 @@ mod tests {
                 .collect();
             ids.sort_unstable();
             self.1.borrow_mut().push(ids);
-            render_tree_with_events(&self.0.tree.borrow(), 0, &self.0, Scrollbars::Overlay).unwrap()
+            render_tree_with_events(
+                &self.0.tree.borrow(),
+                &StyleCache::new(),
+                0,
+                &self.0,
+                Scrollbars::Overlay,
+            )
+            .unwrap()
         }
     }
 

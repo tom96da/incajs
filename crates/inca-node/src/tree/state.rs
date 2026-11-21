@@ -5,6 +5,7 @@
 
 use std::collections::HashSet;
 
+use super::computed::StyleCache;
 use super::{NodeId, VirtualTree};
 
 /// The state a script or the user puts on nodes. The tree reads it and never prunes it.
@@ -65,17 +66,19 @@ impl VirtualTree {
             .focus
             .is_some_and(|focus| self.is_connected(focus) && self.ancestors(focus).any(|a| a == id))
     }
+}
 
+impl StyleCache {
     /// Whether a connected `<style>` rule names `:focus` or `:focus-within`.
     #[must_use]
-    pub fn uses_focus_state(&self) -> bool {
-        self.sheet_flags().focus
+    pub fn uses_focus_state(&self, tree: &VirtualTree) -> bool {
+        self.sheet_flags(tree).focus
     }
 
     /// Whether a connected `<style>` rule names `:hover` or `:active`.
     #[must_use]
-    pub fn uses_pointer_state(&self) -> bool {
-        self.sheet_flags().pointer
+    pub fn uses_pointer_state(&self, tree: &VirtualTree) -> bool {
+        self.sheet_flags(tree).pointer
     }
 }
 
@@ -120,7 +123,7 @@ mod tests {
     }
 
     fn width(f: &Fixture, node: NodeId) -> Option<crate::AttributeValue> {
-        f.tree.computed_style(node).get("width").cloned()
+        f.cache.computed_style(&f.tree, node).get("width").cloned()
     }
 
     #[test]
@@ -247,7 +250,7 @@ mod tests {
         let mut s = scene();
         s.f.sheet(&format!("{selector} {{ width: 1px }}"));
 
-        assert!(s.f.tree.uses_focus_state());
+        assert!(s.f.cache.uses_focus_state(&s.f.tree));
     }
 
     #[rstest]
@@ -260,31 +263,31 @@ mod tests {
         let mut s = scene();
         s.f.sheet(css);
 
-        assert!(!s.f.tree.uses_focus_state());
+        assert!(!s.f.cache.uses_focus_state(&s.f.tree));
     }
 
     #[test]
     fn uses_focus_state_is_false_once_the_style_element_is_removed() {
         let mut s = scene();
         let (style, _) = s.f.sheet(":focus { width: 1px }");
-        let named = s.f.tree.uses_focus_state();
+        let named = s.f.cache.uses_focus_state(&s.f.tree);
         s.f.tree.remove_child(s.f.root, style).unwrap();
 
         assert!(named);
-        assert!(!s.f.tree.uses_focus_state());
+        assert!(!s.f.cache.uses_focus_state(&s.f.tree));
     }
 
     #[test]
     fn uses_focus_state_follows_an_edit_of_the_sheet_text() {
         let mut s = scene();
         let (_, text_node) = s.f.sheet(".a { width: 1px }");
-        let before = s.f.tree.uses_focus_state();
+        let before = s.f.cache.uses_focus_state(&s.f.tree);
         s.f.tree
             .set_data(text_node, ":focus { width: 1px }")
             .unwrap();
 
         assert!(!before);
-        assert!(s.f.tree.uses_focus_state());
+        assert!(s.f.cache.uses_focus_state(&s.f.tree));
     }
 
     #[test]
@@ -433,7 +436,7 @@ mod tests {
         let mut s = scene();
         s.f.sheet(&format!("{selector} {{ width: 1px }}"));
 
-        assert!(s.f.tree.uses_pointer_state());
+        assert!(s.f.cache.uses_pointer_state(&s.f.tree));
     }
 
     #[rstest]
@@ -444,7 +447,7 @@ mod tests {
         let mut s = scene();
         s.f.sheet(css);
 
-        assert!(!s.f.tree.uses_pointer_state());
+        assert!(!s.f.cache.uses_pointer_state(&s.f.tree));
     }
 
     #[rstest]
@@ -454,8 +457,8 @@ mod tests {
         let mut s = scene();
         s.f.sheet(css);
 
-        assert!(s.f.tree.uses_focus_state());
-        assert!(s.f.tree.uses_pointer_state());
+        assert!(s.f.cache.uses_focus_state(&s.f.tree));
+        assert!(s.f.cache.uses_pointer_state(&s.f.tree));
     }
 
     #[test]

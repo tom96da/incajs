@@ -13,7 +13,7 @@ use gpui::{App, Bounds, Context, Window, WindowBounds, WindowOptions, prelude::*
 use gpui_platform::application;
 
 use inca_gpui::render_tree;
-use inca_node::{NodeId, VirtualTree};
+use inca_node::{NodeId, StyleCache, VirtualTree};
 
 struct HelloWorld {
     tree: VirtualTree,
@@ -22,7 +22,7 @@ struct HelloWorld {
 
 impl Render for HelloWorld {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        render_tree(&self.tree, self.root).unwrap()
+        render_tree(&self.tree, &StyleCache::new(), self.root).unwrap()
     }
 }
 

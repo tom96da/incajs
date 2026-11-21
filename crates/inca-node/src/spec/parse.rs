@@ -4,7 +4,7 @@
 use super::keys::{read_edges, read_prop};
 use super::number::MAX_LENGTH_PX;
 use super::{EdgesSpec, LengthSpec, OverflowSpec, StyleSpec};
-use crate::tree::{AttributeValue, NodeId, StyleMap, VirtualTree};
+use crate::tree::{AttributeValue, NodeId, StyleCache, StyleMap, VirtualTree};
 
 /// One or two overflow values, x first; a single value applies to both axes.
 pub(super) fn overflow_pair_from_str(s: &str) -> Option<(OverflowSpec, OverflowSpec)> {
@@ -115,8 +115,12 @@ pub(super) fn style_spec_from_props(props: &StyleMap) -> StyleSpec {
 /// A dimension that is unset, `"auto"`, a percentage, not a size `>= 0` or `33554428` and above is
 /// `None`.
 #[must_use]
-pub fn declared_window_size(tree: &VirtualTree, id: NodeId) -> (Option<f64>, Option<f64>) {
-    let style = style_spec_from_props(&tree.computed_style(id));
+pub fn declared_window_size(
+    tree: &VirtualTree,
+    cache: &StyleCache,
+    id: NodeId,
+) -> (Option<f64>, Option<f64>) {
+    let style = style_spec_from_props(&cache.computed_style(tree, id));
     let px = |length| match length {
         Some(LengthSpec::Px(n)) if n < MAX_LENGTH_PX => Some(n),
         _ => None,
@@ -240,7 +244,10 @@ mod tests {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
         tree.set_style(id, "overflow", 1.0).unwrap();
-        assert_eq!(build_spec(&tree, id).unwrap().style, StyleSpec::default());
+        assert_eq!(
+            build_spec(&tree, &StyleCache::new(), id).unwrap().style,
+            StyleSpec::default()
+        );
     }
 
     #[rstest]
@@ -262,7 +269,10 @@ mod tests {
             tree.set_style(id, *key, *value).unwrap();
         }
         assert_eq!(
-            build_spec(&tree, id).unwrap().style.is_scroll_container(),
+            build_spec(&tree, &StyleCache::new(), id)
+                .unwrap()
+                .style
+                .is_scroll_container(),
             want
         );
     }
@@ -274,7 +284,7 @@ mod tests {
         tree.set_style(id, "display", "not-a-real-display-value")
             .unwrap();
 
-        let spec = build_spec(&tree, id).unwrap();
+        let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(spec.style.display, None);
     }
 
@@ -302,7 +312,10 @@ mod tests {
         tree.set_style(id, "width", width).unwrap();
         tree.set_style(id, "height", height).unwrap();
 
-        assert_eq!(declared_window_size(&tree, id), expected);
+        assert_eq!(
+            declared_window_size(&tree, &StyleCache::new(), id),
+            expected
+        );
     }
 
     #[test]
@@ -312,7 +325,7 @@ mod tests {
         let content = f.add(f.root, "div", "content");
 
         assert_eq!(
-            declared_window_size(&f.tree, content),
+            declared_window_size(&f.tree, &f.cache, content),
             (Some(800.0), Some(600.0))
         );
     }
@@ -322,7 +335,10 @@ mod tests {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
 
-        assert_eq!(declared_window_size(&tree, id), (None, None));
+        assert_eq!(
+            declared_window_size(&tree, &StyleCache::new(), id),
+            (None, None)
+        );
     }
 
     #[test]

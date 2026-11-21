@@ -22,7 +22,7 @@ use gpui::{
 };
 
 use inca_gpui::render_tree;
-use inca_node::{NodeId, VirtualTree};
+use inca_node::{NodeId, StyleCache, VirtualTree};
 
 /// Selectors matching [`build_tree`]'s node creation order, used to tag the
 /// hand-written reference tree the same way `render_tree` tags its own
@@ -147,7 +147,8 @@ fn the_virtual_tree_lays_out_like_hand_written_gpui(cx: &mut TestAppContext) {
     let reference_bounds = draw_and_collect_bounds(cx, build_reference);
 
     let (tree, root) = build_tree();
-    let converted_bounds = draw_and_collect_bounds(cx, || render_tree(&tree, root).unwrap());
+    let converted_bounds =
+        draw_and_collect_bounds(cx, || render_tree(&tree, &StyleCache::new(), root).unwrap());
 
     assert_eq!(
         converted_bounds, reference_bounds,
@@ -178,7 +179,7 @@ fn y_of_boxes_after_empty_text(cx: &mut TestAppContext, gap: Option<f64>) -> (f3
     }
     let cx = cx.add_empty_window();
     cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-        render_tree(&tree, root).unwrap()
+        render_tree(&tree, &StyleCache::new(), root).unwrap()
     });
     let mut y = |selector| f32::from(cx.debug_bounds(selector).unwrap().origin.y);
     (y("node-2"), y("node-4"))

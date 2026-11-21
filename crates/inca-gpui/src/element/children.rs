@@ -152,7 +152,7 @@ mod tests {
     use crate::event_sink::noop_sink_methods;
     use crate::tests::*;
     use gpui::{Bounds, TestAppContext, point};
-    use inca_node::VirtualTree;
+    use inca_node::{StyleCache, VirtualTree};
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
 
@@ -377,7 +377,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
         tree.set_style(root, "overflow", "scroll").unwrap();
-        let spec = inca_node::build_spec(&tree, root).unwrap();
+        let spec = inca_node::build_spec(&tree, &StyleCache::new(), root).unwrap();
         let sink = NoHandles(classic_probe(tree));
         assert_eq!(
             node_gutter(&spec, &sink, Scrollbars::Classic),

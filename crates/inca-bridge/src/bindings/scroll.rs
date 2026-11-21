@@ -54,7 +54,7 @@ fn scroll_into_view_node<'js>(
 /// The scroll offset of the node `id` and its maximum as of the last drawn frame: `left`, `top`,
 /// `max left` and `max top`. A node that scrolls nothing has none.
 pub(super) fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
-    is_scroll_container(&host.tree, id).then(|| {
+    is_scroll_container(&host.tree, &host.style, id).then(|| {
         let handle = host.scroll_handle(id);
         let (offset, max) = (handle.offset(), handle.max_offset());
         // gpui clamps on the next draw; report the same value.
@@ -70,7 +70,7 @@ pub(super) fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
 
 /// Moves the scroll offset of the node `id` on the given axes. A negative value counts as `0`.
 pub(super) fn scroll_to(host: &Host, id: NodeId, left: Option<f64>, top: Option<f64>) {
-    if !is_scroll_container(&host.tree, id) {
+    if !is_scroll_container(&host.tree, &host.style, id) {
         return;
     }
     let handle = host.scroll_handle(id);

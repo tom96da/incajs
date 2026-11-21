@@ -21,7 +21,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use gpui::{App, FocusHandle, Window};
 
 use crate::{EventPayload, EventSink};
-use inca_node::{AttributeValue, NodeId, VirtualTree, hidden_by_attribute, is_disabled_control};
+use inca_node::{
+    AttributeValue, NodeId, StyleCache, VirtualTree, hidden_by_attribute, is_disabled_control,
+};
 
 mod requests;
 mod start;
@@ -178,14 +180,14 @@ impl FocusRegistry {
     /// the node last observed, drops it when a queued check removes its
     /// focusability, then replays the queue in order.
     #[must_use]
-    pub fn active_node(&self, tree: &VirtualTree) -> Option<NodeId> {
+    pub fn active_node(&self, tree: &VirtualTree, cache: &StyleCache) -> Option<NodeId> {
         let mut active = self
             .observed
-            .filter(|&id| self.focusable_after_frame(tree, id));
+            .filter(|&id| self.focusable_after_frame(tree, cache, id));
         for request in &self.pending {
             match *request {
                 PendingFocus::Focus { node: id, .. } => {
-                    if self.focusable_after_frame(tree, id) {
+                    if self.focusable_after_frame(tree, cache, id) {
                         active = Some(id);
                     }
                 }
@@ -202,8 +204,9 @@ impl FocusRegistry {
     /// The node that style rules treat as focused: [`Self::active_node`], or none while the
     /// window is inactive.
     #[must_use]
-    pub fn visual_focus(&self, tree: &VirtualTree) -> Option<NodeId> {
-        self.active_node(tree).filter(|_| !self.window_blurred)
+    pub fn visual_focus(&self, tree: &VirtualTree, cache: &StyleCache) -> Option<NodeId> {
+        self.active_node(tree, cache)
+            .filter(|_| !self.window_blurred)
     }
 
     /// The handle the root container tracks, once [`Self::apply_pending`]
@@ -267,13 +270,14 @@ mod tests {
         registry.mark_tab_dirty(id);
         registry.request_focus(id, true);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
         });
         let before = registry.handle(id).unwrap();
 
         tree.set_attribute(id, "tabindex", "-1").unwrap();
         registry.mark_tab_dirty(id);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         let after = registry.handle(id).unwrap();
         assert_eq!(before, after);
@@ -289,14 +293,15 @@ mod tests {
         registry.mark_tab_dirty(id);
         registry.request_focus(id, true);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
         });
         let held = registry.handle(id).unwrap();
         assert!(cx.update(|window, _| held.is_focused(window)));
 
         tree.remove_attribute(id, "tabindex").unwrap();
         registry.mark_tab_dirty(id);
-        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(registry.handle(id).is_none());
     }
@@ -307,7 +312,8 @@ mod tests {
         let (tree, id) = tree_with("div", None);
         let mut registry = FocusRegistry::default();
         registry.request_focus(id, true);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
         assert!(transitions.is_empty());
         assert!(registry.handle(id).is_none());
     }
@@ -320,7 +326,7 @@ mod tests {
         registry.mark_tab_dirty(id);
         registry.forget(id);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
         });
         assert!(registry.handle(id).is_none());
     }
@@ -332,7 +338,7 @@ mod tests {
         registry.mark_tab_dirty(id);
         registry.request_focus(id, true);
 
-        assert_eq!(registry.visual_focus(&tree), Some(id));
+        assert_eq!(registry.visual_focus(&tree, &StyleCache::new()), Some(id));
     }
 
     #[test]
@@ -343,7 +349,7 @@ mod tests {
         registry.request_focus(id, true);
         registry.set_window_blurred(true);
 
-        assert_eq!(registry.visual_focus(&tree), None);
+        assert_eq!(registry.visual_focus(&tree, &StyleCache::new()), None);
     }
 
     #[gpui::test]
@@ -380,10 +386,10 @@ mod tests {
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(id);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             assert_eq!(registry.focused_node(window, cx), None);
             registry.request_focus(id, true);
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             assert_eq!(registry.focused_node(window, cx), Some(id));
         });
     }
@@ -395,11 +401,11 @@ mod tests {
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(id);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             registry.handle(id).unwrap().focus(window, cx);
             registry.observe(window, cx);
         });
-        assert_eq!(registry.active_node(&tree), Some(id));
+        assert_eq!(registry.active_node(&tree, &StyleCache::new()), Some(id));
     }
 
     #[gpui::test]
@@ -409,10 +415,10 @@ mod tests {
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(id);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
         });
         registry.request_focus(id, true);
-        assert_eq!(registry.active_node(&tree), Some(id));
+        assert_eq!(registry.active_node(&tree, &StyleCache::new()), Some(id));
     }
 
     #[test]
@@ -422,7 +428,7 @@ mod tests {
         registry.mark_tab_dirty(id);
         registry.observed = Some(id);
         registry.request_blur(id);
-        assert_eq!(registry.active_node(&tree), None);
+        assert_eq!(registry.active_node(&tree, &StyleCache::new()), None);
     }
 
     #[test]
@@ -433,7 +439,7 @@ mod tests {
         registry.mark_tab_dirty(id);
         registry.observed = Some(id);
         registry.request_blur(other);
-        assert_eq!(registry.active_node(&tree), Some(id));
+        assert_eq!(registry.active_node(&tree, &StyleCache::new()), Some(id));
     }
 
     #[test]
@@ -444,7 +450,7 @@ mod tests {
         registry.mark_tab_dirty(id);
         registry.observed = Some(id);
         registry.request_focus(plain, true);
-        assert_eq!(registry.active_node(&tree), Some(id));
+        assert_eq!(registry.active_node(&tree, &StyleCache::new()), Some(id));
     }
 
     #[test]
@@ -455,9 +461,12 @@ mod tests {
         registry.mark_tab_dirty(focusable);
         registry.mark_tab_dirty(plain);
         registry.request_focus(plain, true);
-        assert_eq!(registry.active_node(&tree), None);
+        assert_eq!(registry.active_node(&tree, &StyleCache::new()), None);
         registry.request_focus(focusable, true);
-        assert_eq!(registry.active_node(&tree), Some(focusable));
+        assert_eq!(
+            registry.active_node(&tree, &StyleCache::new()),
+            Some(focusable)
+        );
     }
 
     #[test]
@@ -466,9 +475,9 @@ mod tests {
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(id);
         registry.observed = Some(id);
-        assert_eq!(registry.active_node(&tree), Some(id));
+        assert_eq!(registry.active_node(&tree, &StyleCache::new()), Some(id));
         tree.remove_attribute(id, "tabindex").unwrap();
-        assert_eq!(registry.active_node(&tree), None);
+        assert_eq!(registry.active_node(&tree, &StyleCache::new()), None);
     }
 
     /// Parking the window focus on the root container reports no transition,
@@ -480,7 +489,7 @@ mod tests {
         let mut registry = FocusRegistry::default();
         cx.update(|window, cx| {
             for _ in 0..2 {
-                let transitions = registry.apply_pending(&tree, window, cx);
+                let transitions = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
                 assert!(transitions.is_empty());
                 assert!(window.focused(cx).is_some());
                 assert_eq!(registry.focused_node(window, cx), None);
@@ -500,8 +509,9 @@ mod tests {
 
         registry.drop_focus_in(&tree, gone);
 
-        assert_eq!(registry.active_node(&tree), None);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        assert_eq!(registry.active_node(&tree, &StyleCache::new()), None);
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
         assert!(transitions.is_empty());
     }
 
@@ -515,9 +525,13 @@ mod tests {
 
         registry.drop_focus_in(&tree, ids[1]);
 
-        assert_eq!(registry.active_node(&tree), Some(ids[0]));
+        assert_eq!(
+            registry.active_node(&tree, &StyleCache::new()),
+            Some(ids[0])
+        );
         let held = registry.handle(ids[0]).unwrap();
-        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
         assert!(cx.update(|window, _| held.is_focused(window)));
     }
 
@@ -534,7 +548,8 @@ mod tests {
         let held = registry.handle(other).unwrap();
         cx.update(|window, cx| held.focus(window, cx));
 
-        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(cx.update(|window, _| held.is_focused(window)));
     }
@@ -563,7 +578,8 @@ mod tests {
 
         queue(&mut registry, ids[0]);
         assert!(registry.has_queued_work());
-        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(!registry.has_queued_work());
     }
@@ -578,7 +594,8 @@ mod tests {
         registry.drop_focus_in(&tree, ids[0]);
         assert!(registry.has_queued_work());
 
-        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(!registry.has_queued_work());
     }

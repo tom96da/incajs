@@ -30,8 +30,14 @@ struct ClickCounter {
 impl Render for ClickCounter {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let host = self.host.borrow();
-        render_tree_with_events(&host.tree, self.root, &self.dispatcher, Scrollbars::Overlay)
-            .unwrap()
+        render_tree_with_events(
+            &host.tree,
+            &host.style,
+            self.root,
+            &self.dispatcher,
+            Scrollbars::Overlay,
+        )
+        .unwrap()
     }
 }
 

@@ -7,11 +7,12 @@
 
 use crate::selector::{closest_selector, matches_selector};
 use crate::spec::*;
-use crate::tree::{AttributeValue, NodeId, TEXT_TAG, VirtualTree};
+use crate::tree::{AttributeValue, NodeId, StyleCache, TEXT_TAG, VirtualTree};
 
 /// A tree under construction. Every node an `add` call makes gets an `id` attribute of `name`.
 pub(crate) struct Fixture {
     pub(crate) tree: VirtualTree,
+    pub(crate) cache: StyleCache,
     pub(crate) root: NodeId,
 }
 
@@ -21,7 +22,11 @@ impl Fixture {
         let root = tree.create_node("div").unwrap();
         tree.set_root(root);
         tree.set_attribute(root, "id", "root").unwrap();
-        Fixture { tree, root }
+        Fixture {
+            tree,
+            cache: StyleCache::new(),
+            root,
+        }
     }
 
     /// A fixture whose root hangs under a new `#document`. Returns it with the document.
@@ -61,7 +66,10 @@ impl Fixture {
     }
 
     pub(crate) fn computed(&self, node: NodeId, key: &str) -> Option<AttributeValue> {
-        self.tree.computed_style(node).get(key).cloned()
+        self.cache
+            .computed_style(&self.tree, node)
+            .get(key)
+            .cloned()
     }
 
     pub(crate) fn matches(&self, node: NodeId, selector: &str) -> bool {
@@ -157,7 +165,7 @@ pub(crate) fn style_of(props: &[(&str, AttributeValue)]) -> StyleSpec {
     for (key, value) in props {
         tree.set_style(id, *key, value.clone()).unwrap();
     }
-    build_spec(&tree, id).unwrap().style
+    build_spec(&tree, &StyleCache::new(), id).unwrap().style
 }
 
 /// The style a node gets from `props`, and what [`style_warning`] says
@@ -172,7 +180,10 @@ pub(crate) fn style_and_warnings(props: &[(&str, AttributeValue)]) -> (StyleSpec
         .iter()
         .filter_map(|(key, value)| style_warning(key, value))
         .collect();
-    (build_spec(&tree, id).unwrap().style, warnings)
+    (
+        build_spec(&tree, &StyleCache::new(), id).unwrap().style,
+        warnings,
+    )
 }
 
 pub(crate) fn sides<T: Copy>(edges: EdgesSpec<T>) -> [Option<T>; 4] {
@@ -185,7 +196,7 @@ pub(crate) fn overflow_of(props: &[(&str, &str)]) -> (Option<OverflowSpec>, Opti
     for (key, value) in props {
         tree.set_style(id, *key, *value).unwrap();
     }
-    let style = build_spec(&tree, id).unwrap().style;
+    let style = build_spec(&tree, &StyleCache::new(), id).unwrap().style;
     (style.overflow_x, style.overflow_y)
 }
 

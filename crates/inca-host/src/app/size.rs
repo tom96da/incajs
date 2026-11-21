@@ -25,7 +25,7 @@ pub(super) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Op
     let Some(&content) = host.tree.get(root).and_then(|node| node.children().first()) else {
         return (None, None);
     };
-    let (width, height) = declared_window_size(&host.tree, content);
+    let (width, height) = declared_window_size(&host.tree, &host.style, content);
 
     // A window dimension in px is always far within f32's
     // precision range. No meaningful truncation risk here.

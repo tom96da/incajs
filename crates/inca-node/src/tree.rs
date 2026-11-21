@@ -26,7 +26,6 @@
 //! subtree. A node that is created, detached or released is an orphan until
 //! it is inserted, held or destroyed.
 
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -37,6 +36,7 @@ mod class_list;
 mod clone;
 mod collection;
 mod computed;
+pub use computed::StyleCache;
 mod element;
 mod insert_nodes;
 mod insertion;
@@ -369,7 +369,6 @@ pub struct VirtualTree {
     /// Bumped by every change to a node, a link, the root or the document, so a cache built from
     /// the tree can tell that it is stale.
     generation: u64,
-    style_cache: RefCell<computed::SheetCache>,
     interaction: state::InteractionState,
 }
 
@@ -377,6 +376,13 @@ impl VirtualTree {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The change counter: it grows with every change to a node, a link, the root or the
+    /// document, so a cache built from the tree can tell that it is stale.
+    #[must_use]
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     /// Declares `id` the node the host owns: the sweep never frees it.

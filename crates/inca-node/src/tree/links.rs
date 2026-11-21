@@ -483,12 +483,15 @@ mod tests {
         f.tree.set_data(css, ".a { width: 1px }").unwrap();
         f.tree.append_child(style, css).unwrap();
         f.tree.append_child(fragment, style).unwrap();
-        let inside = f.tree.computed_style(a).get("width").cloned();
+        let inside = f.cache.computed_style(&f.tree, a).get("width").cloned();
 
         f.tree.append_child(f.root, fragment).unwrap();
 
         assert_eq!(inside, None);
-        assert_eq!(f.tree.computed_style(a).get("width"), Some(&text("1px")));
+        assert_eq!(
+            f.cache.computed_style(&f.tree, a).get("width"),
+            Some(&text("1px"))
+        );
     }
 
     #[test]
@@ -500,12 +503,15 @@ mod tests {
         let css = node(&mut f.tree, TEXT_TAG);
         f.tree.set_data(css, ".a { width: 1px }").unwrap();
         f.tree.append_child(style, css).unwrap();
-        let loose = f.tree.computed_style(a).get("width").cloned();
+        let loose = f.cache.computed_style(&f.tree, a).get("width").cloned();
 
         f.tree.append_child(f.root, style).unwrap();
 
         assert_eq!(loose, None);
-        assert_eq!(f.tree.computed_style(a).get("width"), Some(&text("1px")));
+        assert_eq!(
+            f.cache.computed_style(&f.tree, a).get("width"),
+            Some(&text("1px"))
+        );
     }
 
     #[rstest]
@@ -516,7 +522,7 @@ mod tests {
         let (style, css) = f.sheet(".a { width: 1px }");
         let a = f.add(f.root, "div", "a");
         f.attr(a, "class", "a");
-        let applied = f.tree.computed_style(a).get("width").cloned();
+        let applied = f.cache.computed_style(&f.tree, a).get("width").cloned();
 
         if remove_text {
             f.tree.remove_child(style, css).unwrap();
@@ -525,7 +531,7 @@ mod tests {
         }
 
         assert_eq!(applied, Some(text("1px")));
-        assert_eq!(f.tree.computed_style(a).get("width"), None);
+        assert_eq!(f.cache.computed_style(&f.tree, a).get("width"), None);
     }
 
     #[test]

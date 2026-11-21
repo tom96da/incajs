@@ -17,7 +17,7 @@ use gpui::{App, MouseUpEvent, ScrollHandle, Window, px};
 use gpui::{Context, Render, TestAppContext, VisualTestContext};
 use inca_node::spec::{StyleSpec, build_spec, wheel_axes};
 use inca_node::tree::AttributeValue;
-use inca_node::tree::{NodeId, VirtualTree};
+use inca_node::tree::{NodeId, StyleCache, VirtualTree};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -57,7 +57,7 @@ pub(crate) fn focus_all(
     }
     registry.request_focus(focus, false);
     cx.update(|window, cx| {
-        let _ = registry.apply_pending(tree, window, cx);
+        let _ = registry.apply_pending(tree, &StyleCache::new(), window, cx);
     });
 }
 
@@ -145,7 +145,7 @@ impl EventSink for Probe {
     }
 
     fn wheel_axes(&self, id: NodeId) -> Option<inca_node::WheelAxes> {
-        wheel_axes(&self.tree.borrow(), id)
+        wheel_axes(&self.tree.borrow(), &StyleCache::new(), id)
     }
 
     fn clear_layout(&self) {
@@ -247,7 +247,8 @@ impl Render for ProbeView {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         self.0.renders.set(self.0.renders.get() + 1);
         let mode = self.0.mode_now.get().unwrap_or(self.0.mode);
-        render_tree_with_events(&self.0.tree.borrow(), 0, &self.0, mode).unwrap()
+        render_tree_with_events(&self.0.tree.borrow(), &StyleCache::new(), 0, &self.0, mode)
+            .unwrap()
     }
 }
 
@@ -471,7 +472,7 @@ pub(crate) fn layout(
     }
     let cx = cx.add_empty_window();
     cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-        render_tree(&tree, root).unwrap()
+        render_tree(&tree, &StyleCache::new(), root).unwrap()
     });
     ["node-0", "node-1", "node-2"][..=children.len()]
         .iter()
@@ -496,7 +497,7 @@ pub(crate) fn frame(cx: &mut TestAppContext, window: gpui::AnyWindowHandle) {
 
 pub(crate) fn draw(cx: &mut gpui::VisualTestContext, tree: &VirtualTree, probe: &Probe) {
     cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-        render_tree_with_events(tree, 0, probe, probe.mode).unwrap()
+        render_tree_with_events(tree, &StyleCache::new(), 0, probe, probe.mode).unwrap()
     });
 }
 
@@ -510,5 +511,5 @@ pub(crate) fn style_of(props: &[(&str, AttributeValue)]) -> StyleSpec {
     for (key, value) in props {
         tree.set_style(id, *key, value.clone()).unwrap();
     }
-    build_spec(&tree, id).unwrap().style
+    build_spec(&tree, &StyleCache::new(), id).unwrap().style
 }

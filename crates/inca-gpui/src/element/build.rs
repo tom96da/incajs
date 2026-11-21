@@ -14,7 +14,7 @@ use super::style::{apply_style, clip_scroll_axes, reserve_gutter};
 use super::wheel::{scroll_anchor, wire_scroll};
 use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
 use inca_node::spec::{ElementSpec, ElementTag, WheelAxes, build_spec};
-use inca_node::tree::{NodeId, VirtualTree};
+use inca_node::tree::{NodeId, StyleCache, VirtualTree};
 
 /// The selector `build_element` gives the container with this id. A test
 /// passes it to `gpui`'s `debug_bounds` to read that container's bounds.
@@ -240,8 +240,8 @@ pub fn build_element_with_events<E: EventSink + Clone + 'static>(
 /// whole subtree from `tree` into a real `gpui` element. `None` if `root`
 /// doesn't resolve.
 #[must_use]
-pub fn render_tree(tree: &VirtualTree, root: NodeId) -> Option<AnyElement> {
-    build_spec(tree, root).map(|spec| build_element(&spec))
+pub fn render_tree(tree: &VirtualTree, cache: &StyleCache, root: NodeId) -> Option<AnyElement> {
+    build_spec(tree, cache, root).map(|spec| build_element(&spec))
 }
 
 /// Like [`render_tree`], but input on the containers dispatches into JS via
@@ -249,12 +249,13 @@ pub fn render_tree(tree: &VirtualTree, root: NodeId) -> Option<AnyElement> {
 #[must_use]
 pub fn render_tree_with_events<E: EventSink + Clone + 'static>(
     tree: &VirtualTree,
+    cache: &StyleCache,
     root: NodeId,
     dispatch: &E,
     mode: Scrollbars,
 ) -> Option<AnyElement> {
     dispatch.clear_layout();
-    build_spec(tree, root).map(|spec| build_element_with_events(&spec, dispatch, mode))
+    build_spec(tree, cache, root).map(|spec| build_element_with_events(&spec, dispatch, mode))
 }
 
 #[cfg(test)]
@@ -283,7 +284,7 @@ mod tests {
 
     impl Render for TreeView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            render_tree(&self.0, 0).unwrap()
+            render_tree(&self.0, &StyleCache::new(), 0).unwrap()
         }
     }
 
@@ -349,7 +350,7 @@ mod tests {
 
         let cx = cx.add_empty_window();
         cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-            render_tree(&tree, root).unwrap()
+            render_tree(&tree, &StyleCache::new(), root).unwrap()
         });
 
         let bounds = cx
@@ -367,7 +368,7 @@ mod tests {
 
         let cx = cx.add_empty_window();
         cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-            render_tree(&tree, root).unwrap()
+            render_tree(&tree, &StyleCache::new(), root).unwrap()
         });
     }
 

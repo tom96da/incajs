@@ -6,7 +6,9 @@
 use std::collections::BTreeMap;
 
 use gpui::{Pixels, Point, point, px};
-use inca_node::{AttributeValue, ElementSpec, ElementTag, NodeId, VirtualTree, build_spec};
+use inca_node::{
+    AttributeValue, ElementSpec, ElementTag, NodeId, StyleCache, VirtualTree, build_spec,
+};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -110,10 +112,11 @@ impl Node {
 #[must_use]
 pub fn snapshot(
     tree: &VirtualTree,
+    cache: &StyleCache,
     root: NodeId,
     bounds: &mut impl FnMut(NodeId) -> Option<Bounds>,
 ) -> Option<Node> {
-    node(tree, &build_spec(tree, root)?, bounds)
+    node(tree, &build_spec(tree, cache, root)?, bounds)
 }
 
 fn node(
@@ -173,7 +176,7 @@ mod tests {
     #[test]
     fn a_missing_root_has_no_snapshot() {
         let tree = VirtualTree::new();
-        assert!(snapshot(&tree, 42, &mut no_bounds).is_none());
+        assert!(snapshot(&tree, &StyleCache::new(), 42, &mut no_bounds).is_none());
     }
 
     #[test]
@@ -183,7 +186,7 @@ mod tests {
         let child = tree.create_node("span").unwrap();
         tree.append_child(parent, child).unwrap();
 
-        let snap = snapshot(&tree, parent, &mut unit).unwrap();
+        let snap = snapshot(&tree, &StyleCache::new(), parent, &mut unit).unwrap();
 
         assert_eq!(
             (snap.id, snap.tag.as_str(), snap.text.clone()),
@@ -202,7 +205,7 @@ mod tests {
         let text = tree.create_node("#text").unwrap();
         tree.set_data(text, "hi").unwrap();
 
-        let snap = snapshot(&tree, text, &mut unit).unwrap();
+        let snap = snapshot(&tree, &StyleCache::new(), text, &mut unit).unwrap();
 
         assert_eq!(snap.text.as_deref(), Some("hi"));
     }
@@ -213,7 +216,7 @@ mod tests {
         let text = tree.create_node("#text").unwrap();
         tree.set_data(text, "hi").unwrap();
 
-        let snap = snapshot(&tree, text, &mut unit).unwrap();
+        let snap = snapshot(&tree, &StyleCache::new(), text, &mut unit).unwrap();
 
         assert_eq!(snap.bounds, None);
     }
@@ -223,7 +226,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let input = tree.create_node("input").unwrap();
 
-        let snap = snapshot(&tree, input, &mut unit).unwrap();
+        let snap = snapshot(&tree, &StyleCache::new(), input, &mut unit).unwrap();
 
         assert_eq!(snap.bounds, unit(input));
         assert_eq!(snap.text, None);
@@ -237,7 +240,7 @@ mod tests {
         tree.set_attribute(id, "count", 3.0).unwrap();
         tree.set_attribute(id, "on", true).unwrap();
 
-        let snap = snapshot(&tree, id, &mut no_bounds).unwrap();
+        let snap = snapshot(&tree, &StyleCache::new(), id, &mut no_bounds).unwrap();
 
         assert_eq!(
             serde_json::to_string(&snap.attributes).unwrap(),
@@ -255,7 +258,7 @@ mod tests {
         tree.append_child(root, a).unwrap();
         tree.append_child(a, a_child).unwrap();
         tree.append_child(root, b).unwrap();
-        let snap = snapshot(&tree, root, &mut no_bounds).unwrap();
+        let snap = snapshot(&tree, &StyleCache::new(), root, &mut no_bounds).unwrap();
 
         assert_eq!(snap.find(&|n| n.tag == "b").unwrap().id, a_child);
         assert_eq!(snap.find(&|n| n.id == root).unwrap().id, root);
@@ -294,7 +297,7 @@ mod tests {
     fn find_misses_when_nothing_matches() {
         let mut tree = VirtualTree::new();
         let root = tree.create_node("div").unwrap();
-        let snap = snapshot(&tree, root, &mut no_bounds).unwrap();
+        let snap = snapshot(&tree, &StyleCache::new(), root, &mut no_bounds).unwrap();
 
         assert!(snap.find(&|n| n.tag == "nope").is_none());
     }

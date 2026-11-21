@@ -167,7 +167,7 @@ mod tests {
     use super::*;
     use crate::build_spec;
     use crate::tests::{num, text};
-    use crate::tree::{AttributeValue, VirtualTree};
+    use crate::tree::{AttributeValue, StyleCache, VirtualTree};
     use rstest::rstest;
 
     fn block(props: &[(&str, AttributeValue)]) -> (VirtualTree, crate::NodeId) {
@@ -394,7 +394,13 @@ mod tests {
 
         assert!(lines.is_empty(), "{lines:?}");
         assert_eq!(css_text(tree.get(id).unwrap()), "opacity: 0.5;");
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(0.5));
+        assert_eq!(
+            build_spec(&tree, &StyleCache::new(), id)
+                .unwrap()
+                .style
+                .opacity,
+            Some(0.5)
+        );
     }
 
     #[test]
@@ -405,7 +411,13 @@ mod tests {
 
         assert!(lines.is_empty(), "{lines:?}");
         assert_eq!(style_length(tree.get(id).unwrap()), 1);
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(0.5));
+        assert_eq!(
+            build_spec(&tree, &StyleCache::new(), id)
+                .unwrap()
+                .style
+                .opacity,
+            Some(0.5)
+        );
     }
 
     #[test]
@@ -419,7 +431,13 @@ mod tests {
             css_text(tree.get(id).unwrap()),
             "opacity: 3.4028234663852886e+38;"
         );
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(1.0));
+        assert_eq!(
+            build_spec(&tree, &StyleCache::new(), id)
+                .unwrap()
+                .style
+                .opacity,
+            Some(1.0)
+        );
     }
 
     #[rstest]
@@ -430,7 +448,13 @@ mod tests {
 
         assert_eq!(css_text(tree.get(id).unwrap()), "");
         assert_eq!(style_length(tree.get(id).unwrap()), 0);
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, None);
+        assert_eq!(
+            build_spec(&tree, &StyleCache::new(), id)
+                .unwrap()
+                .style
+                .opacity,
+            None
+        );
     }
 
     #[rstest]
@@ -447,11 +471,23 @@ mod tests {
     ) {
         let (mut tree, id) = block(&[("opacity", value)]);
         assert_eq!(css_text(tree.get(id).unwrap()), css);
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
+        assert_eq!(
+            build_spec(&tree, &StyleCache::new(), id)
+                .unwrap()
+                .style
+                .opacity,
+            Some(rendered)
+        );
 
         tree.set_style_text(id, css).unwrap();
         assert_eq!(css_text(tree.get(id).unwrap()), css);
-        assert_eq!(build_spec(&tree, id).unwrap().style.opacity, Some(rendered));
+        assert_eq!(
+            build_spec(&tree, &StyleCache::new(), id)
+                .unwrap()
+                .style
+                .opacity,
+            Some(rendered)
+        );
     }
 
     #[test]

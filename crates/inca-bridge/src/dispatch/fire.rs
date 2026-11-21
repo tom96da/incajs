@@ -314,7 +314,9 @@ mod tests {
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
             let host = &mut *host.borrow_mut();
-            let _ = host.focus.apply_pending(&host.tree, window, cx);
+            let _ = host
+                .focus
+                .apply_pending(&host.tree, &host.style, window, cx);
         });
         assert!(dispatcher.tracks_pointer());
     }

@@ -430,7 +430,7 @@ mod tests {
 
         let host = host.borrow();
         for _ in 0..3 {
-            inca_node::build_spec(&host.tree, 1).unwrap();
+            inca_node::build_spec(&host.tree, &host.style, 1).unwrap();
         }
         assert_eq!(warnings.borrow().len(), 1);
     }
