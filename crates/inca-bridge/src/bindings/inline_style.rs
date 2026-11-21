@@ -24,7 +24,6 @@ use inca_node::{NodeId, STYLE_KEYS, TreeError, VirtualNode};
 use inca_style::{css_text, style_item, style_length, style_property_value};
 
 use super::Natives;
-use super::attributes::print_style_warning;
 use super::convert::{JsNodeId, saturated, unsigned};
 use super::host::Host;
 use crate::interfaces::define_unconstructable;
@@ -86,7 +85,7 @@ fn finish(
     let Ok(lines) = result else { return };
     let mut host = host.borrow_mut();
     for line in &lines {
-        print_style_warning(&mut host, node, line);
+        host.warn_style(node, line);
     }
     if display {
         host.mark_focus_dirty(node);
@@ -259,7 +258,9 @@ mod tests {
         let (engine, host) = engine_with_bindings();
         let warnings = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&warnings);
-        host.borrow_mut().warn = Rc::new(move |line| sink.borrow_mut().push(line.to_owned()));
+        host.borrow_mut()
+            .warnings
+            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
         let json: String = engine
             .eval(&format!(
                 r"

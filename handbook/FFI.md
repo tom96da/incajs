@@ -65,8 +65,8 @@ The host keeps a retained tree of nodes. JS names each node by a `u32` id.
 - A node has at most one parent. A `#fragment` has none.
 - The text children of a connected `style` element hold rules. Layout and the scroll and focus
   checks read a node's style props after the matching rules apply, and the style props win over
-  every rule. The host prints each dropped rule, at-rule and declaration through `warn` as `<style>:
-  <line>`.
+  every rule. The host prints each dropped rule, at-rule and declaration through the warning sink
+  as `<style>: <line>`.
 - `appendChild`, `insertBefore`, `replaceChild` and `insertNodes` detach each node first, so they
   also move a node. A `#fragment` moves its children in order and stays empty. `appendChild` and
   `insertBefore` return the position of the first inserted node among the children of `parentId`.
@@ -306,7 +306,7 @@ a failure changes nothing and creates no node.
 ### Parsed markup
 
 The natives `setInnerHtml`, `setOuterHtml` and `insertAdjacentHtml` return no node of the parsed
-markup. A `style` attribute applies as style props and its warnings print through `warn`. An `input`
+markup. A `style` attribute applies as style props and its warnings print through the warning sink. An `input`
 takes the typed text of its `value` attribute.
 
 ### Token lists

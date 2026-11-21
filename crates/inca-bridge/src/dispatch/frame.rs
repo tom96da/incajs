@@ -47,7 +47,7 @@ impl EventDispatcher {
     fn warn_style_sheets(&self) {
         let host = self.host.borrow();
         for line in host.style.take_style_warnings(&host.tree) {
-            (host.warn)(&format!("<style>: {line}"));
+            host.warnings.emit(&format!("<style>: {line}"));
         }
     }
 
@@ -137,7 +137,9 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let printed = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&printed);
-        host.borrow_mut().warn = Rc::new(move |line| sink.borrow_mut().push(line.to_owned()));
+        host.borrow_mut()
+            .warnings
+            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
         {
             let mut host = host.borrow_mut();
             let root = host.root();

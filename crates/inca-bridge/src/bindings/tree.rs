@@ -241,7 +241,9 @@ mod tests {
         let (engine, host) = engine_with_bindings();
         let warnings = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&warnings);
-        host.borrow_mut().warn = Rc::new(move |line| sink.borrow_mut().push(line.to_owned()));
+        host.borrow_mut()
+            .warnings
+            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
         engine.eval::<()>(script).unwrap();
         (warnings, host)
     }
@@ -366,7 +368,7 @@ mod tests {
             ",
         );
 
-        assert!(host.borrow().style_warned.is_empty());
+        assert!(host.borrow().warnings.is_empty());
     }
 
     #[test]
@@ -384,7 +386,7 @@ mod tests {
         );
 
         assert!(warnings.borrow().is_empty(), "{:?}", warnings.borrow());
-        assert!(host.borrow().style_warned.is_empty());
+        assert!(host.borrow().warnings.is_empty());
     }
 
     #[test]

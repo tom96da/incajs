@@ -8,7 +8,7 @@ use std::rc::Rc;
 use gpui::{Pixels, ScrollHandle, point, px};
 
 use inca_document::geometry::{Align, scroll_chain};
-use inca_document::{InputState, apply_removals};
+use inca_document::{InputState, StyleWarnings, apply_removals};
 use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
 use inca_node::{NodeId, Removal, VirtualTree};
@@ -26,12 +26,10 @@ pub struct Host {
     pub tree: VirtualTree,
     /// The cascade of the tree, rebuilt when the tree changes.
     pub style: StyleCache,
-    /// Receives one line for each style a `setStyle` call stores with an
-    /// unknown key, an invalid color or a value of a shape the host does not
-    /// support. A node prints each line once. Writes to stderr by default.
-    pub warn: Rc<dyn Fn(&str)>,
-    /// The warnings printed for each node, as the text of the line without the node prefix.
-    pub(crate) style_warned: HashMap<NodeId, HashSet<String>>,
+    /// Receives one line for each style a `setStyle` call stores with an unknown key, an invalid
+    /// color or a value of a shape the host does not support. A node prints each line once.
+    /// Writes to stderr by default.
+    pub warnings: StyleWarnings,
     pub listeners: EventListeners,
     /// The state of every `AbortSignal`, by id. Plain data. The objects live in JS.
     pub(crate) signals: Signals,
@@ -120,8 +118,7 @@ impl Host {
         Self {
             tree,
             style: StyleCache::new(),
-            warn: Rc::new(|line| eprintln!("{line}")),
-            style_warned: HashMap::new(),
+            warnings: StyleWarnings::default(),
             listeners: EventListeners::default(),
             signals: Signals::default(),
             focus: FocusRegistry::default(),
@@ -245,13 +242,18 @@ impl Host {
             .unwrap_or_else(|| self.top())
     }
 
+    /// Reports a style warning of `node_id` through the sink, once for each node and line.
+    pub(crate) fn warn_style(&mut self, node_id: NodeId, line: &str) {
+        self.warnings.report(&self.tree, node_id, line);
+    }
+
     /// Drops the per-node state of freed nodes and returns the callback ids
     /// their listeners held.
     pub(crate) fn free_ids(&mut self, ids: &[NodeId]) -> Vec<u32> {
         for id in ids {
             self.scroll_handles.get_mut().remove(id);
             self.scroll_reported.remove(id);
-            self.style_warned.remove(id);
+            self.warnings.forget(*id);
             self.inputs.get_mut().remove(id);
             self.input_layouts.get_mut().remove(id);
         }
