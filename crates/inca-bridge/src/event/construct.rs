@@ -562,9 +562,9 @@ mod tests {
     }
 
     fn input_payload() -> EventPayload {
-        EventPayload::Input(inca_gpui::InputPayload {
+        EventPayload::Input(inca_document::InputPayload {
             data: None,
-            input_type: inca_gpui::InputType::InsertText,
+            input_type: inca_document::InputType::InsertText,
             is_composing: false,
         })
     }

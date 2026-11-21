@@ -8,13 +8,14 @@
 use crate::element::*;
 use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
 use crate::focus::FocusRegistry;
-use crate::input::{InputLayout, InputRequest, InputState};
+use crate::input::{InputLayout, InputRequest};
 use gpui::Pixels;
 use gpui::point;
 use gpui::prelude::*;
 use gpui::size;
 use gpui::{App, MouseUpEvent, ScrollHandle, Window, px};
 use gpui::{Context, Render, TestAppContext, VisualTestContext};
+use inca_document::InputState;
 use inca_node::tree::AttributeValue;
 use inca_node::tree::{NodeId, VirtualTree};
 use inca_style::StyleCache;
@@ -98,6 +99,8 @@ pub(crate) struct Probe {
     pub(crate) tree: Rc<RefCell<VirtualTree>>,
     /// The text state of each `input` node.
     pub(crate) inputs: Rc<RefCell<HashMap<NodeId, InputState>>>,
+    /// Where the last frame drew the text of each `input` node.
+    pub(crate) layouts_of_inputs: Rc<RefCell<HashMap<NodeId, InputLayout>>>,
     /// The requests the platform's text input sent.
     pub(crate) requests: Rc<RefCell<Vec<(NodeId, InputRequest)>>>,
     /// The node whose focus handle `focus_handle` gives.
@@ -222,12 +225,16 @@ impl EventSink for Probe {
         self.inputs.borrow().get(&id).cloned()
     }
 
+    fn input_layout(&self, id: NodeId) -> InputLayout {
+        self.layouts_of_inputs
+            .borrow()
+            .get(&id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     fn record_input(&self, id: NodeId, layout: InputLayout) {
-        self.inputs
-            .borrow_mut()
-            .entry(id)
-            .or_default()
-            .record(layout);
+        self.layouts_of_inputs.borrow_mut().insert(id, layout);
     }
 
     fn input_request(&self, id: NodeId, request: InputRequest, _: &mut Window, _: &mut App) {
@@ -272,6 +279,7 @@ pub(crate) fn probe() -> Probe {
         handles: Rc::default(),
         tree: Rc::default(),
         inputs: Rc::default(),
+        layouts_of_inputs: Rc::default(),
         requests: Rc::default(),
         focus: Rc::default(),
         mode: Scrollbars::Overlay,

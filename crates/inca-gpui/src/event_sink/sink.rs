@@ -4,9 +4,9 @@
 //! The sink that receives the events a dispatch fires.
 
 use super::{
-    App, EventPayload, InputLayout, InputRequest, InputState, MouseUpEvent, NodeId, NodeLayout,
-    Window,
+    App, EventPayload, InputLayout, InputRequest, MouseUpEvent, NodeId, NodeLayout, Window,
 };
+use inca_document::InputState;
 
 /// What [`crate::element`] needs from something that can dispatch a native
 /// event into JS. The trait keeps this crate free of a `QuickJS` dependency.
@@ -173,6 +173,11 @@ pub trait EventSink {
     /// node.
     fn input(&self, node_id: NodeId) -> Option<InputState>;
 
+    /// Where the last frame drew the text of `node_id`; empty before one did.
+    fn input_layout(&self, _node_id: NodeId) -> InputLayout {
+        InputLayout::default()
+    }
+
     /// Stores where the frame being drawn put the text of `node_id`.
     fn record_input(&self, node_id: NodeId, layout: InputLayout);
 
@@ -275,7 +280,7 @@ macro_rules! noop_sink_methods {
         fn bar_drag(&self, _: inca_node::NodeId, _: bool, _: &mut gpui::Window, _: &mut gpui::App) {}
     };
     (@one input) => {
-        fn input(&self, _: inca_node::NodeId) -> Option<$crate::input::InputState> {
+        fn input(&self, _: inca_node::NodeId) -> Option<inca_document::InputState> {
             None
         }
     };

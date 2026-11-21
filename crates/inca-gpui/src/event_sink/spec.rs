@@ -3,7 +3,8 @@
 
 //! The flags and rules of each event name.
 
-use super::{EventPayload, InputPayload, InputType};
+use super::EventPayload;
+use inca_document::{InputPayload, InputType};
 
 /// `bubbles`, `cancelable` and `composed` of one event.
 #[derive(Clone, Copy)]

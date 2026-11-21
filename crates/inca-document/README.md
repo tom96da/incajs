@@ -4,15 +4,16 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 # inca-document
 
-What the elements of an `inca-node` tree mean beyond their attributes, and the geometry of boxes.
+What the elements of an `inca-node` tree mean beyond their attributes, how a document is built and
+changed, the focus model and the geometry of boxes.
 
 Everything here is plain data and functions.
 
 ## Semantics
 
 `ARIA_REFLECTIONS` lists the `role` and `aria` properties that reflect on an element.
-`AriaReferences` and `TabIndex` add to `VirtualTree` the reads and writes of the element references of an `aria`
-attribute and the `tabindex` of an element, with the default of each element kind.
+`AriaReferences` and `TabIndex` add to `VirtualTree` the reads and writes of the element references
+of an `aria` attribute and the `tabindex` of an element, with the default of each element kind.
 
 ## Geometry
 

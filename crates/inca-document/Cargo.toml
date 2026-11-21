@@ -5,7 +5,7 @@
 
 [package]
 name = "inca-document"
-description = "The semantics of the elements and the box geometry inca renders."
+description = "The semantics of the elements, the document and markup steps, the focus model, the box geometry and the text-control model inca renders."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -22,6 +22,7 @@ name = "inca_document"
 
 [dependencies]
 inca-node = { path = "../inca-node" }
+unicode-segmentation.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

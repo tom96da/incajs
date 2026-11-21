@@ -4,7 +4,8 @@
 use std::rc::Rc;
 
 use gpui::{App, MouseUpEvent, ScrollHandle, Window};
-use inca_gpui::{EventPayload, EventSink, InputLayout, InputRequest, InputState, KeyPayload};
+use inca_document::InputState;
+use inca_gpui::{EventPayload, EventSink, InputLayout, InputRequest, KeyPayload};
 use inca_node::NodeId;
 
 use super::EventDispatcher;
@@ -246,13 +247,13 @@ impl EventSink for EventDispatcher {
         self.is_input(node_id).then(|| self.input_state(node_id))
     }
 
+    fn input_layout(&self, node_id: NodeId) -> InputLayout {
+        EventDispatcher::input_layout(self, node_id)
+    }
+
     fn record_input(&self, node_id: NodeId, layout: InputLayout) {
         let host = self.host.borrow();
-        host.inputs
-            .borrow_mut()
-            .entry(node_id)
-            .or_default()
-            .record(layout);
+        host.input_layouts.borrow_mut().insert(node_id, layout);
     }
 
     fn input_request(

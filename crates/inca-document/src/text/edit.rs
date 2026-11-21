@@ -177,7 +177,7 @@ mod tests {
     #![allow(clippy::float_cmp, clippy::unwrap_used)]
 
     use super::*;
-    use crate::input::tests::{at, caret_at};
+    use crate::text::tests::{at, caret_at};
     use rstest::rstest;
 
     #[test]

@@ -14,7 +14,7 @@ pub use event_sink::{
     EventPayload, EventSink, KeyPayload, MousePayload, NO_BUTTON, PointerSource, WheelPayload,
     buttons_mask, is_menu_key,
 };
-pub use input::{Edit, InputLayout, InputPayload, InputRequest, InputState, InputType, Motion};
+pub use input::{InputLayout, InputRequest};
 
 #[cfg(test)]
 mod tests;

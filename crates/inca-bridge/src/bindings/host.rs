@@ -7,8 +7,9 @@ use std::rc::Rc;
 
 use gpui::{Pixels, ScrollHandle, point, px};
 
+use inca_document::InputState;
 use inca_document::geometry::{Align, scroll_chain};
-use inca_gpui::{InputState, NodeLayout, rect_of};
+use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
 use inca_node::{NodeId, VirtualTree};
 use inca_style::{StyleCache, is_scroll_container};
@@ -47,6 +48,9 @@ pub struct Host {
     /// The text states of the `input` nodes, created on first use. Its own cell, as the draw runs
     /// under a shared borrow.
     pub(crate) inputs: RefCell<HashMap<NodeId, InputState>>,
+    /// Where the last frame drew the text of each `input` node. Its own cell, as the draw runs
+    /// under a shared borrow.
+    pub(crate) input_layouts: RefCell<HashMap<NodeId, InputLayout>>,
     /// Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
     pub(crate) failures: Vec<EngineError>,
     /// Every mouse button currently held, as the `buttons` bitmask of the events. GPUI's own mouse
@@ -126,6 +130,7 @@ impl Host {
             scroll_reported: HashMap::new(),
             layout: RefCell::new(HashMap::new()),
             inputs: RefCell::new(HashMap::new()),
+            input_layouts: RefCell::new(HashMap::new()),
             failures: Vec::new(),
             held_buttons: 0,
             capture_pending: None,
@@ -311,6 +316,7 @@ impl Host {
             self.scroll_reported.remove(id);
             self.style_warned.remove(id);
             self.inputs.get_mut().remove(id);
+            self.input_layouts.get_mut().remove(id);
         }
         ids.iter()
             .flat_map(|&id| {

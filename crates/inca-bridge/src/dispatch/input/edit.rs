@@ -6,12 +6,12 @@
 use crate::dispatch::EventDispatcher;
 use gpui::App;
 use gpui::Window;
-use inca_gpui::Edit;
+use inca_document::Edit;
+use inca_document::InputPayload;
+use inca_document::InputState;
+use inca_document::InputType;
 use inca_gpui::EventPayload;
-use inca_gpui::InputPayload;
 use inca_gpui::InputRequest;
-use inca_gpui::InputState;
-use inca_gpui::InputType;
 use inca_node::NodeId;
 use inca_node::input_text::sanitized;
 use inca_node::input_text::typed;
