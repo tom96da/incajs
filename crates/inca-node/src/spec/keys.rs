@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The style keys the host reads, their aliases and the warnings for a bad value.
+//! The readers of the style keys, their CSS text and the warnings for a bad value.
 
 use super::color::{as_color, rgb_text};
 use super::number::font_size_px;
@@ -24,51 +24,11 @@ use crate::FlexDirectionSpec;
 use crate::LengthSpec;
 use crate::OverflowSpec;
 use crate::StyleSpec;
-use crate::tree::{StyleMap, shortest_number_text};
-use std::borrow::Cow;
+use crate::tree::{STYLE_KEYS, StyleMap, ValueKind, shortest_number_text, style_key};
 
-/// The value a style key takes. A value the kind does not accept is dropped
-/// with a warning.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ValueKind {
-    /// A px value `>= 0`. A text beyond the largest length applies at it.
-    NonNegativePx,
-    /// A px value `>= 0`, or `"auto"`. A text beyond the largest length applies at it.
-    NonNegativePxOrAuto,
-    /// A px value, or `"auto"`. A text beyond the largest length applies at it.
-    PxOrAuto,
-    /// A px value `>= 0`, limited to the largest font size.
-    FontSizePx,
-    /// A decimal value `>= 0`. A text beyond the largest flex factor applies at it.
-    NonNegativeNumber,
-    /// A decimal value or a percentage, clamped to `0..=1` when used.
-    Opacity,
-    /// A number from `0` to `0xffffff`, or a string: `#rgb`, `#rgba`, `#rrggbb`,
-    /// `#rrggbbaa`, `transparent`, `rgb()` or `rgba()`.
-    Color,
-    /// One of the names.
-    Keyword(&'static [&'static str]),
-    /// One or two of the names separated by whitespace: x, then y.
-    KeywordPair(&'static [&'static str]),
-}
-
-/// A style key the host reads.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct StyleKey {
-    /// The host key, in `snake_case`.
-    pub key: &'static str,
-    /// The CSS names of the same prop, in `snake_case`.
-    pub aliases: &'static [&'static str],
-    /// The value the key takes.
-    pub kind: ValueKind,
-}
-
-/// Expands the style declaration below into [`STYLE_KEYS`], `read_prop`,
-/// `alias_target`, `read_edges` and one [`EdgeKeys`] const per box-edge family.
+/// Expands the style declaration below into `read_prop`, `read_edges` and one [`EdgeKeys`] const
+/// per box-edge family. [`STYLE_KEYS`] lists the same keys.
 macro_rules! style_props {
-    (@kind Keyword($ty:ident)) => { ValueKind::Keyword($ty::NAMES) };
-    (@kind KeywordPair($ty:ident)) => { ValueKind::KeywordPair($ty::NAMES) };
-    (@kind $kind:ident) => { ValueKind::$kind };
     (@read NonNegativePx, $value:ident) => { non_negative_px($value) };
     (@read FontSizePx, $value:ident) => { font_size_px($value) };
     (@read NonNegativePxOrAuto, $value:ident) => { size_spec_from($value) };
@@ -88,7 +48,7 @@ macro_rules! style_props {
     (
         props {
             $(
-                $key:literal [$($alias:literal),*]: $kind:ident $(($arg:ident))?
+                $key:literal: $kind:ident $(($arg:ident))?
                     => $target:ident . $field:ident;
             )*
         }
@@ -106,27 +66,6 @@ macro_rules! style_props {
             )*
         }
     ) => {
-        /// Every style key the host reads, in `snake_case`, with its CSS names and
-        /// the value it takes.
-        pub const STYLE_KEYS: &[StyleKey] = &[
-            $(
-                StyleKey {
-                    key: $key,
-                    aliases: &[$($alias),*],
-                    kind: style_props!(@kind $kind $(($arg))?),
-                },
-            )*
-            $(
-                StyleKey { key: $all, aliases: &[], kind: ValueKind::$edge_kind },
-                StyleKey { key: $x, aliases: &[], kind: ValueKind::$edge_kind },
-                StyleKey { key: $y, aliases: &[], kind: ValueKind::$edge_kind },
-                StyleKey { key: $top, aliases: &[], kind: ValueKind::$edge_kind },
-                StyleKey { key: $right, aliases: &[], kind: ValueKind::$edge_kind },
-                StyleKey { key: $bottom, aliases: &[], kind: ValueKind::$edge_kind },
-                StyleKey { key: $left, aliases: &[], kind: ValueKind::$edge_kind },
-            )*
-        ];
-
         $(
             const $edges: EdgeKeys = EdgeKeys {
                 all: $all,
@@ -175,42 +114,34 @@ macro_rules! style_props {
                     edges_from(props, &$edges, |value| style_props!(@read $edge_kind, value));
             )*
         }
-
-        /// The host key that `key`, a CSS name in `snake_case`, stands for.
-        pub(super) fn alias_target(key: &str) -> Option<&'static str> {
-            match key {
-                $($($alias => Some($key),)*)*
-                _ => None,
-            }
-        }
     };
 }
 
 style_props! {
     props {
-        "display" []: Keyword(DisplaySpec) => style.display;
-        "flex_direction" []: Keyword(FlexDirectionSpec) => style.flex_direction;
-        "justify_content" []: Keyword(AlignSpec) => style.justify_content;
-        "align_items" []: Keyword(AlignSpec) => style.align_items;
-        "gap" []: NonNegativePx => style.gap;
-        "width" []: NonNegativePxOrAuto => style.width;
-        "height" []: NonNegativePxOrAuto => style.height;
-        "border_width" []: NonNegativePx => style.border_width;
-        "background" ["background_color"]: Color => style.background;
-        "border_color" []: Color => style.border_color;
-        "corner_radius" ["border_radius"]: NonNegativePx => style.corner_radius;
-        "text_color" ["color"]: Color => style.text_color;
-        "text_size" ["font_size"]: FontSizePx => style.text_size;
-        "overflow" []: KeywordPair(OverflowSpec) => overflow.all;
-        "overflow_x" []: Keyword(OverflowSpec) => overflow.x;
-        "overflow_y" []: Keyword(OverflowSpec) => overflow.y;
-        "flex_grow" []: NonNegativeNumber => style.flex_grow;
-        "flex_shrink" []: NonNegativeNumber => style.flex_shrink;
-        "opacity" []: Opacity => style.opacity;
-        "min_width" []: NonNegativePxOrAuto => style.min_width;
-        "min_height" []: NonNegativePxOrAuto => style.min_height;
-        "max_width" []: NonNegativePxOrAuto => style.max_width;
-        "max_height" []: NonNegativePxOrAuto => style.max_height;
+        "display": Keyword(DisplaySpec) => style.display;
+        "flex_direction": Keyword(FlexDirectionSpec) => style.flex_direction;
+        "justify_content": Keyword(AlignSpec) => style.justify_content;
+        "align_items": Keyword(AlignSpec) => style.align_items;
+        "gap": NonNegativePx => style.gap;
+        "width": NonNegativePxOrAuto => style.width;
+        "height": NonNegativePxOrAuto => style.height;
+        "border_width": NonNegativePx => style.border_width;
+        "background": Color => style.background;
+        "border_color": Color => style.border_color;
+        "corner_radius": NonNegativePx => style.corner_radius;
+        "text_color": Color => style.text_color;
+        "text_size": FontSizePx => style.text_size;
+        "overflow": KeywordPair(OverflowSpec) => overflow.all;
+        "overflow_x": Keyword(OverflowSpec) => overflow.x;
+        "overflow_y": Keyword(OverflowSpec) => overflow.y;
+        "flex_grow": NonNegativeNumber => style.flex_grow;
+        "flex_shrink": NonNegativeNumber => style.flex_shrink;
+        "opacity": Opacity => style.opacity;
+        "min_width": NonNegativePxOrAuto => style.min_width;
+        "min_height": NonNegativePxOrAuto => style.min_height;
+        "max_width": NonNegativePxOrAuto => style.max_width;
+        "max_height": NonNegativePxOrAuto => style.max_height;
     }
     edges {
         PADDING_KEYS: NonNegativePx => padding {
@@ -232,42 +163,6 @@ style_props! {
             left: "margin_left",
         }
     }
-}
-
-/// The host key of a style key. `key` may be `camelCase`, `kebab-case` or
-/// `snake_case`, and a CSS name listed in [`STYLE_KEYS`] names its host key.
-/// A key that is already a host key in `snake_case` comes back borrowed.
-pub(crate) fn style_key(key: &str) -> Cow<'_, str> {
-    let snake = if key.bytes().any(|b| b.is_ascii_uppercase() || b == b'-') {
-        let mut out = String::with_capacity(key.len() + 2);
-        for c in key.chars() {
-            match c {
-                '-' => out.push('_'),
-                c if c.is_ascii_uppercase() => {
-                    out.push('_');
-                    out.push(c.to_ascii_lowercase());
-                }
-                c => out.push(c),
-            }
-        }
-        Cow::Owned(out)
-    } else {
-        Cow::Borrowed(key)
-    };
-    match alias_target(&snake) {
-        Some(key) => Cow::Borrowed(key),
-        None => snake,
-    }
-}
-
-/// The CSS name of the host key `key`: its first CSS alias, or the key itself, in `kebab-case`.
-pub(crate) fn css_name(key: &str) -> String {
-    let name = STYLE_KEYS
-        .iter()
-        .find(|entry| entry.key == key)
-        .and_then(|entry| entry.aliases.first().copied())
-        .unwrap_or(key);
-    name.replace('_', "-")
 }
 
 /// The canonical CSS text of the style prop `key` set to `value`, computed from the value the
@@ -359,6 +254,7 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use crate::{ColorSpec, EdgesSpec, LengthSpec, StyleCache, VirtualTree, build_spec};
+    use crate::{remove_style, set_style};
     use rstest::rstest;
 
     /// Values `kind` accepts, chosen so that a reader of another kind with the
@@ -379,11 +275,10 @@ mod tests {
     fn a_removed_style_key_renders_as_the_default() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        tree.set_style(id, "gap", 8.0).unwrap();
-        tree.set_style(id, "background", f64::from(0x505050))
-            .unwrap();
-        tree.remove_style(id, "gap").unwrap();
-        tree.remove_style(id, "background").unwrap();
+        set_style(&mut tree, id, "gap", 8.0).unwrap();
+        set_style(&mut tree, id, "background", f64::from(0x505050)).unwrap();
+        remove_style(&mut tree, id, "gap").unwrap();
+        remove_style(&mut tree, id, "background").unwrap();
 
         assert_eq!(
             build_spec(&tree, &StyleCache::new(), id).unwrap().style,
@@ -395,22 +290,19 @@ mod tests {
     fn recognized_style_keys_are_mapped() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        tree.set_style(id, "display", "flex").unwrap();
-        tree.set_style(id, "flex_direction", "column").unwrap();
-        tree.set_style(id, "justify_content", "center").unwrap();
-        tree.set_style(id, "align_items", "stretch").unwrap();
-        tree.set_style(id, "gap", 8.0).unwrap();
-        tree.set_style(id, "width", 120.0).unwrap();
-        tree.set_style(id, "height", "auto").unwrap();
-        tree.set_style(id, "border_width", 1.0).unwrap();
-        tree.set_style(id, "background", f64::from(0x505050))
-            .unwrap();
-        tree.set_style(id, "border_color", f64::from(0x0000ff))
-            .unwrap();
-        tree.set_style(id, "corner_radius", 4.0).unwrap();
-        tree.set_style(id, "text_color", f64::from(0xffffff))
-            .unwrap();
-        tree.set_style(id, "text_size", 20.0).unwrap();
+        set_style(&mut tree, id, "display", "flex").unwrap();
+        set_style(&mut tree, id, "flex_direction", "column").unwrap();
+        set_style(&mut tree, id, "justify_content", "center").unwrap();
+        set_style(&mut tree, id, "align_items", "stretch").unwrap();
+        set_style(&mut tree, id, "gap", 8.0).unwrap();
+        set_style(&mut tree, id, "width", 120.0).unwrap();
+        set_style(&mut tree, id, "height", "auto").unwrap();
+        set_style(&mut tree, id, "border_width", 1.0).unwrap();
+        set_style(&mut tree, id, "background", f64::from(0x505050)).unwrap();
+        set_style(&mut tree, id, "border_color", f64::from(0x0000ff)).unwrap();
+        set_style(&mut tree, id, "corner_radius", 4.0).unwrap();
+        set_style(&mut tree, id, "text_color", f64::from(0xffffff)).unwrap();
+        set_style(&mut tree, id, "text_size", 20.0).unwrap();
 
         let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(
@@ -501,9 +393,9 @@ mod tests {
     fn removing_a_side_key_falls_back_to_the_axis_then_the_shorthand() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        tree.set_style(id, "margin", 1.0).unwrap();
-        tree.set_style(id, "margin_x", 2.0).unwrap();
-        tree.set_style(id, "margin_left", "auto").unwrap();
+        set_style(&mut tree, id, "margin", 1.0).unwrap();
+        set_style(&mut tree, id, "margin_x", 2.0).unwrap();
+        set_style(&mut tree, id, "margin_left", "auto").unwrap();
         let left = |tree: &VirtualTree| {
             build_spec(tree, &StyleCache::new(), id)
                 .unwrap()
@@ -512,11 +404,11 @@ mod tests {
                 .left
         };
         assert_eq!(left(&tree), Some(LengthSpec::Auto));
-        tree.remove_style(id, "margin_left").unwrap();
+        remove_style(&mut tree, id, "margin_left").unwrap();
         assert_eq!(left(&tree), Some(LengthSpec::Px(2.0)));
-        tree.remove_style(id, "margin_x").unwrap();
+        remove_style(&mut tree, id, "margin_x").unwrap();
         assert_eq!(left(&tree), Some(LengthSpec::Px(1.0)));
-        tree.remove_style(id, "margin").unwrap();
+        remove_style(&mut tree, id, "margin").unwrap();
         assert_eq!(left(&tree), None);
     }
 
@@ -544,8 +436,8 @@ mod tests {
     fn a_removed_overflow_key_renders_as_the_default() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        tree.set_style(id, "overflow", "scroll").unwrap();
-        tree.remove_style(id, "overflow").unwrap();
+        set_style(&mut tree, id, "overflow", "scroll").unwrap();
+        remove_style(&mut tree, id, "overflow").unwrap();
         assert_eq!(
             build_spec(&tree, &StyleCache::new(), id).unwrap().style,
             StyleSpec::default()
@@ -680,22 +572,6 @@ mod tests {
         assert_eq!(warnings, ["ignoring unknown style key `not_a_real_prop`"]);
     }
 
-    #[test]
-    fn a_css_name_reads_back_as_its_key() {
-        for entry in STYLE_KEYS {
-            assert_eq!(style_key(&css_name(entry.key)), entry.key, "{}", entry.key);
-        }
-    }
-
-    #[rstest]
-    #[case::alias_for_color("text_color", "color")]
-    #[case::alias_for_radius("corner_radius", "border-radius")]
-    #[case::first_alias("background", "background-color")]
-    #[case::kebab_case("flex_direction", "flex-direction")]
-    fn css_name_writes_the_css_spelling(#[case] key: &str, #[case] expected: &str) {
-        assert_eq!(css_name(key), expected);
-    }
-
     #[rstest]
     #[case::px("width", num(5.0), Some("5px"))]
     #[case::negative_px("margin", num(-2.5), Some("-2.5px"))]
@@ -768,15 +644,17 @@ mod tests {
     }
 
     #[test]
-    fn every_listed_alias_maps_to_its_key() {
-        for entry in STYLE_KEYS {
-            for alias in entry.aliases {
-                assert!(
-                    STYLE_KEYS.iter().all(|k| k.key != *alias),
-                    "{alias} is also a key"
-                );
-                assert_eq!(style_key(alias), entry.key, "{alias}");
-            }
+    fn the_key_list_names_the_keys_the_reader_knows() {
+        let source = include_str!("keys.rs");
+        let rows = source
+            .split_once("\nstyle_props! {\n")
+            .and_then(|(_, rest)| rest.split_once("\n}\n"))
+            .unwrap()
+            .0;
+        let keys: Vec<&str> = rows.split('"').skip(1).step_by(2).collect();
+        assert!(!keys.is_empty());
+        for key in keys {
+            assert!(STYLE_KEYS.iter().any(|entry| entry.key == key), "{key}");
         }
     }
 

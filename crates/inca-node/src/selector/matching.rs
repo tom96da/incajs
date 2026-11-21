@@ -322,6 +322,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::set_style_text;
     use crate::tests::*;
     use crate::tree::{AttributeValue, FRAGMENT_TAG};
     use rstest::rstest;
@@ -587,7 +588,7 @@ mod tests {
     #[case::derived_text("[style=\"width: 1px;\"]")]
     fn the_style_attribute_matches_as_derived_text(#[case] selector: &str) {
         let mut p = page();
-        p.f.attr(p.p1, "style", "WIDTH:1px");
+        set_style_text(&mut p.f.tree, p.p1, "WIDTH:1px").unwrap();
 
         assert!(p.f.matches(p.p1, selector));
     }

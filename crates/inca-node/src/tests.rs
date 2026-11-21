@@ -5,7 +5,9 @@
 
 #![allow(clippy::unwrap_used)]
 
+use crate::OverflowSpec;
 use crate::selector::{closest_selector, matches_selector};
+use crate::set_style;
 use crate::spec::*;
 use crate::tree::{AttributeValue, NodeId, StyleCache, TEXT_TAG, VirtualTree};
 
@@ -163,7 +165,7 @@ pub(crate) fn style_of(props: &[(&str, AttributeValue)]) -> StyleSpec {
     let mut tree = VirtualTree::new();
     let id = tree.create_node("div").unwrap();
     for (key, value) in props {
-        tree.set_style(id, *key, value.clone()).unwrap();
+        set_style(&mut tree, id, *key, value.clone()).unwrap();
     }
     build_spec(&tree, &StyleCache::new(), id).unwrap().style
 }
@@ -174,7 +176,7 @@ pub(crate) fn style_and_warnings(props: &[(&str, AttributeValue)]) -> (StyleSpec
     let mut tree = VirtualTree::new();
     let id = tree.create_node("div").unwrap();
     for (key, value) in props {
-        tree.set_style(id, *key, value.clone()).unwrap();
+        set_style(&mut tree, id, *key, value.clone()).unwrap();
     }
     let warnings = props
         .iter()
@@ -194,7 +196,7 @@ pub(crate) fn overflow_of(props: &[(&str, &str)]) -> (Option<OverflowSpec>, Opti
     let mut tree = VirtualTree::new();
     let id = tree.create_node("div").unwrap();
     for (key, value) in props {
-        tree.set_style(id, *key, *value).unwrap();
+        set_style(&mut tree, id, *key, *value).unwrap();
     }
     let style = build_spec(&tree, &StyleCache::new(), id).unwrap().style;
     (style.overflow_x, style.overflow_y)
@@ -240,7 +242,7 @@ pub(crate) fn sample(tree: &mut VirtualTree, tag: &str) -> NodeId {
     let root = node(tree, tag);
     tree.set_attribute(root, "class", "a").unwrap();
     tree.set_attribute(root, "tabindex", 1.0).unwrap();
-    tree.set_style(root, "width", 4.0).unwrap();
+    set_style(tree, root, "width", 4.0).unwrap();
     let span = node(tree, "span");
     let inner = node(tree, TEXT_TAG);
     tree.set_data(inner, "hi").unwrap();

@@ -9,8 +9,9 @@ use cssparser::{
 };
 
 use crate::selector::Selectors;
-use crate::spec::{style_key, style_warning};
+use crate::spec::style_warning;
 use crate::tree::AttributeValue;
+use crate::tree::style_key;
 
 /// One qualified rule: its selectors and its declarations in source order.
 #[derive(Debug)]

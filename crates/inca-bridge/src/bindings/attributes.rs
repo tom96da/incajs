@@ -12,6 +12,7 @@ use inca_node::{AttributeValue, NodeId, VirtualNode, style_warning, valid_attrib
 
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
+use inca_node::{remove_style as remove_style_prop, set_style as set_style_prop, set_style_text};
 
 pub(super) fn set_attribute<'js>(
     host: Rc<RefCell<Host>>,
@@ -46,9 +47,7 @@ pub(super) fn store_attribute(
 ) -> JsResult<()> {
     let key = folded_key(ctx, host, node_id, name)?;
     if key == "style" {
-        let warnings = host
-            .tree
-            .set_style_text(node_id, &value.text())
+        let warnings = set_style_text(&mut host.tree, node_id, &value.text())
             .map_err(|err| throw_tree_error(ctx, err))?;
         for line in &warnings {
             print_style_warning(host, node_id, line);
@@ -124,8 +123,7 @@ pub(super) fn set_style<'js>(
         let mut host = host.borrow_mut();
         let warning = style_warning(&key, &value);
         let is_display = key == "display";
-        host.tree
-            .set_style(node_id, key, value)
+        set_style_prop(&mut host.tree, node_id, key, value)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         if is_display {
             host.mark_focus_dirty(node_id);
@@ -155,8 +153,7 @@ pub(super) fn remove_style<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), key| {
         let mut host = host.borrow_mut();
-        host.tree
-            .remove_style(node_id, &key)
+        remove_style_prop(&mut host.tree, node_id, &key)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         if key == "display" {
             host.mark_focus_dirty(node_id);

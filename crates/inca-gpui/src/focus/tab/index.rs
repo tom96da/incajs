@@ -92,6 +92,7 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use gpui::TestAppContext;
+    use inca_node::{remove_style, set_style};
     use rstest::rstest;
     use std::collections::HashSet;
 
@@ -127,12 +128,12 @@ mod tests {
             None
         );
         let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
-        tree.set_style(id, "display", "none").unwrap();
+        set_style(&mut tree, id, "display", "none").unwrap();
         assert_eq!(
             FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
             None
         );
-        tree.set_style(id, "display", "flex").unwrap();
+        set_style(&mut tree, id, "display", "flex").unwrap();
         assert_eq!(
             FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
             Some(0)
@@ -151,7 +152,7 @@ mod tests {
     #[test]
     fn a_display_none_in_capitals_leaves_no_tab_index() {
         let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
-        tree.set_style(id, "display", "NONE").unwrap();
+        set_style(&mut tree, id, "display", "NONE").unwrap();
         assert_eq!(
             FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
             None
@@ -169,7 +170,7 @@ mod tests {
         tree.append_child(parent, child).unwrap();
         for (target, name) in [(child, "self"), (parent, "ancestor")] {
             if hide == "display" {
-                tree.set_style(target, "display", "none").unwrap();
+                set_style(&mut tree, target, "display", "none").unwrap();
             } else {
                 tree.set_attribute(target, hide, true).unwrap();
             }
@@ -177,7 +178,7 @@ mod tests {
                 mismatches.push(format!("{hide} on {name} keeps the tab index"));
             }
             if hide == "display" {
-                tree.remove_style(target, "display").unwrap();
+                remove_style(&mut tree, target, "display").unwrap();
             } else {
                 tree.remove_attribute(target, hide).unwrap();
             }
@@ -237,12 +238,12 @@ mod tests {
             FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
             None
         );
-        tree.set_style(id, "display", "flex").unwrap();
+        set_style(&mut tree, id, "display", "flex").unwrap();
         assert_eq!(
             FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
             Some(0)
         );
-        tree.remove_style(id, "display").unwrap();
+        remove_style(&mut tree, id, "display").unwrap();
         tree.set_attribute(id, "hidden", "until-found").unwrap();
         assert_eq!(
             FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),

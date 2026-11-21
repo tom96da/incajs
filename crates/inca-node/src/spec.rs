@@ -18,12 +18,15 @@ mod number;
 mod parse;
 
 pub use axes::{WheelAxes, wheel_axes};
-pub use keys::{STYLE_KEYS, StyleKey, ValueKind, style_warning};
-pub(crate) use keys::{css_declaration, css_name, style_key, unknown_key_warning};
+pub use keys::style_warning;
+pub(crate) use keys::{css_declaration, unknown_key_warning};
 pub use parse::declared_window_size;
 
 use self::parse::style_spec_from_props;
 use crate::input_text::sanitized;
+pub use crate::tree::{
+    AlignSpec, DisplaySpec, FlexDirectionSpec, OverflowSpec, STYLE_KEYS, StyleKey, ValueKind,
+};
 use crate::tree::{
     AttributeValue, NodeId, NodeKind, StyleCache, StyleMap, VirtualNode, VirtualTree,
 };
@@ -68,83 +71,6 @@ impl ColorSpec {
     #[must_use]
     pub const fn opaque(rgb: u32) -> Self {
         Self { rgb, alpha: 255 }
-    }
-}
-
-/// Defines a keyword enum: its variants, `NAMES` and `from_name`. A variant
-/// lists every name it takes, separated by `|`.
-macro_rules! keywords {
-    (
-        $(#[$meta:meta])*
-        pub enum $name:ident {
-            $($(#[$vmeta:meta])* $variant:ident = $first:literal $(| $more:literal)*,)*
-        }
-    ) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub enum $name {
-            $($(#[$vmeta])* $variant,)*
-        }
-
-        impl $name {
-            /// Every name a style value of this kind takes, in declaration order.
-            pub const NAMES: &[&str] = &[$($first, $($more,)*)*];
-
-            /// The variant `name` stands for. Names compare without ASCII case.
-            #[must_use]
-            pub fn from_name(name: &str) -> Option<Self> {
-                $(
-                    if name.eq_ignore_ascii_case($first) $(|| name.eq_ignore_ascii_case($more))* {
-                        return Some(Self::$variant);
-                    }
-                )*
-                None
-            }
-        }
-    };
-}
-
-keywords! {
-    /// The values of `display`.
-    pub enum DisplaySpec {
-        Flex = "flex",
-        Block = "block",
-        Grid = "grid",
-        None = "none",
-    }
-}
-
-keywords! {
-    /// The values of `flex-direction`.
-    pub enum FlexDirectionSpec {
-        Row = "row",
-        Column = "column",
-        RowReverse = "row-reverse" | "row_reverse",
-        ColumnReverse = "column-reverse" | "column_reverse",
-    }
-}
-
-keywords! {
-    /// The values of `align-items` and `justify-content`.
-    pub enum AlignSpec {
-        Start = "start" | "flex-start",
-        End = "end" | "flex-end",
-        Center = "center",
-        Stretch = "stretch",
-    }
-}
-
-keywords! {
-    /// The values of `overflow`.
-    pub enum OverflowSpec {
-        Visible = "visible",
-        /// Clips without making a scroll container.
-        Clip = "clip",
-        Hidden = "hidden",
-        /// Scrolls, and a scrollbar of this axis can reserve width.
-        Scroll = "scroll",
-        /// Scrolls, and a scrollbar of this axis draws over the content.
-        Auto = "auto",
     }
 }
 
@@ -367,6 +293,7 @@ mod tests {
     use super::*;
     use crate::tests::{Fixture, HTML, SVG};
     use crate::tree::VirtualTree;
+    use crate::{remove_style, set_style};
 
     /// A node with `name` as its class under the root of `f`.
     fn classed(f: &mut Fixture, name: &str) -> NodeId {
@@ -515,9 +442,9 @@ mod tests {
         }
         tree.set_attribute(id, "hidden", true).unwrap();
         assert_eq!(display(&tree), Some(DisplaySpec::None));
-        tree.set_style(id, "display", "flex").unwrap();
+        set_style(&mut tree, id, "display", "flex").unwrap();
         assert_eq!(display(&tree), Some(DisplaySpec::Flex));
-        tree.remove_style(id, "display").unwrap();
+        remove_style(&mut tree, id, "display").unwrap();
         tree.remove_attribute(id, "hidden").unwrap();
         assert_eq!(display(&tree), None);
     }
@@ -557,10 +484,10 @@ mod tests {
     #[test]
     fn a_hidden_attribute_does_not_hide_a_node_whose_display_is_set() {
         let (mut tree, [_, parent, node]) = chain();
-        tree.set_style(node, "overflow_x", "hidden").unwrap();
-        tree.set_style(node, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, node, "overflow_x", "hidden").unwrap();
+        set_style(&mut tree, node, "overflow_y", "scroll").unwrap();
         tree.set_attribute(parent, "hidden", true).unwrap();
-        tree.set_style(parent, "display", "flex").unwrap();
+        set_style(&mut tree, parent, "display", "flex").unwrap();
         assert_eq!(wheel(&tree, node), Some((false, true)));
     }
 
@@ -568,7 +495,7 @@ mod tests {
     fn the_hidden_attribute_hides_a_node_with_an_empty_display_and_no_sheet() {
         let mut tree = VirtualTree::new();
         let node = tree.create_node("div").unwrap();
-        tree.set_style(node, "display", "").unwrap();
+        set_style(&mut tree, node, "display", "").unwrap();
         tree.set_attribute(node, "hidden", true).unwrap();
 
         assert!(hidden_by_attribute(&tree, &StyleCache::new(), node));
@@ -579,7 +506,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".b { width: 1px }");
         let node = classed(&mut f, "a");
-        f.tree.set_style(node, "display", "").unwrap();
+        set_style(&mut f.tree, node, "display", "").unwrap();
         f.attr(node, "hidden", true);
 
         assert!(hidden_by_attribute(&f.tree, &f.cache, node));

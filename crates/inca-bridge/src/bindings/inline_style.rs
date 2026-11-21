@@ -31,6 +31,7 @@ use super::convert::{JsNodeId, saturated, unsigned};
 use super::host::Host;
 use crate::interfaces::define_unconstructable;
 use inca_jsenv::required_prototype;
+use inca_node::{remove_style_property, set_style_property, set_style_text};
 
 /// A `CSSStyleDeclaration` instance. It holds the node id and no JS value.
 // `IncaStyle` holds a node id and no JS value, so the derive is sound.
@@ -125,7 +126,7 @@ fn define_members<'js>(
         move |ctx, this, value: Value<'js>| {
             let node = node_of(ctx, &this)?;
             let value = value_text(ctx, &value)?;
-            let result = set.borrow_mut().tree.set_style_text(node, &value);
+            let result = set_style_text(&mut set.borrow_mut().tree, node, &value);
             finish(&set, node, true, result);
             Ok(())
         },
@@ -153,7 +154,7 @@ fn define_members<'js>(
         if refused && !value.is_empty() {
             return Ok(());
         }
-        let result = h.borrow_mut().tree.set_style_property(node, &name, &value);
+        let result = set_style_property(&mut h.borrow_mut().tree, node, &name, &value);
         finish(&h, node, is_display(&name), result);
         Ok(())
     })?;
@@ -162,7 +163,7 @@ fn define_members<'js>(
         let node = node_of(ctx, &this)?;
         require(ctx, "removeProperty", args, 1)?;
         let name = text(ctx, &args[0])?;
-        let former = h.borrow_mut().tree.remove_style_property(node, &name);
+        let former = remove_style_property(&mut h.borrow_mut().tree, node, &name);
         if former.is_ok() && is_display(&name) {
             h.borrow_mut().mark_focus_dirty(node);
         }
@@ -209,10 +210,8 @@ fn define_properties<'js>(
             move |ctx, this, value: Value<'js>| {
                 let node = node_of(ctx, &this)?;
                 let value = value_text(ctx, &value)?;
-                let result = set
-                    .borrow_mut()
-                    .tree
-                    .set_style_property(node, &write_name, &value);
+                let result =
+                    set_style_property(&mut set.borrow_mut().tree, node, &write_name, &value);
                 finish(&set, node, is_display(&write_name), result);
                 Ok(())
             },

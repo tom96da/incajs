@@ -20,6 +20,7 @@ use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 
 use inca_bridge::test_support;
+use inca_node::set_style;
 
 /// Counts `event` on `node` into `globalThis.clicks` and keeps the last one
 /// in `globalThis.lastEvent`.
@@ -64,8 +65,8 @@ fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
     let host = Rc::new(RefCell::new(Host::default()));
     let mut host_mut = host.borrow_mut();
     let node = host_mut.tree.create_node("div").unwrap();
-    host_mut.tree.set_style(node, "width", 100.0).unwrap();
-    host_mut.tree.set_style(node, "height", 100.0).unwrap();
+    set_style(&mut host_mut.tree, node, "width", 100.0).unwrap();
+    set_style(&mut host_mut.tree, node, "height", 100.0).unwrap();
     drop(host_mut);
     (host, node)
 }
@@ -116,14 +117,14 @@ fn build_panes_recording(a_events: &[&str], root_events: &[&str], record: &str) 
     let (root, a, b) = {
         let mut host = host.borrow_mut();
         let root = host.tree.create_node("div").unwrap();
-        host.tree.set_style(root, "display", "flex").unwrap();
-        host.tree.set_style(root, "flex_direction", "row").unwrap();
-        host.tree.set_style(root, "width", 300.0).unwrap();
-        host.tree.set_style(root, "height", 100.0).unwrap();
+        set_style(&mut host.tree, root, "display", "flex").unwrap();
+        set_style(&mut host.tree, root, "flex_direction", "row").unwrap();
+        set_style(&mut host.tree, root, "width", 300.0).unwrap();
+        set_style(&mut host.tree, root, "height", 100.0).unwrap();
         let mut pane = || {
             let pane = host.tree.create_node("div").unwrap();
-            host.tree.set_style(pane, "width", 100.0).unwrap();
-            host.tree.set_style(pane, "height", 100.0).unwrap();
+            set_style(&mut host.tree, pane, "width", 100.0).unwrap();
+            set_style(&mut host.tree, pane, "height", 100.0).unwrap();
             host.tree.append_child(root, pane).unwrap();
             pane
         };
@@ -189,11 +190,11 @@ fn mount_recording_pair_with(
     let (parent, child) = {
         let mut host = host.borrow_mut();
         let parent = host.tree.create_node("div").unwrap();
-        host.tree.set_style(parent, "width", 100.0).unwrap();
-        host.tree.set_style(parent, "height", 100.0).unwrap();
+        set_style(&mut host.tree, parent, "width", 100.0).unwrap();
+        set_style(&mut host.tree, parent, "height", 100.0).unwrap();
         let child = host.tree.create_node("div").unwrap();
-        host.tree.set_style(child, "width", 100.0).unwrap();
-        host.tree.set_style(child, "height", 100.0).unwrap();
+        set_style(&mut host.tree, child, "width", 100.0).unwrap();
+        set_style(&mut host.tree, child, "height", 100.0).unwrap();
         host.tree.append_child(parent, child).unwrap();
         (parent, child)
     };

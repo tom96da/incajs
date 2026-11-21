@@ -152,6 +152,7 @@ mod tests {
     use crate::event_sink::noop_sink_methods;
     use crate::tests::*;
     use gpui::{Bounds, TestAppContext, point};
+    use inca_node::set_style;
     use inca_node::{StyleCache, VirtualTree};
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
@@ -169,8 +170,8 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
         let mid = boxed(&mut tree, Some(root), 100., 100.);
-        tree.set_style(mid, "border_width", 2.0).unwrap();
-        tree.set_style(root, "padding", 10.0).unwrap();
+        set_style(&mut tree, mid, "border_width", 2.0).unwrap();
+        set_style(&mut tree, root, "padding", 10.0).unwrap();
         let leaf = boxed(&mut tree, Some(mid), 50., 40.);
         let probe = probe();
         draw(cx.add_empty_window(), &tree, &probe);
@@ -188,11 +189,11 @@ mod tests {
     fn a_record_carries_the_snapped_scroll_its_parent_applied(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
-        tree.set_style(root, "overflow_y", "scroll").unwrap();
-        tree.set_style(root, "padding", 4.0).unwrap();
+        set_style(&mut tree, root, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, root, "padding", 4.0).unwrap();
         let mid = boxed(&mut tree, Some(root), 100., 300.);
-        tree.set_style(mid, "overflow_y", "scroll").unwrap();
-        tree.set_style(mid, "border_width", 2.0).unwrap();
+        set_style(&mut tree, mid, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, mid, "border_width", 2.0).unwrap();
         let leaf = boxed(&mut tree, Some(mid), 100., 600.);
         let (probe, window) = mounted(cx, tree);
         cx.simulate_window_scale_factor_change(window, 2.);
@@ -211,7 +212,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
         let hidden = boxed(&mut tree, Some(root), 100., 100.);
-        tree.set_style(hidden, "display", "none").unwrap();
+        set_style(&mut tree, hidden, "display", "none").unwrap();
         let _shown = boxed(&mut tree, Some(root), 30., 30.);
         let inside = boxed(&mut tree, Some(hidden), 10., 10.);
         let probe = probe();
@@ -225,7 +226,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
         let hidden = boxed(&mut tree, Some(root), 100., 100.);
-        tree.set_style(hidden, "display", "none").unwrap();
+        set_style(&mut tree, hidden, "display", "none").unwrap();
         let shown = boxed(&mut tree, Some(root), 30., 30.);
         boxed(&mut tree, Some(hidden), 10., 10.);
         let probe = probe();
@@ -249,7 +250,7 @@ mod tests {
     fn a_comment_child_leaves_its_sibling_at_the_start(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
-        tree.set_style(root, "gap", 10.).unwrap();
+        set_style(&mut tree, root, "gap", 10.).unwrap();
         let comment = tree.create_node("#comment").unwrap();
         tree.append_child(root, comment).unwrap();
         let shown = boxed(&mut tree, Some(root), 30., 30.);
@@ -363,7 +364,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
         let child = boxed(&mut tree, Some(root), 50., 50.);
-        tree.set_style(child, "overflow", overflow).unwrap();
+        set_style(&mut tree, child, "overflow", overflow).unwrap();
         let probe = classic_probe(tree);
         BarScene::with_probe(cx, probe.clone());
         assert_eq!(
@@ -376,7 +377,7 @@ mod tests {
     fn a_child_with_no_scroll_handle_records_no_strips() {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
-        tree.set_style(root, "overflow", "scroll").unwrap();
+        set_style(&mut tree, root, "overflow", "scroll").unwrap();
         let spec = inca_node::build_spec(&tree, &StyleCache::new(), root).unwrap();
         let sink = NoHandles(classic_probe(tree));
         assert_eq!(
@@ -390,7 +391,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
         let scroller = boxed(&mut tree, Some(root), 50., 50.);
-        tree.set_style(scroller, "overflow", "scroll").unwrap();
+        set_style(&mut tree, scroller, "overflow", "scroll").unwrap();
         let plain = boxed(&mut tree, Some(root), 50., 50.);
         let probe = classic_probe(tree);
         BarScene::with_probe(cx, probe.clone());
@@ -402,7 +403,7 @@ mod tests {
     fn the_bar_element_leaves_the_recorded_box_of_the_last_child(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
-        tree.set_style(root, "overflow", "scroll").unwrap();
+        set_style(&mut tree, root, "overflow", "scroll").unwrap();
         let child = boxed(&mut tree, Some(root), 300., 300.);
         let probe = classic_probe(tree);
         BarScene::with_probe(cx, probe.clone());

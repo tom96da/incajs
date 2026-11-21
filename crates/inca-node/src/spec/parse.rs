@@ -133,6 +133,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::set_style;
     use crate::tests::*;
     use crate::{AlignSpec, FlexDirectionSpec, VirtualTree, build_spec};
     use rstest::rstest;
@@ -243,7 +244,7 @@ mod tests {
     fn an_overflow_number_is_ignored() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        tree.set_style(id, "overflow", 1.0).unwrap();
+        set_style(&mut tree, id, "overflow", 1.0).unwrap();
         assert_eq!(
             build_spec(&tree, &StyleCache::new(), id).unwrap().style,
             StyleSpec::default()
@@ -266,7 +267,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
         for (key, value) in props {
-            tree.set_style(id, *key, *value).unwrap();
+            set_style(&mut tree, id, *key, *value).unwrap();
         }
         assert_eq!(
             build_spec(&tree, &StyleCache::new(), id)
@@ -281,8 +282,7 @@ mod tests {
     fn malformed_enum_value_is_ignored_not_a_panic() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        tree.set_style(id, "display", "not-a-real-display-value")
-            .unwrap();
+        set_style(&mut tree, id, "display", "not-a-real-display-value").unwrap();
 
         let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(spec.style.display, None);
@@ -309,8 +309,8 @@ mod tests {
     ) {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        tree.set_style(id, "width", width).unwrap();
-        tree.set_style(id, "height", height).unwrap();
+        set_style(&mut tree, id, "width", width).unwrap();
+        set_style(&mut tree, id, "height", height).unwrap();
 
         assert_eq!(
             declared_window_size(&tree, &StyleCache::new(), id),

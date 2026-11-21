@@ -68,6 +68,7 @@ mod tests {
     use crate::element::scrollbar::HIDE_DELAY;
     use crate::element::scrollbar::view::ScrollbarState;
     use crate::tests::{BarScene, boxed, capture_entities, nested_bar_tree};
+    use inca_node::set_style;
 
     const BOTH: [(&str, &str); 1] = [("overflow", "scroll")];
     const Y_SCROLL: [(&str, &str); 2] = [("overflow_x", "hidden"), ("overflow_y", "scroll")];
@@ -163,8 +164,8 @@ mod tests {
     fn a_bar_under_the_bar_of_a_later_sibling_reports_no_hover(cx: &mut TestAppContext) {
         let mut tree = nested_bar_tree(&BOTH);
         let cover = boxed(&mut tree, Some(0), 100., 100.);
-        tree.set_style(cover, "margin_top", -150.0).unwrap();
-        tree.set_style(cover, "overflow", "scroll").unwrap();
+        set_style(&mut tree, cover, "margin_top", -150.0).unwrap();
+        set_style(&mut tree, cover, "overflow", "scroll").unwrap();
         boxed(&mut tree, Some(cover), 300., 300.);
         let mut scene = BarScene::new(cx, Scrollbars::Classic, tree);
         scene.probe.hovers.borrow_mut().clear();
@@ -179,7 +180,7 @@ mod tests {
         scene.probe.hovers.borrow_mut().clear();
         {
             let mut tree = scene.probe.tree.borrow_mut();
-            tree.set_style(1, "overflow", "scroll").unwrap();
+            set_style(&mut tree, 1, "overflow", "scroll").unwrap();
         }
         scene.frame();
         assert_eq!(reports(&scene), [true]);

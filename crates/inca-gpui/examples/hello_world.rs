@@ -13,6 +13,7 @@ use gpui::{App, Bounds, Context, Window, WindowBounds, WindowOptions, prelude::*
 use gpui_platform::application;
 
 use inca_gpui::render_tree;
+use inca_node::set_style;
 use inca_node::{NodeId, StyleCache, VirtualTree};
 
 struct HelloWorld {
@@ -30,43 +31,38 @@ fn build_tree() -> (VirtualTree, NodeId) {
     let mut tree = VirtualTree::new();
 
     let outer = tree.create_node("div").unwrap();
-    tree.set_style(outer, "display", "flex").unwrap();
-    tree.set_style(outer, "flex_direction", "column").unwrap();
-    tree.set_style(outer, "gap", 12.0).unwrap();
-    tree.set_style(outer, "width", 500.0).unwrap();
-    tree.set_style(outer, "height", 500.0).unwrap();
-    tree.set_style(outer, "justify_content", "center").unwrap();
-    tree.set_style(outer, "align_items", "center").unwrap();
-    tree.set_style(outer, "background", f64::from(0x505050))
-        .unwrap();
-    tree.set_style(outer, "border_width", 1.0).unwrap();
-    tree.set_style(outer, "border_color", f64::from(0x0000ff))
-        .unwrap();
-    tree.set_style(outer, "text_color", f64::from(0xffffff))
-        .unwrap();
-    tree.set_style(outer, "text_size", 20.0).unwrap();
+    set_style(&mut tree, outer, "display", "flex").unwrap();
+    set_style(&mut tree, outer, "flex_direction", "column").unwrap();
+    set_style(&mut tree, outer, "gap", 12.0).unwrap();
+    set_style(&mut tree, outer, "width", 500.0).unwrap();
+    set_style(&mut tree, outer, "height", 500.0).unwrap();
+    set_style(&mut tree, outer, "justify_content", "center").unwrap();
+    set_style(&mut tree, outer, "align_items", "center").unwrap();
+    set_style(&mut tree, outer, "background", f64::from(0x505050)).unwrap();
+    set_style(&mut tree, outer, "border_width", 1.0).unwrap();
+    set_style(&mut tree, outer, "border_color", f64::from(0x0000ff)).unwrap();
+    set_style(&mut tree, outer, "text_color", f64::from(0xffffff)).unwrap();
+    set_style(&mut tree, outer, "text_size", 20.0).unwrap();
 
     let label = tree.create_node("#text").unwrap();
     tree.set_data(label, "Hello, inca!").unwrap();
     tree.append_child(outer, label).unwrap();
 
     let inner = tree.create_node("div").unwrap();
-    tree.set_style(inner, "display", "flex").unwrap();
-    tree.set_style(inner, "flex_direction", "row").unwrap();
-    tree.set_style(inner, "gap", 8.0).unwrap();
+    set_style(&mut tree, inner, "display", "flex").unwrap();
+    set_style(&mut tree, inner, "flex_direction", "row").unwrap();
+    set_style(&mut tree, inner, "gap", 8.0).unwrap();
     tree.append_child(outer, inner).unwrap();
 
     let colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x000000, 0xffffff];
     for color in colors {
         let square = tree.create_node("div").unwrap();
-        tree.set_style(square, "width", 32.0).unwrap();
-        tree.set_style(square, "height", 32.0).unwrap();
-        tree.set_style(square, "background", f64::from(color))
-            .unwrap();
-        tree.set_style(square, "border_width", 1.0).unwrap();
-        tree.set_style(square, "border_color", f64::from(0xffffff))
-            .unwrap();
-        tree.set_style(square, "corner_radius", 4.0).unwrap();
+        set_style(&mut tree, square, "width", 32.0).unwrap();
+        set_style(&mut tree, square, "height", 32.0).unwrap();
+        set_style(&mut tree, square, "background", f64::from(color)).unwrap();
+        set_style(&mut tree, square, "border_width", 1.0).unwrap();
+        set_style(&mut tree, square, "border_color", f64::from(0xffffff)).unwrap();
+        set_style(&mut tree, square, "corner_radius", 4.0).unwrap();
         tree.append_child(inner, square).unwrap();
     }
 

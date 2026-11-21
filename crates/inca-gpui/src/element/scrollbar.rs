@@ -323,6 +323,7 @@ mod tests {
     use super::*;
     use crate::tests::{BarScene, Probe, boxed, probe_of, rect};
     use inca_node::VirtualTree;
+    use inca_node::set_style;
     use inca_test_macros::gpui_cases;
 
     const BOTH: WheelAxes = WheelAxes { x: true, y: true };
@@ -522,11 +523,11 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
         for (key, value) in props {
-            tree.set_style(root, *key, *value).unwrap();
+            set_style(&mut tree, root, *key, *value).unwrap();
         }
         let leaf = tree.create_node("div").unwrap();
         for (key, value) in child {
-            tree.set_style(leaf, *key, *value).unwrap();
+            set_style(&mut tree, leaf, *key, *value).unwrap();
         }
         tree.append_child(root, leaf).unwrap();
         let probe = Probe {
@@ -576,11 +577,11 @@ mod tests {
     ) -> Point<Pixels> {
         let mut tree = VirtualTree::new();
         let scroller = boxed(&mut tree, None, 200., 100.);
-        tree.set_style(scroller, "padding", 10.0).unwrap();
-        tree.set_style(scroller, "border_width", 3.0).unwrap();
-        tree.set_style(scroller, "overflow", "scroll").unwrap();
+        set_style(&mut tree, scroller, "padding", 10.0).unwrap();
+        set_style(&mut tree, scroller, "border_width", 3.0).unwrap();
+        set_style(&mut tree, scroller, "overflow", "scroll").unwrap();
         let child = boxed(&mut tree, Some(scroller), width, height);
-        tree.set_style(child, "flex_shrink", 0.0).unwrap();
+        set_style(&mut tree, child, "flex_shrink", 0.0).unwrap();
         let probe = Probe {
             mode,
             ..probe_of(tree)
@@ -606,9 +607,9 @@ mod tests {
     fn an_empty_bordered_container_has_no_range_beside_its_strips(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let scroller = boxed(&mut tree, None, 38., 38.);
-        tree.set_style(scroller, "padding", 10.0).unwrap();
-        tree.set_style(scroller, "border_width", 3.0).unwrap();
-        tree.set_style(scroller, "overflow", "scroll").unwrap();
+        set_style(&mut tree, scroller, "padding", 10.0).unwrap();
+        set_style(&mut tree, scroller, "border_width", 3.0).unwrap();
+        set_style(&mut tree, scroller, "overflow", "scroll").unwrap();
         let probe = Probe {
             mode: Scrollbars::Classic,
             ..probe_of(tree)

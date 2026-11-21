@@ -90,6 +90,7 @@ mod tests {
     };
     use inca_jsenv::stderr_reporter;
     use inca_node::AttributeValue;
+    use inca_node::set_style;
     use rstest::rstest;
 
     use crate::app::start;
@@ -141,12 +142,8 @@ mod tests {
             host.tree.append_child(root, id).unwrap();
             id
         };
-        host.tree
-            .set_style(content, "width", f64::from(width))
-            .unwrap();
-        host.tree
-            .set_style(content, "height", f64::from(height))
-            .unwrap();
+        set_style(&mut host.tree, content, "width", f64::from(width)).unwrap();
+        set_style(&mut host.tree, content, "height", f64::from(height)).unwrap();
     }
 
     fn bounds_size(cx: &mut TestAppContext, window: WindowHandle<HostedApp>) -> (f32, f32) {
@@ -303,10 +300,10 @@ mod tests {
         let content = host.tree.create_node("div").unwrap();
         host.tree.append_child(root, content).unwrap();
         if let Some(width) = width {
-            host.tree.set_style(content, "width", width).unwrap();
+            set_style(&mut host.tree, content, "width", width).unwrap();
         }
         if let Some(height) = height {
-            host.tree.set_style(content, "height", height).unwrap();
+            set_style(&mut host.tree, content, "height", height).unwrap();
         }
     }
 
@@ -432,8 +429,8 @@ mod tests {
         let mut host = Host::default();
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
-        host.tree.set_style(content, "width", 300.0).unwrap();
-        host.tree.set_style(content, "height", 150.0).unwrap();
+        set_style(&mut host.tree, content, "width", 300.0).unwrap();
+        set_style(&mut host.tree, content, "height", 150.0).unwrap();
         host.tree.append_child(root, content).unwrap();
 
         assert_eq!(content_window_size(&host, root), (Some(300.0), Some(150.0)));
@@ -444,8 +441,8 @@ mod tests {
         let mut host = Host::default();
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
-        host.tree.set_style(content, "width", "800px").unwrap();
-        host.tree.set_style(content, "height", "150px").unwrap();
+        set_style(&mut host.tree, content, "width", "800px").unwrap();
+        set_style(&mut host.tree, content, "height", "150px").unwrap();
         host.tree.append_child(root, content).unwrap();
 
         assert_eq!(content_window_size(&host, root), (Some(800.0), Some(150.0)));
@@ -459,7 +456,7 @@ mod tests {
         let mut host = Host::default();
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
-        host.tree.set_style(content, "width", value).unwrap();
+        set_style(&mut host.tree, content, "width", value).unwrap();
         host.tree.append_child(root, content).unwrap();
 
         assert_eq!(content_window_size(&host, root), (None, None));

@@ -92,6 +92,7 @@ enum Step {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+    use crate::set_style_text;
     use crate::tests::{SVG, children, family, node, sample};
     use crate::tree::{AttributeValue, FRAGMENT_TAG};
     use rstest::rstest;
@@ -238,8 +239,7 @@ mod tests {
     fn a_clone_keeps_the_declaration_order_and_the_style_entry() {
         let mut tree = VirtualTree::new();
         let original = node(&mut tree, "div");
-        tree.set_attribute(original, "style", "height: 2px; width: 1px")
-            .unwrap();
+        set_style_text(&mut tree, original, "height: 2px; width: 1px").unwrap();
 
         let made = tree.clone_subtree(original, false).unwrap();
 

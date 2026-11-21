@@ -46,6 +46,7 @@ mod name;
 mod props;
 mod relations;
 mod state;
+mod style_key;
 mod template;
 mod text;
 
@@ -54,6 +55,10 @@ pub use insert_nodes::{InsertArg, Inserted, Insertion, Placement};
 pub use name::NodeKind;
 pub use props::valid_attribute_name;
 pub use relations::Link;
+pub use style_key::{
+    AlignSpec, DisplaySpec, FlexDirectionSpec, OverflowSpec, STYLE_KEYS, StyleKey, ValueKind,
+};
+pub(crate) use style_key::{css_name, style_key};
 
 /// The tag of a comment.
 pub(crate) const COMMENT_TAG: &str = "#comment";
@@ -493,6 +498,7 @@ mod tests {
 
     use super::*;
     use crate::tests::{Fixture, node};
+    use crate::{remove_style, set_style};
     use rstest::rstest;
 
     #[rstest]
@@ -539,11 +545,11 @@ mod tests {
             TreeError::NodeNotFound(999)
         );
         assert_eq!(
-            tree.set_style(999, "k", "v").unwrap_err(),
+            set_style(&mut tree, 999, "k", "v").unwrap_err(),
             TreeError::NodeNotFound(999)
         );
         assert_eq!(
-            tree.remove_style(999, "k").unwrap_err(),
+            remove_style(&mut tree, 999, "k").unwrap_err(),
             TreeError::NodeNotFound(999)
         );
     }

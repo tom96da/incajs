@@ -166,6 +166,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::set_style;
     use crate::spec::build_spec;
     use crate::tests::{num, style_and_warnings, text};
     use crate::tree::{StyleCache, VirtualTree};
@@ -194,8 +195,8 @@ mod tests {
     fn color_accepts_hex_strings_as_well_as_numbers() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        tree.set_style(id, "background", "#505050").unwrap();
-        tree.set_style(id, "border_color", "#00f").unwrap();
+        set_style(&mut tree, id, "background", "#505050").unwrap();
+        set_style(&mut tree, id, "border_color", "#00f").unwrap();
 
         let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(spec.style.background, Some(ColorSpec::opaque(0x505050)));

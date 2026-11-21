@@ -185,6 +185,7 @@ mod tests {
         MouseButton, ScrollDelta, ScrollEvent, TestAppContext, VisualTestContext, point, px,
     };
     use inca_node::StyleCache;
+    use inca_node::set_style;
     use inca_node::tree::VirtualTree;
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -439,8 +440,8 @@ mod tests {
         let parent = tree.create_node("div").unwrap();
         let child = tree.create_node("div").unwrap();
         for (id, side) in [(parent, 200.0), (child, 100.0)] {
-            tree.set_style(id, "width", side).unwrap();
-            tree.set_style(id, "height", side).unwrap();
+            set_style(&mut tree, id, "width", side).unwrap();
+            set_style(&mut tree, id, "height", side).unwrap();
         }
         tree.set_attribute(child, "inert", true).unwrap();
         tree.append_child(parent, child).unwrap();
@@ -517,7 +518,7 @@ mod tests {
         boxed(&mut tree, Some(inner), 50., 200.);
         boxed(&mut tree, Some(outer), 50., 200.);
         for id in [outer, inner] {
-            tree.set_style(id, "overflow", overflow).unwrap();
+            set_style(&mut tree, id, "overflow", overflow).unwrap();
         }
         tree
     }

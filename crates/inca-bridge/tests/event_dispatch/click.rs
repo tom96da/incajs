@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use inca_node::set_style;
 
 /// Unlike `install_click_counter`, defers the actual mutation to a
 /// microtask, the same way a real framework's reactivity scheduler
@@ -112,8 +113,8 @@ fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppCont
     let node = {
         let mut host = host.borrow_mut();
         let node = host.tree.create_node("div").unwrap();
-        host.tree.set_style(node, "width", 100.0).unwrap();
-        host.tree.set_style(node, "height", 100.0).unwrap();
+        set_style(&mut host.tree, node, "width", 100.0).unwrap();
+        set_style(&mut host.tree, node, "height", 100.0).unwrap();
         node
     };
     let engine = test_support::engine_for(&host);

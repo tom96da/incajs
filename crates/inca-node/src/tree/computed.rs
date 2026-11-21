@@ -224,6 +224,7 @@ mod tests {
 
     use super::*;
     use crate::build_spec;
+    use crate::set_style;
     use crate::tests::{Fixture, SVG, num, text};
     use crate::tree::TEXT_TAG;
 
@@ -270,7 +271,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet("#a.a { width: 1px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "width", 50.0).unwrap();
+        set_style(&mut f.tree, a, "width", 50.0).unwrap();
 
         assert_eq!(f.computed(a, "width"), Some(num(50.0)));
     }
@@ -280,7 +281,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { display: flex }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "display", "").unwrap();
+        set_style(&mut f.tree, a, "display", "").unwrap();
 
         assert_eq!(f.computed(a, "display"), Some(text("flex")));
     }
@@ -290,7 +291,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { padding-top: 8px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "padding", "").unwrap();
+        set_style(&mut f.tree, a, "padding", "").unwrap();
 
         assert_eq!(padding_top(&f, a), Some(8.0));
     }
@@ -300,8 +301,8 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { padding: 4px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "padding", "").unwrap();
-        f.tree.set_style(a, "padding_top", 2.0).unwrap();
+        set_style(&mut f.tree, a, "padding", "").unwrap();
+        set_style(&mut f.tree, a, "padding_top", 2.0).unwrap();
         let spec = build_spec(&f.tree, &f.cache, a).unwrap();
 
         assert_eq!(spec.style.padding.top, Some(2.0));
@@ -322,7 +323,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { padding-top: 8px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "padding", 4.0).unwrap();
+        set_style(&mut f.tree, a, "padding", 4.0).unwrap();
 
         assert_eq!(padding_top(&f, a), Some(4.0));
     }
@@ -332,7 +333,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { padding-left: 8px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "padding_x", 4.0).unwrap();
+        set_style(&mut f.tree, a, "padding_x", 4.0).unwrap();
 
         assert_eq!(
             build_spec(&f.tree, &f.cache, a).unwrap().style.padding.left,
@@ -442,7 +443,7 @@ mod tests {
         f.sheet(".a { bogus: 1 }");
         let a = f.boxed("a");
         let first = f.cache.take_style_warnings(&f.tree);
-        f.tree.set_style(a, "width", 1.0).unwrap();
+        set_style(&mut f.tree, a, "width", 1.0).unwrap();
 
         assert_eq!(first, ["ignoring unknown style key `bogus`"]);
         assert!(f.cache.take_style_warnings(&f.tree).is_empty());
@@ -452,7 +453,7 @@ mod tests {
     fn a_node_without_a_sheet_in_the_tree_borrows_its_inline_map() {
         let mut f = Fixture::new();
         let a = f.boxed("a");
-        f.tree.set_style(a, "width", 1.0).unwrap();
+        set_style(&mut f.tree, a, "width", 1.0).unwrap();
 
         assert!(matches!(f.cache.computed_style(&f.tree, a), Cow::Borrowed(map) if map.len() == 1));
     }

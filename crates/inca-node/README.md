@@ -12,7 +12,7 @@ Everything here is plain data and functions. A caller builds a tree, mutates it 
 of it.
 
 ```rust
-use inca_node::{LengthSpec, StyleCache, VirtualTree, build_spec, query_selector_all};
+use inca_node::{LengthSpec, StyleCache, VirtualTree, build_spec, query_selector_all, set_style};
 
 let mut tree = VirtualTree::new();
 let root = tree.create_node("div")?;
@@ -20,7 +20,7 @@ let item = tree.create_node("p")?;
 tree.set_root(root);
 tree.append_child(root, item)?;
 tree.set_attribute(item, "class", "note")?;
-tree.set_style(item, "width", 120.0)?;
+set_style(&mut tree, item, "width", 120.0)?;
 
 // Every `.note` below `root`: just `item`.
 assert_eq!(query_selector_all(&tree, root, ".note")?, [item]);

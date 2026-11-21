@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
+use inca_node::set_style;
 use inca_test_macros::gpui_cases;
 
 /// A 200x200 `root` holding a disabled 100x50 `button`, which holds a 100x50 `kid`. Every
@@ -20,16 +21,16 @@ fn mount_disabled(cx: &mut TestAppContext, listening: &[(&str, &[&str])]) -> Dis
     let (root, button, kid) = {
         let mut host = host.borrow_mut();
         let root = host.tree.create_node("div").unwrap();
-        host.tree.set_style(root, "width", 200.0).unwrap();
-        host.tree.set_style(root, "height", 200.0).unwrap();
+        set_style(&mut host.tree, root, "width", 200.0).unwrap();
+        set_style(&mut host.tree, root, "height", 200.0).unwrap();
         let button = host.tree.create_node("button").unwrap();
-        host.tree.set_style(button, "width", 100.0).unwrap();
-        host.tree.set_style(button, "height", 50.0).unwrap();
+        set_style(&mut host.tree, button, "width", 100.0).unwrap();
+        set_style(&mut host.tree, button, "height", 50.0).unwrap();
         host.tree.set_attribute(button, "disabled", true).unwrap();
         host.tree.append_child(root, button).unwrap();
         let kid = host.tree.create_node("div").unwrap();
-        host.tree.set_style(kid, "width", 100.0).unwrap();
-        host.tree.set_style(kid, "height", 50.0).unwrap();
+        set_style(&mut host.tree, kid, "width", 100.0).unwrap();
+        set_style(&mut host.tree, kid, "height", 50.0).unwrap();
         host.tree.append_child(button, kid).unwrap();
         (root, button, kid)
     };

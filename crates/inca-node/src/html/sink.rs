@@ -20,6 +20,7 @@ use html5ever::tokenizer::{
 use html5ever::tree_builder::{TreeBuilder, TreeBuilderOpts};
 use html5ever::{Attribute, LocalName, Namespace, QualName, TokenizerResult, local_name, ns};
 
+use crate::set_style_text;
 use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, NodeId, NodeKind, TEXT_TAG};
 use crate::tree::{TreeError, VirtualNode, VirtualTree};
 
@@ -319,7 +320,7 @@ impl TreeSink for HtmlSink<'_> {
                 let node = tree.get(id).ok_or(TreeError::NodeNotFound(id))?;
                 let key = node.attribute_key(&given).into_owned();
                 if key == "style" {
-                    let lines = tree.set_style_text(id, &attribute.value)?;
+                    let lines = set_style_text(tree, id, &attribute.value)?;
                     warnings.extend(lines.into_iter().map(|line| (id, line)));
                 } else {
                     tree.set_attribute(id, key, &*attribute.value)?;
