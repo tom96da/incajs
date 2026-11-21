@@ -120,7 +120,9 @@ fn platform_result(
     up: bool,
     key: &str,
 ) -> DispatchEventResult {
-    let keystroke = Keystroke::parse(key).unwrap().with_simulated_ime();
+    let keystroke = Keystroke::parse_with_os(key, cx.read(|cx| cx.platform_info().os))
+        .unwrap()
+        .with_simulated_ime();
     let event = if up {
         PlatformInput::KeyUp(KeyUpEvent { keystroke })
     } else {

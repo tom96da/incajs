@@ -114,14 +114,14 @@ where
     element.when_some(handle, |el, handle| {
         let el = el.track_scroll(&handle);
         if !root {
-            return el.on_scroll_wheel(move |_, _, cx| {
+            return el.on_scroll(move |_, _, cx| {
                 cx.default_global::<WheelChain>()
                     .0
                     .push((id, handle.clone()));
             });
         }
         el.when_some(dispatch.cloned(), |el, sink| {
-            el.on_scroll_wheel(move |_, window, cx| {
+            el.on_scroll(move |_, window, cx| {
                 if let Some(delta) = cx.default_global::<RootStep>().0.take() {
                     cx.default_global::<WheelScrolled>().0.insert(id);
                     let axes = sink.wheel_axes(id);
@@ -156,7 +156,7 @@ mod tests {
     use crate::Scrollbars;
     use crate::event_sink::EventSink;
     use crate::tests::*;
-    use gpui::{Context, Render, ScrollDelta, ScrollWheelEvent, StyleRefinement, Window};
+    use gpui::{Context, Render, ScrollDelta, ScrollEvent, StyleRefinement, Window};
     use gpui::{Pixels, Point, TestAppContext, VisualTestContext, point, px};
     use inca_node::tree::{NodeId, VirtualTree};
     use inca_test_macros::gpui_cases;
@@ -230,7 +230,7 @@ mod tests {
 
         /// One wheel event with `delta`, then a draw so offsets are clamped.
         fn wheel_delta(&mut self, pointer_y: f32, delta: ScrollDelta) {
-            self.cx.simulate_event(ScrollWheelEvent {
+            self.cx.simulate_event(ScrollEvent {
                 position: point(px(10.), px(pointer_y)),
                 delta,
                 ..Default::default()

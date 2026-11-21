@@ -3,7 +3,7 @@
 
 use gpui::{
     App, KeyDownEvent, KeyUpEvent, Keystroke, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, ScrollDelta, ScrollWheelEvent, Window,
+    MouseUpEvent, ScrollDelta, ScrollEvent, Window,
 };
 
 use crate::element::NodeLayout;
@@ -250,8 +250,8 @@ impl From<&MouseMoveEvent> for EventPayload {
     }
 }
 
-impl From<&ScrollWheelEvent> for EventPayload {
-    fn from(event: &ScrollWheelEvent) -> Self {
+impl From<&ScrollEvent> for EventPayload {
+    fn from(event: &ScrollEvent) -> Self {
         // GPUI reports a downward/rightward scroll as negative; the
         // payload reports it as positive. `0.0 - x` keeps a zero delta at +0.
         let (delta_x, delta_y, delta_mode) = match event.delta {
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn a_pixel_delta_reports_delta_mode_0() {
-        let event = ScrollWheelEvent {
+        let event = ScrollEvent {
             delta: ScrollDelta::Pixels(gpui::point(gpui::px(3.0), gpui::px(-4.0))),
             ..Default::default()
         };
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn a_line_delta_reports_delta_mode_1() {
-        let event = ScrollWheelEvent {
+        let event = ScrollEvent {
             delta: ScrollDelta::Lines(gpui::point(0.0, 2.0)),
             ..Default::default()
         };
@@ -531,7 +531,7 @@ mod tests {
     #[case::pixels(ScrollDelta::Pixels(gpui::point(gpui::px(0.0), gpui::px(-0.0))))]
     #[case::lines(ScrollDelta::Lines(gpui::point(0.0, -0.0)))]
     fn a_zero_delta_stays_positive_zero(#[case] delta: ScrollDelta) {
-        let event = ScrollWheelEvent {
+        let event = ScrollEvent {
             delta,
             ..Default::default()
         };

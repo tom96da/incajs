@@ -63,7 +63,7 @@ fn wheel_carries_the_delta_fields(cx: &mut TestAppContext) {
         .unwrap();
 
     let mut cx = VisualTestContext::from_window(window.into(), cx);
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: point(px(10.0), px(10.0)),
         delta: ScrollDelta::Pixels(point(px(0.0), px(-5.0))),
         ..Default::default()
@@ -102,7 +102,7 @@ fn wheel_reports_a_button_held_from_an_earlier_mousedown(cx: &mut TestAppContext
         Modifiers::none(),
     );
     cx.run_until_parked();
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: point(px(10.0), px(10.0)),
         delta: ScrollDelta::Lines(point(0.0, 1.0)),
         ..Default::default()

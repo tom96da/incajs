@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Integration tests for scrolling of scroll containers: a real `VirtualTree` rendered through
-//! `render_tree_with_events`, scrolled by `ScrollWheelEvent`s, by script offsets and by the
+//! `render_tree_with_events`, scrolled by `ScrollEvent`s, by script offsets and by the
 //! reveal of focused or scrolled-to nodes.
 
 #![allow(clippy::unwrap_used)]
@@ -11,7 +11,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{
-    Bounds, Context, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent, TestAppContext,
+    Bounds, Context, Pixels, Point, Render, ScrollDelta, ScrollEvent, TestAppContext,
     VisualTestContext, Window, point, prelude::*, px,
 };
 use inca_bridge::{EventDispatcher, Host};
@@ -114,7 +114,7 @@ impl Scene {
 
     /// One wheel event with `delta`, then a draw so offsets are clamped.
     fn wheel_delta(&mut self, pointer_y: f32, delta: ScrollDelta) {
-        self.cx.simulate_event(ScrollWheelEvent {
+        self.cx.simulate_event(ScrollEvent {
             position: point(px(10.), px(pointer_y)),
             delta,
             ..Default::default()

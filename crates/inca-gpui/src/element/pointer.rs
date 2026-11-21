@@ -4,7 +4,7 @@
 use gpui::prelude::*;
 use gpui::{
     App, DispatchPhase, Global, Modifiers, MouseButton, MouseDownEvent, MouseExitEvent,
-    MouseMoveEvent, MouseUpEvent, ScrollHandle, ScrollWheelEvent, Window, canvas,
+    MouseMoveEvent, MouseUpEvent, ScrollEvent, ScrollHandle, Window, canvas,
 };
 
 use super::scrollbar::OverBar;
@@ -186,7 +186,7 @@ pub(super) fn mark_mouse_target<Elem: InteractiveElement + FluentBuilder>(
             cx.default_global::<MouseTarget>().pressed[slot].get_or_insert((id, event.click_count));
         })
         .on_mouse_move(move |_, window, cx| move_over(sink.as_ref(), id, window, cx))
-        .on_scroll_wheel(move |_, _, cx| mark_target(cx, id));
+        .on_scroll(move |_, _, cx| mark_target(cx, id));
     element
         .interactivity()
         .on_any_mouse_up(move |_, _, cx| mark_target(cx, id));

@@ -12,8 +12,7 @@ use std::rc::Rc;
 
 use gpui::{
     Context, Modifiers, MouseButton, MouseDownEvent, MouseExitEvent, MouseUpEvent, Render,
-    ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext, Window, point, prelude::*,
-    px,
+    ScrollDelta, ScrollEvent, TestAppContext, VisualTestContext, Window, point, prelude::*, px,
 };
 use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{Scrollbars, render_tree_with_events};

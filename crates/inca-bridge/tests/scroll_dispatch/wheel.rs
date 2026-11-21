@@ -63,7 +63,7 @@ fn a_script_offset_past_the_end_still_lets_the_ancestor_scroll(cx: &mut TestAppC
     let mut scene = Scene::new(cx, nested_containers(), "");
     // No draw between the script offset and the wheel, so the offset is unclamped.
     scene.js("__inca_native__.scrollNode(2, null, 999)");
-    scene.cx.simulate_event(ScrollWheelEvent {
+    scene.cx.simulate_event(ScrollEvent {
         position: point(px(10.), px(10.)),
         delta: ScrollDelta::Pixels(point(px(0.), px(-50.))),
         ..Default::default()

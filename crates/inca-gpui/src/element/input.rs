@@ -8,9 +8,8 @@ use std::ops::Range;
 
 use gpui::{
     App, Bounds, ContentMask, Element, ElementId, FocusHandle, GlobalElementId, Hsla,
-    InspectorElementId, IntoElement, LayoutId, Pixels, Point, ShapedLine, SharedString, Style,
-    TextAlign, TextRun, UTF16Selection, UnderlineStyle, Window, fill, point, px, relative, rgba,
-    size,
+    InspectorElementId, LayoutId, Pixels, Point, ShapedLine, SharedString, Style, TextAlign,
+    TextRun, UTF16Selection, UnderlineStyle, Window, fill, point, px, relative, rgba, size,
 };
 
 use crate::event_sink::EventSink;
@@ -197,14 +196,6 @@ pub(super) struct Prepainted {
     focus: Option<FocusHandle>,
 }
 
-impl<E: EventSink + Clone + 'static> IntoElement for InputElement<E> {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
-}
-
 impl<E: EventSink + Clone + 'static> Element for InputElement<E> {
     type RequestLayoutState = ();
     type PrepaintState = Prepainted;
@@ -385,7 +376,8 @@ mod tests {
     use crate::{Scrollbars, render_tree, render_tree_with_events};
     use gpui::InputHandler as _;
     use gpui::{
-        Context, Keystroke, Render, TestAppContext, TextStyle, VisualTestContext, point, size,
+        Context, IntoElement, Keystroke, Render, TestAppContext, TextStyle, VisualTestContext,
+        point, size,
     };
     use inca_node::VirtualTree;
     use inca_test_macros::gpui_cases;

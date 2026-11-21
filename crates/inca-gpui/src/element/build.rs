@@ -264,7 +264,7 @@ mod tests {
     use super::*;
     use crate::tests::{num as n, text as s, *};
     use gpui::{
-        Context, Pixels, Point, Render, ScrollDelta, ScrollWheelEvent, TestAppContext,
+        Context, Pixels, Point, Render, ScrollDelta, ScrollEvent, TestAppContext,
         VisualTestContext, point, px, size,
     };
     use inca_node::AttributeValue;
@@ -310,7 +310,7 @@ mod tests {
         cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
             .unwrap();
         let mut cx = VisualTestContext::from_window(window.into(), cx);
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: point(px(10.), px(10.)),
             delta: ScrollDelta::Pixels(delta),
             ..Default::default()
@@ -574,7 +574,7 @@ mod tests {
         let (probe, window) = mounted(cx, tree);
         frame(cx, window);
         let mut vcx = VisualTestContext::from_window(window, cx);
-        vcx.simulate_event(ScrollWheelEvent {
+        vcx.simulate_event(ScrollEvent {
             position: point(px(10.), px(10.)),
             delta: ScrollDelta::Pixels(point(px(0.), px(-50.))),
             ..Default::default()

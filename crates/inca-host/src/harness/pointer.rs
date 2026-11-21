@@ -4,8 +4,8 @@
 //! The pointer and wheel input of the [`super::Harness`].
 
 use gpui::{
-    Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point, ScrollDelta,
-    ScrollWheelEvent, TouchPhase, point, px,
+    Modifiers, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point, ScrollDelta, ScrollEvent,
+    TouchPhase, point, px,
 };
 use inca_gpui::debug_selector;
 use inca_node::NodeId;
@@ -88,7 +88,7 @@ impl Harness {
     /// Panics under the same conditions as [`Harness::click`].
     pub fn scroll(&mut self, id: NodeId, dx: f32, dy: f32) {
         let position = self.center_of(id);
-        self.cx.simulate_event(ScrollWheelEvent {
+        self.cx.simulate_event(ScrollEvent {
             position,
             delta: ScrollDelta::Pixels(point(px(dx), px(dy))),
             ..Default::default()
@@ -105,11 +105,12 @@ impl Harness {
     /// Panics under the same conditions as [`Harness::click`].
     pub fn scroll_with(&mut self, id: NodeId, delta: ScrollDelta, modifiers: Modifiers) {
         let position = self.center_of(id);
-        self.cx.simulate_event(ScrollWheelEvent {
+        self.cx.simulate_event(ScrollEvent {
             position,
             delta,
             modifiers,
             touch_phase: TouchPhase::Moved,
+            ..Default::default()
         });
         self.settle();
     }

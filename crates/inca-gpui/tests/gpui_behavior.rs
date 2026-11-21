@@ -14,7 +14,7 @@ use gpui::prelude::*;
 use gpui::{
     AnyElement, App, Context, DispatchPhase, FocusHandle, KeyBinding, KeyDownEvent, KeyUpEvent,
     Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformInput,
-    Point, ScrollDelta, ScrollHandle, ScrollWheelEvent, TestAppContext, VisualTestContext, Window,
+    Point, ScrollDelta, ScrollEvent, ScrollHandle, TestAppContext, VisualTestContext, Window,
     canvas, div, point, px,
 };
 use inca_test_macros::gpui_cases;
@@ -327,7 +327,7 @@ fn gpui_never_scrolls_a_tracked_container_with_hidden_overflow(cx: &mut TestAppC
     let handle = ScrollHandle::new();
     let mut cx = mount_hidden_scroller(cx, &handle);
 
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: at(10., 10.),
         delta: ScrollDelta::Pixels(point(px(0.), px(-20.))),
         ..Default::default()
@@ -392,7 +392,8 @@ fn key_scene(
 }
 
 fn key_event(cx: &mut VisualTestContext, up: bool, key: &str) -> gpui::DispatchEventResult {
-    let keystroke = gpui::Keystroke::parse(key).unwrap();
+    let keystroke =
+        gpui::Keystroke::parse_with_os(key, cx.read(|cx| cx.platform_info().os)).unwrap();
     let event = if up {
         PlatformInput::KeyUp(KeyUpEvent { keystroke })
     } else {

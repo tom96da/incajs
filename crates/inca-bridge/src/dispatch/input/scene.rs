@@ -92,7 +92,8 @@ impl InputScene {
     pub(crate) fn key(&self, cx: &mut TestAppContext, keys: &str) -> bool {
         let mut handled = false;
         for key in keys.split(' ') {
-            let keystroke = Keystroke::parse(key).unwrap();
+            let keystroke =
+                Keystroke::parse_with_os(key, cx.read(|cx| cx.platform_info().os)).unwrap();
             handled = self.in_window(cx, |_, window, cx| window.dispatch_keystroke(keystroke, cx));
         }
         cx.run_until_parked();

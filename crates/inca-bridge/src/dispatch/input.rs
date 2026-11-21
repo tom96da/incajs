@@ -140,7 +140,7 @@ impl EventDispatcher {
         };
         let modifiers = keystroke.modifiers;
         let plain = !(modifiers.control || modifiers.alt || modifiers.platform);
-        let secondary = modifiers.secondary();
+        let secondary = modifiers.secondary(cx);
         let editable = self.editable(node);
         let key = keystroke.key.as_str();
         match key {

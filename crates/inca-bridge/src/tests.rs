@@ -320,7 +320,8 @@ pub(crate) mod keys {
         }
 
         pub(crate) fn key(&self, cx: &mut TestAppContext, key: &str, up: bool, canceled: bool) {
-            let keystroke = Keystroke::parse(key).unwrap();
+            let keystroke =
+                Keystroke::parse_with_os(key, cx.read(|cx| cx.platform_info().os)).unwrap();
             let payload = EventPayload::Key(KeyPayload {
                 key: keystroke.key.clone(),
                 repeat: false,

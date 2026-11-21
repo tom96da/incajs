@@ -65,7 +65,7 @@ fn mouseleave_reports_zero_where_mousemove_reports_the_delta(cx: &mut TestAppCon
 }
 
 fn wheel_at(cx: &mut VisualTestContext, x: f32, y: f32) {
-    cx.simulate_event(ScrollWheelEvent {
+    cx.simulate_event(ScrollEvent {
         position: point(px(x), px(y)),
         delta: ScrollDelta::Lines(point(0.0, 1.0)),
         ..Default::default()

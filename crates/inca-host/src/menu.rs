@@ -18,6 +18,12 @@ actions!(
 /// the Quit item comes from this binding.
 const QUIT_KEYSTROKE: &str = "secondary-q";
 
+/// The binding of [`QUIT_KEYSTROKE`], with `secondary-` resolved for the running platform.
+fn quit_binding(cx: &App) -> KeyBinding {
+    KeyBinding::load(QUIT_KEYSTROKE, Box::new(Quit), None, false, None, cx)
+        .expect("a valid quit keystroke")
+}
+
 /// One entry per top-level menu.
 ///
 /// `app_name` titles the application menu. macOS titles it from the `.app`
@@ -30,7 +36,7 @@ fn menus(app_name: &str) -> Vec<Menu> {
 /// keyboard shortcuts. Call it before the first window opens.
 pub fn install(cx: &mut App, app_name: &str) {
     cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
-    cx.bind_keys([KeyBinding::new(QUIT_KEYSTROKE, Quit, None)]);
+    cx.bind_keys([quit_binding(cx)]);
     cx.set_menus(menus(app_name));
 }
 
@@ -59,7 +65,8 @@ mod tests {
 
     #[test]
     fn the_quit_shortcut_is_the_platforms_own() {
-        let binding = KeyBinding::new(QUIT_KEYSTROKE, Quit, None);
+        let cx = gpui::TestAppContext::single();
+        let binding = cx.read(quit_binding);
         let keystrokes = binding.keystrokes();
 
         assert_eq!(keystrokes.len(), 1);

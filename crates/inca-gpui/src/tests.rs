@@ -426,7 +426,7 @@ impl BarScene {
 
     /// One wheel step of `delta` at `(x, y)`. The window draws what the step refreshes.
     pub(crate) fn wheel_undrawn(&mut self, (x, y): (f32, f32), delta: f32) {
-        self.cx.simulate_event(gpui::ScrollWheelEvent {
+        self.cx.simulate_event(gpui::ScrollEvent {
             position: point(px(x), px(y)),
             delta: gpui::ScrollDelta::Pixels(point(px(0.), px(delta))),
             ..Default::default()

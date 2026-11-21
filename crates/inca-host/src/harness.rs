@@ -94,7 +94,8 @@ impl Harness {
     ///
     /// Panics when a keystroke does not parse.
     pub fn key_up(&mut self, keys: &str) {
-        for keystroke in keys.split(' ').map(Keystroke::parse) {
+        let os = self.cx.update(|_, cx| cx.platform_info().os);
+        for keystroke in keys.split(' ').map(|key| Keystroke::parse_with_os(key, os)) {
             self.cx.simulate_event(KeyUpEvent {
                 keystroke: keystroke.expect("a parseable keystroke"),
             });
@@ -111,7 +112,8 @@ impl Harness {
     ///
     /// Panics when a keystroke does not parse.
     pub fn key_repeat(&mut self, keys: &str) {
-        for keystroke in keys.split(' ').map(Keystroke::parse) {
+        let os = self.cx.update(|_, cx| cx.platform_info().os);
+        for keystroke in keys.split(' ').map(|key| Keystroke::parse_with_os(key, os)) {
             let keystroke = keystroke
                 .expect("a parseable keystroke")
                 .with_simulated_ime();

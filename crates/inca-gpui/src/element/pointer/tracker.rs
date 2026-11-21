@@ -5,9 +5,9 @@
 
 use super::{
     App, ControlClick, DispatchPhase, EventPayload, EventSink, IntoElement, MouseDownEvent,
-    MouseExitEvent, MouseMoveEvent, MouseTarget, MouseUpEvent, NodeId, RootStep, ScrollHandle,
-    ScrollWheelEvent, Styled, WheelChain, Window, canvas, completes_click, control_click,
-    mouse_target, next_offset, opens_context_menu, restored_down, restored_up, slot,
+    MouseExitEvent, MouseMoveEvent, MouseTarget, MouseUpEvent, NodeId, RootStep, ScrollEvent,
+    ScrollHandle, Styled, WheelChain, Window, canvas, completes_click, control_click, mouse_target,
+    next_offset, opens_context_menu, restored_down, restored_up, slot,
 };
 use crate::element::scrollbar::OverBar;
 use crate::element::wheel::WheelScrolled;
@@ -54,7 +54,7 @@ fn report_release(
 fn report_wheel(
     sink: &impl EventSink,
     root: NodeId,
-    event: &ScrollWheelEvent,
+    event: &ScrollEvent,
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -152,16 +152,14 @@ pub(in crate::element) fn pointer_tracker<E: EventSink + Clone + 'static>(
                 }
             });
             let scrolled = dispatch.clone();
-            window.on_mouse_event(
-                move |event: &ScrollWheelEvent, phase, window, cx| match phase {
-                    DispatchPhase::Capture => {
-                        cx.default_global::<MouseTarget>().current = None;
-                        cx.default_global::<WheelChain>().0.clear();
-                        cx.default_global::<WheelScrolled>().0.clear();
-                    }
-                    DispatchPhase::Bubble => report_wheel(&scrolled, root, event, window, cx),
-                },
-            );
+            window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| match phase {
+                DispatchPhase::Capture => {
+                    cx.default_global::<MouseTarget>().current = None;
+                    cx.default_global::<WheelChain>().0.clear();
+                    cx.default_global::<WheelScrolled>().0.clear();
+                }
+                DispatchPhase::Bubble => report_wheel(&scrolled, root, event, window, cx),
+            });
             let dispatch = dispatch.clone();
             window.on_mouse_event(move |_: &MouseExitEvent, phase, _, _| {
                 if phase == DispatchPhase::Capture {
@@ -184,7 +182,7 @@ mod tests {
     use crate::{Scrollbars, clear_presses, pressed_target, render_tree_with_events};
     use gpui::prelude::*;
     use gpui::{
-        MouseButton, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext, point, px,
+        MouseButton, ScrollDelta, ScrollEvent, TestAppContext, VisualTestContext, point, px,
     };
     use inca_node::tree::VirtualTree;
     use std::cell::RefCell;
@@ -193,7 +191,7 @@ mod tests {
     /// Runs one of each mouse event at `pos`.
     fn mouse_events(cx: &mut VisualTestContext, pos: (f32, f32)) {
         cx.simulate_mouse_move(at(pos), None, gpui::Modifiers::none());
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: at(pos),
             delta: ScrollDelta::Pixels(point(px(0.), px(-5.))),
             ..Default::default()
@@ -525,7 +523,7 @@ mod tests {
         delta: f32,
     ) -> Vec<NodeId> {
         let renders = seen.borrow().len();
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: self::at(at),
             delta: ScrollDelta::Pixels(point(px(0.), px(delta))),
             ..Default::default()
@@ -562,7 +560,7 @@ mod tests {
         cx.simulate_mouse_move(at((10., 10.)), None, gpui::Modifiers::none());
         cx.update(|window, cx| window.draw(cx).clear(cx));
         let renders = seen.borrow().len();
-        cx.simulate_event(ScrollWheelEvent {
+        cx.simulate_event(ScrollEvent {
             position: at((10., 10.)),
             delta: ScrollDelta::Pixels(point(px(0.), px(-40.))),
             ..Default::default()

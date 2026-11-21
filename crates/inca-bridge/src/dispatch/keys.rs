@@ -183,7 +183,9 @@ mod tests {
 
     /// Sends a key release.
     fn key_up(s: &InputScene, cx: &mut TestAppContext, key: &str) {
-        let keystroke = Keystroke::parse(key).unwrap().with_simulated_ime();
+        let keystroke = Keystroke::parse_with_os(key, cx.read(|cx| cx.platform_info().os))
+            .unwrap()
+            .with_simulated_ime();
         s.in_window(cx, |_, window, cx| {
             window.dispatch_event(PlatformInput::KeyUp(KeyUpEvent { keystroke }), cx);
         });
@@ -262,7 +264,7 @@ mod tests {
     #[case::enter("enter", false, true)]
     #[case::letter("x->x", false, true)]
     fn types_character_follows_the_modifiers_and_the_platform(
-        #[case] pressed: &str,
+        #[case] pressed: &'static str,
         #[case] macos: bool,
         #[case] want: bool,
     ) {
