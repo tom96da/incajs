@@ -9,13 +9,13 @@ packages:
   - "tests"
 catalog:
   "@types/node": ^26.6.6
-  "@vitest/mocker": ^5.1.0
+  "@vitest/mocker": 5.1.0
   "@vue/runtime-core": ^3.5.46
   "@vue/runtime-dom": ^3.5.46
   oxfmt: ^0.79.0
   oxlint: ^1.94.0
   vite: ~8.3.8
-  vitest: ^5.1.1
+  vitest: 5.1.0 # 5.1.1 breaks the Bun tests: Bun has no child.channel.unref
   vue: ^3.5.46
 overrides:
   "@arethetypeswrong/core>typescript": 6.0.3
