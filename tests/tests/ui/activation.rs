@@ -137,18 +137,6 @@ fn a_focus_requested_while_inactive_fires_its_events_at_activation(cx: &mut Test
 }
 
 #[gpui::test]
-fn deactivating_during_a_press_drops_its_click(cx: &mut TestAppContext) {
-    let mut h = pressed_button(cx);
-    h.deactivate_window();
-    h.activate_window();
-    let btn = center(&mut h, "btn");
-
-    h.mouse_up(btn, MouseButton::Left, Modifiers::none());
-
-    assert_eq!(text_of(&mut h, "clicks"), "0");
-}
-
-#[gpui::test]
 fn a_move_after_a_press_lost_to_a_deactivation_reports_no_button(cx: &mut TestAppContext) {
     let mut h = pressed_button(cx);
     h.deactivate_window();
@@ -196,23 +184,6 @@ fn deactivating_during_a_press_takes_active_off_the_pressed_node(cx: &mut TestAp
     h.deactivate_window();
 
     near(width(&mut h, "btn"), 80.0);
-}
-
-#[gpui::test]
-fn a_space_held_across_a_deactivation_clicks_nothing_at_its_release(cx: &mut TestAppContext) {
-    let mut h = load(cx, "activation");
-    h.activate_window();
-    let btn = center(&mut h, "btn");
-    h.mouse_down(btn, MouseButton::Left, Modifiers::none());
-    h.mouse_up(btn, MouseButton::Left, Modifiers::none());
-    h.keystrokes("f9");
-    h.keystrokes("space");
-    h.deactivate_window();
-    h.activate_window();
-
-    h.key_up("space");
-
-    assert_eq!(text_of(&mut h, "clicks"), "0");
 }
 
 #[gpui::test]

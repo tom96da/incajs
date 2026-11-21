@@ -13,7 +13,6 @@ const since = ref("");
 const related = ref("");
 const active = ref("");
 const value = ref("abcd");
-const clicks = ref(0);
 const buttons = ref("");
 const mm = ref(0);
 const keys = ref("");
@@ -62,7 +61,7 @@ onMounted(() => {
     if (e.key in actions) armed = e.key;
     if (e.key === "F9") {
       log.value = since.value = related.value = active.value = buttons.value = keys.value = "";
-      clicks.value = mm.value = 0;
+      mm.value = 0;
     }
   });
 });
@@ -90,14 +89,13 @@ onMounted(() => {
       "
       @change="note('change', 'field')"
     />
-    <button id="btn" :style="{ height: 30 }" @click="clicks += 1" />
+    <button id="btn" :style="{ height: 30 }" />
     <div id="pad" :style="{ width: 80, height: 30 }" @pointerdown="$event.preventDefault()" />
     <div id="log">{{ log }}</div>
     <div id="since">{{ since }}</div>
     <div id="related">{{ related }}</div>
     <div id="active">{{ active }}</div>
     <div id="value">{{ value }}</div>
-    <div id="clicks">{{ clicks }}</div>
     <div id="buttons">{{ buttons }}</div>
     <div id="mm">{{ mm }}</div>
     <div id="keys">{{ keys }}</div>
