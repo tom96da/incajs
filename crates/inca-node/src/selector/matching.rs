@@ -15,7 +15,7 @@ use selectors::matching::matches_selector as matches_selector_one;
 mod element_kind;
 
 /// An element of the tree: a node that is neither text content, a comment nor a fragment.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub(super) struct Node<'t> {
     tree: &'t VirtualTree,
     pub(super) node: &'t VirtualNode,
@@ -244,7 +244,7 @@ pub(super) fn matching_context(
 
 pub(super) fn matches_with(
     list: &SelectorList<Impl>,
-    element: &Node<'_>,
+    element: Node<'_>,
     scope: OpaqueElement,
 ) -> bool {
     let mut caches = SelectorCaches::default();
@@ -265,7 +265,7 @@ pub(super) fn specificity_of_match(
     let mut context = matching_context(&mut caches, Some(element.opaque()));
     list.slice()
         .iter()
-        .filter(|selector| matches_selector_one(selector, 0, None, &element, &mut context))
+        .filter(|selector| matches_selector_one(selector, 0, None, element, &mut context))
         .map(selectors::parser::Selector::specificity)
         .max()
 }
@@ -284,7 +284,7 @@ pub fn matches_selector(
     let (list, _) = parse(selector)?;
     Ok(Node::of(tree, node).is_some_and(|element| {
         let scope = element.opaque();
-        matches_with(&list, &element, scope)
+        matches_with(&list, element, scope)
     }))
 }
 
@@ -309,7 +309,7 @@ pub fn closest_selector(
     let scope = OpaqueElement::new(start);
     let mut current = Node::of(tree, node).or_else(|| Node::nearest_above(tree, start));
     while let Some(element) = current {
-        if matches_with(&list, &element, scope) {
+        if matches_with(&list, element, scope) {
             return Ok(Some(element.node.id()));
         }
         current = element.parent_element();

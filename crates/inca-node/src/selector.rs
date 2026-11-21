@@ -7,7 +7,7 @@
 use std::cell::Cell;
 use std::fmt;
 
-use cssparser::{CowRcStr, ParseError, ParseErrorKind, Parser as CssParser, ToCss, Token};
+use cssparser::{ParseError, ParseErrorKind, Parser as CssParser, ToCss, Token};
 use precomputed_hash::PrecomputedHash;
 use selectors::attr::{AttrSelectorOperation, CaseSensitivity, NamespaceConstraint};
 use selectors::bloom::BloomFilter;
@@ -351,10 +351,7 @@ impl<'i> Parser<'i> for SelectorParser {
         name.eq_ignore_ascii_case("-webkit-any")
     }
 
-    fn parse_non_ts_pseudo_class(
-        &self,
-        name: CowRcStr<'i>,
-    ) -> Result<PseudoClass, SelectorParseError> {
+    fn parse_non_ts_pseudo_class(&self, name: &str) -> Result<PseudoClass, SelectorParseError> {
         let name = name.to_ascii_lowercase();
         let class = match name.as_str() {
             "defined" => PseudoClass::Defined,
@@ -375,7 +372,7 @@ impl<'i> Parser<'i> for SelectorParser {
 
     fn parse_non_ts_functional_pseudo_class(
         &self,
-        name: CowRcStr<'i>,
+        name: &str,
         parser: &mut CssParser<'i>,
         _after_part: bool,
     ) -> Result<PseudoClass, SelectorParseError> {
@@ -396,10 +393,7 @@ impl<'i> Parser<'i> for SelectorParser {
         Ok(PseudoClass::Never(name))
     }
 
-    fn parse_pseudo_element(
-        &self,
-        name: CowRcStr<'i>,
-    ) -> Result<PseudoElement, SelectorParseError> {
+    fn parse_pseudo_element(&self, name: &str) -> Result<PseudoElement, SelectorParseError> {
         let name = name.to_ascii_lowercase();
         if PSEUDO_ELEMENTS.contains(&name.as_str()) || name.starts_with("-webkit-") {
             Ok(PseudoElement(name))
@@ -410,7 +404,7 @@ impl<'i> Parser<'i> for SelectorParser {
 
     fn parse_functional_pseudo_element(
         &self,
-        name: CowRcStr<'i>,
+        name: &str,
         parser: &mut CssParser<'i>,
     ) -> Result<PseudoElement, SelectorParseError> {
         if !name.eq_ignore_ascii_case("highlight") {

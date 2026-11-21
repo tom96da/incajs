@@ -20,7 +20,7 @@ readme = "README.md"
 keywords = ["gpui", "quickjs", "desktop-app", "gui", "webview-free"]
 
 [workspace.dependencies]
-base64 = { version = "0.22", default-features = false, features = ["std"] }
+base64 = { version = "0.23", default-features = false, features = ["std"] }
 encoding_rs = "0.8.42"
 env_logger = "0.11"
 getrandom = "0.4"
@@ -41,11 +41,11 @@ unicode-width = "0.2"
 url = "2.5"
 cssparser = "0.38"
 precomputed-hash = "0.1"
-selectors = "0.41"
-sha1 = "0.10"
-sha2 = "0.10"
+selectors = "0.43"
+sha1 = "0.11"
+sha2 = "0.11"
 # Table tests: one generated test per `#[case]`.
-rstest = { version = "0.27.0", default-features = false }
+rstest = { version = "0.28.0", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

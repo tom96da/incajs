@@ -33,7 +33,7 @@ fn search(
         let Some(element) = Node::of(tree, id) else {
             continue;
         };
-        if matches_selector_list(&list, &element, &mut context) {
+        if matches_selector_list(&list, element, &mut context) {
             found.push(id);
             if first_only {
                 break;
