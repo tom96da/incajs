@@ -138,7 +138,7 @@ fn run_abort_steps(
     };
     callbacks::release(ctx, &removed)?;
     if !removed.is_empty() {
-        crate::dispatch::notify_released(ctx, host, &[], &removed);
+        crate::script::notify_released(ctx, host, &[], &removed);
     }
     if table.find(id)?.is_some() {
         crate::event::fire_abort(ctx, host, id);
@@ -191,7 +191,7 @@ pub(crate) fn release_signal(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, id: u32) -
         ids
     };
     callbacks::release(ctx, &ids)?;
-    crate::dispatch::notify_released(ctx, host, &[], &ids);
+    crate::script::notify_released(ctx, host, &[], &ids);
     Ok(())
 }
 

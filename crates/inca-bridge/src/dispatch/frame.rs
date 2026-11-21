@@ -6,7 +6,6 @@
 use gpui::{App, Window};
 use inca_document::EventPayload;
 use inca_gpui::event_sink::with_screen;
-use inca_jsenv::{EngineError, callbacks};
 
 use super::EventDispatcher;
 use crate::EventTargetId;
@@ -62,21 +61,7 @@ impl EventDispatcher {
             return;
         };
         self.host.borrow_mut().focus.observe(window, cx);
-        let host = &self.host;
-        let entered = self.engine.with(|ctx| {
-            let settled = crate::abort::settle_freed(&ctx, &mut host.borrow_mut());
-            if let Err(err) = settled {
-                host.borrow_mut()
-                    .failures
-                    .push(EngineError::capture(&ctx, &err));
-            }
-            if let Err(err) = callbacks::release(&ctx, &callback_ids) {
-                host.borrow_mut()
-                    .failures
-                    .push(EngineError::capture(&ctx, &err));
-            }
-            super::notify_released(&ctx, host, &nodes, &callback_ids)
-        });
+        let entered = self.script.release(&nodes, &callback_ids);
         if entered {
             self.drain_observed(window);
         }

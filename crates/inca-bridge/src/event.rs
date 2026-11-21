@@ -35,7 +35,9 @@ mod walk;
 
 use record::{Held, IncaEvent, State};
 use walk::targets_of;
-pub(crate) use walk::{Walk, click, dispatch_event, fire_abort, listened, lose_focus, walk};
+pub(crate) use walk::{
+    Outcome, Walk, click, dispatch_event, fire_abort, listened, lose_focus, walk,
+};
 
 /// The vault key of the event store: the prototype of each kind of event
 /// under the kind, and the `isTrusted` getter.

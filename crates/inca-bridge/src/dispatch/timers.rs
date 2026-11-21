@@ -8,10 +8,10 @@ use std::rc::{Rc, Weak};
 use std::time::Duration;
 
 use gpui::{AnyWindowHandle, App, FutureExt as _, Window};
-use inca_jsenv::{Engine, ErrorReporter, run_frames, run_timers};
 
-use super::{EventDispatcher, State, drain_jobs_and_refresh, observe_focus, report_failures};
+use super::{EventDispatcher, State, drain_jobs_and_refresh, observe_focus};
 use crate::bindings::Host;
+use crate::script::Script;
 
 impl EventDispatcher {
     /// Starts the task that runs the timers of this dispatcher's engine in
@@ -19,10 +19,9 @@ impl EventDispatcher {
     /// frame callback is pending. Call it once the window exists.
     pub fn start_timers(&self, window: AnyWindowHandle, cx: &mut App) {
         self.state.frame_requested.set(false);
-        let engine = Rc::downgrade(&self.engine);
+        let script = Rc::downgrade(&self.script);
         let host = Rc::downgrade(&self.host);
         let state = Rc::downgrade(&self.state);
-        let reporter = Rc::clone(&self.reporter);
         let wake = self.host.borrow().wake.clone();
         // A foreground task on the main thread. It sleeps on the wake channel and one executor
         // timer until the earliest timer is due.
@@ -41,7 +40,7 @@ impl EventDispatcher {
                 if wants_frame {
                     let live = cx.update(|cx| {
                         window.update(cx, |_, window, _| {
-                            request_frame(window, &engine, &host, &reporter, &state);
+                            request_frame(window, &script, &host, &state);
                         })
                     });
                     if live.is_err() {
@@ -63,11 +62,11 @@ impl EventDispatcher {
                     None => {
                         let live = cx.update(|cx| {
                             window.update(cx, |_, window, cx| {
-                                let (Some(engine), Some(host)) = (engine.upgrade(), host.upgrade())
+                                let (Some(script), Some(host)) = (script.upgrade(), host.upgrade())
                                 else {
                                     return;
                                 };
-                                fire_timers(&engine, &host, &reporter, window, cx);
+                                fire_timers(&*script, &host, window, cx);
                             })
                         });
                         if live.is_err() {
@@ -83,14 +82,7 @@ impl EventDispatcher {
     /// Runs the frame callbacks the script requested, as the next frame of
     /// `window` does before it draws, and redraws when one ran.
     pub fn run_frame_callbacks(&self, window: &mut Window, cx: &App) {
-        run_frame_callbacks(
-            &self.engine,
-            &self.host,
-            &self.reporter,
-            &self.state,
-            window,
-            cx,
-        );
+        run_frame_callbacks(&*self.script, &self.host, &self.state, window, cx);
     }
 
     /// Ends the task [`start_timers`](Self::start_timers) started, so no timer
@@ -102,8 +94,7 @@ impl EventDispatcher {
     /// Runs the callbacks that are due now, for a session that has no window
     /// yet, and reports their failures.
     pub fn run_timers_idle(&self) {
-        let timers = Rc::clone(&self.host.borrow().timers);
-        run_timers(&self.engine, &timers, &self.reporter);
+        self.script.run_timers();
         self.report_pending();
     }
 
@@ -118,67 +109,52 @@ impl EventDispatcher {
 /// weak references, so a dropped session leaves it nothing to run.
 fn request_frame(
     window: &Window,
-    engine: &Weak<Engine>,
+    script: &Weak<dyn Script>,
     host: &Weak<RefCell<Host>>,
-    reporter: &ErrorReporter,
     state: &Weak<State>,
 ) {
     let Some(strong) = state.upgrade() else {
         return;
     };
     strong.frame_requested.set(true);
-    let (engine, host, reporter, state) = (
-        Weak::clone(engine),
-        Weak::clone(host),
-        Rc::clone(reporter),
-        Weak::clone(state),
-    );
+    let (script, host, state) = (Weak::clone(script), Weak::clone(host), Weak::clone(state));
     window.on_next_frame(move |window, cx| {
-        let (Some(engine), Some(host), Some(state)) =
-            (engine.upgrade(), host.upgrade(), state.upgrade())
+        let (Some(script), Some(host), Some(state)) =
+            (script.upgrade(), host.upgrade(), state.upgrade())
         else {
             return;
         };
-        run_frame_callbacks(&engine, &host, &reporter, &state, window, cx);
+        run_frame_callbacks(&*script, &host, &state, window, cx);
     });
 }
 
 /// One frame: the callbacks pending now, then the redraw and the failures they caused. A frame
 /// with no pending callback changes nothing.
 fn run_frame_callbacks(
-    engine: &Engine,
+    script: &dyn Script,
     host: &RefCell<Host>,
-    reporter: &ErrorReporter,
     state: &State,
     window: &mut Window,
     cx: &App,
 ) {
     state.frame_requested.set(false);
     observe_focus(host, window, cx);
-    let frames = Rc::clone(&host.borrow().frames);
-    if run_frames(engine, &frames, reporter) == 0 {
+    if script.run_frames() == 0 {
         return;
     }
-    drain_jobs_and_refresh(engine, reporter, window);
-    report_failures(host, reporter);
+    drain_jobs_and_refresh(script, window);
+    script.report_pending();
 }
 
 /// One turn: the due callbacks, then the redraw and the failures they caused.
 /// A turn with no due callback changes nothing.
-fn fire_timers(
-    engine: &Engine,
-    host: &RefCell<Host>,
-    reporter: &ErrorReporter,
-    window: &mut Window,
-    cx: &App,
-) {
+fn fire_timers(script: &dyn Script, host: &RefCell<Host>, window: &mut Window, cx: &App) {
     observe_focus(host, window, cx);
-    let timers = Rc::clone(&host.borrow().timers);
-    if run_timers(engine, &timers, reporter) == 0 {
+    if script.run_timers() == 0 {
         return;
     }
-    drain_jobs_and_refresh(engine, reporter, window);
-    report_failures(host, reporter);
+    drain_jobs_and_refresh(script, window);
+    script.report_pending();
 }
 
 #[cfg(test)]

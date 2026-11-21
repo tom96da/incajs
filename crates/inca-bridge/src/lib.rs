@@ -12,13 +12,14 @@ mod dispatch;
 mod event;
 mod event_target;
 mod interfaces;
+mod script;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 #[cfg(test)]
 mod tests;
 
 pub use bindings::{Host, install};
-pub use dispatch::{EventDispatcher, drain_jobs_and_refresh};
+pub use dispatch::EventDispatcher;
 pub use focus::FocusRegistry;
 pub(crate) use inca_document::EventTargetId;
 pub use inca_gpui::focus;

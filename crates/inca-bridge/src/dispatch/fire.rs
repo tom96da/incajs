@@ -11,7 +11,7 @@ use inca_node::{NodeId, is_disabled_control};
 
 use super::EventDispatcher;
 use crate::EventTargetId;
-use crate::event::{self, Walk};
+use crate::event::Walk;
 
 impl EventDispatcher {
     /// Dispatches `event` along the path of `target`, with `target` as its
@@ -25,24 +25,20 @@ impl EventDispatcher {
         payload: &EventPayload,
         cut: &[NodeId],
     ) -> (bool, bool) {
-        let outcome = event::walk(
-            &self.engine,
-            &self.host,
-            &Walk {
-                name: event,
-                flags: flags_of(
-                    event,
-                    match payload {
-                        EventPayload::Input(input) => Some(input.input_type),
-                        _ => None,
-                    },
-                ),
-                target,
-                cut,
-                payload,
-                trusted: true,
-            },
-        );
+        let outcome = self.script.walk(&Walk {
+            name: event,
+            flags: flags_of(
+                event,
+                match payload {
+                    EventPayload::Input(input) => Some(input.input_type),
+                    _ => None,
+                },
+            ),
+            target,
+            cut,
+            payload,
+            trusted: true,
+        });
         // Reported after the walk: a reporter is free to do anything, and
         // re-entering the engine from inside `Engine::with` panics.
         self.report_pending();
