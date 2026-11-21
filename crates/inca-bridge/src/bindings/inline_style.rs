@@ -7,7 +7,6 @@
 //! of a freed node reads empty, and its writes change nothing.
 
 use std::cell::RefCell;
-use std::iter::once;
 use std::rc::Rc;
 
 // `IncaStyle` derives `JsLifetime`, and the class holds a node id and no JS value.
@@ -20,8 +19,11 @@ use inca_jsenv::class::{
     define_this_accessor, define_this_getter, define_this_method, plain_class, receiver, require,
     text,
 };
-use inca_node::{NodeId, STYLE_KEYS, TreeError, VirtualNode};
-use inca_style::{css_text, style_item, style_length, style_property_value};
+use inca_node::{NodeId, TreeError, VirtualNode};
+use inca_style::{
+    css_text, priority_refuses_value, property_names, style_item, style_length,
+    style_property_value,
+};
 
 use super::Natives;
 use super::convert::{JsNodeId, saturated, unsigned};
@@ -147,8 +149,7 @@ fn define_members<'js>(
             }
             _ => String::new(),
         };
-        let refused = !priority.is_empty() && !priority.eq_ignore_ascii_case("important");
-        if refused && !value.is_empty() {
+        if priority_refuses_value(&priority) && !value.is_empty() {
             return Ok(());
         }
         let result = set_style_property(&mut h.borrow_mut().tree, node, &name, &value);
@@ -215,29 +216,6 @@ fn define_properties<'js>(
         )?;
     }
     Ok(())
-}
-
-/// The distinct camelCase and kebab-case spellings of every key and CSS alias, each with the CSS
-/// name that reads and writes it.
-fn property_names() -> Vec<(String, String)> {
-    let mut names: Vec<(String, String)> = Vec::new();
-    for entry in STYLE_KEYS {
-        for raw in once(entry.key).chain(entry.aliases.iter().copied()) {
-            let mut words = raw.split('_');
-            let mut camel = words.next().unwrap_or_default().to_owned();
-            for word in words {
-                camel.extend(word.chars().take(1).flat_map(char::to_uppercase));
-                camel.push_str(word.get(1..).unwrap_or_default());
-            }
-            let css = raw.replace('_', "-");
-            for name in [css.clone(), camel] {
-                if names.iter().all(|(known, _)| *known != name) {
-                    names.push((name, css.clone()));
-                }
-            }
-        }
-    }
-    names
 }
 
 #[cfg(test)]

@@ -9,8 +9,8 @@ mod stylesheet;
 
 pub use cascade::StyleCache;
 pub use inline_style::{
-    css_text, remove_style, remove_style_property, set_style, set_style_property, set_style_text,
-    style_item, style_length, style_property_value,
+    css_text, priority_refuses_value, property_names, remove_style, remove_style_property,
+    set_style, set_style_property, set_style_text, style_item, style_length, style_property_value,
 };
 pub use selector::{
     SelectorError, check_selector, closest_selector, matches_selector, query_selector,
