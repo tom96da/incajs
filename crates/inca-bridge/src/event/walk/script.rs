@@ -12,8 +12,8 @@ use rquickjs::{Class, Ctx, Exception, Result as JsResult, Value};
 
 use super::listeners::{deliver, end_dispatch};
 use super::{IncaEvent, Walk, listened, next_event_id, path_from, run, script_walk, targets_of};
-use crate::EventTargetId;
 use crate::bindings::Host;
+use inca_document::EventTargetId;
 
 /// Dispatches a script-built `event` at `target` and returns `false` when a
 /// listener canceled it. Listener errors go to `Host::failures`.

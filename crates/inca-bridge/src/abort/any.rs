@@ -442,7 +442,7 @@ mod tests {
         collect(&f);
 
         assert_eq!(f.json("(c.abort(), s.aborted)"), json!(true));
-        assert!(!f.host.borrow().signals.by_id.contains_key(&2));
+        assert!(!f.host.borrow().signals.contains(2));
     }
 
     #[test]

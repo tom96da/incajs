@@ -20,6 +20,7 @@ mod html;
 mod inline_style;
 mod input;
 mod insert_nodes;
+#[cfg(test)]
 mod links;
 mod listeners;
 mod members;
@@ -31,7 +32,6 @@ mod token_list;
 mod tree;
 
 pub use host::Host;
-pub use listeners::{EventListeners, Listener};
 
 use std::cell::RefCell;
 use std::rc::Rc;

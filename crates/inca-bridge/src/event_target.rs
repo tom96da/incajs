@@ -1,21 +1,12 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use inca_document::EventTargetId;
 use inca_node::NodeId;
 use rquickjs::{Ctx, IntoJs, Result as JsResult, Value};
 
 /// The JS tag of [`HookTarget::Window`].
 pub(crate) const WINDOW_TAG: &str = "$window";
-
-/// Something an event can be dispatched at or travel through: a node of the
-/// tree, the tag `"$window"`, which is no node, or an `AbortSignal`, which
-/// Rust knows by its id.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EventTargetId {
-    Node(NodeId),
-    Window,
-    Signal(u32),
-}
 
 /// A target the global `__inca_targets__` gives an object for: a node or the window. A signal
 /// is no hook target.
@@ -25,13 +16,13 @@ pub(crate) enum HookTarget {
     Window,
 }
 
-impl EventTargetId {
-    /// The target as the hook takes it, `None` for a signal.
-    pub(crate) fn hook_target(self) -> Option<HookTarget> {
-        match self {
-            Self::Node(id) => Some(HookTarget::Node(id)),
-            Self::Window => Some(HookTarget::Window),
-            Self::Signal(_) => None,
+impl HookTarget {
+    /// The hook target of `target`, `None` for a signal.
+    pub(crate) fn of(target: EventTargetId) -> Option<Self> {
+        match target {
+            EventTargetId::Node(id) => Some(Self::Node(id)),
+            EventTargetId::Window => Some(Self::Window),
+            EventTargetId::Signal(_) => None,
         }
     }
 }
@@ -62,7 +53,7 @@ mod tests {
         #[case] target: EventTargetId,
         #[case] hook: Option<HookTarget>,
     ) {
-        assert_eq!(target.hook_target(), hook);
+        assert_eq!(HookTarget::of(target), hook);
     }
 
     #[rstest]

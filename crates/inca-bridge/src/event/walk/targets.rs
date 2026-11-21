@@ -8,6 +8,7 @@ use rquickjs::{Array, Ctx, Function, Object, Result as JsResult, Value};
 use crate::EventTargetId;
 use crate::abort::Table;
 use crate::event::array_of;
+use crate::event_target::HookTarget;
 
 /// What stands for each of `targets`: the entries of the array that the
 /// global `__inca_targets__` returns for them, or the targets themselves when
@@ -27,7 +28,7 @@ pub(in crate::event) fn targets_of<'js>(
             found.map_or_else(|| Value::new_null(ctx.clone()), Object::into_value),
         ]);
     }
-    let given = array_of(ctx, targets.iter().filter_map(|t| t.hook_target()))?;
+    let given = array_of(ctx, targets.iter().filter_map(|&t| HookTarget::of(t)))?;
     let Ok(hook) = ctx.globals().get::<_, Function>("__inca_targets__") else {
         return (0..targets.len()).map(|index| given.get(index)).collect();
     };

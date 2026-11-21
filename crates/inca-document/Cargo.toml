@@ -21,7 +21,8 @@ publish = false
 name = "inca_document"
 
 [features]
-# Exposes the queue of changed tab indexes that a dependent crate's tests read.
+# Exposes the queue of changed tab indexes and the signal record check that a dependent crate's
+# tests read.
 test-support = []
 
 [dependencies]

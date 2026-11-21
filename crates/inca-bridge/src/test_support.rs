@@ -19,7 +19,8 @@ use inca_jsenv::{
 use inca_node::NodeId;
 
 use crate::bindings::install;
-use crate::{EventDispatcher, EventListeners, EventTargetId, Host};
+use crate::{EventDispatcher, EventTargetId, Host};
+use inca_document::EventListeners;
 
 /// The HTML namespace.
 pub const HTML: &str = "http://www.w3.org/1999/xhtml";
