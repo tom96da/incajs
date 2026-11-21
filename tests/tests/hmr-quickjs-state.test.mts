@@ -258,15 +258,15 @@ it(
     await vi.waitFor(() => expect(buildErrors).toHaveLength(1), { timeout: WAIT_TIMEOUT_MS });
     expect(buildErrors[0]?.message).toContain("Unexpected token");
 
-    // Fixing it remounts cleanly and the host keeps responding. The wait has
+    // Fixing it with a new script remounts cleanly (the same script only re-renders). The wait has
     // the same race as the script edit above.
     const beforeRecoveryEdit = mountedCount(stderrText);
-    await writeFile(vuePath, appVue(STYLE_V2, "!"));
+    await writeFile(vuePath, appVue(STYLE_V2, "!?"));
     await vi.waitFor(() => expect(mountedCount(stderrText)).toBeGreaterThan(beforeRecoveryEdit), {
       timeout: WAIT_TIMEOUT_MS,
     });
 
-    expect(await clickCounter(client)).toBe("Clicked 1 time(s)!");
+    expect(await clickCounter(client)).toBe("Clicked 1 time(s)!?");
   },
   WAIT_TIMEOUT_MS + 30_000,
 );
