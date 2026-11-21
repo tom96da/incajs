@@ -9,7 +9,8 @@ use inca_gpui::{EventPayload, MousePayload, NO_BUTTON};
 
 use super::EventDispatcher;
 use crate::EventTargetId;
-use crate::focus::FocusTransition;
+use crate::focus::dispatch_transition;
+use inca_document::FocusTransition;
 
 /// The payload of the window's `focus` and `blur`.
 const FOCUS_PAYLOAD: EventPayload = EventPayload::Focus {
@@ -43,7 +44,12 @@ impl EventDispatcher {
             if !active {
                 self.input_window_blur(node, window, cx);
             }
-            FocusTransition::window_activation(node, active).dispatch(self, window, cx);
+            dispatch_transition(
+                &FocusTransition::window_activation(node, active),
+                self,
+                window,
+                cx,
+            );
         }
         if !active {
             self.fire_at_global(EventTargetId::Window, "blur", &FOCUS_PAYLOAD, window, cx);

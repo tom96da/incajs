@@ -20,5 +20,5 @@ mod tests;
 pub use bindings::{EventListeners, Host, Listener, install};
 pub use dispatch::{EventDispatcher, drain_jobs_and_refresh};
 pub use event_target::EventTargetId;
-pub use focus::{FocusRegistry, FocusTransition};
+pub use focus::FocusRegistry;
 pub use inca_gpui::focus;

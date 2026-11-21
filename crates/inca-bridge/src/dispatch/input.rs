@@ -10,7 +10,7 @@ use inca_gpui::{EventPayload, InputLayout, MousePayload, opens_context_menu};
 use inca_node::input_text::pasted;
 use inca_node::{NodeId, is_disabled_control};
 
-use crate::focus::FocusTransition;
+use inca_document::FocusTransition;
 
 use super::EventDispatcher;
 

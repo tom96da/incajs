@@ -15,6 +15,13 @@ Everything here is plain data and functions.
 `AriaReferences` and `TabIndex` add to `VirtualTree` the reads and writes of the element references
 of an `aria` attribute and the `tabindex` of an element, with the default of each element kind.
 
+## Focus
+
+`FocusModel` holds the node that has focus, the focus and blur requests that wait for the next
+frame, the nodes whose `tabindex` changed and where Tab starts, and it moves focus along the Tab
+order. A `FocusSurface` is the window side that creates the handle of a node and moves the window's
+focus.
+
 ## Geometry
 
 `Rect` and `Align` describe a box and where it lands in a client rectangle. `scroll_delta` gives the

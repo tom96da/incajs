@@ -2839,6 +2839,7 @@ name = "inca-document"
 version = "0.0.35"
 dependencies = [
  "inca-node",
+ "inca-style",
  "rstest",
  "unicode-segmentation",
 ]

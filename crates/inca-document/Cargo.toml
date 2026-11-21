@@ -20,8 +20,13 @@ publish = false
 [lib]
 name = "inca_document"
 
+[features]
+# Exposes the queue of changed tab indexes that a dependent crate's tests read.
+test-support = []
+
 [dependencies]
 inca-node = { path = "../inca-node" }
+inca-style = { path = "../inca-style" }
 unicode-segmentation.workspace = true
 
 [dev-dependencies]

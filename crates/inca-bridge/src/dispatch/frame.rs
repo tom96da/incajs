@@ -10,6 +10,7 @@ use inca_jsenv::{EngineError, callbacks};
 
 use super::EventDispatcher;
 use crate::EventTargetId;
+use crate::focus::dispatch_transition;
 
 impl EventDispatcher {
     /// Runs the work a window owes before it draws a frame: prints the warnings of the `<style>`
@@ -30,7 +31,7 @@ impl EventDispatcher {
         };
         for transition in &transitions {
             self.input_focus_moved(transition, window, cx);
-            transition.dispatch(self, window, cx);
+            dispatch_transition(transition, self, window, cx);
         }
         self.release_orphans(window, cx);
         self.host.borrow_mut().reveal_focus(window);
