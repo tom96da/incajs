@@ -22,6 +22,8 @@ pub(crate) struct Walked {
     pub(crate) target: EventTargetId,
     pub(crate) payload: EventPayload,
     pub(crate) bubbles: bool,
+    /// The nodes the walk skips.
+    pub(crate) cut: Vec<NodeId>,
 }
 
 impl Walked {
@@ -101,6 +103,7 @@ impl Script for FakeScript {
             target: walk.target,
             payload: walk.payload.clone(),
             bubbles: walk.flags.bubbles,
+            cut: walk.cut.to_vec(),
         };
         let handler = Rc::clone(&self.handler.borrow());
         self.walks.borrow_mut().push(walked.clone());

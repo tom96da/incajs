@@ -292,10 +292,11 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::dispatch::input::scene::{InputScene, input_scene, log, mouse_of, record, types};
     use crate::dispatch::input::scene::{
-        cancel_beforeinput, eval_input, line_break_rows, replace, set_attributes,
+        cancel, cancel_beforeinput, cut_of, forget, line_break_rows, record_window_blur, replace,
+        set_attributes, walked,
     };
     use crate::test_support::{SVG, engine_with_bindings};
-    use crate::tests::{at, dispatcher_with_engine, eval_json, listen, listen_global, read_out};
+    use crate::tests::{at, dispatcher_with_engine, eval_json, listen};
     use gpui::{MouseButton, TestAppContext, VisualTestContext};
     use inca_gpui::{EventSink as _, InputLayout, InputRequest};
     use inca_test_macros::gpui_cases;
@@ -442,12 +443,7 @@ mod tests {
     #[gpui::test]
     fn a_canceled_press_leaves_the_caret(cx: &mut TestAppContext) {
         let s = input_scene(cx, "abcd");
-        s.engine
-            .eval::<()>(&format!(
-                "__inca_test_listen__({}, 'mousedown', (e) => e.preventDefault());",
-                s.input
-            ))
-            .unwrap();
+        cancel(&s, s.input, "mousedown");
         s.select(1, 1);
         s.pointer(cx, "mousedown", s.input, mouse_of(13.0, 0, false));
         assert_eq!(s.state().selection(), 1..1);
@@ -539,13 +535,11 @@ mod tests {
     ) {
         let s = input_scene(cx, "abcd");
         s.set_attribute("disabled");
-        for node in [s.input, s.parent] {
-            listen(&s.dispatcher, node, "mousedown", "() => out.push('down')");
-        }
         s.draw(cx);
         let mut visual = VisualTestContext::from_window(s.window.into(), cx);
         visual.simulate_mouse_down(at(13.0, 5.0), MouseButton::Left, gpui::Modifiers::none());
-        assert_eq!(read_out(&s.dispatcher), serde_json::json!([]));
+        let cut = cut_of(&s, "mousedown");
+        assert!(cut.contains(&s.input) && cut.contains(&s.parent));
     }
 
     #[gpui::test]
@@ -571,13 +565,13 @@ mod tests {
             .get_mut()
             .entry(svg_input)
             .or_default();
-        listen(&s.dispatcher, svg_input, "input", "() => out.push('input')");
+        forget(&s);
         s.in_window(cx, |scene, window, cx| {
             scene
                 .dispatcher
                 .input_request(svg_input, replace("x"), window, cx);
         });
-        assert_eq!(read_out(&s.dispatcher), serde_json::json!([]));
+        assert_eq!(walked(&s), Vec::<String>::new());
     }
 
     #[test]
@@ -657,7 +651,7 @@ mod tests {
         record(&s, s.input, &["change"]);
         s.focus(cx, s.input);
         s.key(cx, "x");
-        eval_input(&s, "__inca_native__.setInputValue(INPUT, 'z');");
+        s.write_value("z");
         s.focus(cx, s.button);
         assert_eq!(types(&s), ["change"]);
     }
@@ -667,7 +661,7 @@ mod tests {
         let s = input_scene(cx, "");
         record(&s, s.input, &["change"]);
         s.focus(cx, s.input);
-        eval_input(&s, "__inca_native__.setInputValue(INPUT, 'z');");
+        s.write_value("z");
         s.focus(cx, s.button);
         assert_eq!(types(&s), Vec::<String>::new());
     }
@@ -688,13 +682,7 @@ mod tests {
     fn typed_then_deactivated(cx: &mut TestAppContext) -> InputScene {
         let s = input_scene(cx, "");
         record(&s, s.input, &["change", "blur", "focusout"]);
-        listen_global(
-            &s.dispatcher,
-            "$window",
-            "blur",
-            false,
-            "() => globalThis.log.push(['window blur'])",
-        );
+        record_window_blur(&s);
         s.focus(cx, s.input);
         s.key(cx, "x");
         s.deactivate(cx);
@@ -733,7 +721,7 @@ mod tests {
 
     /// Blurs the input through the script and draws the frame that applies it.
     fn script_blur(s: &InputScene, cx: &mut TestAppContext) {
-        eval_input(s, "__inca_native__.blurNode(INPUT);");
+        s.host.document.borrow_mut().focus.request_blur(s.input);
         s.draw(cx);
         cx.run_until_parked();
     }
