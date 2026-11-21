@@ -266,7 +266,7 @@ mod tests {
         seen_rows, tree_of_three,
     };
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
     use inca_jsenv::Clock;
 
     /// A clock that `at` moves.

@@ -9,7 +9,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{AppContext as _, Context, TestAppContext, Window, point, px};
-use inca_gpui::{EventPayload, EventSink, MousePayload, PointerSource, WheelPayload};
+use inca_document::{EventPayload, MousePayload, PointerSource, WheelPayload};
+use inca_gpui::EventSink;
 use inca_jsenv::Clock;
 use inca_node::NodeId;
 
@@ -41,20 +42,20 @@ pub(crate) fn at(x: f32, y: f32) -> gpui::Point<gpui::Pixels> {
 }
 
 pub(crate) fn mouse_at(x: f32, y: f32) -> EventPayload {
-    EventPayload::Mouse(MousePayload::at(at(x, y), gpui::Modifiers::none()))
+    EventPayload::Mouse(MousePayload::at(x, y, inca_document::Modifiers::none()))
 }
 
 /// A `click` from the mouse pointer.
 pub(crate) fn pointer_click() -> EventPayload {
     EventPayload::Mouse(MousePayload {
         pointer: Some(PointerSource::Mouse),
-        ..MousePayload::at(at(1.0, 1.0), gpui::Modifiers::none())
+        ..MousePayload::at(1.0, 1.0, inca_document::Modifiers::none())
     })
 }
 
 pub(crate) fn wheel_at(x: f32, y: f32) -> EventPayload {
     EventPayload::Wheel(WheelPayload {
-        mouse: MousePayload::at(at(x, y), gpui::Modifiers::none()),
+        mouse: MousePayload::at(x, y, inca_document::Modifiers::none()),
         delta_x: 0.0,
         delta_y: 1.0,
         delta_z: 0.0,
@@ -62,8 +63,8 @@ pub(crate) fn wheel_at(x: f32, y: f32) -> EventPayload {
     })
 }
 
-pub(crate) fn key_payload(modifiers: gpui::Modifiers) -> EventPayload {
-    EventPayload::Key(inca_gpui::KeyPayload {
+pub(crate) fn key_payload(modifiers: inca_document::Modifiers) -> EventPayload {
+    EventPayload::Key(inca_document::KeyPayload {
         key: "a".into(),
         repeat: false,
         modifiers,
@@ -204,7 +205,8 @@ pub(crate) mod keys {
     use std::rc::Rc;
 
     use gpui::{App, AppContext as _, Keystroke, TestAppContext, Window, WindowHandle, WindowId};
-    use inca_gpui::{EventPayload, EventSink, KeyPayload};
+    use inca_document::{EventPayload, KeyPayload};
+    use inca_gpui::EventSink;
     use inca_node::NodeId;
 
     use super::mouse_at;
@@ -325,7 +327,7 @@ pub(crate) mod keys {
             let payload = EventPayload::Key(KeyPayload {
                 key: keystroke.key.clone(),
                 repeat: false,
-                modifiers: keystroke.modifiers,
+                modifiers: inca_gpui::modifiers_of(keystroke.modifiers),
                 is_composing: false,
             });
             self.engine
@@ -475,7 +477,7 @@ pub(crate) mod pointer {
             let sink = self.dispatcher.clone();
             let payload = EventPayload::Mouse(MousePayload {
                 buttons: 1,
-                ..MousePayload::at(at(x, y), gpui::Modifiers::none())
+                ..MousePayload::at(x, y, inca_document::Modifiers::none())
             });
             self.cx.update(|window, cx| {
                 sink.pointer_moved(at(x, y), cx);
@@ -550,7 +552,7 @@ pub(crate) mod pointer {
     fn button_payload(button: u8) -> EventPayload {
         EventPayload::Mouse(MousePayload {
             button,
-            ..MousePayload::at(at(1.0, 1.0), gpui::Modifiers::none())
+            ..MousePayload::at(1.0, 1.0, inca_document::Modifiers::none())
         })
     }
 }

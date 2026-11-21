@@ -4,7 +4,7 @@
 //! The work a window owes before a frame and when it gains or loses focus.
 
 use gpui::{App, Window};
-use inca_gpui::EventPayload;
+use inca_document::EventPayload;
 use inca_gpui::event_sink::with_screen;
 use inca_jsenv::{EngineError, callbacks};
 

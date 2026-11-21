@@ -4,7 +4,8 @@
 //! The `contextmenu` that the Menu key and Shift+F10 open.
 
 use gpui::{App, Window};
-use inca_gpui::{EventPayload, MousePayload, NO_BUTTON, PointerSource};
+use inca_document::{EventPayload, MousePayload, NO_BUTTON, PointerSource};
+use inca_gpui::modifiers_of;
 
 use crate::dispatch::EventDispatcher;
 
@@ -30,7 +31,7 @@ impl EventDispatcher {
             client_y: y,
             button: NO_BUTTON,
             pointer: Some(PointerSource::Mouse),
-            ..MousePayload::keyboard_click(modifiers)
+            ..MousePayload::keyboard_click(modifiers_of(modifiers))
         });
         self.fire(target, "contextmenu", &payload, window, cx);
     }
@@ -46,7 +47,9 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::tests::keys::{Scene, scene};
     use gpui::{Keystroke, TestAppContext};
-    use inca_gpui::{EventPayload, EventSink as _, KeyPayload};
+    use inca_document::{EventPayload, KeyPayload};
+    use inca_gpui::EventSink as _;
+    use inca_gpui::modifiers_of;
     use inca_node::NodeId;
     use inca_style::set_style;
     use inca_test_macros::gpui_cases;
@@ -128,7 +131,7 @@ mod tests {
         let payload = EventPayload::Key(KeyPayload {
             key: "ContextMenu".to_string(),
             repeat: false,
-            modifiers: keystroke.modifiers,
+            modifiers: modifiers_of(keystroke.modifiers),
             is_composing: false,
         });
         s.in_window(cx, |scene, window, cx| {

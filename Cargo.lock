@@ -2867,6 +2867,7 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "inca-bridge",
+ "inca-document",
  "inca-gpui",
  "inca-jsenv",
  "inca-node",

@@ -13,8 +13,8 @@ use std::ops::{Deref, DerefMut};
 
 use gpui::{App, FocusHandle, Window};
 
-use crate::{EventPayload, EventSink};
-use inca_document::{FocusModel, FocusSurface, FocusTransition};
+use crate::EventSink;
+use inca_document::{EventPayload, FocusModel, FocusSurface, FocusTransition};
 use inca_node::NodeId;
 
 mod requests;

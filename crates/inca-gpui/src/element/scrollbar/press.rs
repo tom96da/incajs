@@ -17,7 +17,7 @@ use super::{Parts, Scrollbars};
 use crate::element::pointer::{
     control_click_is_right, mark_target, move_over, opens_context_menu, restored_down, restored_up,
 };
-use crate::event_sink::{EventPayload, EventSink};
+use crate::event_sink::{EventSink, context_menu_payload, mouse_down_payload, mouse_up_payload};
 use inca_node::NodeId;
 
 /// What the listeners of one frame need to know about the bars of a container.
@@ -105,12 +105,12 @@ fn press<E: EventSink>(ctx: &Ctx<E>, event: &MouseDownEvent, window: &mut Window
     }
     if let Some(sink) = &ctx.sink {
         let event = restored_down(event, cx);
-        sink.bar_pressed(ctx.id, &(&event).into(), window, cx);
+        sink.bar_pressed(ctx.id, &mouse_down_payload(&event), window, cx);
         if drag.is_some() {
             sink.bar_drag(ctx.id, true, window, cx);
         }
         if opens_context_menu(event.button, event.modifiers, control_click_is_right(cx)) {
-            let payload = EventPayload::context_menu(&event);
+            let payload = context_menu_payload(&event);
             sink.fire(ctx.id, "contextmenu", &payload, window, cx);
         }
     }
@@ -127,7 +127,7 @@ fn release<E: EventSink>(ctx: &Ctx<E>, event: &MouseUpEvent, window: &mut Window
             .update(cx, |state, _| state.pressed_on_bar = false);
         if let Some(sink) = &ctx.sink {
             let event = restored_up(event, cx);
-            sink.bar_released(ctx.id, &(&event).into(), window, cx);
+            sink.bar_released(ctx.id, &mouse_up_payload(&event), window, cx);
         }
         if dragging && event.button == MouseButton::Left {
             ctx.end_drag(window, cx);

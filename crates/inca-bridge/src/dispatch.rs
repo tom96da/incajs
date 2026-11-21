@@ -227,7 +227,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::tests::{dispatcher_with_engine, listen};
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
 
     #[gpui::test]
     fn a_stale_callback_id_is_skipped_rather_than_reported(cx: &mut TestAppContext) {

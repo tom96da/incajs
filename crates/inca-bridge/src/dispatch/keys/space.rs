@@ -4,7 +4,7 @@
 //! The clicks that Space, Enter and a mouse release make on a button.
 
 use gpui::{App, MouseButton, MouseUpEvent, Window};
-use inca_gpui::EventPayload;
+use inca_gpui::click_payload;
 use inca_node::NodeId;
 
 use crate::dispatch::EventDispatcher;
@@ -47,7 +47,7 @@ impl EventDispatcher {
         let Some(start) = captured.or_else(|| self.common_ancestor(pressed, released)) else {
             return;
         };
-        let mut payload = EventPayload::click(event);
+        let mut payload = click_payload(event);
         if event.button != MouseButton::Left {
             self.fire(start, "auxclick", &payload, window, cx);
             return;
@@ -71,7 +71,8 @@ mod tests {
     use crate::tests::keys::{Scene, scene};
     use crate::tests::{at, mouse_at};
     use gpui::{TestAppContext, WindowId};
-    use inca_gpui::{EventPayload, EventSink};
+    use inca_document::EventPayload;
+    use inca_gpui::EventSink;
     use inca_node::NodeId;
     use inca_style::set_style;
     use inca_test_macros::gpui_cases;

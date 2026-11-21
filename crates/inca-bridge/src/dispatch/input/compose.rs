@@ -6,7 +6,7 @@
 use crate::dispatch::EventDispatcher;
 use gpui::App;
 use gpui::Window;
-use inca_gpui::EventPayload;
+use inca_document::EventPayload;
 use inca_node::NodeId;
 impl EventDispatcher {
     /// Fires the composition event `event` at `node` with `data`.

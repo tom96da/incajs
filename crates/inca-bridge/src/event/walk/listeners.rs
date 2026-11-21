@@ -105,7 +105,7 @@ mod tests {
         dispatcher_with_engine, fire_and_read, listen, listen_with, tagged, tree_of_three,
     };
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
 
     #[gpui::test]
     fn a_listener_added_mid_dispatch_runs_on_an_ancestor_and_waits_on_the_node(

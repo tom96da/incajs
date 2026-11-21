@@ -5,7 +5,7 @@
 
 use gpui::{App, Window};
 use inca_document::spec_of;
-use inca_gpui::{EventPayload, NO_BUTTON, PointerSource, buttons_mask};
+use inca_document::{EventPayload, NO_BUTTON, PointerSource, buttons_mask};
 use inca_node::NodeId;
 
 use super::EventDispatcher;
@@ -180,7 +180,8 @@ mod tests {
     use crate::tests::state;
     use crate::tests::{at, dispatcher_with_engine, mouse_at, wheel_at};
     use gpui::TestAppContext;
-    use inca_gpui::{EventPayload, EventSink as _, MousePayload};
+    use inca_document::{EventPayload, MousePayload};
+    use inca_gpui::EventSink as _;
     use inca_node::NodeId;
     use inca_test_macros::gpui_cases;
 
@@ -415,7 +416,7 @@ mod tests {
         s.down(s.a, button);
         s.up(s.a, s.a, button);
         let got: Vec<_> = s.take().into_iter().filter(|e| !e.contains('@')).collect();
-        let mask = inca_gpui::buttons_mask(button);
+        let mask = inca_document::buttons_mask(button);
         let which = u32::from(button) + 1;
         assert_eq!(
             got,
@@ -656,7 +657,7 @@ mod tests {
         let b = s.b;
         let held = EventPayload::Mouse(MousePayload {
             buttons: 1,
-            ..MousePayload::at(at(5.0, 5.0), gpui::Modifiers::none())
+            ..MousePayload::at(5.0, 5.0, inca_document::Modifiers::none())
         });
         s.cx.update(|window, cx| {
             sink.pointer_over(b, window, cx);

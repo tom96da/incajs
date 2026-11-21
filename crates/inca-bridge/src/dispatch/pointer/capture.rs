@@ -4,7 +4,7 @@
 //! The capture of the pointer by a node.
 
 use gpui::{App, Window};
-use inca_gpui::EventPayload;
+use inca_document::EventPayload;
 use inca_node::NodeId;
 
 use super::super::EventDispatcher;
@@ -87,11 +87,11 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::at;
     use crate::tests::pointer::{Scene, scene};
     use crate::tests::state;
     use gpui::TestAppContext;
-    use inca_gpui::{EventPayload, EventSink, MousePayload, PointerSource};
+    use inca_document::{EventPayload, MousePayload, PointerSource};
+    use inca_gpui::EventSink;
     use inca_test_macros::gpui_cases;
 
     /// A scene where a press on `a` captures `capturer` from its `pointerdown` listener. The
@@ -374,7 +374,7 @@ mod tests {
         let sink = s.dispatcher.clone();
         let payload = EventPayload::Mouse(MousePayload {
             pointer: Some(PointerSource::Mouse),
-            ..MousePayload::at(at(1.0, 1.0), gpui::Modifiers::none())
+            ..MousePayload::at(1.0, 1.0, inca_document::Modifiers::none())
         });
         s.cx.update(|window, cx| EventSink::fire(&sink, s.b, "contextmenu", &payload, window, cx));
         assert_eq!(s.take(), [format!("contextmenu@{}", s.a)]);

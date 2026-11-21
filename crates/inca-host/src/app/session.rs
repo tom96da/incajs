@@ -252,7 +252,7 @@ mod tests {
 
     use super::*;
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
     use inca_jsenv::stderr_reporter;
     use rstest::rstest;
 

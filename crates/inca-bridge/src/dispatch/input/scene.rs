@@ -11,12 +11,13 @@ use std::rc::Rc;
 
 use gpui::{App, AppContext as _, Keystroke, TestAppContext, WindowHandle};
 use inca_document::InputState;
-use inca_gpui::{EventPayload, EventSink, InputRequest, MousePayload};
+use inca_document::{EventPayload, MousePayload};
+use inca_gpui::{EventSink, InputRequest};
 use inca_node::NodeId;
 use serde_json::{Value, json};
 
 use crate::test_support::{TestRoot, engine_for, mount_active};
-use crate::tests::{at, listen};
+use crate::tests::listen;
 use crate::{EventDispatcher, Host};
 use inca_style::set_style;
 
@@ -206,13 +207,10 @@ pub(crate) fn types(s: &InputScene) -> Vec<String> {
 
 /// A mouse payload of `button` at window x `x` and y 5.
 pub(crate) fn mouse_of(x: f32, button: u8, shift: bool) -> MousePayload {
-    let modifiers = gpui::Modifiers {
-        shift,
-        ..gpui::Modifiers::none()
-    };
+    let modifiers = inca_document::Modifiers::none().set(inca_document::Modifiers::SHIFT, shift);
     MousePayload {
         button,
-        ..MousePayload::at(at(x, 5.0), modifiers)
+        ..MousePayload::at(x, 5.0, modifiers)
     }
 }
 

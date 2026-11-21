@@ -39,11 +39,12 @@ pub(in crate::event) fn targets_of<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::tests::{
-        at, dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
+        dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
         node_under_root, read_out, tree_of_three,
     };
     use gpui::TestAppContext;
-    use inca_gpui::{EventPayload, EventSink, MousePayload, WheelPayload};
+    use inca_document::{EventPayload, MousePayload, WheelPayload};
+    use inca_gpui::EventSink;
     use rstest::rstest;
 
     /// Gives every node one object `{ node }` and counts the calls.
@@ -120,7 +121,7 @@ mod tests {
         }
         let over = EventPayload::Mouse(MousePayload {
             related_target: Some(parent),
-            ..MousePayload::at(at(0.0, 0.0), gpui::Modifiers::none())
+            ..MousePayload::at(0.0, 0.0, inca_document::Modifiers::none())
         });
         let cx = cx.add_empty_window();
 
@@ -337,7 +338,7 @@ mod tests {
         let wheel = EventPayload::Wheel(WheelPayload {
             mouse: MousePayload {
                 related_target: Some(parent),
-                ..MousePayload::at(at(0.0, 0.0), gpui::Modifiers::none())
+                ..MousePayload::at(0.0, 0.0, inca_document::Modifiers::none())
             },
             delta_x: 0.0,
             delta_y: 0.0,

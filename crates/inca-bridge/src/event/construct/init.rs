@@ -3,7 +3,7 @@
 
 //! The init dictionary that the event constructors read.
 
-use gpui::Modifiers;
+use inca_document::Modifiers;
 use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, Exception, Object, Result as JsResult, Value};
 
@@ -15,13 +15,11 @@ fn modifiers(init: &Init<'_, '_>) -> JsResult<Modifiers> {
     let control = init.boolean("ctrlKey")?;
     let platform = init.boolean("metaKey")?;
     let shift = init.boolean("shiftKey")?;
-    Ok(Modifiers {
-        control,
-        alt,
-        shift,
-        platform,
-        function: false,
-    })
+    Ok(Modifiers::none()
+        .set(Modifiers::CONTROL, control)
+        .set(Modifiers::ALT, alt)
+        .set(Modifiers::SHIFT, shift)
+        .set(Modifiers::PLATFORM, platform))
 }
 
 /// The mouse fields of `init` and its `relatedTarget`. `ui` holds the `detail` read before.

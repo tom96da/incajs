@@ -5,7 +5,8 @@
 //! it resets.
 
 use gpui::{App, Window};
-use inca_gpui::{EventPayload, MousePayload, NO_BUTTON};
+use inca_document::{EventPayload, NO_BUTTON};
+use inca_gpui::mouse_at;
 
 use super::EventDispatcher;
 use crate::EventTargetId;
@@ -61,8 +62,7 @@ impl EventDispatcher {
     /// would leave them set.
     fn reset_pointer(&self, window: &mut Window, cx: &mut App) {
         self.host.borrow_mut().capture_pending = None;
-        let payload =
-            EventPayload::Mouse(MousePayload::at(gpui::Point::default(), window.modifiers()));
+        let payload = EventPayload::Mouse(mouse_at(gpui::Point::default(), window.modifiers()));
         self.process_capture(&payload, NO_BUTTON, window, cx);
         self.state.pointerdown_canceled.set(false);
         self.state.input_drag.set(None);

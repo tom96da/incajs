@@ -12,7 +12,8 @@ use super::pointer::{
 use super::scrollbar::{Scrollbars, gutter_of, scrollbar};
 use super::style::{apply_style, clip_scroll_axes, reserve_gutter};
 use super::wheel::{scroll_anchor, wire_scroll};
-use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
+use crate::event_sink::{EventSink, noop_sink_methods};
+use inca_document::EventPayload;
 use inca_node::tree::{NodeId, VirtualTree};
 use inca_style::StyleCache;
 use inca_style::spec::{ElementSpec, ElementTag, WheelAxes, build_spec};
