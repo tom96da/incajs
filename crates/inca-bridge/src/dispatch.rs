@@ -44,7 +44,7 @@ mod restyle;
 mod sink;
 mod timers;
 
-pub(crate) use inca_gpui::event_sink::spec_of;
+pub(crate) use inca_document::spec_of;
 
 /// Everything needed to dispatch a native event into JS: the engine to call
 /// into, and the registry of which JS callback ids are listening for which

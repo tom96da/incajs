@@ -3,8 +3,7 @@
 
 //! The flags and rules of each event name.
 
-use super::EventPayload;
-use inca_document::{InputPayload, InputType};
+use crate::text::InputType;
 
 /// `bubbles`, `cancelable` and `composed` of one event.
 #[derive(Clone, Copy)]
@@ -58,7 +57,7 @@ const fn own_buttons(mut event: EventSpec) -> EventSpec {
     event
 }
 
-/// Every event the host dispatches.
+/// Every event the document dispatches.
 pub const EVENTS: [EventSpec; 35] = [
     own_buttons(spec("click", Flags::ALL)),
     own_buttons(spec("dblclick", Flags::ALL)),
@@ -149,20 +148,12 @@ pub fn spec_of(event: &str) -> EventSpec {
         .unwrap_or(spec("", Flags::NONE))
 }
 
-/// The flags of `event` carrying `payload`: those of [`spec_of`], with a
+/// The flags of `event` with an input of `input_type`: those of [`spec_of`], with a
 /// `beforeinput` of `insertCompositionText` not cancelable.
 #[must_use]
-pub fn flags_of(event: &str, payload: &EventPayload) -> Flags {
+pub fn flags_of(event: &str, input_type: Option<InputType>) -> Flags {
     let mut flags = spec_of(event).flags;
-    if event == "beforeinput"
-        && matches!(
-            payload,
-            EventPayload::Input(InputPayload {
-                input_type: InputType::InsertCompositionText,
-                ..
-            })
-        )
-    {
+    if event == "beforeinput" && input_type == Some(InputType::InsertCompositionText) {
         flags.cancelable = false;
     }
     flags
@@ -174,14 +165,6 @@ mod tests {
 
     use super::*;
     use rstest::rstest;
-
-    fn input_payload(input_type: InputType) -> EventPayload {
-        EventPayload::Input(InputPayload {
-            data: None,
-            input_type,
-            is_composing: false,
-        })
-    }
 
     #[rstest]
     #[case::down("pointerdown", true, true, true, false)]
@@ -214,15 +197,15 @@ mod tests {
     }
 
     #[rstest]
-    #[case::composition("beforeinput", input_payload(InputType::InsertCompositionText), false)]
-    #[case::insert_text("beforeinput", input_payload(InputType::InsertText), true)]
-    #[case::none_payload("beforeinput", EventPayload::None, true)]
-    #[case::other_event("keydown", input_payload(InputType::InsertCompositionText), true)]
+    #[case::composition("beforeinput", Some(InputType::InsertCompositionText), false)]
+    #[case::insert_text("beforeinput", Some(InputType::InsertText), true)]
+    #[case::no_input("beforeinput", None, true)]
+    #[case::other_event("keydown", Some(InputType::InsertCompositionText), true)]
     fn flags_of_drops_cancelable_for_a_composition_beforeinput(
         #[case] event: &str,
-        #[case] payload: EventPayload,
+        #[case] input_type: Option<InputType>,
         #[case] cancelable: bool,
     ) {
-        assert_eq!(flags_of(event, &payload).cancelable, cancelable);
+        assert_eq!(flags_of(event, input_type).cancelable, cancelable);
     }
 }

@@ -20,7 +20,7 @@
 
 use std::cell::{Cell, RefCell};
 
-pub(crate) use inca_gpui::event_sink::Flags;
+pub(crate) use inca_document::Flags;
 use inca_jsenv::{FunctionAccessor, vault};
 use rquickjs::convert::Coerced;
 use rquickjs::function::Opt;
@@ -28,7 +28,6 @@ use rquickjs::object::Property;
 use rquickjs::{Array, Class, Ctx, Exception, IntoJs, Object, Result as JsResult, Value};
 
 mod construct;
-mod key_code;
 mod members;
 mod payload;
 mod record;
