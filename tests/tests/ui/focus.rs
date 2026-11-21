@@ -1,14 +1,15 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `document.activeElement` reads the focused node from a real `.vue` app.
+//! The focus a script and a focus listener request, read through `document.activeElement` and
+//! the focus events.
 
-use super::common::{click, load, text_of};
+use super::common::{appended, click, load, settled, text_of};
 use gpui::TestAppContext;
 
 #[gpui::test]
 fn focus_in_a_handler_is_visible_at_once(cx: &mut TestAppContext) {
-    let mut h = load(cx, "active");
+    let mut h = load(cx, "focus-active");
 
     click(&mut h, "focus-a");
 
@@ -17,7 +18,7 @@ fn focus_in_a_handler_is_visible_at_once(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn focusing_another_node_moves_it(cx: &mut TestAppContext) {
-    let mut h = load(cx, "active");
+    let mut h = load(cx, "focus-active");
     click(&mut h, "focus-a");
 
     click(&mut h, "focus-b");
@@ -27,7 +28,7 @@ fn focusing_another_node_moves_it(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn blur_gives_the_mount_container(cx: &mut TestAppContext) {
-    let mut h = load(cx, "active");
+    let mut h = load(cx, "focus-active");
     click(&mut h, "focus-a");
 
     click(&mut h, "blur-a");
@@ -37,7 +38,7 @@ fn blur_gives_the_mount_container(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn focusing_a_node_with_no_tabindex_reads_the_mount_container(cx: &mut TestAppContext) {
-    let mut h = load(cx, "active");
+    let mut h = load(cx, "focus-active");
 
     click(&mut h, "focus-n");
 
@@ -46,7 +47,7 @@ fn focusing_a_node_with_no_tabindex_reads_the_mount_container(cx: &mut TestAppCo
 
 #[gpui::test]
 fn a_click_that_focuses_a_node_is_visible_in_its_click_handler(cx: &mut TestAppContext) {
-    let mut h = load(cx, "active");
+    let mut h = load(cx, "focus-active");
 
     click(&mut h, "click-target");
 
@@ -55,7 +56,7 @@ fn a_click_that_focuses_a_node_is_visible_in_its_click_handler(cx: &mut TestAppC
 
 #[gpui::test]
 fn tab_focus_is_visible_in_the_focus_handler(cx: &mut TestAppContext) {
-    let mut h = load(cx, "active");
+    let mut h = load(cx, "focus-active");
     click(&mut h, "focus-a");
 
     h.keystrokes("tab");
@@ -65,7 +66,7 @@ fn tab_focus_is_visible_in_the_focus_handler(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn removing_the_focused_node_makes_the_active_element_the_mount_container(cx: &mut TestAppContext) {
-    let mut h = load(cx, "active");
+    let mut h = load(cx, "focus-active");
     click(&mut h, "doomed");
     click(&mut h, "probe-doomed-focused");
     assert_eq!(text_of(&mut h, "result"), "true");
@@ -74,4 +75,38 @@ fn removing_the_focused_node_makes_the_active_element_the_mount_container(cx: &m
     click(&mut h, "probe-doomed");
 
     assert_eq!(text_of(&mut h, "result2"), "true");
+}
+
+#[gpui::test]
+fn focus_requested_in_a_focus_listener_ends_on_the_requested_node(cx: &mut TestAppContext) {
+    let mut h = load(cx, "focus-chain");
+
+    click(&mut h, "go-a");
+    settled(&mut h, 2);
+    click(&mut h, "read");
+
+    assert_eq!(text_of(&mut h, "active"), "b");
+}
+
+#[gpui::test]
+fn blur_requested_in_a_focus_listener_ends_with_nothing_focused(cx: &mut TestAppContext) {
+    let mut h = load(cx, "focus-chain");
+
+    click(&mut h, "go-c");
+    settled(&mut h, 2);
+    click(&mut h, "read");
+
+    assert_eq!(text_of(&mut h, "active"), "");
+}
+
+#[gpui::test]
+fn a_key_after_a_focus_chain_reaches_the_node_that_ended_focused(cx: &mut TestAppContext) {
+    let mut h = load(cx, "focus-chain");
+    click(&mut h, "go-a");
+    settled(&mut h, 2);
+    let before = text_of(&mut h, "log");
+
+    h.keystrokes("x");
+
+    assert_eq!(appended(&before, &text_of(&mut h, "log")), "keydown:b");
 }

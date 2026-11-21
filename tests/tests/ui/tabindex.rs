@@ -54,7 +54,7 @@ fn removing_tabindex_blurs_the_node_and_stops_click_focus(cx: &mut TestAppContex
 fn tab_moves_focus_through_the_tabindex_order_from_a_node_with_tabindex_minus_one(
     cx: &mut TestAppContext,
 ) {
-    let mut h = load(cx, "taborder");
+    let mut h = load(cx, "tabindex-order");
     click(&mut h, "t4");
 
     h.keystrokes("tab tab");

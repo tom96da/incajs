@@ -317,6 +317,14 @@ pub(crate) fn eval_f64(h: &Harness, code: &str) -> f64 {
         .unwrap()
 }
 
+pub(crate) fn eval_string(h: &Harness, code: &str) -> String {
+    h.window
+        .read_with(&h.cx, |app, _| {
+            app.session.engine.eval::<String>(code).unwrap()
+        })
+        .unwrap()
+}
+
 pub(crate) fn id_where(h: &mut Harness, f: impl Fn(&Node) -> bool) -> NodeId {
     h.snapshot().find(&f).unwrap().id
 }

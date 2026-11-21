@@ -9,8 +9,12 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{KeyUpEvent, Keystroke, TestAppContext, VisualTestContext, WindowHandle};
+use gpui::{
+    KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, PlatformInput, TestAppContext,
+    VisualTestContext, WindowHandle,
+};
 use inca_bridge::Host;
+pub use inca_gpui::Scrollbars;
 use inca_jsenv::stderr_reporter;
 use inca_node::NodeId;
 
@@ -32,6 +36,7 @@ pub struct Harness {
 }
 
 mod pointer;
+mod text;
 
 impl Harness {
     /// Mounts the bundle `source`, read from `entry_path`, in a window of
@@ -97,6 +102,79 @@ impl Harness {
         self.settle();
     }
 
+    /// Sends space-separated keystrokes, such as `"a b"`, to the focused node
+    /// as keys the platform repeats. Each key-down has `repeat` true. When no
+    /// listener cancels it and the keystroke carries text, that text goes to the
+    /// focused `input`. No key-up is sent.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a keystroke does not parse.
+    pub fn key_repeat(&mut self, keys: &str) {
+        for keystroke in keys.split(' ').map(Keystroke::parse) {
+            let keystroke = keystroke
+                .expect("a parseable keystroke")
+                .with_simulated_ime();
+            let text = keystroke.key_char.clone();
+            let result = self.cx.update(|window, cx| {
+                window.dispatch_event(
+                    PlatformInput::KeyDown(KeyDownEvent {
+                        keystroke,
+                        is_held: true,
+                        prefer_character_input: false,
+                    }),
+                    cx,
+                )
+            });
+            if let (true, Some(text)) = (result.propagate, text) {
+                self.type_text(&text);
+            }
+        }
+        self.settle();
+    }
+
+    /// Reports `modifiers` as the modifier keys held now, with caps lock off,
+    /// until the next activation or deactivation. [`Modifiers::none`] reports
+    /// every key released. No key event is sent apart from the ones the app
+    /// derives from the change.
+    pub fn set_modifiers(&mut self, modifiers: Modifiers) {
+        self.cx.simulate_modifiers_change(modifiers);
+        self.settle();
+    }
+
+    /// Reports the window active. The app sees the activation: `window`
+    /// receives `focus`, and the focused node receives `focus` and `focusin`
+    /// again. The held modifier keys are reported released, with no key
+    /// event.
+    ///
+    /// [`Harness::load`] leaves the window inactive.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the window is already active.
+    pub fn activate_window(&mut self) {
+        assert!(!self.is_window_active(), "the window is already active");
+        self.cx.update(|window, _| window.activate_window());
+        self.settle();
+    }
+
+    /// Reports the window inactive. The app sees the deactivation: `window`
+    /// receives `blur`. The held modifier keys are reported released, with
+    /// no key event.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the window is not active.
+    pub fn deactivate_window(&mut self) {
+        assert!(self.is_window_active(), "the window is not active");
+        self.cx.deactivate_window();
+        self.settle();
+    }
+
+    fn is_window_active(&mut self) -> bool {
+        self.cx.update(|window, _| window.is_window_active())
+    }
+
     /// Runs one pass: the app's pending JS jobs, then queued work until none
     /// is left, then the frame callbacks the app requested, then a window
     /// draw, so [`Harness::snapshot`] reads current bounds. Jobs scheduled by
@@ -123,6 +201,13 @@ impl Harness {
         self.cx.update(|window, cx| window.draw(cx).clear(cx));
     }
 
+    /// Makes every render after this call take `mode` as the platform's scrollbar setting, until
+    /// the next call, then settles. The test platform shows classic bars until this is called.
+    pub fn scrollbars(&mut self, mode: Scrollbars) {
+        self.cx.update(|_, cx| Scrollbars::set_for_tests(cx, mode));
+        self.settle();
+    }
+
     /// Moves the fake clock forward by `by`, runs the timers that fall due, then
     /// settles. A repeating timer runs once per call, whatever `by` is.
     pub fn advance_clock(&mut self, by: Duration) {
@@ -136,9 +221,8 @@ mod tests {
     #![allow(clippy::float_cmp, clippy::unwrap_used)]
 
     use super::*;
-    use crate::tests::{TEST_ENTRY_PATH, eval_f64, id_where, load_listening, log};
-    use gpui::{Pixels, Point, point, px};
-    use inca_gpui::EventSink;
+    use crate::tests::{TEST_ENTRY_PATH, eval_f64, id_where, load_listening, log, node};
+    use gpui::{point, px};
 
     #[gpui::test]
     fn settle_flushes_a_microtask_mount(cx: &mut TestAppContext) {
@@ -186,35 +270,45 @@ mod tests {
             n.setStyle(inner, 'width', 300);
             n.setStyle(inner, 'height', 300);
             n.appendChild(c, inner);
+            globalThis.inner = inner;
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(`${e.deltaX}:${e.deltaY}`);
+                },
+            };
+            listen(c, 'wheel', 0);
         ";
 
-    fn offset(h: &Harness, id: NodeId) -> Point<Pixels> {
-        h.window
-            .read_with(&h.cx, |app, _| {
-                app.session.dispatcher.scroll_handle(id).unwrap().offset()
-            })
+    fn id_y(h: &mut Harness, id: NodeId) -> f32 {
+        h.snapshot()
+            .find(&|n| n.id == id)
             .unwrap()
+            .bounds
+            .unwrap()
+            .y
     }
 
     #[gpui::test]
     fn scroll_on_a_text_leaf_scrolls_its_container(cx: &mut TestAppContext) {
-        let mut h = Harness::load(cx, TEST_ENTRY_PATH, SCROLLER);
-        let container = id_where(&mut h, |n| n.children.iter().any(|c| c.text.is_some()));
+        let mut h = load_listening(cx, SCROLLER);
         let leaf = id_where(&mut h, |n| n.text.is_some());
+        let inner = node(&h, "inner");
+        let before = id_y(&mut h, inner);
 
         h.scroll(leaf, 0.0, -20.0);
 
-        assert_eq!(offset(&h, container).y, px(-20.0));
+        assert_eq!(id_y(&mut h, inner), before - 20.0);
     }
 
     #[gpui::test]
-    fn scroll_moves_the_horizontal_offset(cx: &mut TestAppContext) {
-        let mut h = Harness::load(cx, TEST_ENTRY_PATH, SCROLLER);
+    fn scroll_passes_both_deltas_to_the_wheel_event(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, SCROLLER);
         let container = id_where(&mut h, |n| n.children.iter().any(|c| c.text.is_some()));
 
-        h.scroll(container, -25.0, 0.0);
+        h.scroll(container, -25.0, -20.0);
 
-        assert_eq!(offset(&h, container).x, px(-25.0));
+        assert_eq!(log(&h), "25:20");
     }
 
     #[gpui::test]
@@ -305,7 +399,7 @@ mod tests {
     }
 
     /// A focused 100x50 `box` whose `keydown` and `keyup` listeners log `type:key:metaKey`.
-    const KEYED: &str = r"
+    pub(super) const KEYED: &str = r"
             const n = __inca_native__;
             const box = n.createNode('div');
             n.setStyle(box, 'width', 100);
@@ -323,6 +417,114 @@ mod tests {
             n.focusNode(box);
         ";
 
+    /// `KEYED` with the listeners logging `type:key:repeat`.
+    const REPEATED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.setAttribute(box, 'tabindex', '0');
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(`${e.type}:${e.key}:${e.repeat}`);
+                },
+            };
+            listen(box, 'keydown', 0);
+            listen(box, 'keyup', 0);
+            n.focusNode(box);
+        ";
+
+    #[gpui::test]
+    fn set_modifiers_reports_the_held_modifier_keys(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.set_modifiers(Modifiers::shift());
+
+        assert_eq!(log(&h), "keydown:Shift:false");
+    }
+
+    #[gpui::test]
+    fn set_modifiers_none_releases_the_held_keys(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.set_modifiers(Modifiers::shift());
+        h.set_modifiers(Modifiers::none());
+
+        assert_eq!(log(&h), "keydown:Shift:false,keyup:Shift:false");
+    }
+
+    /// A `box` with `focus` and `blur` listeners on the window that log their type.
+    const WINDOWED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(e.type);
+                },
+            };
+            listen(n.windowTargetId(), 'focus', 0);
+            listen(n.windowTargetId(), 'blur', 0);
+        ";
+
+    /// A focused `box` with `focus` and `focusin` listeners that log `type`.
+    const FOCUSED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.setAttribute(box, 'tabindex', '0');
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(e.type);
+                },
+            };
+            listen(box, 'focus', 0);
+            listen(box, 'focusin', 0);
+            n.focusNode(box);
+        ";
+
+    #[gpui::test]
+    fn activate_window_refocuses_the_focused_node(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, FOCUSED);
+        assert_eq!(log(&h), "focus,focusin");
+
+        h.activate_window();
+
+        assert_eq!(log(&h), "focus,focusin,focus,focusin");
+    }
+
+    #[gpui::test]
+    fn key_repeat_marks_each_key_as_a_repeat(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.key_repeat("a");
+
+        assert_eq!(log(&h), "keydown:a:true");
+    }
+
+    #[gpui::test]
+    #[should_panic(expected = "InvalidKeystrokeError")]
+    fn key_repeat_panics_on_an_unparseable_key(cx: &mut TestAppContext) {
+        Harness::load(cx, TEST_ENTRY_PATH, "").key_repeat("a-b");
+    }
+
+    #[gpui::test]
+    fn key_repeat_repeats_each_key_in_order(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.key_repeat("a b");
+
+        assert_eq!(log(&h), "keydown:a:true,keydown:b:true");
+    }
+
     #[gpui::test]
     fn keystrokes_press_each_key_in_order_and_release_none(cx: &mut TestAppContext) {
         let mut h = load_listening(cx, KEYED);
@@ -339,6 +541,62 @@ mod tests {
         h.key_up("a cmd-b x");
 
         assert_eq!(log(&h), "keyup:a:false,keyup:b:true,keyup:x:false");
+    }
+
+    #[gpui::test]
+    fn activate_window_reports_the_window_active(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, WINDOWED);
+
+        h.activate_window();
+
+        assert_eq!(log(&h), "focus");
+    }
+
+    #[gpui::test]
+    fn deactivate_window_reports_the_window_inactive(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, WINDOWED);
+
+        h.activate_window();
+        h.deactivate_window();
+
+        assert_eq!(log(&h), "focus,blur");
+    }
+
+    #[gpui::test]
+    #[should_panic(expected = "the window is not active")]
+    fn deactivate_window_panics_on_an_inactive_window(cx: &mut TestAppContext) {
+        Harness::load(cx, TEST_ENTRY_PATH, "").deactivate_window();
+    }
+
+    #[gpui::test]
+    #[should_panic(expected = "the window is already active")]
+    fn activate_window_panics_on_an_active_window(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
+        h.activate_window();
+        h.activate_window();
+    }
+
+    #[gpui::test]
+    fn activate_window_reports_no_modifier_key_held(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.set_modifiers(Modifiers::shift());
+        h.activate_window();
+        h.set_modifiers(Modifiers::none());
+
+        assert_eq!(log(&h), "keydown:Shift:false");
+    }
+
+    #[gpui::test]
+    fn deactivate_window_reports_no_modifier_key_held(cx: &mut TestAppContext) {
+        let mut h = load_listening(cx, REPEATED);
+
+        h.activate_window();
+        h.set_modifiers(Modifiers::shift());
+        h.deactivate_window();
+        h.set_modifiers(Modifiers::none());
+
+        assert_eq!(log(&h), "keydown:Shift:false");
     }
 
     #[gpui::test]
@@ -407,5 +665,45 @@ mod tests {
         assert_eq!(eval_f64(&h, "globalThis.frames"), 1.0);
         h.settle();
         assert_eq!(eval_f64(&h, "globalThis.frames"), 1.0);
+    }
+
+    const BARRED: &str = r"
+            const n = __inca_native__;
+            const c = n.createNode('div');
+            n.setStyle(c, 'width', 100);
+            n.setStyle(c, 'height', 50);
+            n.setStyle(c, 'overflow_y', 'scroll');
+            n.appendChild(n.rootNodeId(), c);
+            const inner = n.createNode('div');
+            n.setStyle(inner, 'width', 50);
+            n.setStyle(inner, 'height', 300);
+            n.appendChild(c, inner);
+            globalThis.bar = c;
+        ";
+
+    fn client(h: &Harness) -> f64 {
+        eval_f64(
+            h,
+            "__inca_native__.nodeHandle(globalThis.bar)[0].clientWidth",
+        )
+    }
+
+    #[gpui::test]
+    fn scrollbars_overlay_reserves_no_strip(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, TEST_ENTRY_PATH, BARRED);
+
+        h.scrollbars(Scrollbars::Overlay);
+
+        assert_eq!(client(&h), 100.0);
+    }
+
+    #[gpui::test]
+    fn scrollbars_classic_after_overlay_reserves_the_strip(cx: &mut TestAppContext) {
+        let mut h = Harness::load(cx, TEST_ENTRY_PATH, BARRED);
+        h.scrollbars(Scrollbars::Overlay);
+
+        h.scrollbars(Scrollbars::Classic);
+
+        assert_eq!(client(&h), 85.0);
     }
 }

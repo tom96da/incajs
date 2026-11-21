@@ -13,9 +13,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
-use gpui::TestAppContext;
+use gpui::{Modifiers, MouseButton, Pixels, Point, TestAppContext, point, px};
 use inca_host::harness::Harness;
 use inca_host::snapshot::Node;
+use inca_node::NodeId;
+use serde_json::Value;
 
 const ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
 
@@ -87,15 +89,79 @@ pub fn has_id(root: &Node, id: &str) -> bool {
     find_id(root, id).is_some()
 }
 
+/// The id of the node whose `id` attribute is `id`, from a fresh snapshot.
+pub fn node_id(h: &mut Harness, id: &str) -> NodeId {
+    by_id(&h.snapshot(), id).id
+}
+
 /// Clicks the node with `id`.
 pub fn click(h: &mut Harness, id: &str) {
-    let node = by_id(&h.snapshot(), id).id;
+    let node = node_id(h, id);
     h.click(node);
+}
+
+/// Clicks the node with `id` with `button`, `modifiers` and `count`.
+pub fn click_with(
+    h: &mut Harness,
+    id: &str,
+    button: MouseButton,
+    modifiers: Modifiers,
+    count: usize,
+) {
+    let node = node_id(h, id);
+    h.click_with(node, button, modifiers, count);
+}
+
+/// Moves the pointer onto the node with `id`.
+pub fn hover(h: &mut Harness, id: &str) {
+    let node = node_id(h, id);
+    h.hover(node);
+}
+
+/// Mounts the fixture `name`, clicks its `#probe` and parses the JSON that
+/// the probe writes into `#result`.
+pub fn probe(cx: &mut TestAppContext, name: &str) -> Value {
+    let mut h = load(cx, name);
+    click(&mut h, "probe");
+    serde_json::from_str(&text_of(&mut h, "result")).unwrap()
+}
+
+/// The left edge of the node with `id`.
+pub fn x(h: &mut Harness, id: &str) -> f32 {
+    by_id(&h.snapshot(), id).bounds.unwrap().x
 }
 
 /// The top edge of the node with `id`.
 pub fn y(h: &mut Harness, id: &str) -> f32 {
     by_id(&h.snapshot(), id).bounds.unwrap().y
+}
+
+/// The width of the node with `id`.
+pub fn width(h: &mut Harness, id: &str) -> f32 {
+    by_id(&h.snapshot(), id).bounds.unwrap().width
+}
+
+/// The height of the node with `id`.
+pub fn height(h: &mut Harness, id: &str) -> f32 {
+    by_id(&h.snapshot(), id).bounds.unwrap().height
+}
+
+/// The point 2 px right of and below `p`.
+pub fn nudge(p: Point<Pixels>) -> Point<Pixels> {
+    p + point(px(2.0), px(2.0))
+}
+
+/// The center of the node with `id`.
+pub fn center(h: &mut Harness, id: &str) -> Point<Pixels> {
+    let b = by_id(&h.snapshot(), id).bounds.unwrap();
+    point(px(b.x + b.width / 2.0), px(b.y + b.height / 2.0))
+}
+
+/// The point `from_right` left of the right edge and `from_top` below the
+/// top edge of the node with `id`.
+pub fn inset(h: &mut Harness, id: &str, from_right: f32, from_top: f32) -> Point<Pixels> {
+    let b = by_id(&h.snapshot(), id).bounds.unwrap();
+    point(px(b.x + b.width - from_right), px(b.y + from_top))
 }
 
 /// Asserts `a` and `b` differ by less than 0.01.
@@ -123,4 +189,43 @@ pub fn child_ids(node: &Node) -> Vec<String> {
         .iter()
         .filter_map(|c| c.attributes.get("id")?.as_str().map(str::to_owned))
         .collect()
+}
+
+/// The text of `now` after the prefix `before`.
+///
+/// # Panics
+///
+/// Panics when `before` is not a prefix of `now`.
+pub fn appended<'a>(before: &str, now: &'a str) -> &'a str {
+    now.strip_prefix(before)
+        .unwrap_or_else(|| panic!("{before:?} is not a prefix of {now:?}"))
+        .trim()
+}
+
+/// Settles `frames` times. A request that a listener or a frame callback
+/// makes lands one frame later, so a chain of `n` requests needs `n` frames.
+pub fn settled(h: &mut Harness, frames: usize) {
+    for _ in 0..frames {
+        h.settle();
+    }
+}
+
+/// The top of the node with `id` minus the top of `container`, from one snapshot.
+pub fn top_in(h: &mut Harness, id: &str, container: &str) -> f32 {
+    let root = h.snapshot();
+    by_id(&root, id).bounds.unwrap().y - by_id(&root, container).bounds.unwrap().y
+}
+
+/// The left of the node with `id` minus the left of `container`, from one snapshot.
+pub fn left_in(h: &mut Harness, id: &str, container: &str) -> f32 {
+    let root = h.snapshot();
+    by_id(&root, id).bounds.unwrap().x - by_id(&root, container).bounds.unwrap().x
+}
+
+/// The distinct whitespace-separated tokens of `log`, sorted.
+pub fn sorted_unique(log: &str) -> Vec<String> {
+    let mut tokens: Vec<String> = log.split_whitespace().map(str::to_owned).collect();
+    tokens.sort();
+    tokens.dedup();
+    tokens
 }

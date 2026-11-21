@@ -5,21 +5,15 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{by_id, load, near};
+use super::common::{hover, load, near, width};
 use gpui::TestAppContext;
-use inca_host::harness::Harness;
-
-fn width(h: &mut Harness, id: &str) -> f32 {
-    by_id(&h.snapshot(), id).bounds.unwrap().width
-}
 
 #[gpui::test]
 fn hovering_a_box_without_listeners_applies_its_hover_rule_until_unhover(cx: &mut TestAppContext) {
-    let mut h = load(cx, "visual-hover");
+    let mut h = load(cx, "visual-state");
     near(width(&mut h, "box"), 40.0);
 
-    let node = by_id(&h.snapshot(), "box").id;
-    h.hover(node);
+    hover(&mut h, "box");
     near(width(&mut h, "box"), 60.0);
 
     h.unhover();
@@ -28,7 +22,7 @@ fn hovering_a_box_without_listeners_applies_its_hover_rule_until_unhover(cx: &mu
 
 #[gpui::test]
 fn tab_applies_the_focus_rule_to_the_input(cx: &mut TestAppContext) {
-    let mut h = load(cx, "visual-focus");
+    let mut h = load(cx, "visual-state");
 
     h.keystrokes("tab");
 
@@ -37,7 +31,7 @@ fn tab_applies_the_focus_rule_to_the_input(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn the_next_tab_removes_the_focus_rule_from_the_input(cx: &mut TestAppContext) {
-    let mut h = load(cx, "visual-focus");
+    let mut h = load(cx, "visual-state");
     h.keystrokes("tab");
 
     h.keystrokes("tab");
