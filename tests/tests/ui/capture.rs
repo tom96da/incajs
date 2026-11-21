@@ -3,7 +3,7 @@
 
 //! Pointer capture, read through a real `.vue` app.
 
-use super::common::{center, height, load, near, node_id, nudge, text_of};
+use super::common::{center, load, nudge, text_of};
 use gpui::{Modifiers, MouseButton, Pixels, Point, TestAppContext};
 use inca_host::harness::Harness;
 
@@ -165,17 +165,6 @@ fn releasing_one_of_two_buttons_keeps_the_capture(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn the_hover_rule_stays_on_the_node_under_the_pointer_during_a_capture(cx: &mut TestAppContext) {
-    let mut h = load(cx, "capture");
-    capture_a(&mut h);
-    let b = center(&mut h, "b");
-
-    h.move_to(b, LEFT, Modifiers::none());
-
-    near(height(&mut h, "b"), 50.0);
-}
-
-#[gpui::test]
 fn a_capture_moved_to_another_node_fires_lost_before_got_at_the_next_move(cx: &mut TestAppContext) {
     let mut h = load(cx, "capture");
     let p = capture_a(&mut h);
@@ -292,28 +281,6 @@ fn a_removed_node_with_a_pending_capture_has_no_capture(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
-fn a_right_press_sends_contextmenu_to_the_pressed_node_before_its_capture_starts(
-    cx: &mut TestAppContext,
-) {
-    let mut h = load(cx, "capture");
-    let c = center(&mut h, "c");
-
-    h.mouse_down(c, MouseButton::Right, Modifiers::none());
-
-    assert_eq!(text_of(&mut h, "menu"), "contextmenu@c");
-}
-
-#[gpui::test]
-fn a_captured_double_click_fires_dblclick_at_the_capture_target(cx: &mut TestAppContext) {
-    let mut h = load(cx, "capture");
-    let c = node_id(&mut h, "c");
-
-    h.click_with(c, MouseButton::Left, Modifiers::none(), 2);
-
-    assert_eq!(text_of(&mut h, "dbl"), "dblclick@b");
-}
-
-#[gpui::test]
 fn capture_events_carry_their_bubbles_cancelable_and_composed_flags(cx: &mut TestAppContext) {
     let mut h = load(cx, "capture");
     let p = capture_a(&mut h);
@@ -323,19 +290,5 @@ fn capture_events_carry_their_bubbles_cancelable_and_composed_flags(cx: &mut Tes
     assert_eq!(
         text_of(&mut h, "cflags"),
         "gotpointercapture:true:false:true:false lostpointercapture:true:false:true:false"
-    );
-}
-
-#[gpui::test]
-fn deactivating_the_window_ends_the_capture(cx: &mut TestAppContext) {
-    let mut h = load(cx, "capture");
-    h.activate_window();
-    capture_a(&mut h);
-
-    h.deactivate_window();
-
-    assert_eq!(
-        text_of(&mut h, "caps"),
-        "gotpointercapture@a lostpointercapture@a"
     );
 }

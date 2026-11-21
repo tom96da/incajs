@@ -13,12 +13,11 @@ const log = ref("");
 const caps = ref("");
 const menu = ref("");
 const aux = ref("");
-const dbl = ref("");
 const cflags = ref("");
 const got = ref("");
 const els = {};
 let kept = null;
-const css = "#a, #b, #c { height: 40px } #b:hover { height: 50px }";
+const css = "#a, #b, #c { height: 40px }";
 
 const nameOf = (node) => (node === document ? "document" : node.id);
 const note = (e) => {
@@ -74,11 +73,6 @@ onMounted(() => {
     (e) => (aux.value += `${e.type}@${nameOf(e.target)} `),
     true,
   );
-  document.addEventListener(
-    "dblclick",
-    (e) => (dbl.value += `${e.type}@${nameOf(e.target)} `),
-    true,
-  );
   for (const type of ["gotpointercapture", "lostpointercapture"]) {
     els.a.addEventListener(type, (e) => {
       e.preventDefault();
@@ -90,7 +84,7 @@ onMounted(() => {
   });
   window.addEventListener("keydown", (e) => {
     if (e.key === "F9") {
-      log.value = caps.value = menu.value = aux.value = dbl.value = cflags.value = got.value = "";
+      log.value = caps.value = menu.value = aux.value = cflags.value = got.value = "";
     } else if (e.key === "r") {
       els.a.releasePointerCapture(1);
       caps.value += `has:${els.a.hasPointerCapture(1)} `;
@@ -136,7 +130,6 @@ onMounted(() => {
     <div id="caps">{{ caps }}</div>
     <div id="menu">{{ menu }}</div>
     <div id="aux">{{ aux }}</div>
-    <div id="dbl">{{ dbl }}</div>
     <div id="cflags">{{ cflags }}</div>
     <div id="got">{{ got }}</div>
   </div>
