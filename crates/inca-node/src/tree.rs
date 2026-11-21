@@ -94,13 +94,13 @@ impl AttributeValue {
         }
     }
 
-    /// The text of the value: a string as is, a number through [`js_number_text`], a bool as `true`
-    /// or `false`.
+    /// The text of the value: a string as is, a number through [`shortest_number_text`], a bool as
+    /// `true` or `false`.
     #[must_use]
     pub fn text(&self) -> String {
         match self {
             Self::String(text) => text.clone(),
-            Self::Number(number) => js_number_text(*number),
+            Self::Number(number) => shortest_number_text(*number),
             Self::Bool(flag) => flag.to_string(),
         }
     }
@@ -139,10 +139,10 @@ impl From<bool> for AttributeValue {
     }
 }
 
-/// The text JavaScript makes of a number. `-0` prints as `0`, and values from `1e21` up or below
-/// `1e-6` use the exponent form.
+/// The shortest text that reads back as the number. `-0` prints as `0`, and values from `1e21` up
+/// or below `1e-6` use the exponent form.
 #[must_use]
-pub fn js_number_text(value: f64) -> String {
+pub fn shortest_number_text(value: f64) -> String {
     if value.is_nan() {
         return "NaN".to_owned();
     }
@@ -593,11 +593,8 @@ mod tests {
     #[case::decimal_zeros(0.000_001, "0.000001")]
     #[case::exponent_with_digits(1.5e-7, "1.5e-7")]
     #[case::fraction(0.5, "0.5")]
-    fn js_number_text_prints_a_number_as_javascript_does(
-        #[case] value: f64,
-        #[case] expected: &str,
-    ) {
-        assert_eq!(js_number_text(value), expected);
+    fn shortest_number_text_prints_the_shortest_form(#[case] value: f64, #[case] expected: &str) {
+        assert_eq!(shortest_number_text(value), expected);
     }
 
     /// `parent` holds `a`, `b`, `c`. `lone_parent` holds `lone`. `loose` has no parent. The last

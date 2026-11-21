@@ -24,7 +24,7 @@ use crate::FlexDirectionSpec;
 use crate::LengthSpec;
 use crate::OverflowSpec;
 use crate::StyleSpec;
-use crate::tree::{StyleMap, js_number_text};
+use crate::tree::{StyleMap, shortest_number_text};
 use std::borrow::Cow;
 
 /// The value a style key takes. A value the kind does not accept is dropped
@@ -280,8 +280,8 @@ pub(crate) fn css_declaration(key: &str, value: &AttributeValue) -> Option<Strin
         ValueKind::FontSizePx => font_size_px(value).map(px_text),
         ValueKind::PxOrAuto => margin_length_from(value).map(length_text),
         ValueKind::NonNegativePxOrAuto => size_spec_from(value).map(length_text),
-        ValueKind::NonNegativeNumber => non_negative(value).map(js_number_text),
-        ValueKind::Opacity => opacity_value(value).map(js_number_text),
+        ValueKind::NonNegativeNumber => non_negative(value).map(shortest_number_text),
+        ValueKind::Opacity => opacity_value(value).map(shortest_number_text),
         ValueKind::Keyword(names) => value.as_str().and_then(|name| keyword_text(names, name)),
         ValueKind::KeywordPair(names) => {
             let text = value.as_str()?;
@@ -305,7 +305,7 @@ pub(crate) fn css_declaration(key: &str, value: &AttributeValue) -> Option<Strin
 }
 
 fn px_text(n: f64) -> String {
-    format!("{}px", js_number_text(n))
+    format!("{}px", shortest_number_text(n))
 }
 
 fn length_text(length: LengthSpec) -> String {
