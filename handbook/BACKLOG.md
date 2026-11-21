@@ -411,8 +411,7 @@ A fixed entry is deleted and its ID is never reused.
 
   A vertical wheel scrolls a container that scrolls only on x, and a
   horizontal wheel scrolls a container that scrolls only on y, where Chromium
-  scrolls nothing. Pinned by
-  `a_horizontal_wheel_step_scrolls_a_vertical_only_container_down`. Only the
+  scrolls nothing. Only the
   dominant axis of a diagonal delta moves. The rules are `axis_step` in
   `crates/inca-gpui/src/element/wheel.rs`. The DOM latches a continuing
   gesture to the container it started on. Here a gesture moves to the parent
@@ -1941,21 +1940,20 @@ A fixed entry is deleted and its ID is never reused.
   `namedItem("x")` gives the `a`, and Chromium and WebKit give the `b`. Fix: none while the DOM
   Standard keeps tree order, follow the standard if it changes.
 
-- **B-365 A modifier key held at an activation has no test**
+- **B-365 A modifier key held at an activation becomes the baseline with no key event**
   `Units: bridge · Size: S · Impact: Low`
 
-  The modifier keys an activation finds held become the baseline with no key event. No test reaches
-  a held key: the `gpui` test platform reports none. Nearest tests:
-  `activate_window_reports_no_modifier_key_held`, `deactivate_window_reports_no_modifier_key_held`.
-  Fix: add a test when the test platform can report a held modifier.
+  The modifier keys an activation finds held become the baseline with no key event
+  (`window_activated` in `dispatch/activation.rs`). The `gpui` test platform reports no held
+  modifier at an activation, so only a real platform reaches this path. Fix: decide the key event
+  of a held modifier at an activation once the test platform can report one.
 
-- **B-366 The `editable` flag of the input handler has no test through the platform**
+- **B-366 The `editable` flag that the input element passes at paint reaches only a real platform**
   `Units: host · Size: S · Impact: Low`
 
-  The input element passes its `editable` flag to the platform text input handler at paint. No
-  `Harness` operation reads the platform text input configuration or sends character input, so no
-  test reaches the flag the paint passes in. The `inca-gpui` tests pin the answer of a handler
-  built with a given flag. Fix: a `Harness` operation that sends character input once `gpui`
+  The input element passes its `editable` flag to the platform text input handler at paint. `gpui`
+  reads it for the platform text input configuration and for character input, and the `gpui` test
+  platform exposes neither. Fix: send character input through the test platform once `gpui`
   exposes the test window.
 
 - **B-367 A button that its `keydown` listener disables hears no `keyup`, Chromium delivers it**
@@ -1963,8 +1961,7 @@ A fixed entry is deleted and its ID is never reused.
 
   After a `keydown` listener sets `disabled` on the focused button, the host sends the `keyup` to no
   listener of that button. The host delivers `keypress` and omits `keyup`. Chromium delivers both
-  and clicks nothing. Pinned by `a_button_disabled_by_its_key_down_listener_clicks_nothing`. Fix:
-  keep the key target of a pressed key until its release.
+  and clicks nothing. Fix: keep the key target of a pressed key until its release.
 
 - **B-368 A focus request made inside a focus listener takes effect at the next frame**
   `Units: gpui,bridge · Size: M · Impact: Low`
@@ -1974,9 +1971,7 @@ A fixed entry is deleted and its ID is never reused.
   focus before the listener returns and fires no `focusin` on the first node. Example: `a` focuses
   `b` in its `focus` listener, the host logs `focus:a focusin:a blur:a focusout:a focus:b focusin:b`
   and Chromium logs `focus:a blur:a focusout:a focus:b focusin:b`. Same mechanism as B-238. Fix:
-  apply the request inside the call that makes it. Tests:
-  `a_focus_moved_by_a_focus_listener_fires_after_the_listener_returns` and
-  `a_blur_requested_by_a_focus_listener_fires_after_the_listener_returns`.
+  apply the request inside the call that makes it.
 
 - **B-369 A release after a key press targets the root container until the pointer moves**
   `Units: gpui · Size: M · Impact: Low`
@@ -1985,89 +1980,68 @@ A fixed entry is deleted and its ID is never reused.
   the next pointer move. A `mouseup` at an unmoved pointer, with or without a press before, then
   reaches no container: `pointerup` and `mouseup` fire at the root container and the `click` of
   the press goes there too. UI Events targets `mouseup` at the topmost element under the pointer.
-  Example: hold the mouse on a `button`, press and release Space, release the mouse. The tests
-  `a_release_with_no_press_fires_pointerup_and_mouseup_alone` and
-  `the_mouse_release_after_a_space_click_clicks_again` in `tests/tests/ui/click.rs` move the pointer
-  after F9 to avoid it. Fix: let the release use the hit test of the pointer position whatever the
-  last input was, then drop that move from both tests.
+  Example: hold the mouse on a `button`, press and release Space, release the mouse. Fix: let the
+  release use the hit test of the pointer position whatever the last input was.
 
 - **B-370 `:hover` follows the node under the pointer during a capture**
   `Units: bridge · Size: S · Impact: Low`
 
   While a node holds the pointer capture, the `:hover` rule stays on the node under the pointer.
-  Chromium matches `:hover` on the capture target. The test
-  `the_hover_rule_stays_on_the_node_under_the_pointer_during_a_capture` in
-  `tests/tests/ui/capture.rs` pins the host value. Fix: build the hover path from the capturing
+  Chromium matches `:hover` on the capture target. Fix: build the hover path from the capturing
   node in `report_hover_with`.
 
 - **B-371 A capture outlives the release of one of two buttons**
   `Units: bridge · Size: S · Impact: Low`
 
   The host keeps the capture until the last button is released.
-  Chromium ends it at the first move after the release of the other button. The test
-  `releasing_one_of_two_buttons_keeps_the_capture` in `tests/tests/ui/capture.rs` pins the host
-  value. Fix: none while the standard decides, follow it if it changes.
+  Chromium ends it at the first move after the release of the other button. Fix: none while the
+  standard decides, follow it if it changes.
 
 - **B-372 `contextmenu` of a right press that sets a capture goes to the pressed node**
   `Units: bridge · Size: S · Impact: Low`
 
   The `pointerdown` listener of a node sets the capture after the host stored that node as the
   press target, so `contextmenu` fires at the pressed node. Chromium fires it at the node the
-  capture names. The test
-  `a_right_press_sends_contextmenu_to_the_pressed_node_before_its_capture_starts` in
-  `tests/tests/ui/capture.rs` pins the host value. Fix: process the pending capture before the
-  `contextmenu` target is chosen.
+  capture names. Fix: process the pending capture before the `contextmenu` target is chosen.
 
 - **B-373 `dblclick` of a captured release fires at the capture target**
   `Units: bridge · Size: S · Impact: Low`
 
   The release ends the capture and `dblclick` fires at the node that held it. Pointer Events 3
   sends every event after the release of a capture, except `click`, `auxclick` and `contextmenu`,
-  to the hit-tested node (`specs/w3c/pointerevents/index.html:1374`, `:2669-2677`). The test
-  `a_captured_double_click_fires_dblclick_at_the_capture_target` in `tests/tests/ui/capture.rs`
-  pins the host value. Fix: fire `dblclick` at the common ancestor of the pressed and the
-  released node.
+  to the hit-tested node (`specs/w3c/pointerevents/index.html:1374`, `:2669-2677`). Fix: fire
+  `dblclick` at the common ancestor of the pressed and the released node.
 
 - **B-374 A thumb drag release fires boundary events at the node under the pointer**
   `Units: bridge · Size: S · Impact: Low`
 
   The release at the end of a thumb drag fires `pointerout`, `pointerleave`, `pointerover`,
   `pointerenter` and the mouse counterparts at the node under the pointer, after `pointerup` and
-  `mouseup`. Chromium fires no boundary event at the release. The test
-  `a_thumb_drag_release_fires_boundary_events_at_the_node_under_the_pointer` in
-  `tests/tests/ui/scrollbar.rs` pins the host value. Fix: end the drag without
-  firing them and let the next pointer move report the change.
+  `mouseup`. Chromium fires no boundary event at the release. Fix: end the drag without firing them
+  and let the next pointer move report the change.
 
 - **B-375 `compositionupdate` and `compositionend` are cancelable**
   `Units: gpui,bridge · Size: S · Impact: Low`
 
   The host fires both events as cancelable, so `preventDefault()` sets `defaultPrevented` on them.
-  UI Events defines both as not cancelable. The test
-  `composition_events_carry_their_bubbles_cancelable_and_composed_flags` pins the host flags.
-  Fix: give the `compositionupdate` and `compositionend` rows of `EVENTS` in
-  `event_sink/spec.rs` the flags of the standard, then update that test.
+  UI Events defines both as not cancelable. Fix: give the `compositionupdate` and `compositionend`
+  rows of `EVENTS` in `event_sink/spec.rs` the flags of the standard.
 
 - **B-376 A window deactivation ends the pointer capture**
   `Units: bridge · Size: S · Impact: Low`
 
   The host ends the capture with `lostpointercapture` when the window loses focus. Chromium keeps
-  the capture and fires `lostpointercapture` after `mouseup` at the release. The test
-  `deactivating_the_window_ends_the_capture` in `tests/tests/ui/capture.rs` pins the host value.
-  Fix: keep the capture across the deactivation and end it at the release.
+  the capture and fires `lostpointercapture` after `mouseup` at the release. Fix: keep the capture
+  across the deactivation and end it at the release.
 
 - **B-377 A press held across a window deactivation clicks nothing at its release**
   `Units: bridge · Size: S · Impact: Low`
 
   The host forgets the press at the deactivation, so the release fires no `click`. Chromium fires
-  one `click` at the release. The test `deactivating_during_a_press_drops_its_click` in
-  `tests/tests/ui/activation.rs` pins the host value. Fix: keep the press record across the
-  deactivation.
+  one `click` at the release. Fix: keep the press record across the deactivation.
 
 - **B-378 A Space held across a window deactivation clicks nothing at its release**
   `Units: bridge · Size: S · Impact: Low`
 
   The `blur` of the deactivation clears the Space press, so the `keyup` fires no `click`. Chromium
-  fires one `click` at the `keyup`. The test
-  `a_space_held_across_a_deactivation_clicks_nothing_at_its_release` in
-  `tests/tests/ui/activation.rs` pins the host value. Fix: keep the Space press across the `blur`
-  of a deactivation.
+  fires one `click` at the `keyup`. Fix: keep the Space press across the `blur` of a deactivation.
