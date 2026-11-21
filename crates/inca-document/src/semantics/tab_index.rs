@@ -3,7 +3,7 @@
 
 //! The `tabindex` of an element: the parsed attribute and the default of each element kind.
 
-use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree, shortest_number_text};
+use inca_node::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree, shortest_number_text};
 
 /// Parses a `tabindex` value: optional leading ASCII whitespace, an optional
 /// sign, then digits. Trailing characters are ignored. Returns `None` when the
@@ -25,11 +25,20 @@ fn parse_tab_index(value: &str) -> Option<i32> {
     i32::try_from(if negative { -magnitude } else { magnitude }).ok()
 }
 
-impl VirtualTree {
+/// The `tabindex` reads of a tree.
+pub trait TabIndex {
     /// The `tabindex` attribute of `node` parsed as an integer. `None` for a missing, unparsable
     /// or out of range value, a boolean, and a node the tree does not have.
-    #[must_use]
-    pub fn explicit_tab_index(&self, node: NodeId) -> Option<i32> {
+    fn explicit_tab_index(&self, node: NodeId) -> Option<i32>;
+
+    /// The reflected `tabIndex` of `node`: the parsed attribute, else 0 for the element kinds
+    /// the HTML standard lists and -1 for the others. `None` for a node the tree does not have
+    /// and a node that is no element.
+    fn tab_index(&self, node: NodeId) -> Option<i32>;
+}
+
+impl TabIndex for VirtualTree {
+    fn explicit_tab_index(&self, node: NodeId) -> Option<i32> {
         match self.get(node)?.attributes().get("tabindex")? {
             AttributeValue::String(value) => parse_tab_index(value),
             AttributeValue::Number(value) => parse_tab_index(&shortest_number_text(*value)),
@@ -37,45 +46,41 @@ impl VirtualTree {
         }
     }
 
-    /// The reflected `tabIndex` of `node`: the parsed attribute, else 0 for the element kinds
-    /// the HTML standard lists and -1 for the others. `None` for a node the tree does not have
-    /// and a node that is no element.
-    #[must_use]
-    pub fn tab_index(&self, node: NodeId) -> Option<i32> {
+    fn tab_index(&self, node: NodeId) -> Option<i32> {
         let element = self.get(node).filter(|element| element.is_element())?;
         Some(self.explicit_tab_index(node).unwrap_or_else(|| {
-            if self.focusable_kind(node, element) {
+            if focusable_kind(self, node, element) {
                 0
             } else {
                 -1
             }
         }))
     }
+}
 
-    /// Whether the element kind of `element` has a default `tabIndex` of 0.
-    fn focusable_kind(&self, node: NodeId, element: &VirtualNode) -> bool {
-        const HTML: [&str; 9] = [
-            "a", "area", "button", "frame", "iframe", "input", "object", "select", "textarea",
-        ];
-        element.in_html_namespace() && HTML.contains(&element.local_name())
-            || element.is_svg("a")
-            || element.is_mathml("a")
-            || element.is_html("summary") && self.is_summary_of_details(node, element)
-    }
+/// Whether the element kind of `element` has a default `tabIndex` of 0.
+fn focusable_kind(tree: &VirtualTree, node: NodeId, element: &VirtualNode) -> bool {
+    const HTML: [&str; 9] = [
+        "a", "area", "button", "frame", "iframe", "input", "object", "select", "textarea",
+    ];
+    element.in_html_namespace() && HTML.contains(&element.local_name())
+        || element.is_svg("a")
+        || element.is_mathml("a")
+        || element.is_html("summary") && is_summary_of_details(tree, node, element)
+}
 
-    /// Whether `element` is the first `summary` child of an HTML `details`.
-    fn is_summary_of_details(&self, node: NodeId, element: &VirtualNode) -> bool {
-        let Some(parent) = element.parent().and_then(|id| self.get(id)) else {
-            return false;
-        };
-        parent.is_html("details")
-            && parent
-                .children()
-                .iter()
-                .filter_map(|id| self.get(*id))
-                .find(|child| child.is_html("summary"))
-                .is_some_and(|first| first.id() == node)
-    }
+/// Whether `element` is the first `summary` child of an HTML `details`.
+fn is_summary_of_details(tree: &VirtualTree, node: NodeId, element: &VirtualNode) -> bool {
+    let Some(parent) = element.parent().and_then(|id| tree.get(id)) else {
+        return false;
+    };
+    parent.is_html("details")
+        && parent
+            .children()
+            .iter()
+            .filter_map(|id| tree.get(*id))
+            .find(|child| child.is_html("summary"))
+            .is_some_and(|first| first.id() == node)
 }
 
 #[cfg(test)]

@@ -3,6 +3,8 @@
 
 //! The tab index of a node and the nodes whose tab index may have changed.
 
+use inca_document::TabIndex;
+
 use super::super::{
     AttributeValue, FocusRegistry, NodeId, StyleCache, VirtualTree, hidden_by_attribute,
     is_disabled_control,

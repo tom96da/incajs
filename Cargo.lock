@@ -2823,6 +2823,7 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "inca-bridge",
+ "inca-document",
  "inca-gpui",
  "inca-jsenv",
  "inca-node",
@@ -2834,12 +2835,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "inca-document"
+version = "0.0.35"
+dependencies = [
+ "inca-node",
+ "rstest",
+]
+
+[[package]]
 name = "inca-gpui"
 version = "0.0.35"
 dependencies = [
  "env_logger",
  "gpui",
  "gpui_platform",
+ "inca-document",
  "inca-node",
  "inca-style",
  "inca-test-macros",

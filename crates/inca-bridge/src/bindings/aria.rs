@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
-use inca_node::{AriaKind, aria_reflection};
+use inca_document::{AriaKind, AriaReferences, aria_reflection};
 
 use super::Natives;
 use super::convert::{JsNodeId, or_null};

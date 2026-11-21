@@ -30,6 +30,7 @@ test-support = []
 
 [dependencies]
 gpui.workspace = true
+inca-document = { path = "../inca-document" }
 inca-node = { path = "../inca-node" }
 inca-style = { path = "../inca-style" }
 unicode-segmentation.workspace = true

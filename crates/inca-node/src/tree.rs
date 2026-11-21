@@ -220,7 +220,7 @@ pub struct VirtualNode {
     content: Option<NodeId>,
     /// The template that owns this fragment.
     owner: Option<NodeId>,
-    /// The elements set from script for an ARIA attribute, keyed by the attribute name.
+    /// The elements an ARIA attribute refers to by element reference, keyed by the attribute name.
     pub(crate) aria_refs: HashMap<&'static str, Vec<NodeId>>,
 }
 
@@ -247,6 +247,17 @@ impl VirtualNode {
             owner: None,
             aria_refs: HashMap::new(),
         }
+    }
+
+    /// The elements the ARIA attribute `attribute` refers to by element reference.
+    #[must_use]
+    pub fn aria_refs(&self, attribute: &str) -> Option<&[NodeId]> {
+        self.aria_refs.get(attribute).map(Vec::as_slice)
+    }
+
+    /// Keeps `ids` as the elements the ARIA attribute `attribute` refers to by element reference.
+    pub fn set_aria_refs(&mut self, attribute: &'static str, ids: Vec<NodeId>) {
+        self.aria_refs.insert(attribute, ids);
     }
 
     #[must_use]

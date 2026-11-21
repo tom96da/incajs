@@ -4,8 +4,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 # inca-node
 
-The retained virtual tree (`VirtualTree`) and the pure logic that goes with it: the semantics of the
-elements, scroll-into-view geometry and the filters for typed and pasted text.
+The retained virtual tree (`VirtualTree`) and the pure logic that goes with it: the filters for
+typed and pasted text.
 
 Everything here is plain data and functions. A caller builds a tree, mutates it and asks questions
 of it.
@@ -43,11 +43,6 @@ The tree answers the node relations and the text operations of the DOM: the ance
 siblings of a node, the position of one node against another, and the reading and editing of
 text data. It also records the pointer and focus state that `:hover`, `:active`, `:focus` and
 `:focus-within` match.
-
-## Scroll geometry
-
-Scrolling a `Rect` into view in a visible `Rect` gives a scroll change per axis, and a chain of
-containers applies it from the innermost outward.
 
 ## Text filters
 

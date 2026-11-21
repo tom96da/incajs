@@ -20,6 +20,7 @@ publish = false
 [dependencies]
 async-channel.workspace = true
 gpui.workspace = true
+inca-document = { path = "../inca-document" }
 inca-gpui = { path = "../inca-gpui" }
 inca-jsenv = { path = "../inca-jsenv" }
 inca-node = { path = "../inca-node" }

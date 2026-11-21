@@ -11,8 +11,9 @@ use std::rc::Rc;
 use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, FromJs, Result as JsResult};
 
+use inca_document::{ARIA_REFLECTIONS, AriaKind, TabIndex};
 use inca_jsenv::required_prototype;
-use inca_node::{ARIA_REFLECTIONS, AriaKind, AttributeValue};
+use inca_node::AttributeValue;
 
 use super::accessor;
 use crate::bindings::attributes::mark_focus_dirty_for;
@@ -95,7 +96,7 @@ mod tests {
     use rstest::rstest;
     use serde_json::json;
 
-    use inca_node::{ARIA_REFLECTIONS, AriaKind};
+    use inca_document::{ARIA_REFLECTIONS, AriaKind};
 
     use crate::test_support::{engine_with_bindings, member_error, member_json};
 

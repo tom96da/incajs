@@ -4,8 +4,8 @@
 //! The default actions of key presses and the `keypress` event.
 
 use gpui::{App, Window};
+use inca_document::geometry::Align;
 use inca_gpui::{EventPayload, MousePayload};
-use inca_node::scroll::Align;
 
 use super::EventDispatcher;
 use crate::EventTargetId;

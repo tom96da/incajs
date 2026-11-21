@@ -1,11 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The ARIA table and the element references an element holds from script.
+//! The ARIA table and the element references an element holds.
 
 use std::collections::{HashMap, HashSet};
 
-use crate::tree::{NodeId, TreeError, VirtualTree};
+use inca_node::tree::{NodeId, TreeError, VirtualTree};
 
 /// How a member of the ARIA table reads its attribute.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,19 +119,37 @@ pub fn aria_reflection(attribute: &str) -> Option<&'static AriaReflection> {
 
 const ASCII_WHITESPACE: [char; 5] = [' ', '\t', '\n', '\x0c', '\r'];
 
-impl VirtualTree {
+/// The element references of the `aria` attributes of a tree.
+pub trait AriaReferences {
     /// The elements the attribute `attribute` of `node` refers to, in order. A reference set with
     /// [`set_aria_elements`](Self::set_aria_elements) resolves to the nodes that are descendants
     /// of the root of `node`, and to nothing while `node` has no parent. Without one, the
     /// attribute value names the elements by ID inside the root of `node`. `None` for an unknown
     /// node, an attribute of kind [`AriaKind::Text`] or outside the table, and an absent
     /// attribute.
-    #[must_use]
-    pub fn aria_elements(&self, node: NodeId, attribute: &str) -> Option<Vec<NodeId>> {
+    fn aria_elements(&self, node: NodeId, attribute: &str) -> Option<Vec<NodeId>>;
+
+    /// Sets the attribute `attribute` of `node` to the empty text and keeps `ids` as the elements
+    /// it refers to, or removes the attribute and the reference for `None`. A write to an
+    /// attribute outside the table or of kind [`AriaKind::Text`] changes nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `node` names no node.
+    fn set_aria_elements(
+        &mut self,
+        node: NodeId,
+        attribute: &str,
+        ids: Option<Vec<NodeId>>,
+    ) -> Result<(), TreeError>;
+}
+
+impl AriaReferences for VirtualTree {
+    fn aria_elements(&self, node: NodeId, attribute: &str) -> Option<Vec<NodeId>> {
         let row = aria_reflection(attribute)?;
         let element = self.get(node)?;
         let root = self.ancestors(node).last()?;
-        if let Some(ids) = element.aria_refs.get(row.attribute) {
+        if let Some(ids) = element.aria_refs(row.attribute) {
             if element.parent().is_none() {
                 return Some(Vec::new());
             }
@@ -148,17 +166,10 @@ impl VirtualTree {
             AriaKind::Element => vec![value.as_str()],
             AriaKind::Elements => value.split(ASCII_WHITESPACE).collect(),
         };
-        Some(self.elements_with_ids(root, &tokens))
+        Some(elements_with_ids(self, root, &tokens))
     }
 
-    /// Sets the attribute `attribute` of `node` to the empty text and keeps `ids` as the elements
-    /// it refers to, or removes the attribute and the reference for `None`. A write to an
-    /// attribute outside the table or of kind [`AriaKind::Text`] changes nothing.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TreeError::NodeNotFound`] if `node` names no node.
-    pub fn set_aria_elements(
+    fn set_aria_elements(
         &mut self,
         node: NodeId,
         attribute: &str,
@@ -170,37 +181,37 @@ impl VirtualTree {
         match ids {
             Some(ids) => {
                 self.set_attribute(node, row.attribute, "")?;
-                self.node_mut(node)?.aria_refs.insert(row.attribute, ids);
+                self.node_mut(node)?.set_aria_refs(row.attribute, ids);
             }
             None => self.remove_attribute(node, row.attribute)?,
         }
         Ok(())
     }
+}
 
-    /// For each of `ids` that names an element of the tree under `root`, `root` included, the first
-    /// such element in tree order, in the order of `ids`. The empty text matches nothing. The
-    /// content of a template is its own tree. One walk serves all of `ids`.
-    fn elements_with_ids(&self, root: NodeId, ids: &[&str]) -> Vec<NodeId> {
-        let mut found: HashMap<&str, NodeId> = HashMap::new();
-        let wanted: HashSet<&str> = ids.iter().copied().filter(|id| !id.is_empty()).collect();
-        let mut pending = vec![root];
-        while let Some(current) = pending.pop() {
-            if found.len() == wanted.len() {
-                break;
-            }
-            let Some(node) = self.get(current) else {
-                break;
-            };
-            if node.is_element()
-                && let Some(value) = node.attributes().get("id")
-                && let Some(&id) = wanted.get(value.text().as_str())
-            {
-                found.entry(id).or_insert(current);
-            }
-            pending.extend(node.children().iter().rev());
+/// For each of `ids` that names an element of the tree under `root`, `root` included, the first
+/// such element in tree order, in the order of `ids`. The empty text matches nothing. The
+/// content of a template is its own tree. One walk serves all of `ids`.
+fn elements_with_ids(tree: &VirtualTree, root: NodeId, ids: &[&str]) -> Vec<NodeId> {
+    let mut found: HashMap<&str, NodeId> = HashMap::new();
+    let wanted: HashSet<&str> = ids.iter().copied().filter(|id| !id.is_empty()).collect();
+    let mut pending = vec![root];
+    while let Some(current) = pending.pop() {
+        if found.len() == wanted.len() {
+            break;
         }
-        ids.iter().filter_map(|id| found.get(id).copied()).collect()
+        let Some(node) = tree.get(current) else {
+            break;
+        };
+        if node.is_element()
+            && let Some(value) = node.attributes().get("id")
+            && let Some(&id) = wanted.get(value.text().as_str())
+        {
+            found.entry(id).or_insert(current);
+        }
+        pending.extend(node.children().iter().rev());
     }
+    ids.iter().filter_map(|id| found.get(id).copied()).collect()
 }
 
 #[cfg(test)]
@@ -208,7 +219,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::tree::AttributeValue;
+    use inca_node::tree::AttributeValue;
 
     /// A `div` root under a document with the children `names`, each with an `id` of its name.
     fn page(names: &[&str]) -> (VirtualTree, NodeId, Vec<NodeId>) {
@@ -591,6 +602,6 @@ mod tests {
                 .map(AttributeValue::text),
             Some(String::new())
         );
-        assert!(tree.get(copy).unwrap().aria_refs.is_empty());
+        assert_eq!(tree.get(copy).unwrap().aria_refs("aria-owns"), None);
     }
 }
