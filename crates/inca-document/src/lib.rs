@@ -1,12 +1,14 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+pub mod create;
 pub mod focus;
 pub mod geometry;
 pub mod removal;
 pub mod semantics;
 pub mod text;
 
+pub use create::{NameError, is_element_local_name, validate_and_extract};
 pub use focus::{FocusModel, FocusSurface, FocusTransition};
 pub use geometry::{Align, Rect, scroll_chain, scroll_delta};
 pub use removal::apply_removals;

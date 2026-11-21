@@ -8,16 +8,12 @@ use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 
+use inca_document::{NameError, is_element_local_name, validate_and_extract};
 use inca_node::{NodeId, VirtualNode};
 
 use super::attributes::folded_key;
 use super::convert::{JsNodeId, or_null, throw_tree_error};
 use super::host::Host;
-
-/// The namespace the `xml` prefix is bound to.
-const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
-/// The namespace of `xmlns` names.
-const XMLNS_NS: &str = "http://www.w3.org/2000/xmlns/";
 
 /// Creates the element `local_name` names, lowered in ASCII, and gives its id and tag. A name
 /// that is no valid element local name throws `InvalidCharacterError`.
@@ -55,7 +51,7 @@ pub(super) fn create_element_ns<'js>(
     move |ctx, namespace, qualified_name| {
         let namespace = namespace.filter(|text| !text.is_empty());
         let (prefix, local_name) = validate_and_extract(namespace.as_deref(), &qualified_name)
-            .map_err(|err| err.throw(&ctx))?;
+            .map_err(|err| throw_name_error(&ctx, err))?;
         let mut host = host.borrow_mut();
         let id = host
             .tree
@@ -90,78 +86,18 @@ pub(super) fn element_entry<'js>(
     Ok(entry)
 }
 
-enum NameError {
-    InvalidCharacter,
-    Namespace,
-}
-
-impl NameError {
-    fn throw(&self, ctx: &Ctx<'_>) -> rquickjs::Error {
-        let (name, message) = match self {
-            Self::InvalidCharacter => (
-                "InvalidCharacterError",
-                "the element name is not valid. pass a name such as div or svg:g",
-            ),
-            Self::Namespace => (
-                "NamespaceError",
-                "the prefix does not fit the namespace. pass the namespace the prefix belongs to",
-            ),
-        };
-        Exception::throw_dom(ctx, name, message)
-    }
-}
-
-/// Splits `qualified_name` at its first colon into the prefix and the local name, which holds the
-/// rest of the text, and checks both against `namespace`.
-fn validate_and_extract<'a>(
-    namespace: Option<&str>,
-    qualified_name: &'a str,
-) -> Result<(Option<&'a str>, &'a str), NameError> {
-    let (prefix, rest) = match qualified_name.split_once(':') {
-        Some((prefix, rest)) => (Some(prefix), rest),
-        None => (None, qualified_name),
+fn throw_name_error(ctx: &Ctx<'_>, err: NameError) -> rquickjs::Error {
+    let (name, message) = match err {
+        NameError::InvalidCharacter => (
+            "InvalidCharacterError",
+            "the element name is not valid. pass a name such as div or svg:g",
+        ),
+        NameError::Namespace => (
+            "NamespaceError",
+            "the prefix does not fit the namespace. pass the namespace the prefix belongs to",
+        ),
     };
-    let local_name = rest;
-    if !is_element_local_name(local_name) || prefix.is_some_and(|p| !is_prefix(p)) {
-        return Err(NameError::InvalidCharacter);
-    }
-    let is_xmlns = qualified_name == "xmlns" || prefix == Some("xmlns");
-    let allowed = match (prefix, namespace) {
-        (Some(_), None) => false,
-        (Some("xml"), namespace) if namespace != Some(XML_NS) => false,
-        _ if is_xmlns => namespace == Some(XMLNS_NS),
-        _ => namespace != Some(XMLNS_NS),
-    };
-    if allowed {
-        Ok((prefix, local_name))
-    } else {
-        Err(NameError::Namespace)
-    }
-}
-
-/// ASCII whitespace, NUL, `/` and `>`, which no part of an element name holds.
-fn is_forbidden(c: char) -> bool {
-    c.is_ascii_whitespace() || matches!(c, '\0' | '/' | '>')
-}
-
-/// A prefix is not empty and holds no forbidden character.
-fn is_prefix(prefix: &str) -> bool {
-    !prefix.is_empty() && !prefix.contains(is_forbidden)
-}
-
-/// An ASCII letter followed by no forbidden character, or a name that starts with `:`, `_` or a
-/// code point from U+0080 on and continues with name characters.
-fn is_element_local_name(name: &str) -> bool {
-    let mut chars = name.chars();
-    match chars.next() {
-        Some(first) if first.is_ascii_alphabetic() => !chars.any(is_forbidden),
-        Some(':' | '_' | '\u{80}'..) => chars.all(is_name_char),
-        _ => false,
-    }
-}
-
-fn is_name_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '-' | '.') || c >= '\u{80}'
+    Exception::throw_dom(ctx, name, message)
 }
 
 #[cfg(test)]
@@ -170,8 +106,9 @@ mod tests {
 
     use rstest::rstest;
 
-    use super::{XML_NS, XMLNS_NS};
     use crate::test_support::{HTML, SVG, engine_with_bindings, error_name};
+
+    const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
 
     #[rstest]
     #[case::upper("DIV", "div")]
@@ -291,132 +228,34 @@ mod tests {
     }
 
     #[rstest]
-    #[case::second_colon_stays_in_the_name("a:b:c", "b:c")]
-    #[case::third_colon_stays_in_the_name("a:b:c:d", "b:c:d")]
-    #[case::trailing_colon("a:b:", "b:")]
-    #[case::double_colon("a::b", ":b")]
-    #[case::angle_in_local("a:b<", "b<")]
-    fn create_element_ns_keeps_the_text_after_the_first_colon_as_the_local_name(
+    #[case::bad_name("'urn:x'", "a:1", "InvalidCharacterError")]
+    #[case::prefix_without_namespace("null", "p:q", "NamespaceError")]
+    #[case::prefix_with_empty_namespace("''", "p:q", "NamespaceError")]
+    fn create_element_ns_throws_the_error_of_the_name_check(
+        #[case] namespace: &str,
         #[case] name: &str,
-        #[case] local: &str,
+        #[case] error: &str,
     ) {
+        let (engine, _host) = engine_with_bindings();
+
+        assert_eq!(
+            error_name(
+                &engine,
+                &format!("__inca_native__.createElementNS({namespace}, '{name}')")
+            ),
+            error
+        );
+    }
+
+    #[test]
+    fn create_element_ns_keeps_the_text_after_the_first_colon_as_the_local_name() {
         let (engine, _host) = engine_with_bindings();
 
         let given: String = engine
-            .eval(&format!(
-                "__inca_native__.createElementNS('urn:x', '{name}')[1]"
-            ))
+            .eval("__inca_native__.createElementNS('urn:x', 'a:b:c')[1]")
             .unwrap();
 
-        assert_eq!(given, local);
-    }
-
-    #[rstest]
-    #[case::forbidden_after_a_second_colon("a:b:c/")]
-    #[case::digit_local("a:1")]
-    #[case::empty_prefix(":a")]
-    #[case::empty_local("a:")]
-    #[case::digit_first("1a")]
-    #[case::space("a b")]
-    #[case::empty("")]
-    #[case::dash_first_local("a:-b")]
-    #[case::space_in_prefix("a b:c")]
-    #[case::angle_in_prefix("x>y:a")]
-    #[case::slash_in_prefix("x/y:a")]
-    #[case::nul_in_prefix("x\\u0000y:a")]
-    fn create_element_ns_throws_invalid_character_error_for_a_bad_name(#[case] name: &str) {
-        let (engine, _host) = engine_with_bindings();
-
-        assert_eq!(
-            error_name(
-                &engine,
-                &format!("__inca_native__.createElementNS('urn:x', '{name}')")
-            ),
-            "InvalidCharacterError"
-        );
-    }
-
-    #[rstest]
-    #[case::parenthesis_after_a_letter("a(")]
-    #[case::dot_after_a_letter("a.b")]
-    #[case::dash_after_a_letter("a-b")]
-    #[case::non_ascii("\u{c9}")]
-    fn create_element_ns_accepts_a_name_without_a_prefix(#[case] name: &str) {
-        let (engine, _host) = engine_with_bindings();
-
-        let prefix: Option<String> = engine
-            .eval(&format!(
-                "__inca_native__.createElementNS(null, '{name}')[3]"
-            ))
-            .unwrap();
-
-        assert_eq!(prefix, None);
-    }
-
-    #[rstest]
-    #[case::digit_first("1:a")]
-    #[case::dash_first("-x:a")]
-    #[case::dot_first(".x:a")]
-    #[case::equals_sign("x=y:a")]
-    #[case::non_ascii("\u{e9}:a")]
-    fn create_element_ns_accepts_any_prefix_without_a_forbidden_character(#[case] name: &str) {
-        let (engine, _host) = engine_with_bindings();
-
-        let prefix: Option<String> = engine
-            .eval(&format!(
-                "__inca_native__.createElementNS('urn:x', '{name}')[3]"
-            ))
-            .unwrap();
-
-        assert_eq!(
-            prefix.as_deref(),
-            name.split_once(':').map(|(prefix, _)| prefix)
-        );
-    }
-
-    #[rstest]
-    #[case::prefix_without_namespace(None, "p:q")]
-    #[case::digit_prefix_without_namespace(None, "1:a")]
-    #[case::xmlns_name_without_namespace(None, "xmlns")]
-    #[case::prefix_with_empty_namespace(Some(""), "p:q")]
-    #[case::xml_prefix_in_another_namespace(Some("urn:x"), "xml:a")]
-    #[case::xmlns_prefix_in_another_namespace(Some("urn:x"), "xmlns:a")]
-    #[case::xmlns_name_in_another_namespace(Some("urn:x"), "xmlns")]
-    #[case::xmlns_namespace_without_xmlns(Some(XMLNS_NS), "a")]
-    fn create_element_ns_throws_namespace_error_for_a_prefix_that_does_not_fit(
-        #[case] namespace: Option<&str>,
-        #[case] name: &str,
-    ) {
-        let (engine, _host) = engine_with_bindings();
-        let namespace = namespace.map_or("null".to_owned(), |text| format!("'{text}'"));
-
-        assert_eq!(
-            error_name(
-                &engine,
-                &format!("__inca_native__.createElementNS({namespace}, '{name}')")
-            ),
-            "NamespaceError"
-        );
-    }
-
-    #[rstest]
-    #[case::xml(Some(XML_NS), "xml:a")]
-    #[case::xmlns(Some(XMLNS_NS), "xmlns:a")]
-    #[case::xmlns_name(Some(XMLNS_NS), "xmlns")]
-    fn create_element_ns_accepts_the_reserved_prefix_in_its_namespace(
-        #[case] namespace: Option<&str>,
-        #[case] name: &str,
-    ) {
-        let (engine, _host) = engine_with_bindings();
-        let namespace = namespace.map_or("null".to_owned(), |text| format!("'{text}'"));
-
-        assert_eq!(
-            error_name(
-                &engine,
-                &format!("__inca_native__.createElementNS({namespace}, '{name}')")
-            ),
-            "none"
-        );
+        assert_eq!(given, "b:c");
     }
 
     #[test]
