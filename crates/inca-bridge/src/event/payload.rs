@@ -8,12 +8,12 @@ use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::{Array, Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 
-use super::key_code::{key_code, keypress_code};
 use super::{
     COMPOSITION, EVENT, FOCUS, INPUT, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, constants,
     other_kind, with_event,
 };
 use crate::bindings::convert::or_null;
+use inca_document::{key_code, keypress_code};
 
 /// The payload fields of an event, as its getters read them.
 pub(super) enum Payload {

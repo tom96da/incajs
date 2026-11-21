@@ -13,13 +13,11 @@ use inca_node::tree::NodeId;
 
 mod key;
 mod sink;
-mod spec;
 
 pub use key::is_menu_key;
 use key::key_name;
 pub use sink::EventSink;
 pub(crate) use sink::noop_sink_methods;
-pub use spec::{EVENTS, EventSpec, Flags, flags_of, spec_of};
 
 /// What a dispatch carries beyond the node it fired on.
 #[derive(Debug, Clone, PartialEq)]

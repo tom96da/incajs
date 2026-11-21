@@ -4,7 +4,8 @@
 //! Fires one event along the path of a node and resolves its targets.
 
 use gpui::{App, Window};
-use inca_gpui::event_sink::{flags_of, with_screen};
+use inca_document::flags_of;
+use inca_gpui::event_sink::with_screen;
 use inca_gpui::{EventPayload, MousePayload, PointerSource};
 use inca_node::{NodeId, is_disabled_control};
 
@@ -29,7 +30,13 @@ impl EventDispatcher {
             &self.host,
             &Walk {
                 name: event,
-                flags: flags_of(event, payload),
+                flags: flags_of(
+                    event,
+                    match payload {
+                        EventPayload::Input(input) => Some(input.input_type),
+                        _ => None,
+                    },
+                ),
                 target,
                 cut,
                 payload,

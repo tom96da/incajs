@@ -4,7 +4,7 @@
 //! The pointer events of the mouse and the capture of the pointer.
 
 use gpui::{App, Window};
-use inca_gpui::event_sink::spec_of;
+use inca_document::spec_of;
 use inca_gpui::{EventPayload, NO_BUTTON, PointerSource, buttons_mask};
 use inca_node::NodeId;
 

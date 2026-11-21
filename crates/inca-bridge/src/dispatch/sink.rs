@@ -274,7 +274,7 @@ mod tests {
         RECORDER, at, dispatcher_with_engine, listen, seen, seen_rows, tree_of_three,
     };
     use gpui::TestAppContext;
-    use inca_gpui::event_sink::EVENTS;
+    use inca_document::EVENTS;
     use inca_gpui::{EventPayload, MousePayload, PointerSource, WheelPayload};
     use inca_node::NodeId;
     use inca_test_macros::gpui_cases;
