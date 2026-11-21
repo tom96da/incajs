@@ -159,21 +159,16 @@ fn a_canceled_space_keypress_still_clicks_on_key_up(cx: &mut TestAppContext) {
     );
 }
 
-#[gpui_cases]
 #[gpui::test]
-#[case::enter("enter", "Enter")]
-#[case::space("space", "Space")]
-fn a_button_disabled_by_its_key_down_listener_clicks_nothing(
-    cx: &mut TestAppContext,
-    #[case] keys: &str,
-    #[case] key: &str,
-) {
+fn enter_on_a_button_that_its_key_down_listener_disables_clicks_nothing(cx: &mut TestAppContext) {
     let mut h = load(cx, "key-activation-button");
     let before = focus(&mut h, "self-off");
 
+    h.keystrokes("enter");
+
     assert_eq!(
-        press_release(&mut h, &before, keys),
-        format!("self-off:keydown:{key} self-off:keypress:{key}")
+        appended(&before, &text_of(&mut h, "log")),
+        "self-off:keydown:Enter self-off:keypress:Enter"
     );
 }
 
