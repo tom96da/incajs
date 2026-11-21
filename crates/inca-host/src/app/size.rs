@@ -6,7 +6,8 @@
 use gpui::{Size, Window, px};
 
 use inca_bridge::Host;
-use inca_node::{NodeId, declared_window_size};
+use inca_node::NodeId;
+use inca_style::declared_window_size;
 
 use crate::app::HostedApp;
 use crate::config::{self, usable, window_size};
@@ -90,7 +91,7 @@ mod tests {
     };
     use inca_jsenv::stderr_reporter;
     use inca_node::AttributeValue;
-    use inca_node::set_style;
+    use inca_style::set_style;
     use rstest::rstest;
 
     use crate::app::start;

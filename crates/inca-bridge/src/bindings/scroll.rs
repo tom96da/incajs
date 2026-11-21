@@ -7,8 +7,9 @@ use std::rc::Rc;
 use gpui::px;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
+use inca_node::NodeId;
 use inca_node::scroll::Align;
-use inca_node::{NodeId, is_scroll_container};
+use inca_style::is_scroll_container;
 
 use super::Natives;
 use super::convert::{JsAlign, JsNodeId, existing_node, or_null};

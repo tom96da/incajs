@@ -184,9 +184,9 @@ mod tests {
     use gpui::{
         MouseButton, ScrollDelta, ScrollEvent, TestAppContext, VisualTestContext, point, px,
     };
-    use inca_node::StyleCache;
-    use inca_node::set_style;
     use inca_node::tree::VirtualTree;
+    use inca_style::StyleCache;
+    use inca_style::set_style;
     use std::cell::RefCell;
     use std::rc::Rc;
 

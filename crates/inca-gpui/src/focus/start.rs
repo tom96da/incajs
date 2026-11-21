@@ -74,7 +74,7 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use gpui::{TestAppContext, VisualTestContext};
-    use inca_node::StyleCache;
+    use inca_style::StyleCache;
 
     /// A rooted tree with one node under the root per entry of `tabindex`, `None` for a node with
     /// no tab index, and a registry that holds a handle for each stop and focuses nothing.

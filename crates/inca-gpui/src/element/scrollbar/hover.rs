@@ -68,7 +68,7 @@ mod tests {
     use crate::element::scrollbar::HIDE_DELAY;
     use crate::element::scrollbar::view::ScrollbarState;
     use crate::tests::{BarScene, boxed, capture_entities, nested_bar_tree};
-    use inca_node::set_style;
+    use inca_style::set_style;
 
     const BOTH: [(&str, &str); 1] = [("overflow", "scroll")];
     const Y_SCROLL: [(&str, &str); 2] = [("overflow_x", "hidden"), ("overflow_y", "scroll")];

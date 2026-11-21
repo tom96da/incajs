@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
-use inca_node::set_style;
+use inca_style::set_style;
 
 /// The `eventId` of the event `install_click_counter` saw last, 0 if none.
 fn last_event_id(engine: &Engine) -> u64 {

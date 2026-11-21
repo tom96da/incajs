@@ -6,8 +6,9 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
-use inca_node::{
-    NodeId, SelectorError, check_selector, closest_selector, query_selector, query_selector_all,
+use inca_node::NodeId;
+use inca_style::{
+    SelectorError, check_selector, closest_selector, query_selector, query_selector_all,
 };
 
 use super::Natives;

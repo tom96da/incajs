@@ -19,8 +19,8 @@ use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{Scrollbars, render_tree_with_events};
 use inca_jsenv::Engine;
-use inca_node::set_style;
 use inca_node::{NodeId, VirtualTree};
+use inca_style::set_style;
 
 struct ClickCounter {
     host: Rc<RefCell<Host>>,

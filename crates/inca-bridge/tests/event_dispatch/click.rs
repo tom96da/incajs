@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
-use inca_node::set_style;
+use inca_style::set_style;
 
 /// Unlike `install_click_counter`, defers the actual mutation to a
 /// microtask, the same way a real framework's reactivity scheduler

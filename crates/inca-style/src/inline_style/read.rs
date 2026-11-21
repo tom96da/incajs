@@ -4,7 +4,7 @@
 //! Reading the declarations of an inline style.
 
 use crate::spec::css_declaration;
-use crate::tree::{STYLE_KEYS, VirtualNode, css_name, style_key};
+use inca_node::tree::{STYLE_KEYS, VirtualNode, css_name, style_key};
 
 /// unknown key and a value without a text are no declaration.
 fn style_declarations(node: &VirtualNode) -> impl Iterator<Item = (&str, String)> {
@@ -70,7 +70,7 @@ mod tests {
     use super::*;
     use crate::inline_style::tests::block;
     use crate::tests::{num, text};
-    use crate::tree::{AttributeValue, VirtualTree};
+    use inca_node::tree::{AttributeValue, VirtualTree};
     use rstest::rstest;
 
     #[test]
@@ -94,7 +94,7 @@ mod tests {
         assert_eq!(css_text(tree.get(id).unwrap()), "");
     }
 
-    fn block_with_no_declaration_keys() -> (VirtualTree, crate::NodeId) {
+    fn block_with_no_declaration_keys() -> (VirtualTree, inca_node::NodeId) {
         block(&[
             ("not_a_key", num(1.0)),
             ("height", AttributeValue::Bool(true)),

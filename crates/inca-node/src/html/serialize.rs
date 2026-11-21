@@ -169,7 +169,6 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::set_style;
     use crate::tests::{HTML, SVG, node};
     use crate::tree::{AttributeValue, COMMENT_TAG, FRAGMENT_TAG, TEXT_TAG};
 
@@ -393,44 +392,6 @@ mod tests {
         tree.set_attribute(div, "style", "").unwrap();
 
         assert_eq!(outer(&tree, div), "<div style=\"\"></div>");
-    }
-
-    #[test]
-    fn a_node_without_style_writes_no_style_attribute() {
-        let mut tree = VirtualTree::new();
-        let div = node(&mut tree, "div");
-        set_style(&mut tree, div, "width", "").unwrap();
-
-        assert_eq!(outer(&tree, div), "<div></div>");
-    }
-
-    #[test]
-    fn the_style_attribute_keeps_the_position_of_the_entry() {
-        let mut tree = VirtualTree::new();
-        let div = node(&mut tree, "div");
-        for key in ["a", "style", "b"] {
-            tree.set_attribute(div, key, "1").unwrap();
-        }
-        set_style(&mut tree, div, "width", "5px").unwrap();
-
-        assert_eq!(
-            outer(&tree, div),
-            "<div a=\"1\" style=\"width: 5px;\" b=\"1\"></div>"
-        );
-    }
-
-    #[test]
-    fn declarations_are_written_in_the_order_they_were_set() {
-        let mut tree = VirtualTree::new();
-        let div = node(&mut tree, "div");
-        set_style(&mut tree, div, "width", 5.0).unwrap();
-        set_style(&mut tree, div, "text_color", "#f00").unwrap();
-        set_style(&mut tree, div, "corner_radius", 2.0).unwrap();
-
-        assert_eq!(
-            outer(&tree, div),
-            "<div style=\"width: 5px; color: rgb(255, 0, 0); border-radius: 2px;\"></div>"
-        );
     }
 
     /// An element of `namespace` holding `data` as a text node.

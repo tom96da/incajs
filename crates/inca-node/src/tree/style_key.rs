@@ -311,7 +311,8 @@ pub const STYLE_KEYS: &[StyleKey] = &[
 /// The host key of a style key. `key` may be `camelCase`, `kebab-case` or
 /// `snake_case`, and a CSS name listed in [`STYLE_KEYS`] names its host key.
 /// A key that is already a host key in `snake_case` comes back borrowed.
-pub(crate) fn style_key(key: &str) -> Cow<'_, str> {
+#[must_use]
+pub fn style_key(key: &str) -> Cow<'_, str> {
     let snake = if key.bytes().any(|b| b.is_ascii_uppercase() || b == b'-') {
         let mut out = String::with_capacity(key.len() + 2);
         for c in key.chars() {
@@ -338,7 +339,8 @@ pub(crate) fn style_key(key: &str) -> Cow<'_, str> {
 }
 
 /// The CSS name of the host key `key`: its first CSS alias, or the key itself, in `kebab-case`.
-pub(crate) fn css_name(key: &str) -> String {
+#[must_use]
+pub fn css_name(key: &str) -> String {
     let name = STYLE_KEYS
         .iter()
         .find(|entry| entry.key == key)

@@ -20,10 +20,8 @@ use inca_jsenv::class::{
     define_this_accessor, define_this_getter, define_this_method, plain_class, receiver, require,
     text,
 };
-use inca_node::{
-    NodeId, STYLE_KEYS, TreeError, VirtualNode, css_text, style_item, style_length,
-    style_property_value,
-};
+use inca_node::{NodeId, STYLE_KEYS, TreeError, VirtualNode};
+use inca_style::{css_text, style_item, style_length, style_property_value};
 
 use super::Natives;
 use super::attributes::print_style_warning;
@@ -31,7 +29,7 @@ use super::convert::{JsNodeId, saturated, unsigned};
 use super::host::Host;
 use crate::interfaces::define_unconstructable;
 use inca_jsenv::required_prototype;
-use inca_node::{remove_style_property, set_style_property, set_style_text};
+use inca_style::{remove_style_property, set_style_property, set_style_text};
 
 /// A `CSSStyleDeclaration` instance. It holds the node id and no JS value.
 // `IncaStyle` holds a node id and no JS value, so the derive is sound.

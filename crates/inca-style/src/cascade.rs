@@ -10,9 +10,9 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use super::{AttributeValue, NodeId, NodeKind, StyleMap, VirtualNode, VirtualTree};
 use crate::selector::StateFlags;
 use crate::stylesheet::{Rule, StyleSheet};
+use inca_node::tree::{AttributeValue, NodeId, NodeKind, StyleMap, VirtualNode, VirtualTree};
 
 /// The longhands that a shorthand key overrides when it is applied after them.
 const SHORTHANDS: &[(&str, &[&str])] = &[
@@ -237,8 +237,8 @@ mod tests {
     use super::*;
     use crate::build_spec;
     use crate::set_style;
-    use crate::tests::{Fixture, SVG, num, text};
-    use crate::tree::TEXT_TAG;
+    use crate::tests::{Fixture, SVG, node, num, text};
+    use inca_node::tree::{FRAGMENT_TAG, TEXT_TAG};
 
     #[rstest]
     #[case::focus(":focus")]
@@ -625,5 +625,95 @@ mod tests {
 
         assert_eq!(hung, Some(text("1px")));
         assert_eq!(f.computed(a, "width"), None);
+    }
+
+    #[test]
+    fn a_fragment_with_a_style_applies_its_rule_once_moved_into_the_tree() {
+        let mut f = Fixture::new();
+        let a = f.add(f.root, "div", "a");
+        f.attr(a, "class", "a");
+        let fragment = node(&mut f.tree, FRAGMENT_TAG);
+        let style = node(&mut f.tree, "style");
+        let css = node(&mut f.tree, TEXT_TAG);
+        f.tree.set_data(css, ".a { width: 1px }").unwrap();
+        f.tree.append_child(style, css).unwrap();
+        f.tree.append_child(fragment, style).unwrap();
+        let inside = f.cache.computed_style(&f.tree, a).get("width").cloned();
+
+        f.tree.append_child(f.root, fragment).unwrap();
+
+        assert_eq!(inside, None);
+        assert_eq!(
+            f.cache.computed_style(&f.tree, a).get("width"),
+            Some(&text("1px"))
+        );
+    }
+
+    #[test]
+    fn a_loose_style_applies_its_rule_once_appended_under_the_root() {
+        let mut f = Fixture::new();
+        let a = f.add(f.root, "div", "a");
+        f.attr(a, "class", "a");
+        let style = node(&mut f.tree, "style");
+        let css = node(&mut f.tree, TEXT_TAG);
+        f.tree.set_data(css, ".a { width: 1px }").unwrap();
+        f.tree.append_child(style, css).unwrap();
+        let loose = f.cache.computed_style(&f.tree, a).get("width").cloned();
+
+        f.tree.append_child(f.root, style).unwrap();
+
+        assert_eq!(loose, None);
+        assert_eq!(
+            f.cache.computed_style(&f.tree, a).get("width"),
+            Some(&text("1px"))
+        );
+    }
+
+    #[rstest]
+    #[case::style(false)]
+    #[case::its_text(true)]
+    fn removing_a_connected_style_stops_its_rules(#[case] remove_text: bool) {
+        let mut f = Fixture::new();
+        let (style, css) = f.sheet(".a { width: 1px }");
+        let a = f.add(f.root, "div", "a");
+        f.attr(a, "class", "a");
+        let applied = f.cache.computed_style(&f.tree, a).get("width").cloned();
+
+        if remove_text {
+            f.tree.remove_child(style, css).unwrap();
+        } else {
+            f.tree.remove_child(f.root, style).unwrap();
+        }
+
+        assert_eq!(applied, Some(text("1px")));
+        assert_eq!(f.cache.computed_style(&f.tree, a).get("width"), None);
+    }
+
+    #[test]
+    fn a_style_in_a_content_applies_no_rule() {
+        let mut f = Fixture::new();
+        let template = f.add(f.root, "template", "template");
+        let content = f.tree.template_content(template).unwrap();
+        let style = node(&mut f.tree, "style");
+        let rules = node(&mut f.tree, "#text");
+        f.tree.set_data(rules, "div { width: 9px }").unwrap();
+        f.tree.append_child(style, rules).unwrap();
+        f.tree.append_child(content, style).unwrap();
+        let target = f.boxed("target");
+
+        assert_eq!(f.computed(target, "width"), None);
+    }
+
+    #[test]
+    fn a_style_in_the_children_of_a_connected_template_applies() {
+        let mut f = Fixture::new();
+        let template = f.add(f.root, "template", "template");
+        let style = f.add(template, "style", "sheet");
+        let rules = node(&mut f.tree, "#text");
+        f.tree.set_data(rules, "div { width: 9px }").unwrap();
+        f.tree.append_child(style, rules).unwrap();
+        let target = f.boxed("target");
+
+        assert_eq!(f.computed(target, "width"), Some(text("9px")));
     }
 }

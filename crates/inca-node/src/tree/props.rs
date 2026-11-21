@@ -58,7 +58,6 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::set_style;
     use rstest::rstest;
 
     #[test]
@@ -140,26 +139,6 @@ mod tests {
         assert_eq!(
             tree.remove_attribute(999, "k").unwrap_err(),
             TreeError::NodeNotFound(999)
-        );
-    }
-
-    #[test]
-    fn remove_attribute_leaves_the_rest_of_the_node_unchanged() {
-        let mut tree = VirtualTree::new();
-        let parent = tree.create_node("div").unwrap();
-        let node = tree.create_node("span").unwrap();
-        tree.append_child(parent, node).unwrap();
-        tree.set_attribute(node, "label", "a").unwrap();
-        set_style(&mut tree, node, "label", "b").unwrap();
-
-        tree.remove_attribute(node, "label").unwrap();
-
-        let got = tree.get(node).unwrap();
-        assert_eq!(got.local_name(), "span");
-        assert_eq!(got.parent(), Some(parent));
-        assert_eq!(
-            got.style_props().get("label"),
-            Some(&AttributeValue::String("b".into()))
         );
     }
 

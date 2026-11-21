@@ -13,8 +13,9 @@ use super::scrollbar::{Scrollbars, gutter_of, scrollbar};
 use super::style::{apply_style, clip_scroll_axes, reserve_gutter};
 use super::wheel::{scroll_anchor, wire_scroll};
 use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
-use inca_node::spec::{ElementSpec, ElementTag, WheelAxes, build_spec};
-use inca_node::tree::{NodeId, StyleCache, VirtualTree};
+use inca_node::tree::{NodeId, VirtualTree};
+use inca_style::StyleCache;
+use inca_style::spec::{ElementSpec, ElementTag, WheelAxes, build_spec};
 
 /// The selector `build_element` gives the container with this id. A test
 /// passes it to `gpui`'s `debug_bounds` to read that container's bounds.
@@ -269,7 +270,7 @@ mod tests {
         VisualTestContext, point, px, size,
     };
     use inca_node::AttributeValue;
-    use inca_node::set_style;
+    use inca_style::set_style;
     use inca_test_macros::gpui_cases;
 
     fn row() -> [(&'static str, AttributeValue); 4] {

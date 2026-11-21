@@ -12,8 +12,6 @@ use super::{
 };
 use selectors::matching::matches_selector as matches_selector_one;
 
-mod element_kind;
-
 /// An element of the tree: a node that is neither text content, a comment nor a fragment.
 #[derive(Clone, Copy)]
 pub(super) struct Node<'t> {
@@ -324,7 +322,7 @@ mod tests {
     use super::*;
     use crate::set_style_text;
     use crate::tests::*;
-    use crate::tree::{AttributeValue, FRAGMENT_TAG};
+    use inca_node::tree::{AttributeValue, FRAGMENT_TAG};
     use rstest::rstest;
 
     #[rstest]

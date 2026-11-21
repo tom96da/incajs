@@ -21,9 +21,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use gpui::{App, FocusHandle, Window};
 
 use crate::{EventPayload, EventSink};
-use inca_node::{
-    AttributeValue, NodeId, StyleCache, VirtualTree, hidden_by_attribute, is_disabled_control,
-};
+use inca_node::{AttributeValue, NodeId, VirtualTree, is_disabled_control};
+use inca_style::{StyleCache, hidden_by_attribute};
 
 mod requests;
 mod start;

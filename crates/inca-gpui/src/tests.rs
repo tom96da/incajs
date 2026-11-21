@@ -15,10 +15,11 @@ use gpui::prelude::*;
 use gpui::size;
 use gpui::{App, MouseUpEvent, ScrollHandle, Window, px};
 use gpui::{Context, Render, TestAppContext, VisualTestContext};
-use inca_node::set_style;
-use inca_node::spec::{StyleSpec, build_spec, wheel_axes};
 use inca_node::tree::AttributeValue;
-use inca_node::tree::{NodeId, StyleCache, VirtualTree};
+use inca_node::tree::{NodeId, VirtualTree};
+use inca_style::StyleCache;
+use inca_style::set_style;
+use inca_style::spec::{StyleSpec, build_spec, wheel_axes};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -145,7 +146,7 @@ impl EventSink for Probe {
         Some(self.handles.borrow_mut().entry(id).or_default().clone())
     }
 
-    fn wheel_axes(&self, id: NodeId) -> Option<inca_node::WheelAxes> {
+    fn wheel_axes(&self, id: NodeId) -> Option<inca_style::WheelAxes> {
         wheel_axes(&self.tree.borrow(), &StyleCache::new(), id)
     }
 

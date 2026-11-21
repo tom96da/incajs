@@ -11,13 +11,15 @@ use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 
-use inca_node::{AttributeValue, NodeId, ParsedHtml, TreeError, VirtualNode, VirtualTree};
+use inca_node::{NodeId, ParsedHtml, TreeError, VirtualNode, VirtualTree};
 
 use super::Natives;
-use super::attributes::print_style_warning;
 use super::convert::{JsNodeId, existing_node, throw_tree_error};
 use super::host::Host;
 use super::mutation::removed_subtrees;
+
+mod finish;
+use finish::finish;
 
 pub(super) fn install_html(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("setInnerHtml", set_inner_html)?;
@@ -207,31 +209,6 @@ fn insert_parsed(
     Ok(())
 }
 
-/// The steps that follow a parse once its nodes are in place: prints the style warnings, gives an
-/// `input` the typed text of its `value` attribute and frees the result fragment, which is empty.
-fn finish(host: &mut Host, parsed: &ParsedHtml) {
-    for (node_id, line) in &parsed.warnings {
-        print_style_warning(host, *node_id, line);
-    }
-    for node in &parsed.nodes {
-        let typed = host
-            .tree
-            .get(node.id)
-            .filter(|input| input.is_html("input"))
-            .and_then(|input| input.attributes().get("value"))
-            .and_then(AttributeValue::as_str)
-            .map(str::to_owned);
-        if let Some(typed) = typed {
-            host.inputs
-                .borrow_mut()
-                .entry(node.id)
-                .or_default()
-                .set_value(&typed);
-        }
-    }
-    host.tree.destroy_node(parsed.fragment);
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -312,32 +289,6 @@ mod tests {
                 r##"[["p",-1,"{HTML}",null],["#text",0,null,"a"],["#text",-1,null,"b"],["#comment",-1,null,"c"],["svg",-1,"{SVG}",null],["foreignObject",4,"{SVG}",null],["math",-1,"{MATHML}",null],["mi",6,"{MATHML}",null],["#text",7,null,"x"]]"##
             )
         );
-    }
-
-    #[rstest]
-    #[case::html("<input value=a>", "n.childNodeIds(host)[0]", true)]
-    #[case::svg(
-        "<svg><input value=a></svg>",
-        "n.childNodeIds(n.childNodeIds(host)[0])[0]",
-        false
-    )]
-    fn a_parsed_input_takes_the_value_attribute_as_typed_text_in_html_only(
-        #[case] markup: &str,
-        #[case] input: &str,
-        #[case] typed: bool,
-    ) {
-        let (engine, host) = engine();
-
-        let id: u32 = engine
-            .eval(&format!(
-                r"
-                n.setInnerHtml(host, '{markup}');
-                {input};
-                "
-            ))
-            .unwrap();
-
-        assert_eq!(host.borrow().inputs.borrow().contains_key(&id), typed);
     }
 
     #[test]
@@ -746,25 +697,6 @@ mod tests {
         );
 
         assert_eq!(got, "[[],true]");
-    }
-
-    #[test]
-    fn style_warnings_print_once_for_each_node_and_line() {
-        let (engine, host) = engine();
-        let lines = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&lines);
-        host.borrow_mut().warn = Rc::new(move |line| sink.borrow_mut().push(line.to_owned()));
-
-        engine
-            .eval::<()>(
-                "n.setInnerHtml(host, '<p style=\"bogus:1;bogus:2\"><i style=\"bogus:1\"></i></p>');",
-            )
-            .unwrap();
-
-        let lines = lines.borrow();
-        assert_eq!(lines.len(), 2, "{lines:?}");
-        assert!(lines[0].contains("(p)"), "{lines:?}");
-        assert!(lines[1].contains("(i)"), "{lines:?}");
     }
 
     #[test]

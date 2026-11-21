@@ -6,7 +6,7 @@ use gpui::{
     StyleRefinement, px, rgba,
 };
 
-use inca_node::spec::{
+use inca_style::spec::{
     AlignSpec, ColorSpec, DisplaySpec, FlexDirectionSpec, LengthSpec, OverflowSpec, StyleSpec,
 };
 

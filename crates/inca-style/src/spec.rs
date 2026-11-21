@@ -23,13 +23,12 @@ pub(crate) use keys::{css_declaration, unknown_key_warning};
 pub use parse::declared_window_size;
 
 use self::parse::style_spec_from_props;
-use crate::input_text::sanitized;
-pub use crate::tree::{
+use crate::StyleCache;
+use inca_node::input_text::sanitized;
+pub use inca_node::tree::{
     AlignSpec, DisplaySpec, FlexDirectionSpec, OverflowSpec, STYLE_KEYS, StyleKey, ValueKind,
 };
-use crate::tree::{
-    AttributeValue, NodeId, NodeKind, StyleCache, StyleMap, VirtualNode, VirtualTree,
-};
+use inca_node::tree::{AttributeValue, NodeId, NodeKind, StyleMap, VirtualNode, VirtualTree};
 
 /// What kind of element a [`VirtualNode`] maps to.
 ///
@@ -45,7 +44,7 @@ pub enum ElementTag {
     Text(String),
     /// An `"input"` tag: one line of text the host holds per node, drawn
     /// over the box. `placeholder` is its `placeholder` attribute without CR
-    /// and LF ([`crate::input_text::sanitized`]; missing or non-string → empty).
+    /// and LF ([`inca_node::input_text::sanitized`]; missing or non-string → empty).
     /// `editable` is false with a `readonly` or `disabled` attribute. Its
     /// children are not rendered.
     Input { placeholder: String, editable: bool },
@@ -292,8 +291,8 @@ mod tests {
 
     use super::*;
     use crate::tests::{Fixture, HTML, SVG};
-    use crate::tree::VirtualTree;
     use crate::{remove_style, set_style};
+    use inca_node::tree::VirtualTree;
 
     /// A node with `name` as its class under the root of `f`.
     fn classed(f: &mut Fixture, name: &str) -> NodeId {

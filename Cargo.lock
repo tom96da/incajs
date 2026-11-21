@@ -2826,6 +2826,7 @@ dependencies = [
  "inca-gpui",
  "inca-jsenv",
  "inca-node",
+ "inca-style",
  "inca-test-macros",
  "rquickjs",
  "rstest",
@@ -2840,6 +2841,7 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "inca-node",
+ "inca-style",
  "inca-test-macros",
  "rstest",
  "unicode-segmentation",
@@ -2857,6 +2859,7 @@ dependencies = [
  "inca-gpui",
  "inca-jsenv",
  "inca-node",
+ "inca-style",
  "inca-test-macros",
  "log",
  "rquickjs",
@@ -2888,9 +2891,17 @@ dependencies = [
 name = "inca-node"
 version = "0.0.35"
 dependencies = [
- "cssparser",
  "html5ever",
  "indexmap",
+ "rstest",
+]
+
+[[package]]
+name = "inca-style"
+version = "0.0.35"
+dependencies = [
+ "cssparser",
+ "inca-node",
  "precomputed-hash",
  "rstest",
  "selectors",
@@ -2914,6 +2925,7 @@ dependencies = [
  "inca-host",
  "inca-jsenv",
  "inca-node",
+ "inca-style",
  "inca-test-macros",
  "rquickjs",
  "rstest",

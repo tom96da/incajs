@@ -21,6 +21,7 @@ inca-bridge = { path = "../crates/inca-bridge" }
 inca-host = { path = "../crates/inca-host", features = ["test-support"] }
 inca-jsenv = { path = "../crates/inca-jsenv" }
 inca-node = { path = "../crates/inca-node" }
+inca-style = { path = "../crates/inca-style" }
 inca-test-macros = { path = "../crates/inca-test-macros" }
 rquickjs.workspace = true
 rstest.workspace = true

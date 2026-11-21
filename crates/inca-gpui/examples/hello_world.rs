@@ -13,8 +13,9 @@ use gpui::{App, Bounds, Context, Window, WindowBounds, WindowOptions, prelude::*
 use gpui_platform::application;
 
 use inca_gpui::render_tree;
-use inca_node::set_style;
-use inca_node::{NodeId, StyleCache, VirtualTree};
+use inca_node::{NodeId, VirtualTree};
+use inca_style::StyleCache;
+use inca_style::set_style;
 
 struct HelloWorld {
     tree: VirtualTree,

@@ -18,7 +18,7 @@ use super::{Bar, HIDE_DELAY, Parts, Scrollbars, TRACK, gutter_of, hit_rects, par
 use crate::element::wheel::{WheelScrolled, anchor_insets};
 use crate::event_sink::EventSink;
 use inca_node::NodeId;
-use inca_node::spec::ElementSpec;
+use inca_style::spec::ElementSpec;
 
 /// What a container keeps between frames about its bars.
 // Four independent flags; a state enum would need a variant per combination.
@@ -240,12 +240,12 @@ mod tests {
     use std::time::Duration;
 
     use gpui::{Entity, Size, TestAppContext, point, px, size};
-    use inca_node::spec::WheelAxes;
+    use inca_style::spec::WheelAxes;
     use rstest::rstest;
 
     use super::*;
     use crate::tests::{BarScene, bar_tree, capture_entities};
-    use inca_node::set_style;
+    use inca_style::set_style;
 
     type States = Rc<RefCell<Vec<Entity<ScrollbarState>>>>;
 

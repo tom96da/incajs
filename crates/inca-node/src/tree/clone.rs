@@ -92,7 +92,6 @@ enum Step {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use crate::set_style_text;
     use crate::tests::{SVG, children, family, node, sample};
     use crate::tree::{AttributeValue, FRAGMENT_TAG};
     use rstest::rstest;
@@ -233,22 +232,6 @@ mod tests {
             to.attributes().get("tabindex"),
             Some(&AttributeValue::Number(1.0))
         );
-    }
-
-    #[test]
-    fn a_clone_keeps_the_declaration_order_and_the_style_entry() {
-        let mut tree = VirtualTree::new();
-        let original = node(&mut tree, "div");
-        set_style_text(&mut tree, original, "height: 2px; width: 1px").unwrap();
-
-        let made = tree.clone_subtree(original, false).unwrap();
-
-        let copy = tree.get(made[0].1).unwrap();
-        assert_eq!(
-            copy.attributes().get("style"),
-            Some(&AttributeValue::String("height: 2px; width: 1px;".into()))
-        );
-        assert_eq!(crate::css_text(copy), "height: 2px; width: 1px;");
     }
 
     #[test]

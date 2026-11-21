@@ -81,7 +81,7 @@ mod tests {
 
     use super::*;
     use crate::tests::*;
-    use crate::tree::FRAGMENT_TAG;
+    use inca_node::tree::FRAGMENT_TAG;
     use rstest::rstest;
 
     /// `root > (a > (a1, a2), b)`, created in the order a, a1, b, a2, so that the creation order,
@@ -271,5 +271,17 @@ mod tests {
                 .map(|name| named.iter().find(|(n, _)| n == name).unwrap().1)
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn a_query_never_finds_a_node_of_a_content() {
+        let mut f = Fixture::new();
+        let template = f.add(f.root, "template", "template");
+        let content = f.tree.template_content(template).unwrap();
+        let inner = node(&mut f.tree, "span");
+        f.tree.append_child(content, inner).unwrap();
+
+        assert_eq!(query_selector(&f.tree, f.root, "span").unwrap(), None);
+        assert_eq!(query_selector(&f.tree, template, "span").unwrap(), None);
     }
 }

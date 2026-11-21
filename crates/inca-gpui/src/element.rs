@@ -3,7 +3,7 @@
 
 //! Converts a retained [`VirtualTree`](inca_node::tree::VirtualTree) into real `gpui` elements
 //! ([`build_element`]/[`render_tree`]), reading each node through
-//! [`build_spec`](inca_node::build_spec).
+//! [`build_spec`](inca_style::build_spec).
 
 mod build;
 mod children;

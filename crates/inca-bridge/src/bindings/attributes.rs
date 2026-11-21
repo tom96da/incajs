@@ -8,11 +8,12 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, IntoJs, Result as JsResult, Value};
 
-use inca_node::{AttributeValue, NodeId, VirtualNode, style_warning, valid_attribute_name};
+use inca_node::{AttributeValue, NodeId, VirtualNode, valid_attribute_name};
+use inca_style::style_warning;
 
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
-use inca_node::{remove_style as remove_style_prop, set_style as set_style_prop, set_style_text};
+use inca_style::{remove_style as remove_style_prop, set_style as set_style_prop, set_style_text};
 
 pub(super) fn set_attribute<'js>(
     host: Rc<RefCell<Host>>,

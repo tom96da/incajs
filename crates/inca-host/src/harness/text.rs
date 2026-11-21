@@ -8,7 +8,8 @@ use std::rc::Rc;
 use gpui::{ClipboardItem, InputHandler};
 use inca_bridge::EventDispatcher;
 use inca_gpui::TextInputHandler;
-use inca_node::{ElementTag, NodeId, build_spec};
+use inca_node::NodeId;
+use inca_style::{ElementTag, build_spec};
 
 use super::Harness;
 

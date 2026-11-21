@@ -11,8 +11,7 @@
 //!
 //! An element keeps the namespace the parser reports. The names and attribute keys of the HTML
 //! namespace are in lower case, and those of `svg` and `math` content keep the case the parser
-//! delivers, such as `viewBox`. A `style` attribute applies as inline style props and no `style`
-//! attribute is stored.
+//! delivers, such as `viewBox`. A `style` attribute is stored as written. It sets no style props.
 
 mod depth;
 mod serialize;
@@ -44,8 +43,6 @@ pub struct ParsedHtml {
     /// Every node below `fragment` in pre-order. A template is followed by its content fragment
     /// and that fragment's subtree, then by its own children.
     pub nodes: Vec<ParsedNode>,
-    /// One line for each declaration of a `style` attribute that was dropped, with the node.
-    pub warnings: Vec<(NodeId, String)>,
 }
 
 impl VirtualTree {
@@ -105,7 +102,6 @@ impl VirtualTree {
         Ok(ParsedHtml {
             fragment,
             nodes: self.entries(fragment),
-            warnings: end.warnings,
         })
     }
 
@@ -190,7 +186,6 @@ pub(super) mod tests {
 
     use super::*;
     use crate::tests::node;
-    use crate::tree::AttributeValue;
 
     pub(super) fn parsed(context: Option<&str>, markup: &str) -> (VirtualTree, ParsedHtml) {
         let mut tree = VirtualTree::new();
@@ -326,83 +321,15 @@ pub(super) mod tests {
         );
     }
 
-    fn props(markup: &str) -> (VirtualTree, ParsedHtml) {
-        parsed(Some("div"), markup)
-    }
-
-    fn style_prop(tree: &VirtualTree, html: &ParsedHtml, key: &str) -> Option<AttributeValue> {
-        tree.get(html.nodes[0].id)
-            .unwrap()
-            .style_props()
-            .get(key)
-            .cloned()
-    }
-
-    #[rstest]
-    #[case::normalised_key("<div style='COLOR: #f00'>", "text_color", "#f00")]
-    #[case::later_wins("<div style='width: 1px; width: 2px'>", "width", "2px")]
-    #[case::invalid_later_keeps_earlier("<div style='width: 1px; width: bogus'>", "width", "1px")]
-    #[case::important_reads_as_normal("<div style='width: 3px !important'>", "width", "3px")]
-    fn a_style_attribute_applies_as_style_props(
-        #[case] markup: &str,
-        #[case] key: &str,
-        #[case] value: &str,
-    ) {
-        let (tree, html) = props(markup);
-
-        assert_eq!(style_prop(&tree, &html, key), Some(value.into()));
-    }
-
     #[test]
-    fn a_style_attribute_is_stored_at_its_source_position() {
-        let (tree, html) = props("<div style='width: 1px' id='a'>");
+    fn a_style_attribute_is_kept_as_written_and_sets_no_style_props() {
+        let (tree, html) = parsed(Some("div"), r#"<p style="COLOR: #f00; bogus:1">"#);
 
-        let keys: Vec<&String> = tree
-            .get(html.nodes[0].id)
-            .unwrap()
-            .attributes()
-            .keys()
-            .collect();
-        assert_eq!(keys, ["style", "id"]);
-    }
-
-    #[test]
-    fn a_style_attribute_is_stored_as_the_derived_text() {
-        let (tree, html) = props("<div style='WIDTH:1px; bogus: 1; height:2PX'>");
-
-        let attributes = tree.get(html.nodes[0].id).unwrap().attributes();
+        let p = tree.get(html.nodes[0].id).unwrap();
         assert_eq!(
-            attributes.get("style"),
-            Some(&AttributeValue::String("width: 1px; height: 2px;".into()))
+            p.attributes().get("style"),
+            Some(&"COLOR: #f00; bogus:1".into())
         );
-    }
-
-    #[test]
-    fn a_dropped_declaration_warns_with_the_node() {
-        let (_, html) = props("<div style='bogus: 1; width: x; color'>");
-
-        let id = html.nodes[0].id;
-        assert_eq!(
-            html.warnings,
-            [
-                (id, "ignoring unknown style key `bogus`".to_owned()),
-                (
-                    id,
-                    "ignoring unsupported value for style key `width`".to_owned()
-                ),
-                (id, "ignoring the declaration `color`".to_owned()),
-            ]
-        );
-    }
-
-    #[rstest]
-    #[case::empty("<div style=''>")]
-    #[case::blank("<div style='  '>")]
-    #[case::valueless("<div style>")]
-    fn an_empty_style_attribute_sets_and_warns_nothing(#[case] markup: &str) {
-        let (tree, html) = props(markup);
-
-        assert!(html.warnings.is_empty());
-        assert!(tree.get(html.nodes[0].id).unwrap().style_props().is_empty());
+        assert!(p.style_props().is_empty());
     }
 }

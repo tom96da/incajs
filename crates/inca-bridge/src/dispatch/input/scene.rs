@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use crate::test_support::{TestRoot, engine_for, mount_active};
 use crate::tests::{at, listen};
 use crate::{EventDispatcher, Host};
-use inca_node::set_style;
+use inca_style::set_style;
 
 /// An `input` holding a value (100 px wide, 6 px per char, from x 0) and a `button`, under a `div`
 /// in an active window.

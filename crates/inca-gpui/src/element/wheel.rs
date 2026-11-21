@@ -8,7 +8,7 @@ use gpui::{Global, Pixels, Point, ScrollHandle, Window, div, point, px};
 
 use crate::event_sink::EventSink;
 use inca_node::NodeId;
-use inca_node::spec::{ElementSpec, StyleSpec, WheelAxes};
+use inca_style::spec::{ElementSpec, StyleSpec, WheelAxes};
 
 /// The tracked scroll containers under the pointer for the wheel event being
 /// dispatched, innermost first, without the root.
@@ -158,8 +158,8 @@ mod tests {
     use crate::tests::*;
     use gpui::{Context, Render, ScrollDelta, ScrollEvent, StyleRefinement, Window};
     use gpui::{Pixels, Point, TestAppContext, VisualTestContext, point, px};
-    use inca_node::set_style;
     use inca_node::tree::{NodeId, VirtualTree};
+    use inca_style::set_style;
     use inca_test_macros::gpui_cases;
 
     struct Wheels {

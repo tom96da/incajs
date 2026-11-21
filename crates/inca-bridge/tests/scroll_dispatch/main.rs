@@ -20,7 +20,7 @@ use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 
 use inca_bridge::test_support;
-use inca_node::set_style;
+use inca_style::set_style;
 
 struct Root {
     host: Rc<RefCell<Host>>,

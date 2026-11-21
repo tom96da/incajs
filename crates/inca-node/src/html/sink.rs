@@ -20,7 +20,6 @@ use html5ever::tokenizer::{
 use html5ever::tree_builder::{TreeBuilder, TreeBuilderOpts};
 use html5ever::{Attribute, LocalName, Namespace, QualName, TokenizerResult, local_name, ns};
 
-use crate::set_style_text;
 use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, NodeId, NodeKind, TEXT_TAG};
 use crate::tree::{TreeError, VirtualNode, VirtualTree};
 
@@ -63,13 +62,12 @@ pub(super) type Handle = u64;
 /// The first handle that stands in for a node.
 const STAND_IN: Handle = 1 << 32;
 
-/// The result of a parse: the first failure and the warnings of the `style` attributes.
+/// The result of a parse: the nodes it created and the first failure.
 #[derive(Debug, Default)]
 pub(super) struct SinkEnd {
     /// Every node the sink created, the document and the context excluded.
     pub(super) created: Vec<NodeId>,
     pub(super) failure: Option<TreeError>,
-    pub(super) warnings: Vec<(NodeId, String)>,
 }
 
 /// The name of an element as the tree builder reads it.
@@ -94,7 +92,6 @@ pub(super) struct HtmlSink<'a> {
     /// The qualified name of every element the tree builder created, the context included.
     pub(super) names: RefCell<HashMap<Handle, QualName>>,
     failure: Cell<Option<TreeError>>,
-    warnings: RefCell<Vec<(NodeId, String)>>,
     created: RefCell<Vec<NodeId>>,
     next_stand_in: Cell<Handle>,
     document: Handle,
@@ -126,7 +123,6 @@ impl<'a> HtmlSink<'a> {
             tree: RefCell::new(tree),
             names: RefCell::default(),
             failure: Cell::new(None),
-            warnings: RefCell::default(),
             created: RefCell::default(),
             next_stand_in: Cell::new(STAND_IN),
             document: Handle::from(document),
@@ -287,7 +283,6 @@ impl TreeSink for HtmlSink<'_> {
         SinkEnd {
             created: self.created.into_inner(),
             failure: self.failure.get(),
-            warnings: self.warnings.into_inner(),
         }
     }
 
@@ -314,23 +309,16 @@ impl TreeSink for HtmlSink<'_> {
     fn create_element(&self, name: QualName, attrs: Vec<Attribute>, flags: ElementFlags) -> Handle {
         let created = self.change(|tree| {
             let id = tree.create_element_ns(Some(&*name.ns), None, &*name.local)?;
-            let mut warnings = Vec::new();
             for attribute in &attrs {
                 let given = prefixed_name(&attribute.name);
                 let node = tree.get(id).ok_or(TreeError::NodeNotFound(id))?;
                 let key = node.attribute_key(&given).into_owned();
-                if key == "style" {
-                    let lines = set_style_text(tree, id, &attribute.value)?;
-                    warnings.extend(lines.into_iter().map(|line| (id, line)));
-                } else {
-                    tree.set_attribute(id, key, &*attribute.value)?;
-                }
+                tree.set_attribute(id, key, &*attribute.value)?;
             }
-            Ok((id, warnings))
+            Ok(id)
         });
         let handle = match created {
-            Some((id, warnings)) => {
-                self.warnings.borrow_mut().extend(warnings);
+            Some(id) => {
                 self.created.borrow_mut().push(id);
                 Handle::from(id)
             }

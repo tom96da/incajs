@@ -6,7 +6,7 @@
 //! and `:read-only`. The tests of these sit in the same file.
 
 use super::{Node, PseudoClass};
-use crate::tree::{AttributeValue, is_disabled_control};
+use inca_node::tree::{AttributeValue, is_disabled_control};
 
 impl Node<'_> {
     /// An HTML `input` that has neither `readonly` nor `disabled`.
@@ -63,7 +63,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use crate::tests::*;
-    use crate::tree::NodeId;
+    use inca_node::tree::NodeId;
     use rstest::rstest;
 
     #[rstest]

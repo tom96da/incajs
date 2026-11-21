@@ -66,9 +66,9 @@ impl EventSink for EventDispatcher {
         Some(self.host.borrow().scroll_handle(node_id))
     }
 
-    fn wheel_axes(&self, node_id: NodeId) -> Option<inca_node::WheelAxes> {
+    fn wheel_axes(&self, node_id: NodeId) -> Option<inca_style::WheelAxes> {
         let host = self.host.borrow();
-        inca_node::wheel_axes(&host.tree, &host.style, node_id)
+        inca_style::wheel_axes(&host.tree, &host.style, node_id)
     }
 
     /// The first call of an update computes the delta and defers clearing it,

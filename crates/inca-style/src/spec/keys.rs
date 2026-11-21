@@ -17,14 +17,14 @@ use super::parse::StyleFault;
 use super::parse::edges_from;
 use super::parse::overflow_pair_from_str;
 use super::parse::store;
-use crate::AlignSpec;
-use crate::AttributeValue;
-use crate::DisplaySpec;
-use crate::FlexDirectionSpec;
 use crate::LengthSpec;
-use crate::OverflowSpec;
 use crate::StyleSpec;
-use crate::tree::{STYLE_KEYS, StyleMap, ValueKind, shortest_number_text, style_key};
+use inca_node::AlignSpec;
+use inca_node::AttributeValue;
+use inca_node::DisplaySpec;
+use inca_node::FlexDirectionSpec;
+use inca_node::OverflowSpec;
+use inca_node::tree::{STYLE_KEYS, StyleMap, ValueKind, shortest_number_text, style_key};
 
 /// Expands the style declaration below into `read_prop`, `read_edges` and one [`EdgeKeys`] const
 /// per box-edge family. [`STYLE_KEYS`] lists the same keys.
@@ -253,8 +253,9 @@ mod tests {
 
     use super::*;
     use crate::tests::*;
-    use crate::{ColorSpec, EdgesSpec, LengthSpec, StyleCache, VirtualTree, build_spec};
+    use crate::{ColorSpec, EdgesSpec, LengthSpec, StyleCache, build_spec};
     use crate::{remove_style, set_style};
+    use inca_node::VirtualTree;
     use rstest::rstest;
 
     /// Values `kind` accepts, chosen so that a reader of another kind with the

@@ -73,7 +73,7 @@ mod tests {
     use gpui::{TestAppContext, WindowId};
     use inca_gpui::{EventPayload, EventSink};
     use inca_node::NodeId;
-    use inca_node::set_style;
+    use inca_style::set_style;
     use inca_test_macros::gpui_cases;
 
     impl Scene {

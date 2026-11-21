@@ -4,7 +4,8 @@
 //! The axes a wheel step can scroll.
 
 use super::{DisplaySpec, hidden_by_attribute, style_spec_from_props};
-use crate::tree::{NodeId, StyleCache, VirtualTree};
+use crate::StyleCache;
+use inca_node::tree::{NodeId, VirtualTree};
 
 /// The axes a wheel step can scroll.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

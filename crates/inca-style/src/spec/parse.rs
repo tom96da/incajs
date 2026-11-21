@@ -4,7 +4,8 @@
 use super::keys::{read_edges, read_prop};
 use super::number::MAX_LENGTH_PX;
 use super::{EdgesSpec, LengthSpec, OverflowSpec, StyleSpec};
-use crate::tree::{AttributeValue, NodeId, StyleCache, StyleMap, VirtualTree};
+use crate::StyleCache;
+use inca_node::tree::{AttributeValue, NodeId, StyleMap, VirtualTree};
 
 /// One or two overflow values, x first; a single value applies to both axes.
 pub(super) fn overflow_pair_from_str(s: &str) -> Option<(OverflowSpec, OverflowSpec)> {
@@ -133,9 +134,10 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::build_spec;
     use crate::set_style;
     use crate::tests::*;
-    use crate::{AlignSpec, FlexDirectionSpec, VirtualTree, build_spec};
+    use inca_node::{AlignSpec, FlexDirectionSpec, VirtualTree};
     use rstest::rstest;
 
     #[test]

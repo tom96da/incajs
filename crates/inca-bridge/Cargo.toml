@@ -23,6 +23,7 @@ gpui.workspace = true
 inca-gpui = { path = "../inca-gpui" }
 inca-jsenv = { path = "../inca-jsenv" }
 inca-node = { path = "../inca-node" }
+inca-style = { path = "../inca-style" }
 rquickjs.workspace = true
 serde_json.workspace = true
 
