@@ -33,9 +33,13 @@ const edited = (e) => {
   input(e);
   value.value = e.target.value;
 };
+// Only `compositionstart` logs `cancelable`: the other two are BACKLOG B-375.
 const flagged = (e) => {
   e.preventDefault();
-  flags.value += `${e.type}:${e.bubbles}:${e.cancelable}:${e.composed}:${e.defaultPrevented} `;
+  flags.value +=
+    e.type === "compositionstart"
+      ? `${e.type}:${e.bubbles}:${e.cancelable}:${e.composed}:${e.defaultPrevented} `
+      : `${e.type}:${e.bubbles}:${e.composed} `;
 };
 
 onMounted(() => {

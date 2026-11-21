@@ -226,7 +226,9 @@ fn disabling_a_composing_input_ends_the_composition(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn composition_events_carry_their_bubbles_cancelable_and_composed_flags(cx: &mut TestAppContext) {
+fn composition_events_bubble_and_are_composed_and_compositionstart_is_cancelable(
+    cx: &mut TestAppContext,
+) {
     let mut h = composing(cx, "flag");
 
     h.ime_mark("k");
@@ -235,8 +237,8 @@ fn composition_events_carry_their_bubbles_cancelable_and_composed_flags(cx: &mut
     assert_eq!(
         text_of(&mut h, "flags"),
         concat!(
-            "compositionstart:true:true:true:true compositionupdate:true:true:true:true ",
-            "compositionupdate:true:true:true:true compositionend:true:true:true:true"
+            "compositionstart:true:true:true:true compositionupdate:true:true ",
+            "compositionupdate:true:true compositionend:true:true"
         )
     );
 }
