@@ -11,7 +11,8 @@ use rquickjs::{Class, Ctx, Value};
 
 use super::{IncaEvent, Walk, bubble_targets, is_cut, note};
 use crate::EventTargetId;
-use crate::bindings::{Host, Listener};
+use crate::bindings::Host;
+use inca_document::Listener;
 
 /// Calls the listeners along `path` with `event`, then leaves the event
 /// idle. Returns whether it ended canceled.

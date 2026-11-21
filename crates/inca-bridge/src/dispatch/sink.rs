@@ -426,7 +426,7 @@ mod tests {
             ("click", 99, "record", &[parent], &[], false),
         ];
         for (event, start, listener, listening, reached, prevented) in rows {
-            host.borrow_mut().listeners = crate::bindings::EventListeners::default();
+            host.borrow_mut().listeners = inca_document::EventListeners::default();
             for node in listening {
                 listen(&dispatcher, *node, event, listener);
             }

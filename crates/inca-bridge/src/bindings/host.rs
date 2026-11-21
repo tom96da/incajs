@@ -8,16 +8,15 @@ use std::rc::Rc;
 use gpui::{Pixels, ScrollHandle, point, px};
 
 use inca_document::geometry::{Align, scroll_chain};
-use inca_document::{InputState, StyleWarnings, apply_removals, new_document_tree};
+use inca_document::{
+    EventListeners, InputState, Signals, StyleWarnings, apply_removals, new_document_tree,
+};
 use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
 use inca_node::{NodeId, Removal, VirtualTree};
 use inca_style::{StyleCache, is_scroll_container};
 
-use crate::abort::Signals;
 use crate::focus::FocusRegistry;
-
-use super::listeners::EventListeners;
 
 /// Everything one `__inca_native__` binding set shares: the retained tree
 /// it mutates, the root a mounting app attaches under, and the
@@ -243,14 +242,12 @@ impl Host {
             self.inputs.get_mut().remove(id);
             self.input_layouts.get_mut().remove(id);
         }
-        ids.iter()
-            .flat_map(|&id| {
-                self.focus.forget(id);
-                self.scroll_fresh.retain(|&(node, ..)| node != id);
-                self.scroll_retry.retain(|&(node, ..)| node != id);
-                self.listeners.release(id)
-            })
-            .collect()
+        for &id in ids {
+            self.focus.forget(id);
+            self.scroll_fresh.retain(|&(node, ..)| node != id);
+            self.scroll_retry.retain(|&(node, ..)| node != id);
+        }
+        self.listeners.release_nodes(ids)
     }
 
     /// Frees every orphan of the tree with its subtree and drops their
