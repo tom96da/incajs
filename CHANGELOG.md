@@ -10,6 +10,10 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- an edit saved while the app loads in `inca dev` is applied ([ed55709f](https://github.com/tom96da/incajs/commit/ed55709f))
+
 ## [0.0.35] - 2026-11-19
 
 ### Added
