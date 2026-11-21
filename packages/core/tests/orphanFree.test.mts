@@ -18,6 +18,7 @@ import { createElementNode, createTextNode } from "../src/element/handle.mts";
 import { elementOf, isDestroyed } from "../src/element/lifecycle.mts";
 import { createIncaApp } from "../src/vue/index.mts";
 import { installFakeHost } from "./fakeHost.mts";
+import { collectGarbage } from "./gc.mts";
 import type { Element } from "../src/index.mts";
 import type { FakeHost } from "./fakeHost.mts";
 
@@ -140,14 +141,44 @@ describe("a host that frees orphans, driven by the Inca renderer", () => {
     mountApp(App);
     await settle();
     await settle();
+    // The start and the end anchor of the Teleport have no parent while the target is null.
+    const anchors = idsOf("#text");
+    expect(anchors).toHaveLength(2);
+    expect(anchors.map((id) => host.nodes.get(id)?.parent)).toEqual([null, null]);
     target.value = box.value;
     await settle();
 
+    expect(host.nodes.get(box.value!.__node_id)!.children).toEqual(anchors);
     const tags = host.nodes
       .get(box.value!.__node_id)!
       .children.map((id) => host.nodes.get(id)!.tag);
     // The start and the end anchor of the Teleport both move into the target.
     expect(tags).toEqual(["#text", "#text"]);
+  });
+
+  it("frees the anchors of a Teleport after the app unmounts and the handles are collected", async () => {
+    // The refs and the app live in this function, so nothing of the test holds a handle afterwards.
+    const mountAndUnmount = async (): Promise<void> => {
+      const target = ref<Element | null>(null);
+      const box = ref<Element | null>(null);
+      const App = {
+        render: () => h("div", [h("div", { ref: box }), h(Teleport, { to: target.value }, [])]),
+      };
+      const app = createIncaApp(App);
+      app.mount();
+      await settle();
+      target.value = box.value;
+      await settle();
+      expect(idsOf("#text")).toHaveLength(2);
+      app.unmount();
+      await settle();
+    };
+
+    await mountAndUnmount();
+    await collectGarbage();
+    frame();
+
+    expect(idsOf("#text")).toEqual([]);
   });
 
   it("keeps the resolved branch of a pending Suspense across frames", async () => {
