@@ -80,7 +80,7 @@ pub(super) fn insert_planned(
     let Some(insertion) = planned else {
         return Ok(None);
     };
-    let left = host.leaving(&insertion.leaving());
+    let left = host.tree.removals(&insertion.leaving());
     let inserted = host
         .tree
         .apply_insertion(insertion)

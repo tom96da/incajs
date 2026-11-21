@@ -11,8 +11,9 @@ pub use html::{HtmlScope, ParsedHtml, ParsedNode};
 pub use input_text::{pasted, sanitized, typed};
 pub use tree::{
     AlignSpec, AttributeValue, ClassListError, DisplaySpec, FlexDirectionSpec, InsertArg, Inserted,
-    Insertion, Link, NodeId, NodeKind, OverflowSpec, Placement, STYLE_KEYS, StyleKey, StyleMap,
-    TreeError, ValueKind, VirtualNode, VirtualTree, is_disabled_control, valid_attribute_name,
+    Insertion, Link, NodeId, NodeKind, OverflowSpec, Placement, Removal, STYLE_KEYS, StyleKey,
+    StyleMap, TreeError, ValueKind, VirtualNode, VirtualTree, is_disabled_control,
+    valid_attribute_name,
 };
 
 #[cfg(test)]

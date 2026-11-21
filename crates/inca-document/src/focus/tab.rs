@@ -112,7 +112,7 @@ impl FocusModel {
     }
 
     /// Takes the nodes marked by [`Self::mark_tab_dirty`] and its subtree form.
-    #[cfg(feature = "test-support")]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn take_tab_dirty(&mut self) -> std::collections::HashSet<NodeId> {
         std::mem::take(&mut self.tab_dirty)
     }

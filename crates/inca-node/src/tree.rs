@@ -50,6 +50,7 @@ mod text;
 
 pub use class_list::ClassListError;
 pub use insert_nodes::{InsertArg, Inserted, Insertion, Placement};
+pub use lifetime::Removal;
 pub use name::NodeKind;
 pub use props::valid_attribute_name;
 pub use relations::Link;

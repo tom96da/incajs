@@ -76,7 +76,7 @@ fn set_inner_html<'js>(
         let mut host = host.borrow_mut();
         let old = children_of(&host.tree, container);
         for &child in &old {
-            let left = host.leaving(&[child]);
+            let left = host.tree.removals(&[child]);
             host.tree
                 .remove_child(container, child)
                 .map_err(|err| throw_tree_error(&ctx, err))?;
@@ -115,8 +115,11 @@ fn set_outer_html<'js>(
         else {
             return Array::new(ctx.clone());
         };
-        let mut left = host.leaving(&[node_id]);
-        left.extend(host.leaving(&host.tree.nodes_to_move(parsed.fragment)));
+        let mut left = host.tree.removals(&[node_id]);
+        left.extend(
+            host.tree
+                .removals(&host.tree.nodes_to_move(parsed.fragment)),
+        );
         host.tree
             .replace_child(parent, parsed.fragment, node_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
@@ -200,7 +203,9 @@ fn insert_parsed(
     container: NodeId,
     reference: Option<NodeId>,
 ) -> JsResult<()> {
-    let left = host.leaving(&host.tree.nodes_to_move(parsed.fragment));
+    let left = host
+        .tree
+        .removals(&host.tree.nodes_to_move(parsed.fragment));
     host.tree
         .insert_before(container, parsed.fragment, reference)
         .map_err(|err| throw_tree_error(ctx, err))?;

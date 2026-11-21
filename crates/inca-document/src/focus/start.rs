@@ -46,6 +46,12 @@ impl FocusModel {
         });
     }
 
+    /// The node Tab starts from while no node is focused.
+    #[cfg(test)]
+    pub(crate) fn start_node(&self) -> Option<NodeId> {
+        self.start.map(Start::node)
+    }
+
     /// Moves where Tab starts off `node_id`'s subtree, which leaves its
     /// place in the tree, to `before`, the node right before that place
     /// ([`VirtualTree::preceding`] taken before the change). A start that
