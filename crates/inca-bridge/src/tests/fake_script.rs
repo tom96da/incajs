@@ -64,6 +64,7 @@ type Handler = Rc<dyn Fn(&Walked) -> bool>;
 pub(crate) struct FakeScript {
     walks: RefCell<Vec<Walked>>,
     handler: RefCell<Handler>,
+    jobs: RefCell<Vec<Box<dyn FnOnce()>>>,
 }
 
 impl Default for FakeScript {
@@ -71,6 +72,7 @@ impl Default for FakeScript {
         Self {
             walks: RefCell::default(),
             handler: RefCell::new(Rc::new(|_| false)),
+            jobs: RefCell::default(),
         }
     }
 }
@@ -79,6 +81,11 @@ impl FakeScript {
     /// Runs `handler` on each walk from now on. It returns whether the event is canceled.
     pub(crate) fn on_walk(&self, handler: impl Fn(&Walked) -> bool + 'static) {
         *self.handler.borrow_mut() = Rc::new(handler);
+    }
+
+    /// Queues `job` for the next [`Script::drain_jobs`].
+    pub(crate) fn queue_job(&self, job: impl FnOnce() + 'static) {
+        self.jobs.borrow_mut().push(Box::new(job));
     }
 
     /// The walks recorded since the last call.
@@ -115,7 +122,12 @@ impl Script for FakeScript {
         false
     }
 
-    fn drain_jobs(&self) {}
+    fn drain_jobs(&self) {
+        let jobs = std::mem::take(&mut *self.jobs.borrow_mut());
+        for job in jobs {
+            job();
+        }
+    }
 
     fn report_pending(&self) {}
 
@@ -125,14 +137,20 @@ impl Script for FakeScript {
 /// A dispatcher over a [`FakeScript`] and a default host.
 pub(crate) fn fake_dispatcher() -> (EventDispatcher, Rc<Host>, Rc<FakeScript>) {
     let host = Rc::new(Host::default());
+    let (dispatcher, fake) = fake_dispatcher_on(&host);
+    (dispatcher, host, fake)
+}
+
+/// A dispatcher over a [`FakeScript`] and `host`.
+pub(crate) fn fake_dispatcher_on(host: &Rc<Host>) -> (EventDispatcher, Rc<FakeScript>) {
     let fake = Rc::new(FakeScript::default());
     let dispatcher = EventDispatcher {
         engine: Rc::new(inca_jsenv::Engine::new().unwrap()),
         script: Rc::clone(&fake) as Rc<dyn Script>,
-        host: Rc::clone(&host),
+        host: Rc::clone(host),
         state: Rc::default(),
     };
-    (dispatcher, host, fake)
+    (dispatcher, fake)
 }
 
 /// What `setPointerCapture(node, 1)` does to the document while a button is held.

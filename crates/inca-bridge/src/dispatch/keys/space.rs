@@ -71,19 +71,14 @@ mod tests {
     use crate::tests::keys::{Scene, scene};
     use crate::tests::{at, mouse_at};
     use gpui::{TestAppContext, WindowId};
-    use inca_document::EventPayload;
+    use inca_document::{EventPayload, EventTargetId};
     use inca_gpui::EventSink;
+    use inca_node::AttributeValue;
     use inca_node::NodeId;
     use inca_style::set_style;
     use inca_test_macros::gpui_cases;
 
     impl Scene {
-        fn cancel_at_parent(&self, on: bool) {
-            self.engine
-                .eval::<()>(&format!("globalThis.cancelParent = {on};"))
-                .unwrap();
-        }
-
         fn mouse_up(&self, cx: &mut TestAppContext, node: NodeId) {
             let payload = mouse_at(1.0, 1.0);
             self.in_window(cx, |scene, window, cx| {
@@ -122,7 +117,7 @@ mod tests {
         s.focus(cx, s.first);
         s.key(cx, "space", false, false);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -130,7 +125,7 @@ mod tests {
         let s = scene(cx);
         s.focus(cx, s.first);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -139,7 +134,7 @@ mod tests {
         s.focus(cx, s.first);
         s.key(cx, "space", false, false);
         s.key(cx, "ctrl-space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui_cases]
@@ -152,7 +147,7 @@ mod tests {
         s.key(cx, "space", false, false);
         s.key(cx, "a", up, false);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -162,7 +157,7 @@ mod tests {
         s.key(cx, "space", false, false);
         s.mouse_down(cx, s.second);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.second));
+        assert_eq!(s.clicks(), [s.second]);
     }
 
     #[gpui::test]
@@ -173,7 +168,7 @@ mod tests {
         s.focus(cx, s.first);
         s.set_pending(Some((other_id, s.first)));
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -184,7 +179,7 @@ mod tests {
         s.key(cx, "space", false, false);
         s.enable(s.first);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -194,7 +189,7 @@ mod tests {
         s.key(cx, "space", false, false);
         s.disable(s.first);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui_cases]
@@ -206,7 +201,7 @@ mod tests {
         s.focus(cx, s.field);
         s.key(cx, key, false, false);
         s.key(cx, key, true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -225,20 +220,12 @@ mod tests {
             host.tree.append_child(s.parent, button).unwrap();
             host.focus.mark_tab_dirty(button);
         }
-        s.engine
-            .eval::<()>(&format!(
-                r"
-                __inca_test_listen__({button}, 'click', () => {{
-                    out.push('click');
-                }});
-                "
-            ))
-            .unwrap();
+        s.watch(button);
         s.focus(cx, button);
         assert_eq!(s.focused(cx), Some(button));
         s.key(cx, "space", false, false);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -246,7 +233,7 @@ mod tests {
         let s = scene(cx);
         s.focus(cx, s.first);
         s.key(cx, "enter", false, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -254,7 +241,7 @@ mod tests {
         let s = scene(cx);
         s.focus(cx, s.first);
         s.key(cx, "enter", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui_cases]
@@ -266,7 +253,7 @@ mod tests {
         let s = scene(cx);
         s.focus(cx, s.first);
         s.key(cx, key, false, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -274,7 +261,7 @@ mod tests {
         let s = scene(cx);
         s.focus(cx, s.first);
         s.key(cx, "shift-enter", false, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -284,7 +271,7 @@ mod tests {
         s.key(cx, "space", false, false);
         s.key(cx, "enter", false, false);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -294,8 +281,7 @@ mod tests {
         s.key(cx, "enter", false, false);
         s.key(cx, "space", false, false);
         s.key(cx, "space", true, false);
-        let click = format!("click:{}:true", s.first);
-        assert_eq!(s.clicks(), format!(r#"["{click}","{click}"]"#));
+        assert_eq!(s.clicks(), [s.first, s.first]);
     }
 
     #[gpui_cases]
@@ -313,7 +299,7 @@ mod tests {
         let node = if same_node { s.first } else { s.second };
         s.fire(cx, node, event);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -331,7 +317,7 @@ mod tests {
             EventSink::fire(&s.dispatcher, s.first, "blur", &payload, window, cx);
         });
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui_cases]
@@ -350,7 +336,7 @@ mod tests {
         s.key(cx, "space", false, false);
         s.key(cx, key, up, false);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui_cases]
@@ -363,7 +349,7 @@ mod tests {
         s.blur(cx, s.first);
         s.key(cx, key, false, false);
         s.key(cx, key, true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -373,7 +359,7 @@ mod tests {
         s.focus(cx, s.first);
         s.set_pending(Some((window_id, s.second)));
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui_cases]
@@ -384,7 +370,7 @@ mod tests {
         let s = scene(cx);
         s.focus(cx, s.first);
         s.key(cx, key, false, true);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -394,7 +380,7 @@ mod tests {
         s.key(cx, "space", false, false);
         s.key(cx, "a", false, true);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -404,7 +390,7 @@ mod tests {
         s.key(cx, "space", false, false);
         s.key(cx, "space", false, true);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -413,7 +399,7 @@ mod tests {
         s.focus(cx, s.first);
         s.key(cx, "space", false, false);
         s.key(cx, "space", true, true);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -423,7 +409,7 @@ mod tests {
         s.key(cx, "space", false, false);
         s.key(cx, "space", true, true);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -433,38 +419,42 @@ mod tests {
         s.key(cx, "space", false, false);
         s.key(cx, "enter", false, true);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui_cases]
     #[gpui::test]
-    #[case::enter_click("enter", 0, "disabled", "true", None)]
-    #[case::tab_move("tab", 1, "tabindex", "'-1'", Some(2))]
+    #[case::enter_click("enter", 0, "disabled", AttributeValue::from(true), None)]
+    #[case::tab_move("tab", 1, "tabindex", AttributeValue::from("-1"), Some(2))]
     fn a_job_queued_by_a_key_down_listener_lands_before_the_default_action(
         cx: &mut TestAppContext,
         key: &str,
         changed: usize,
-        attribute: &str,
-        value: &str,
+        attribute: &'static str,
+        value: AttributeValue,
         focused: Option<usize>,
     ) {
         let s = scene(cx);
         let nodes = [s.first, s.second, s.field];
-        s.engine
-            .eval::<()>(&format!(
-                r"
-                __inca_test_listen__({}, 'keydown', () => {{
-                    Promise.resolve().then(() => {{
-                        __inca_native__.setAttribute({}, '{attribute}', {value});
-                    }});
-                }});
-                ",
-                s.first, nodes[changed]
-            ))
-            .unwrap();
+        let first = s.first;
+        let host = s.host.clone();
+        let fake = s.queue_handle();
+        s.on_walk(move |walked| {
+            if walked.name == "keydown" && walked.target == EventTargetId::Node(first) {
+                let (host, value) = (host.clone(), value.clone());
+                fake(Box::new(move || {
+                    let mut host = host.document.borrow_mut();
+                    host.tree
+                        .set_attribute(nodes[changed], attribute, value)
+                        .unwrap();
+                    host.focus.mark_tab_dirty(nodes[changed]);
+                }));
+            }
+            false
+        });
         s.focus(cx, s.first);
         s.key(cx, key, false, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
         assert_eq!(s.focused(cx), focused.map(|index| nodes[index]));
     }
 
@@ -479,7 +469,7 @@ mod tests {
         s.key(cx, key, false, false);
         s.cancel_at_parent(false);
         s.key(cx, key, true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -490,7 +480,7 @@ mod tests {
         s.mouse_down(cx, s.first);
         s.mouse_up(cx, s.first);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -498,20 +488,11 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let s = scene(cx);
-        s.engine
-            .eval::<()>(&format!(
-                r"
-                __inca_test_listen__({}, 'mousedown', (e) => {{
-                    e.preventDefault();
-                }});
-                ",
-                s.first
-            ))
-            .unwrap();
+        s.cancel_at(s.first, "mousedown");
         s.focus(cx, s.first);
         s.mouse_down(cx, s.first);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -521,7 +502,7 @@ mod tests {
         s.mouse_down(cx, s.first);
         s.key(cx, "space", true, false);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -531,7 +512,7 @@ mod tests {
         s.mouse_down(cx, s.first);
         s.key(cx, "enter", false, false);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -542,7 +523,7 @@ mod tests {
         s.focus(cx, s.second);
         s.focus(cx, s.first);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -553,8 +534,7 @@ mod tests {
         s.key(cx, "space", true, false);
         s.key(cx, "space", false, false);
         s.key(cx, "space", true, false);
-        let click = format!("click:{}:true", s.first);
-        assert_eq!(s.clicks(), format!(r#"["{click}","{click}"]"#));
+        assert_eq!(s.clicks(), [s.first, s.first]);
     }
 
     #[gpui::test]
@@ -565,7 +545,7 @@ mod tests {
         s.mouse_down(cx, s.plain);
         s.focus(cx, s.first);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -574,7 +554,7 @@ mod tests {
         s.focus(cx, s.first);
         s.mouse_down(cx, s.second);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.second));
+        assert_eq!(s.clicks(), [s.second]);
     }
 
     #[gpui::test]
@@ -583,26 +563,17 @@ mod tests {
         s.mouse_down(cx, s.first);
         s.mouse_up(cx, s.second);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
     fn space_up_after_a_prevented_mouse_press_elsewhere_clicks_nothing(cx: &mut TestAppContext) {
         let s = scene(cx);
-        s.engine
-            .eval::<()>(&format!(
-                r"
-                __inca_test_listen__({}, 'mousedown', (e) => {{
-                    e.preventDefault();
-                }});
-                ",
-                s.second
-            ))
-            .unwrap();
+        s.cancel_at(s.second, "mousedown");
         s.focus(cx, s.first);
         s.mouse_down(cx, s.second);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -611,7 +582,7 @@ mod tests {
         s.focus(cx, s.first);
         s.disable(s.first);
         s.key(cx, "enter", false, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -622,7 +593,7 @@ mod tests {
         s.blur(cx, s.first);
         s.focus(cx, s.first);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -634,7 +605,7 @@ mod tests {
         s.key(cx, "enter", false, false);
         s.enable(s.first);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui::test]
@@ -648,25 +619,20 @@ mod tests {
             set_style(&mut host.tree, s.first, "height", 50.0).unwrap();
         }
         s.disable(s.first);
-        s.engine
-            .eval::<()>(&format!(
-                r"
-                __inca_test_listen__({}, 'click', () => {{
-                    out.push('parent');
-                }});
-                ",
-                s.parent
-            ))
-            .unwrap();
         s.focus(cx, s.second);
         s.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
         let mut visual = gpui::VisualTestContext::from_window(s.window.into(), cx);
         visual.simulate_mouse_move(at(10.0, 10.0), None, gpui::Modifiers::none());
+        s.forget();
         s.key(cx, "enter", false, false);
-        assert_eq!(
-            s.clicks(),
-            format!(r#"["click:{}:true","parent"]"#, s.second)
-        );
+        let clicks: Vec<_> = s
+            .walks()
+            .into_iter()
+            .filter(|walked| walked.name == "click")
+            .collect();
+        assert_eq!(clicks.len(), 1);
+        assert_eq!(clicks[0].target, EventTargetId::Node(s.second));
+        assert!(clicks[0].bubbles);
     }
 
     #[gpui_cases]
@@ -687,7 +653,7 @@ mod tests {
         assert_eq!(s.focused(cx), Some(inner));
         s.key(cx, key, false, false);
         s.key(cx, key, true, false);
-        assert_eq!(s.clicks(), "[]");
+        assert!(s.clicks().is_empty());
     }
 
     #[gpui::test]
@@ -711,12 +677,7 @@ mod tests {
     #[case::mousedown("mousedown")]
     fn a_canceled_press_does_not_focus(cx: &mut TestAppContext, event: &str) {
         let s = scene(cx);
-        s.engine
-            .eval::<()>(&format!(
-                "__inca_test_listen__({}, '{event}', (e) => e.preventDefault());",
-                s.field
-            ))
-            .unwrap();
+        s.cancel_at(s.field, event);
         s.mouse_down(cx, s.field);
         assert_eq!(s.focused(cx), None);
     }

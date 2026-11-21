@@ -45,37 +45,29 @@ pub(super) fn shift_f10_opens_context_menu(macos: bool) -> bool {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::keys::{Scene, scene};
+    use crate::tests::keys::{Scene, js_scene, scene};
+    use crate::tests::{Walked, listen};
     use gpui::{Keystroke, TestAppContext};
-    use inca_document::{EventPayload, KeyPayload};
+    use inca_document::{EventPayload, EventTargetId, KeyPayload, PointerSource};
     use inca_gpui::EventSink as _;
     use inca_gpui::modifiers_of;
     use inca_node::NodeId;
     use inca_style::set_style;
     use inca_test_macros::gpui_cases;
 
-    /// Records every `contextmenu` and `keydown` into `globalThis.log`.
-    fn record(s: &Scene, node: NodeId) {
-        s.engine
-            .eval::<()>(&format!(
-                r"
-                globalThis.log = [];
-                __inca_test_listen__({node}, 'keydown', (e) => log.push(e.type));
-                __inca_test_listen__({node}, 'contextmenu', (e) => log.push([
-                    e.type, e.target, e.isTrusted, e.pointerId, e.pointerType, e.isPrimary, e.button,
-                    e.buttons, e.which, e.detail, e.pressure, e.clientX, e.clientY
-                ]));
-                "
-            ))
-            .unwrap();
+    const EVENTS: &[&str] = &["keydown", "contextmenu"];
+
+    /// The `keydown` and `contextmenu` walks at `node`, in order.
+    fn menu_walks(s: &Scene, node: NodeId) -> Vec<Walked> {
+        s.walks()
+            .into_iter()
+            .filter(|walked| {
+                walked.target == EventTargetId::Node(node) && EVENTS.contains(&walked.name.as_str())
+            })
+            .collect()
     }
 
-    fn log(s: &Scene) -> serde_json::Value {
-        let json = s.engine.eval::<String>("JSON.stringify(log)").unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-
-    fn center_of(s: &Scene, node: NodeId) -> (f64, f64) {
+    fn center_of(s: &Scene, node: NodeId) -> (f32, f32) {
         let layout = s
             .host
             .window
@@ -86,51 +78,54 @@ mod tests {
             .copied()
             .unwrap();
         let center = layout.bounds.center();
-        (
-            f64::from(f32::from(center.x)),
-            f64::from(f32::from(center.y)),
-        )
+        (f32::from(center.x), f32::from(center.y))
     }
 
     #[gpui::test]
     fn contextmenu_key_dispatches_to_focused_node(cx: &mut TestAppContext) {
         let s = scene(cx);
-        record(&s, s.field);
         s.focus(cx, s.field);
         let (x, y) = center_of(&s, s.field);
+        s.forget();
         s.key(cx, "menu", false, false);
         s.key(cx, "menu", true, false);
-        let log = log(&s);
-        assert_eq!(log[0], "keydown");
-        assert_eq!(
-            log[1].as_array().unwrap()[..11],
-            serde_json::json!([
-                "contextmenu",
-                s.field,
-                true,
-                1,
-                "mouse",
-                false,
-                -1,
-                0,
-                0,
-                0,
-                0
+        let walks = menu_walks(&s, s.field);
+        assert_eq!(walks.len(), 2);
+        assert_eq!(walks[0].name, "keydown");
+        assert_eq!(walks[1].name, "contextmenu");
+        let menu = walks[1].mouse();
+        assert_eq!((menu.client_x, menu.client_y), (x, y));
+        assert_eq!(menu.pointer, Some(PointerSource::Mouse));
+    }
+
+    /// `pointerId`, `pointerType`, `which` and `pressure` are read off the event by the script.
+    #[gpui::test]
+    fn the_contextmenu_of_the_menu_key_carries_the_mouse_pointer_fields(cx: &mut TestAppContext) {
+        let s = js_scene(cx);
+        s.focus(cx, s.field);
+        listen(
+            &s.dispatcher,
+            s.field,
+            "contextmenu",
+            r"
+            (e) => out.push([
+                e.isTrusted, e.pointerId, e.pointerType, e.isPrimary, e.button,
+                e.buttons, e.which, e.detail, e.pressure,
             ])
-            .as_array()
-            .unwrap()[..11]
+            ",
         );
+        s.key(cx, "menu", false, false);
         assert_eq!(
-            (log[1][11].as_f64(), log[1][12].as_f64()),
-            (Some(x), Some(y))
+            s.engine.eval::<String>("JSON.stringify(out)").unwrap(),
+            r#"[[true,1,"mouse",false,-1,0,0,0,0]]"#
         );
     }
 
     #[gpui::test]
     fn a_mac_menu_key_dispatches_contextmenu(cx: &mut TestAppContext) {
         let s = scene(cx);
-        record(&s, s.field);
         s.focus(cx, s.field);
+        s.forget();
         let keystroke = Keystroke {
             key: "\u{10}".to_string(),
             key_char: None,
@@ -147,9 +142,11 @@ mod tests {
                 .dispatcher
                 .key_input(&keystroke, false, &payload, window, cx);
         });
-        let log = log(&s);
-        assert_eq!(log[0], "keydown");
-        assert_eq!(log[1][0], "contextmenu");
+        let names: Vec<_> = menu_walks(&s, s.field)
+            .into_iter()
+            .map(|walked| walked.name)
+            .collect();
+        assert_eq!(names, EVENTS);
     }
 
     #[gpui_cases]
@@ -165,14 +162,11 @@ mod tests {
         want: usize,
     ) {
         let s = scene(cx);
-        record(&s, s.field);
         s.focus(cx, s.field);
         s.key(cx, key, up, false);
-        let menus = log(&s)
-            .as_array()
-            .unwrap()
+        let menus = menu_walks(&s, s.field)
             .iter()
-            .filter(|entry| entry.is_array())
+            .filter(|walked| walked.name == "contextmenu")
             .count();
         assert_eq!(menus, want);
     }
@@ -183,10 +177,25 @@ mod tests {
     #[case::shift_f10("shift-f10")]
     fn a_canceled_contextmenu_keydown_suppresses_contextmenu(cx: &mut TestAppContext, key: &str) {
         let s = scene(cx);
-        record(&s, s.field);
         s.focus(cx, s.field);
+        s.forget();
         s.key(cx, key, false, true);
-        assert_eq!(log(&s), serde_json::json!(["keydown"]));
+        let names: Vec<_> = menu_walks(&s, s.field)
+            .into_iter()
+            .map(|walked| walked.name)
+            .collect();
+        assert_eq!(names, ["keydown"]);
+    }
+
+    /// The `contextmenu` walk of the scene.
+    fn contextmenu(s: &Scene) -> Walked {
+        let mut menus: Vec<_> = s
+            .walks()
+            .into_iter()
+            .filter(|walked| walked.name == "contextmenu")
+            .collect();
+        assert_eq!(menus.len(), 1);
+        menus.remove(0)
     }
 
     #[gpui::test]
@@ -202,27 +211,11 @@ mod tests {
             .unwrap();
         }
         s.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
-        let root = s.host.document.borrow().root();
-        record(&s, root);
         s.key(cx, "menu", false, false);
-        assert_eq!(
-            log(&s)[1],
-            serde_json::json!([
-                "contextmenu",
-                s.first,
-                true,
-                1,
-                "mouse",
-                false,
-                -1,
-                0,
-                0,
-                0,
-                0,
-                1,
-                1
-            ])
-        );
+        let menu = contextmenu(&s);
+        assert_eq!(menu.target, EventTargetId::Node(s.first));
+        let mouse = menu.mouse();
+        assert_eq!((mouse.client_x, mouse.client_y), (1.0, 1.0));
     }
 
     #[gpui::test]
@@ -246,24 +239,19 @@ mod tests {
         .unwrap();
         s.focus(cx, s.field);
         s.host.window.borrow().layout.borrow_mut().remove(&s.field);
-        let root = s.host.document.borrow().root();
-        record(&s, root);
         s.key(cx, "menu", false, false);
-        let log = log(&s);
-        assert_eq!(log[1][1], serde_json::json!(s.first));
-        assert_eq!(
-            (log[1][11].as_f64(), log[1][12].as_f64()),
-            (Some(1.0), Some(1.0))
-        );
+        let menu = contextmenu(&s);
+        assert_eq!(menu.target, EventTargetId::Node(s.first));
+        let mouse = menu.mouse();
+        assert_eq!((mouse.client_x, mouse.client_y), (1.0, 1.0));
     }
 
     #[gpui::test]
     fn contextmenu_key_outside_every_box_targets_the_root(cx: &mut TestAppContext) {
         let s = scene(cx);
         let root = s.host.document.borrow().root();
-        record(&s, root);
         s.key(cx, "menu", false, false);
-        assert_eq!(log(&s)[1][1], serde_json::json!(root));
+        assert_eq!(contextmenu(&s).target, EventTargetId::Node(root));
     }
 
     #[gpui_cases]
