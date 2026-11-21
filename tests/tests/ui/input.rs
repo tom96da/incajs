@@ -426,7 +426,7 @@ fn paste_turns_each_line_break_into_a_space(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn paste_into_a_readonly_input_fires_nothing(cx: &mut TestAppContext) {
+fn paste_into_a_readonly_input_fires_only_its_keydown(cx: &mut TestAppContext) {
     let mut h = load(cx, "input-clipboard");
     h.set_clipboard("x");
     click(&mut h, "ro");
@@ -434,7 +434,7 @@ fn paste_into_a_readonly_input_fires_nothing(cx: &mut TestAppContext) {
 
     h.keystrokes("secondary-v");
 
-    assert_eq!(text_of(&mut h, "log"), "");
+    assert_eq!(text_of(&mut h, "log"), "keydown:v");
 }
 
 #[gpui::test]

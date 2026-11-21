@@ -15,6 +15,7 @@ const locked = ref(null);
 const lockedValue = ref("");
 
 const note = (e) => (log.value += `${e.type}:${e.inputType}:${e.data} `);
+const noteKey = (e) => (log.value += `${e.type}:${e.key} `);
 const noteData = (e) => (data.value += `${e.type}:${JSON.stringify(e.data)} `);
 
 onMounted(() => {
@@ -49,6 +50,7 @@ onMounted(() => {
       readonly
       value="abcd"
       :style="{ width: 200, textSize: 10 }"
+      @keydown="noteKey"
       @beforeinput="note"
       @input="note"
     />
