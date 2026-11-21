@@ -157,8 +157,20 @@ impl StyleCache {
         cache.parsed = parsed;
     }
 
+    /// Whether a connected `<style>` rule names `:focus` or `:focus-within`.
+    #[must_use]
+    pub fn uses_focus_state(&self, tree: &VirtualTree) -> bool {
+        self.sheet_flags(tree).focus
+    }
+
+    /// Whether a connected `<style>` rule names `:hover` or `:active`.
+    #[must_use]
+    pub fn uses_pointer_state(&self, tree: &VirtualTree) -> bool {
+        self.sheet_flags(tree).pointer
+    }
+
     /// The state flags of the connected sheets.
-    pub(super) fn sheet_flags(&self, tree: &VirtualTree) -> StateFlags {
+    fn sheet_flags(&self, tree: &VirtualTree) -> StateFlags {
         self.refresh(tree);
         self.0.borrow().flags
     }
@@ -227,6 +239,89 @@ mod tests {
     use crate::set_style;
     use crate::tests::{Fixture, SVG, num, text};
     use crate::tree::TEXT_TAG;
+
+    #[rstest]
+    #[case::focus(":focus")]
+    #[case::focus_within(":focus-within")]
+    #[case::negated(":not(:focus)")]
+    #[case::inside_is(":is(.a:focus)")]
+    #[case::nested_in_has("div:has(:focus)")]
+    fn uses_focus_state_is_true_when_a_rule_names_the_state(#[case] selector: &str) {
+        let mut f = Fixture::new();
+        f.sheet(&format!("{selector} {{ width: 1px }}"));
+
+        assert!(f.cache.uses_focus_state(&f.tree));
+    }
+
+    #[rstest]
+    #[case::no_rule("")]
+    #[case::no_state(".a { width: 1px }")]
+    #[case::an_invalid_rule(":focus:bogus { width: 1px }")]
+    #[case::host_context(":host-context(a:focus) { width: 1px }")]
+    #[case::host_context_in_is(":is(:host-context(a:focus b), p) { width: 1px }")]
+    fn uses_focus_state_is_false_when_no_rule_names_the_state(#[case] css: &str) {
+        let mut f = Fixture::new();
+        f.sheet(css);
+
+        assert!(!f.cache.uses_focus_state(&f.tree));
+    }
+
+    #[test]
+    fn uses_focus_state_is_false_once_the_style_element_is_removed() {
+        let mut f = Fixture::new();
+        let (style, _) = f.sheet(":focus { width: 1px }");
+        let named = f.cache.uses_focus_state(&f.tree);
+        f.tree.remove_child(f.root, style).unwrap();
+
+        assert!(named);
+        assert!(!f.cache.uses_focus_state(&f.tree));
+    }
+
+    #[test]
+    fn uses_focus_state_follows_an_edit_of_the_sheet_text() {
+        let mut f = Fixture::new();
+        let (_, text_node) = f.sheet(".a { width: 1px }");
+        let before = f.cache.uses_focus_state(&f.tree);
+        f.tree.set_data(text_node, ":focus { width: 1px }").unwrap();
+
+        assert!(!before);
+        assert!(f.cache.uses_focus_state(&f.tree));
+    }
+
+    #[rstest]
+    #[case::hover(":hover")]
+    #[case::active(":active")]
+    #[case::negated(":not(:hover)")]
+    #[case::inside_is(":is(.a:hover)")]
+    #[case::nested_in_has("div:has(:active)")]
+    fn uses_pointer_state_is_true_when_a_rule_names_the_state(#[case] selector: &str) {
+        let mut f = Fixture::new();
+        f.sheet(&format!("{selector} {{ width: 1px }}"));
+
+        assert!(f.cache.uses_pointer_state(&f.tree));
+    }
+
+    #[rstest]
+    #[case::no_rule("")]
+    #[case::a_focus_rule(":focus { width: 1px }")]
+    #[case::host_context(":host-context(a:hover) { width: 1px }")]
+    fn uses_pointer_state_is_false_when_no_rule_names_the_state(#[case] css: &str) {
+        let mut f = Fixture::new();
+        f.sheet(css);
+
+        assert!(!f.cache.uses_pointer_state(&f.tree));
+    }
+
+    #[rstest]
+    #[case::two_rules(":focus { width: 1px } :hover { width: 2px }")]
+    #[case::one_selector(":focus:hover { width: 1px }")]
+    fn sheet_flags_keep_both_kinds(#[case] css: &str) {
+        let mut f = Fixture::new();
+        f.sheet(css);
+
+        assert!(f.cache.uses_focus_state(&f.tree));
+        assert!(f.cache.uses_pointer_state(&f.tree));
+    }
 
     fn padding_top(f: &Fixture, node: NodeId) -> Option<f64> {
         build_spec(&f.tree, &f.cache, node)
