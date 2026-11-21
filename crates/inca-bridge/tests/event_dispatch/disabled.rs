@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
-use inca_node::set_style;
+use inca_style::set_style;
 use inca_test_macros::gpui_cases;
 
 /// A 200x200 `root` holding a disabled 100x50 `button`, which holds a 100x50 `kid`. Every

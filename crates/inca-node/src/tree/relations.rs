@@ -202,7 +202,6 @@ mod tests {
     use super::*;
     use crate::tests::{Fixture, HTML, SVG, family, node, sample};
     use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, TEXT_TAG};
-    use crate::{set_style, set_style_text};
 
     /// `r > (a > (a1 > x, a2), b > b1)`, returned as `[r, a, a1, a2, b, b1, x]`.
     fn shape() -> (VirtualTree, [NodeId; 7]) {
@@ -510,7 +509,6 @@ mod tests {
     #[case::tag("p", |_: &mut VirtualTree, _: NodeId| {}, false)]
     #[case::attribute_value("div", |t: &mut VirtualTree, r: NodeId| t.set_attribute(r, "class", "b").unwrap(), false)]
     #[case::extra_attribute("div", |t: &mut VirtualTree, r: NodeId| t.set_attribute(r, "id", "x").unwrap(), false)]
-    #[case::style_prop("div", |t: &mut VirtualTree, r: NodeId| set_style(t, r, "width", 5.0).unwrap(), false)]
     #[case::child_count(
         "div",
         |t: &mut VirtualTree, r: NodeId| {
@@ -606,34 +604,5 @@ mod tests {
         }
 
         assert_eq!(tree.is_equal(first, second), Ok(true));
-    }
-
-    #[test]
-    fn is_equal_compares_the_derived_style_text() {
-        let mut tree = VirtualTree::new();
-        let (first, second) = (node(&mut tree, "div"), node(&mut tree, "div"));
-        set_style(&mut tree, first, "text_color", "#f00").unwrap();
-        set_style(&mut tree, second, "text_color", "rgb(255, 0, 0)").unwrap();
-
-        assert_eq!(tree.is_equal(first, second), Ok(true));
-    }
-
-    #[test]
-    fn is_equal_tells_another_declaration_order_apart() {
-        let mut tree = VirtualTree::new();
-        let (first, second) = (node(&mut tree, "div"), node(&mut tree, "div"));
-        set_style_text(&mut tree, first, "width: 1px; height: 2px").unwrap();
-        set_style_text(&mut tree, second, "height: 2px; width: 1px").unwrap();
-
-        assert_eq!(tree.is_equal(first, second), Ok(false));
-    }
-
-    #[test]
-    fn is_equal_tells_an_empty_style_attribute_from_none() {
-        let mut tree = VirtualTree::new();
-        let (first, second) = (node(&mut tree, "div"), node(&mut tree, "div"));
-        set_style_text(&mut tree, first, "").unwrap();
-
-        assert_eq!(tree.is_equal(first, second), Ok(false));
     }
 }

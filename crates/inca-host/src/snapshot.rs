@@ -6,9 +6,8 @@
 use std::collections::BTreeMap;
 
 use gpui::{Pixels, Point, point, px};
-use inca_node::{
-    AttributeValue, ElementSpec, ElementTag, NodeId, StyleCache, VirtualTree, build_spec,
-};
+use inca_node::{AttributeValue, NodeId, VirtualTree};
+use inca_style::{ElementSpec, ElementTag, StyleCache, build_spec};
 use serde::Serialize;
 use serde_json::Value;
 

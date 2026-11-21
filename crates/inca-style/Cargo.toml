@@ -1,0 +1,33 @@
+#:schema https://json.schemastore.org/cargo.json
+
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "inca-style"
+description = "The selectors, style sheets, cascade and element spec inca renders."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+publish = false
+
+[lib]
+name = "inca_style"
+
+[dependencies]
+cssparser.workspace = true
+inca-node = { path = "../inca-node" }
+precomputed-hash.workspace = true
+selectors.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+
+[lints]
+workspace = true

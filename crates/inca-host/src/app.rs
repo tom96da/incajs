@@ -37,7 +37,7 @@ use gpui_platform::application;
 
 use inca_gpui::{EventSink, NodeLayout, Scrollbars, build_element_with_events, node_gutter};
 use inca_jsenv::{EngineError, ErrorReporter, PendingModule, stderr_reporter};
-use inca_node::build_spec;
+use inca_style::build_spec;
 
 use crate::config::{
     self, DEFAULT_APP_NAME, effective_config, is_resizable, window_min_size, window_size,

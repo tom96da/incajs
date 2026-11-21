@@ -11,8 +11,8 @@ use super::scrollbar::{Scrollbars, gutter_of};
 use super::wheel::snapped_extra;
 use crate::event_sink::EventSink;
 use inca_node::scroll::Rect;
-use inca_node::spec::{DisplaySpec, ElementSpec, ElementTag};
 use inca_node::tree::NodeId;
+use inca_style::spec::{DisplaySpec, ElementSpec, ElementTag};
 
 /// The children of `spec` that become `gpui` elements, in order. An empty
 /// text child renders nothing.
@@ -152,8 +152,9 @@ mod tests {
     use crate::event_sink::noop_sink_methods;
     use crate::tests::*;
     use gpui::{Bounds, TestAppContext, point};
-    use inca_node::set_style;
-    use inca_node::{StyleCache, VirtualTree};
+    use inca_node::VirtualTree;
+    use inca_style::StyleCache;
+    use inca_style::set_style;
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
 
@@ -319,7 +320,7 @@ mod tests {
             None
         }
 
-        fn wheel_axes(&self, _: NodeId) -> Option<inca_node::WheelAxes> {
+        fn wheel_axes(&self, _: NodeId) -> Option<inca_style::WheelAxes> {
             None
         }
 
@@ -378,7 +379,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 200., 200.);
         set_style(&mut tree, root, "overflow", "scroll").unwrap();
-        let spec = inca_node::build_spec(&tree, &StyleCache::new(), root).unwrap();
+        let spec = inca_style::build_spec(&tree, &StyleCache::new(), root).unwrap();
         let sink = NoHandles(classic_probe(tree));
         assert_eq!(
             node_gutter(&spec, &sink, Scrollbars::Classic),

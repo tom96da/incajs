@@ -35,8 +35,6 @@ use indexmap::IndexMap;
 mod class_list;
 mod clone;
 mod collection;
-mod computed;
-pub use computed::StyleCache;
 mod element;
 mod insert_nodes;
 mod insertion;
@@ -58,7 +56,7 @@ pub use relations::Link;
 pub use style_key::{
     AlignSpec, DisplaySpec, FlexDirectionSpec, OverflowSpec, STYLE_KEYS, StyleKey, ValueKind,
 };
-pub(crate) use style_key::{css_name, style_key};
+pub use style_key::{css_name, style_key};
 
 /// The tag of a comment.
 pub(crate) const COMMENT_TAG: &str = "#comment";
@@ -71,7 +69,7 @@ pub const TEXT_TAG: &str = "#text";
 pub(crate) const DOCUMENT_TAG: &str = "#document";
 
 /// The tag of a fragment: a node that holds children, has no parent and is never connected.
-pub(crate) const FRAGMENT_TAG: &str = "#fragment";
+pub const FRAGMENT_TAG: &str = "#fragment";
 
 /// Stable handle returned to JS, used in every subsequent host-bridge call.
 pub type NodeId = u32;
@@ -212,8 +210,10 @@ pub struct VirtualNode {
     /// without one.
     namespace: Option<Namespace>,
     prefix: Option<String>,
-    pub(crate) style_props: StyleMap,
-    pub(crate) attributes: IndexMap<String, AttributeValue>,
+    /// The style props of the node.
+    pub style_props: StyleMap,
+    /// The attributes in insertion order.
+    pub attributes: IndexMap<String, AttributeValue>,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
     /// The fragment a template owns.
@@ -432,7 +432,12 @@ impl VirtualTree {
         self.nodes.get(&id)
     }
 
-    pub(crate) fn node_mut(&mut self, id: NodeId) -> Result<&mut VirtualNode, TreeError> {
+    /// The node `id` for a change, and counts the change.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::NodeNotFound`] if `id` names no node.
+    pub fn node_mut(&mut self, id: NodeId) -> Result<&mut VirtualNode, TreeError> {
         self.generation += 1;
         self.nodes.get_mut(&id).ok_or(TreeError::NodeNotFound(id))
     }
@@ -498,7 +503,6 @@ mod tests {
 
     use super::*;
     use crate::tests::{Fixture, node};
-    use crate::{remove_style, set_style};
     use rstest::rstest;
 
     #[rstest]
@@ -542,14 +546,6 @@ mod tests {
         );
         assert_eq!(
             tree.set_attribute(999, "k", "v").unwrap_err(),
-            TreeError::NodeNotFound(999)
-        );
-        assert_eq!(
-            set_style(&mut tree, 999, "k", "v").unwrap_err(),
-            TreeError::NodeNotFound(999)
-        );
-        assert_eq!(
-            remove_style(&mut tree, 999, "k").unwrap_err(),
             TreeError::NodeNotFound(999)
         );
     }

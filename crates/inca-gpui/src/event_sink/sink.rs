@@ -41,10 +41,10 @@ pub trait EventSink {
     fn scroll_handle(&self, node_id: NodeId) -> Option<gpui::ScrollHandle>;
 
     /// The axes along which a wheel step can scroll `node_id` now, read from
-    /// the live tree (see [`inca_node::wheel_axes`]). `None` when the node is unknown,
+    /// the live tree (see [`inca_style::wheel_axes`]). `None` when the node is unknown,
     /// detached, hidden or inert. A shown container with neither `scroll` nor `auto` overflow
     /// gives `false` on both axes.
-    fn wheel_axes(&self, node_id: NodeId) -> Option<inca_node::WheelAxes>;
+    fn wheel_axes(&self, node_id: NodeId) -> Option<inca_style::WheelAxes>;
 
     /// Forgets every recorded layout. Called before each frame's tree is
     /// built, so only nodes laid out in the new frame have a record.

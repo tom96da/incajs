@@ -10,7 +10,8 @@ use gpui::{Pixels, ScrollHandle, point, px};
 use inca_gpui::{InputState, NodeLayout, rect_of};
 use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
 use inca_node::scroll::{Align, scroll_chain};
-use inca_node::{NodeId, StyleCache, VirtualTree, is_scroll_container};
+use inca_node::{NodeId, VirtualTree};
+use inca_style::{StyleCache, is_scroll_container};
 
 use crate::abort::Signals;
 use crate::focus::FocusRegistry;

@@ -379,9 +379,9 @@ mod tests {
         Context, IntoElement, Keystroke, Render, TestAppContext, TextStyle, VisualTestContext,
         point, size,
     };
-    use inca_node::StyleCache;
     use inca_node::VirtualTree;
-    use inca_node::set_style;
+    use inca_style::StyleCache;
+    use inca_style::set_style;
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
     use std::ops::Range;

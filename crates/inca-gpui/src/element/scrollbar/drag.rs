@@ -104,7 +104,7 @@ mod tests {
     #![allow(clippy::float_cmp, clippy::unwrap_used)]
 
     use gpui::{Hsla, MouseButton, MouseExitEvent, TestAppContext, point, px, rgb};
-    use inca_node::spec::WheelAxes;
+    use inca_style::spec::WheelAxes;
     use inca_test_macros::gpui_cases;
 
     use super::*;
@@ -112,7 +112,7 @@ mod tests {
     use crate::element::scrollbar::view::{ScrollbarState, paint_plan};
     use crate::element::scrollbar::{HIDE_DELAY, THUMB_HOVER, gutter_of, parts};
     use crate::tests::{BarScene, capture_entities, nested_bar_tree};
-    use inca_node::set_style;
+    use inca_style::set_style;
 
     const BOTH: [(&str, &str); 1] = [("overflow", "scroll")];
     const Y_SCROLL: [(&str, &str); 2] = [("overflow_x", "hidden"), ("overflow_y", "scroll")];

@@ -4,7 +4,7 @@
 //! Reads a style number, a px length and an opacity from a raw value.
 
 use super::LengthSpec;
-use crate::tree::AttributeValue;
+use inca_node::tree::AttributeValue;
 
 /// The largest magnitude of a decimal: the largest `f32`.
 const MAX_NUMBER: f64 = f32::MAX as f64;

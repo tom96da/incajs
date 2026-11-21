@@ -92,7 +92,7 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use gpui::TestAppContext;
-    use inca_node::{remove_style, set_style};
+    use inca_style::{remove_style, set_style};
     use rstest::rstest;
     use std::collections::HashSet;
 

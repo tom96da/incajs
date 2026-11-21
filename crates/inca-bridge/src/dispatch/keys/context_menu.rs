@@ -48,7 +48,7 @@ mod tests {
     use gpui::{Keystroke, TestAppContext};
     use inca_gpui::{EventPayload, EventSink as _, KeyPayload};
     use inca_node::NodeId;
-    use inca_node::set_style;
+    use inca_style::set_style;
     use inca_test_macros::gpui_cases;
 
     /// Records every `contextmenu` and `keydown` into `globalThis.log`.

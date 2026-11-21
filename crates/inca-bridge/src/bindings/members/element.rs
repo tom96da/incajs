@@ -13,7 +13,8 @@ use rquickjs::{Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value};
 
 use inca_jsenv::class::{define_this_getter, require, text};
 use inca_jsenv::required_prototype;
-use inca_node::{VirtualNode, check_selector, matches_selector};
+use inca_node::VirtualNode;
+use inca_style::{check_selector, matches_selector};
 
 use super::{getter, method};
 use crate::bindings::capture::{has_capture, release_capture, set_capture};
@@ -50,7 +51,7 @@ pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
             let selector = text(ctx, &args[0])?;
             let mut host = host.borrow_mut();
             host.sync_focus_style();
-            let syntax = |err: inca_node::SelectorError| {
+            let syntax = |err: inca_style::SelectorError| {
                 Exception::throw_dom(ctx, "SyntaxError", &err.to_string())
             };
             if host.tree.get(id).is_none() {

@@ -404,7 +404,7 @@ A fixed entry is deleted and its ID is never reused.
   Fix: a press on the track scrolls by the client size toward the pointer and repeats while the
   button is held. The arrow buttons need the arrow geometry of the browser, measured per
   platform. `thin` and `none` change the reserved width, and the colours need parsing in
-  `inca-node`.
+  `inca-style`.
 
 - **B-082 Wheel scrolling has `gpui`'s axis rules and no gesture latching**
   `Units: gpui · Size: M · Impact: Low`
@@ -507,10 +507,10 @@ A fixed entry is deleted and its ID is never reused.
   hosts are added.
 
 - **B-096 `missing_docs` is not enforced**
-  `Units: node,gpui,bridge,jsenv,ci · Size: M · Impact: Low`
+  `Units: node,style,gpui,bridge,jsenv,ci · Size: M · Impact: Low`
 
-  `inca-node` lacks docs on 41 public items, `inca-gpui` on 38, `inca-bridge`
-  on 6 and `inca-jsenv` on 2, as
+  `inca-node` lacks docs on 24 public items, `inca-style` on 23, `inca-gpui` on
+  38, `inca-bridge` on 6 and `inca-jsenv` on 2, as
   `RUSTDOCFLAGS="-W missing-docs" cargo doc -p <crate> --no-deps` counts
   them. `inca-host` has none. Setting
   `missing_docs = "warn"` under `[workspace.lints.rust]` applies to every

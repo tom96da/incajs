@@ -190,7 +190,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::tests::{Fixture, children, family, node, not_a_child, text};
+    use crate::tests::{children, family, node, not_a_child};
     use crate::tree::{FRAGMENT_TAG, TEXT_TAG};
 
     #[test]
@@ -470,68 +470,6 @@ mod tests {
             tree.remove_child(9999, 0).unwrap_err(),
             TreeError::NodeNotFound(9999)
         );
-    }
-
-    #[test]
-    fn a_fragment_with_a_style_applies_its_rule_once_moved_into_the_tree() {
-        let mut f = Fixture::new();
-        let a = f.add(f.root, "div", "a");
-        f.attr(a, "class", "a");
-        let fragment = node(&mut f.tree, FRAGMENT_TAG);
-        let style = node(&mut f.tree, "style");
-        let css = node(&mut f.tree, TEXT_TAG);
-        f.tree.set_data(css, ".a { width: 1px }").unwrap();
-        f.tree.append_child(style, css).unwrap();
-        f.tree.append_child(fragment, style).unwrap();
-        let inside = f.cache.computed_style(&f.tree, a).get("width").cloned();
-
-        f.tree.append_child(f.root, fragment).unwrap();
-
-        assert_eq!(inside, None);
-        assert_eq!(
-            f.cache.computed_style(&f.tree, a).get("width"),
-            Some(&text("1px"))
-        );
-    }
-
-    #[test]
-    fn a_loose_style_applies_its_rule_once_appended_under_the_root() {
-        let mut f = Fixture::new();
-        let a = f.add(f.root, "div", "a");
-        f.attr(a, "class", "a");
-        let style = node(&mut f.tree, "style");
-        let css = node(&mut f.tree, TEXT_TAG);
-        f.tree.set_data(css, ".a { width: 1px }").unwrap();
-        f.tree.append_child(style, css).unwrap();
-        let loose = f.cache.computed_style(&f.tree, a).get("width").cloned();
-
-        f.tree.append_child(f.root, style).unwrap();
-
-        assert_eq!(loose, None);
-        assert_eq!(
-            f.cache.computed_style(&f.tree, a).get("width"),
-            Some(&text("1px"))
-        );
-    }
-
-    #[rstest]
-    #[case::style(false)]
-    #[case::its_text(true)]
-    fn removing_a_connected_style_stops_its_rules(#[case] remove_text: bool) {
-        let mut f = Fixture::new();
-        let (style, css) = f.sheet(".a { width: 1px }");
-        let a = f.add(f.root, "div", "a");
-        f.attr(a, "class", "a");
-        let applied = f.cache.computed_style(&f.tree, a).get("width").cloned();
-
-        if remove_text {
-            f.tree.remove_child(style, css).unwrap();
-        } else {
-            f.tree.remove_child(f.root, style).unwrap();
-        }
-
-        assert_eq!(applied, Some(text("1px")));
-        assert_eq!(f.cache.computed_style(&f.tree, a).get("width"), None);
     }
 
     #[test]

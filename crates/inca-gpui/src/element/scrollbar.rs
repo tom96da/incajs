@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use gpui::{App, Axis, Bounds, Hsla, Pixels, Point, Size, point, px, rgb, size};
 
-use inca_node::spec::WheelAxes;
+use inca_style::spec::WheelAxes;
 
 pub(super) use hover::OverBar;
 pub(super) use view::scrollbar;
@@ -323,7 +323,7 @@ mod tests {
     use super::*;
     use crate::tests::{BarScene, Probe, boxed, probe_of, rect};
     use inca_node::VirtualTree;
-    use inca_node::set_style;
+    use inca_style::set_style;
     use inca_test_macros::gpui_cases;
 
     const BOTH: WheelAxes = WheelAxes { x: true, y: true };

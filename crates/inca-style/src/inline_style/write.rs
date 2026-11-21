@@ -5,7 +5,7 @@
 
 use super::read::{css_text, property_key, style_property_value};
 use crate::spec::{css_declaration, style_warning, unknown_key_warning};
-use crate::tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, style_key};
+use inca_node::tree::{AttributeValue, NodeId, TreeError, VirtualNode, VirtualTree, style_key};
 
 /// Stores `css_text` as the `style` attribute of `node`: an existing entry keeps its place, and a
 /// missing one is created last when `create` is set. A text node and a comment never get one.
@@ -140,11 +140,12 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+    use crate::StyleCache;
     use crate::build_spec;
     use crate::inline_style::tests::{attribute_keys, block, entry};
     use crate::style_length;
     use crate::tests::{num, text};
-    use crate::tree::{AttributeValue, StyleCache, VirtualTree};
+    use inca_node::tree::{AttributeValue, VirtualTree};
     use rstest::rstest;
 
     #[test]

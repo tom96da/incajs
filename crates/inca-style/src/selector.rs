@@ -21,11 +21,15 @@ use selectors::parser::{
 };
 use selectors::{Element, OpaqueElement};
 
-use crate::tree::{NodeId, NodeKind, VirtualNode, VirtualTree};
+use inca_node::tree::{NodeId, NodeKind, VirtualNode, VirtualTree};
 
+mod element_kind;
 mod matching;
 mod query;
+#[cfg(test)]
+mod state;
 
+use matching::Node;
 pub use matching::{closest_selector, matches_selector};
 pub use query::{query_selector, query_selector_all};
 

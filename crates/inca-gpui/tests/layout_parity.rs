@@ -22,8 +22,9 @@ use gpui::{
 };
 
 use inca_gpui::render_tree;
-use inca_node::set_style;
-use inca_node::{NodeId, StyleCache, VirtualTree};
+use inca_node::{NodeId, VirtualTree};
+use inca_style::StyleCache;
+use inca_style::set_style;
 
 /// Selectors matching [`build_tree`]'s node creation order, used to tag the
 /// hand-written reference tree the same way `render_tree` tags its own

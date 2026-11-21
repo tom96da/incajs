@@ -10,8 +10,8 @@ use cssparser::{
 
 use crate::selector::Selectors;
 use crate::spec::style_warning;
-use crate::tree::AttributeValue;
-use crate::tree::style_key;
+use inca_node::tree::AttributeValue;
+use inca_node::tree::style_key;
 
 /// One qualified rule: its selectors and its declarations in source order.
 #[derive(Debug)]

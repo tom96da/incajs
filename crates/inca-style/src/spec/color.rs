@@ -3,7 +3,7 @@
 
 use super::ColorSpec;
 use super::number::decimal;
-use crate::tree::AttributeValue;
+use inca_node::tree::AttributeValue;
 
 /// A number from `0` to `0xffffff` (opaque), or a string holding `#rgb`,
 /// `#rgba`, `#rrggbb`, `#rrggbbaa`, `transparent`, `rgb(...)` or `rgba(...)`
@@ -166,10 +166,11 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::StyleCache;
     use crate::set_style;
     use crate::spec::build_spec;
     use crate::tests::{num, style_and_warnings, text};
-    use crate::tree::{StyleCache, VirtualTree};
+    use inca_node::tree::VirtualTree;
 
     #[rstest]
     #[case::opaque(ColorSpec::opaque(0xff8000), "rgb(255, 128, 0)")]

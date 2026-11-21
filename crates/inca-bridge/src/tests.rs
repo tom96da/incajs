@@ -187,7 +187,7 @@ pub(crate) fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::V
 
 /// Whether `node` matches the state class `class`.
 pub(crate) fn state(host: &Host, node: NodeId, class: &str) -> bool {
-    inca_node::matches_selector(&host.tree, node, class).unwrap()
+    inca_style::matches_selector(&host.tree, node, class).unwrap()
 }
 
 /// Appends a `<style>` element that holds `css` under the root.

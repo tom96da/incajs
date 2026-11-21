@@ -43,8 +43,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::selector::query_selector;
-    use crate::tests::{Fixture, HTML, SVG, children, node, text};
+    use crate::tests::{HTML, SVG, children, node};
 
     #[test]
     fn a_template_has_an_empty_parentless_content_it_owns() {
@@ -169,45 +168,5 @@ mod tests {
         tree.append_child(filled, child).unwrap();
 
         assert_eq!(tree.is_equal(a, b), Ok(true));
-    }
-
-    #[test]
-    fn a_query_never_finds_a_node_of_a_content() {
-        let mut f = Fixture::new();
-        let template = f.add(f.root, "template", "template");
-        let content = f.tree.template_content(template).unwrap();
-        let inner = node(&mut f.tree, "span");
-        f.tree.append_child(content, inner).unwrap();
-
-        assert_eq!(query_selector(&f.tree, f.root, "span").unwrap(), None);
-        assert_eq!(query_selector(&f.tree, template, "span").unwrap(), None);
-    }
-
-    #[test]
-    fn a_style_in_a_content_applies_no_rule() {
-        let mut f = Fixture::new();
-        let template = f.add(f.root, "template", "template");
-        let content = f.tree.template_content(template).unwrap();
-        let style = node(&mut f.tree, "style");
-        let rules = node(&mut f.tree, "#text");
-        f.tree.set_data(rules, "div { width: 9px }").unwrap();
-        f.tree.append_child(style, rules).unwrap();
-        f.tree.append_child(content, style).unwrap();
-        let target = f.boxed("target");
-
-        assert_eq!(f.computed(target, "width"), None);
-    }
-
-    #[test]
-    fn a_style_in_the_children_of_a_connected_template_applies() {
-        let mut f = Fixture::new();
-        let template = f.add(f.root, "template", "template");
-        let style = f.add(template, "style", "sheet");
-        let rules = node(&mut f.tree, "#text");
-        f.tree.set_data(rules, "div { width: 9px }").unwrap();
-        f.tree.append_child(style, rules).unwrap();
-        let target = f.boxed("target");
-
-        assert_eq!(f.computed(target, "width"), Some(text("9px")));
     }
 }
