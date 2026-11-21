@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use inca_gpui::EventPayload;
+use inca_document::EventPayload;
 use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 use rquickjs::{Ctx, Result as JsResult};
@@ -16,12 +16,14 @@ use crate::bindings::Host;
 use listeners::deliver;
 
 mod abort;
+mod click;
 mod listeners;
 mod script;
 mod targets;
 
 pub(crate) use abort::fire_abort;
-pub(crate) use script::{click, dispatch_event, lose_focus};
+pub(crate) use click::click;
+pub(crate) use script::{dispatch_event, lose_focus};
 pub(super) use targets::targets_of;
 
 /// What one walk needs to know.
@@ -184,7 +186,7 @@ mod tests {
     };
     use crate::{EventTargetId, event};
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
     use rstest::rstest;
 
     #[gpui::test]

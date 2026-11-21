@@ -3,10 +3,8 @@
 
 //! The sink that receives the events a dispatch fires.
 
-use super::{
-    App, EventPayload, InputLayout, InputRequest, MouseUpEvent, NodeId, NodeLayout, Window,
-};
-use inca_document::InputState;
+use super::{App, InputLayout, InputRequest, MouseUpEvent, NodeId, NodeLayout, Window};
+use inca_document::{EventPayload, InputState};
 
 /// What [`crate::element`] needs from something that can dispatch a native
 /// event into JS. The trait keeps this crate free of a `QuickJS` dependency.
@@ -228,7 +226,7 @@ macro_rules! noop_sink_methods {
             &self,
             _: &str,
             _: inca_node::NodeId,
-            _: &$crate::event_sink::EventPayload,
+            _: &inca_document::EventPayload,
             _: &mut gpui::Window,
             _: &mut gpui::App,
         ) {
@@ -250,7 +248,7 @@ macro_rules! noop_sink_methods {
             &self,
             _: &gpui::Keystroke,
             _: bool,
-            _: &$crate::event_sink::EventPayload,
+            _: &inca_document::EventPayload,
             _: &mut gpui::Window,
             _: &mut gpui::App,
         ) {
@@ -260,7 +258,7 @@ macro_rules! noop_sink_methods {
         fn bar_pressed(
             &self,
             _: inca_node::NodeId,
-            _: &$crate::event_sink::EventPayload,
+            _: &inca_document::EventPayload,
             _: &mut gpui::Window,
             _: &mut gpui::App,
         ) {
@@ -270,7 +268,7 @@ macro_rules! noop_sink_methods {
         fn bar_released(
             &self,
             _: inca_node::NodeId,
-            _: &$crate::event_sink::EventPayload,
+            _: &inca_document::EventPayload,
             _: &mut gpui::Window,
             _: &mut gpui::App,
         ) {

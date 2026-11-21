@@ -3,7 +3,7 @@
 
 use std::cell::RefCell;
 
-use inca_gpui::EventPayload;
+use inca_document::EventPayload;
 use inca_jsenv::class;
 use inca_jsenv::class::{define_method, define_this_getter};
 use inca_node::NodeId;
@@ -263,7 +263,7 @@ mod tests {
         pointer_click, wheel_at,
     };
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
 
@@ -580,7 +580,11 @@ mod tests {
     #[case::mouse("mousedown", mouse_at(1.0, 1.0), "MouseEvent")]
     #[case::pointer("click", pointer_click(), "PointerEvent")]
     #[case::wheel("wheel", wheel_at(1.0, 1.0), "WheelEvent")]
-    #[case::keyboard("keydown", key_payload(gpui::Modifiers::none()), "KeyboardEvent")]
+    #[case::keyboard(
+        "keydown",
+        key_payload(inca_document::Modifiers::none()),
+        "KeyboardEvent"
+    )]
     #[case::focus("focus", EventPayload::Focus { related_target: None }, "FocusEvent")]
     #[case::input("input", input_payload(), "InputEvent")]
     #[case::composition("compositionend", composition_payload(), "CompositionEvent")]

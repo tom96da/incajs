@@ -5,7 +5,8 @@
 
 use gpui::{App, Window};
 use inca_document::geometry::Align;
-use inca_gpui::{EventPayload, MousePayload};
+use inca_document::{EventPayload, MousePayload};
+use inca_gpui::modifiers_of;
 
 use super::EventDispatcher;
 use crate::EventTargetId;
@@ -140,7 +141,8 @@ impl EventDispatcher {
         };
         if let Some(button) = click {
             self.state.mouse_held.set(None);
-            let payload = EventPayload::Mouse(MousePayload::keyboard_click(modifiers));
+            let payload =
+                EventPayload::Mouse(MousePayload::keyboard_click(modifiers_of(modifiers)));
             self.fire(button, "click", &payload, window, cx);
         }
     }

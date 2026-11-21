@@ -264,9 +264,9 @@ A fixed entry is deleted and its ID is never reused.
   which one it is.
 
 - **B-026 More `MouseEvent`/`KeyboardEvent` fields could reach JS**
-  `Units: gpui,bridge · Size: M–L · Impact: Low`
+  `Units: document,gpui,bridge · Size: M–L · Impact: Low`
 
-  `crates/inca-gpui/src/event_sink.rs`'s `MousePayload`/`KeyPayload`
+  `MousePayload`/`KeyPayload` in `crates/inca-document/src/event/payload.rs`
   carry a deliberate subset of each DOM type's own fields. What's between
   each missing one and landing differs:
   - `screenX`/`screenY` are `Window::bounds`' origin plus the client

@@ -16,7 +16,10 @@ pub mod warnings;
 pub use attributes::store_attribute;
 pub use create::{NameError, is_element_local_name, validate_and_extract};
 pub use document::new_document_tree;
-pub use event::{EVENTS, EventSpec, Flags, flags_of, key_code, keypress_code, spec_of};
+pub use event::{
+    EVENTS, EventPayload, EventSpec, Flags, KeyPayload, Modifiers, MousePayload, NO_BUTTON,
+    PointerSource, WheelPayload, buttons_mask, flags_of, key_code, keypress_code, spec_of,
+};
 pub use focus::{FocusModel, FocusSurface, FocusTransition};
 pub use geometry::{Align, Rect, scroll_chain, scroll_delta};
 pub use markup::{

@@ -5,8 +5,9 @@
 //! input, the editing keys and the mouse selection.
 
 use gpui::{App, ClipboardItem, Keystroke, MouseButton, Window};
+use inca_document::{EventPayload, MousePayload};
 use inca_document::{InputPayload, InputState, InputType, Motion};
-use inca_gpui::{EventPayload, InputLayout, MousePayload, opens_context_menu};
+use inca_gpui::{InputLayout, opens_context_menu};
 use inca_node::input_text::pasted;
 use inca_node::{NodeId, is_disabled_control};
 
@@ -242,7 +243,14 @@ impl EventDispatcher {
         if mouse.button != 0 || !enabled_input {
             return;
         }
-        let menu = opens_context_menu(MouseButton::Left, mouse.modifiers, macos);
+        let menu = opens_context_menu(
+            MouseButton::Left,
+            gpui::Modifiers {
+                control: mouse.modifiers.control(),
+                ..gpui::Modifiers::none()
+            },
+            macos,
+        );
         let offset = self.input_layout(target).offset_at(mouse.client_x);
         self.with_input(target, |state| {
             if menu {
@@ -251,7 +259,7 @@ impl EventDispatcher {
                     state.place(offset, false);
                 }
             } else {
-                state.place(offset, mouse.modifiers.shift);
+                state.place(offset, mouse.modifiers.shift());
             }
         });
         if !menu {
@@ -336,7 +344,7 @@ mod tests {
     ) {
         s.select(selection.0, selection.1);
         let mut mouse = mouse_of(13.0, 0, false);
-        mouse.modifiers.control = true;
+        mouse.modifiers = mouse.modifiers.set(inca_document::Modifiers::CONTROL, true);
         s.in_window(cx, |scene, window, _| {
             scene
                 .dispatcher

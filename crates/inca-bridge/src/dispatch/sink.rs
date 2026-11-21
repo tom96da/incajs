@@ -5,7 +5,8 @@ use std::rc::Rc;
 
 use gpui::{App, MouseUpEvent, ScrollHandle, Window};
 use inca_document::InputState;
-use inca_gpui::{EventPayload, EventSink, InputLayout, InputRequest, KeyPayload};
+use inca_document::{EventPayload, KeyPayload};
+use inca_gpui::{EventSink, InputLayout, InputRequest, modifiers_of};
 use inca_node::NodeId;
 
 use super::EventDispatcher;
@@ -108,7 +109,7 @@ impl EventSink for EventDispatcher {
                 let payload = EventPayload::Key(KeyPayload {
                     key: key.to_owned(),
                     repeat: false,
-                    modifiers,
+                    modifiers: modifiers_of(modifiers),
                     is_composing,
                 });
                 let event = if is { "keydown" } else { "keyup" };
@@ -270,12 +271,10 @@ impl EventSink for EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::{
-        RECORDER, at, dispatcher_with_engine, listen, seen, seen_rows, tree_of_three,
-    };
+    use crate::tests::{RECORDER, dispatcher_with_engine, listen, seen, seen_rows, tree_of_three};
     use gpui::TestAppContext;
     use inca_document::EVENTS;
-    use inca_gpui::{EventPayload, MousePayload, PointerSource, WheelPayload};
+    use inca_document::{EventPayload, MousePayload, PointerSource, WheelPayload};
     use inca_node::NodeId;
     use inca_test_macros::gpui_cases;
 
@@ -518,7 +517,9 @@ mod tests {
             dispatcher.fire(
                 button,
                 "click",
-                &EventPayload::Mouse(MousePayload::keyboard_click(gpui::Modifiers::none())),
+                &EventPayload::Mouse(MousePayload::keyboard_click(
+                    inca_document::Modifiers::none(),
+                )),
                 window,
                 cx,
             );
@@ -621,7 +622,7 @@ mod tests {
     }
 
     fn plain_mouse() -> MousePayload {
-        MousePayload::at(at(7.0, 9.0), gpui::Modifiers::none())
+        MousePayload::at(7.0, 9.0, inca_document::Modifiers::none())
     }
 
     fn pointer_payload(source: PointerSource) -> EventPayload {
