@@ -178,7 +178,7 @@ impl VirtualTree {
             let nx = self.get(x).ok_or(missing(x))?;
             let ny = self.get(y).ok_or(missing(y))?;
             if nx.kind != ny.kind
-                || nx.tag_name != ny.tag_name
+                || nx.local_name != ny.local_name
                 || nx.data != ny.data
                 || nx.namespace != ny.namespace
                 || nx.prefix != ny.prefix

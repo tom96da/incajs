@@ -18,11 +18,11 @@ impl VirtualTree {
     /// and [`TreeError::IdsExhausted`] once `u32::MAX` nodes have been
     /// created over the tree's lifetime. A template takes two ids, its own and its content's,
     /// and fails without creating either when fewer are left.
-    pub fn create_node(&mut self, tag_name: impl Into<String>) -> Result<NodeId, TreeError> {
-        let tag_name = tag_name.into();
-        match NodeKind::of_tag(&tag_name).ok_or(TreeError::UnknownTag)? {
-            NodeKind::Element => self.create_element(Some(ns!(html)), None, tag_name),
-            kind => self.allocate(kind, tag_name, None, None),
+    pub fn create_node(&mut self, local_name: impl Into<String>) -> Result<NodeId, TreeError> {
+        let local_name = local_name.into();
+        match NodeKind::of_tag(&local_name).ok_or(TreeError::UnknownTag)? {
+            NodeKind::Element => self.create_element(Some(ns!(html)), None, local_name),
+            kind => self.allocate(kind, local_name, None, None),
         }
     }
 
@@ -35,14 +35,16 @@ impl VirtualTree {
     pub(super) fn allocate(
         &mut self,
         kind: NodeKind,
-        tag_name: String,
+        local_name: String,
         namespace: Option<Namespace>,
         prefix: Option<String>,
     ) -> Result<NodeId, TreeError> {
         let id = self.next_id;
         self.next_id = id.checked_add(1).ok_or(TreeError::IdsExhausted)?;
-        self.nodes
-            .insert(id, VirtualNode::new(id, kind, tag_name, namespace, prefix));
+        self.nodes.insert(
+            id,
+            VirtualNode::new(id, kind, local_name, namespace, prefix),
+        );
         self.orphans.insert(id);
         Ok(id)
     }
@@ -70,12 +72,12 @@ impl VirtualTree {
         &mut self,
         namespace: Option<Namespace>,
         prefix: Option<String>,
-        tag_name: String,
+        local_name: String,
     ) -> Result<NodeId, TreeError> {
-        if namespace == Some(ns!(html)) && tag_name == "template" {
-            return self.create_template(tag_name, prefix);
+        if namespace == Some(ns!(html)) && local_name == "template" {
+            return self.create_template(local_name, prefix);
         }
-        self.allocate(NodeKind::Element, tag_name, namespace, prefix)
+        self.allocate(NodeKind::Element, local_name, namespace, prefix)
     }
 }
 

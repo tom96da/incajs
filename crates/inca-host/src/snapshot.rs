@@ -128,7 +128,7 @@ fn node(
     };
     Some(Node {
         id: spec.id,
-        tag: source.tag_name().to_owned(),
+        tag: source.local_name().to_owned(),
         text,
         attributes: source
             .attributes()

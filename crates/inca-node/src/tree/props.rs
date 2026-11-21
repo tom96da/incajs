@@ -203,7 +203,7 @@ mod tests {
         tree.remove_attribute(node, "label").unwrap();
 
         let got = tree.get(node).unwrap();
-        assert_eq!(got.tag_name(), "span");
+        assert_eq!(got.local_name(), "span");
         assert_eq!(got.parent(), Some(parent));
         assert_eq!(
             got.style_props().get("label"),

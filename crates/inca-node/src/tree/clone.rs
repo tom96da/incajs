@@ -33,7 +33,7 @@ impl VirtualTree {
                         .ok_or(TreeError::NodeNotFound(original))?;
                     let (kind, tag, namespace, prefix) = (
                         node.kind,
-                        node.tag_name.clone(),
+                        node.local_name.clone(),
                         node.namespace.clone(),
                         node.prefix.clone(),
                     );
@@ -117,7 +117,7 @@ mod tests {
         let ids: Vec<NodeId> = made.iter().map(|&(_, copy)| copy).collect();
         let tags: Vec<&str> = ids
             .iter()
-            .map(|&id| tree.get(id).unwrap().tag_name())
+            .map(|&id| tree.get(id).unwrap().local_name())
             .collect();
         assert_eq!(tags, ["div", "span", "#text", "#text"]);
         assert_eq!(children(&tree, ids[0]), [ids[1], ids[3]]);
@@ -137,7 +137,7 @@ mod tests {
         let made = tree.clone_subtree(original, true).unwrap();
 
         let copy = tree.get(made[0].1).unwrap();
-        assert_eq!(copy.tag_name(), tag);
+        assert_eq!(copy.local_name(), tag);
         assert_eq!(copy.kind(), kind);
     }
 
@@ -319,7 +319,7 @@ mod tests {
 
         let tags: Vec<&str> = made
             .iter()
-            .map(|&(_, copy)| tree.get(copy).unwrap().tag_name())
+            .map(|&(_, copy)| tree.get(copy).unwrap().local_name())
             .collect();
         assert_eq!(tags, ["template", FRAGMENT_TAG]);
         let copy = made[0].1;
@@ -341,7 +341,7 @@ mod tests {
 
         let tags: Vec<&str> = made
             .iter()
-            .map(|&(_, copy)| tree.get(copy).unwrap().tag_name())
+            .map(|&(_, copy)| tree.get(copy).unwrap().local_name())
             .collect();
         assert_eq!(tags, ["template", FRAGMENT_TAG, "span", "b"]);
         let copies: Vec<NodeId> = made.iter().map(|&(_, copy)| copy).collect();
@@ -364,7 +364,7 @@ mod tests {
 
         let tags: Vec<&str> = made
             .iter()
-            .map(|&(_, copy)| tree.get(copy).unwrap().tag_name())
+            .map(|&(_, copy)| tree.get(copy).unwrap().local_name())
             .collect();
         assert_eq!(
             tags,

@@ -25,11 +25,11 @@ use crate::bindings::host::Host;
 pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     let proto = required_prototype(ctx, "Element")?;
     define_name(ctx, &proto, host, "tagName", |ctx, node| {
-        node.map_or_else(String::new, |node| node.dom_tag_name().into_owned())
+        node.map_or_else(String::new, |node| node.tag_name().into_owned())
             .into_js(ctx)
     })?;
     define_name(ctx, &proto, host, "localName", |ctx, node| {
-        node.map_or_else(String::new, |node| node.tag_name().to_owned())
+        node.map_or_else(String::new, |node| node.local_name().to_owned())
             .into_js(ctx)
     })?;
     define_name(ctx, &proto, host, "namespaceURI", |ctx, node| {

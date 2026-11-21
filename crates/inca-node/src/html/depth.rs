@@ -187,13 +187,13 @@ mod tests {
         let children = tree.get(id).unwrap().children();
         children
             .iter()
-            .map(|&child| tree.get(child).unwrap().tag_name().to_owned())
+            .map(|&child| tree.get(child).unwrap().local_name().to_owned())
             .collect()
     }
 
     fn next_tag(tree: &VirtualTree, id: NodeId) -> Option<String> {
         let next = tree.next_sibling(id)?;
-        Some(tree.get(next).unwrap().tag_name().to_owned())
+        Some(tree.get(next).unwrap().local_name().to_owned())
     }
 
     #[rstest]
@@ -386,7 +386,7 @@ mod tests {
 
         let block = entry(&html, "p").id;
         let before = tree.previous_sibling(block).unwrap();
-        assert_eq!(tree.get(before).unwrap().tag_name(), "i");
+        assert_eq!(tree.get(before).unwrap().local_name(), "i");
     }
 
     /// The number of ancestors of the deepest node, the result fragment excluded.

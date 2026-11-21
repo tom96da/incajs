@@ -196,7 +196,7 @@ scheduled right after input, since retrofitting an accessibility tree onto a
 node vocabulary that grew without one means rewriting that vocabulary.
 
 1. **Semantics on the retained tree**: a node's role, name, value and state,
-   carried alongside `style_props` and `attributes`. The `tag_name`
+   carried alongside `style_props` and `attributes`. The tag
    vocabulary is thin (see [FFI.md](./FFI.md#tag-vocabulary)), so semantics
    are declared on the node.
 2. **Platform accessibility APIs**: expose that tree through each platform's

@@ -51,7 +51,7 @@ impl Context {
         });
         Self {
             namespace: node.namespace_uri().map(Namespace::from),
-            local_name: node.tag_name().to_owned(),
+            local_name: node.local_name().to_owned(),
             integration_point: holds_html,
         }
     }
@@ -612,7 +612,7 @@ mod tests {
         let (tree, html) = parse("<!--c-->");
 
         let comment = tree.get(html.nodes[0].id).unwrap();
-        assert_eq!(comment.tag_name(), COMMENT_TAG);
+        assert_eq!(comment.local_name(), COMMENT_TAG);
         assert_eq!(comment.data(), "c");
     }
 

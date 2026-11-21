@@ -145,7 +145,7 @@ pub(super) fn print_style_warning(host: &mut Host, node_id: NodeId, warning: &st
         .or_default()
         .insert(warning.to_owned())
     {
-        let tag = host.tree.get(node_id).map_or("", VirtualNode::tag_name);
+        let tag = host.tree.get(node_id).map_or("", VirtualNode::local_name);
         (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
     }
 }
@@ -219,7 +219,7 @@ mod tests {
         let root_id: NodeId = engine.eval("__inca_native__.rootNodeId();").unwrap();
 
         assert_eq!(root_id, host.borrow().root());
-        assert_eq!(host.borrow().tree.get(root_id).unwrap().tag_name(), "div");
+        assert_eq!(host.borrow().tree.get(root_id).unwrap().local_name(), "div");
     }
 
     #[test]

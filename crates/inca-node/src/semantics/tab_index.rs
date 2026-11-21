@@ -57,7 +57,7 @@ impl VirtualTree {
         const HTML: [&str; 9] = [
             "a", "area", "button", "frame", "iframe", "input", "object", "select", "textarea",
         ];
-        element.in_html_namespace() && HTML.contains(&element.tag_name())
+        element.in_html_namespace() && HTML.contains(&element.local_name())
             || element.is_svg("a")
             || element.is_mathml("a")
             || element.is_html("summary") && self.is_summary_of_details(node, element)

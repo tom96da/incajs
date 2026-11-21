@@ -34,16 +34,16 @@ impl Node<'_> {
     /// compares without ASCII case.
     pub(super) fn has_name(&self, name: &str) -> bool {
         if self.node.in_html_namespace() {
-            self.node.tag_name() == name
+            self.node.local_name() == name
         } else {
-            self.node.tag_name().eq_ignore_ascii_case(name)
+            self.node.local_name().eq_ignore_ascii_case(name)
         }
     }
 
     /// Whether `other` has the same namespace and local name.
     pub(super) fn is_same_type_as(&self, other: &Self) -> bool {
         self.node.namespace_uri() == other.node.namespace_uri()
-            && self.node.tag_name() == other.node.tag_name()
+            && self.node.local_name() == other.node.local_name()
     }
 
     /// Whether the element is in the form state `class`. Any other pseudo-class is false.

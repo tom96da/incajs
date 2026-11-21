@@ -200,7 +200,7 @@ pub type StyleMap = IndexMap<String, AttributeValue>;
 pub struct VirtualNode {
     id: NodeId,
     kind: NodeKind,
-    tag_name: String,
+    local_name: String,
     /// The character data of a text node or a comment, empty for any other node.
     data: String,
     /// The namespace of an element. `None` for a node that is no element and for an element made
@@ -223,14 +223,14 @@ impl VirtualNode {
     fn new(
         id: NodeId,
         kind: NodeKind,
-        tag_name: String,
+        local_name: String,
         namespace: Option<Namespace>,
         prefix: Option<String>,
     ) -> Self {
         Self {
             id,
             kind,
-            tag_name,
+            local_name,
             data: String::new(),
             namespace,
             prefix,
@@ -250,8 +250,8 @@ impl VirtualNode {
     }
 
     #[must_use]
-    pub fn tag_name(&self) -> &str {
-        &self.tag_name
+    pub fn local_name(&self) -> &str {
+        &self.local_name
     }
 
     #[must_use]
