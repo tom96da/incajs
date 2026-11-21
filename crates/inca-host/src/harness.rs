@@ -201,8 +201,8 @@ impl Harness {
         self.cx.update(|window, cx| window.draw(cx).clear(cx));
     }
 
-    /// Makes every render after this call take `mode` as the platform's scrollbar setting, until the
-    /// next call, then settles. The test platform shows classic bars until this is called.
+    /// Makes every render after this call take `mode` as the platform's scrollbar setting, until
+    /// the next call, then settles. The test platform shows classic bars until this is called.
     pub fn scrollbars(&mut self, mode: Scrollbars) {
         self.cx.update(|_, cx| Scrollbars::set_for_tests(cx, mode));
         self.settle();

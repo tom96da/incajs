@@ -676,10 +676,12 @@ mod tests {
             n.appendChild(box, child);
             globalThis.box = box;
             globalThis.log = [];
-            globalThis.cb[0] = (e) => {
-                globalThis.log.push(`${e.deltaY > 0}:${e.ctrlKey}:${e.deltaMode}`);
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(`${e.deltaY > 0}:${e.ctrlKey}:${e.deltaMode}`);
+                },
             };
-            globalThis.listen(box, 'wheel', 0);
+            listen(box, 'wheel', 0);
         ";
 
     #[gpui::test]
