@@ -26,6 +26,10 @@ function isServerFailure(error: unknown): boolean {
  * is rethrown as an unhandled rejection. `__inca_dev__.setLoadFailed(true)` follows a failed
  * attempt and `setLoadFailed(false)` precedes each retry.
  *
+ * The payloads that arrive during an attempt wait until it ends, so an update never meets a
+ * module that is still loading. A successful attempt then delivers them in order, and a failed
+ * one drops them, since the retry loads every module again.
+ *
  * Every inlined module runs through `__inca_dev__.compile`; the import fails
  * when the host lacks it.
  *
@@ -47,15 +51,13 @@ export async function start(
   Object.assign(globalThis, globals);
   let wake = (): void => {};
   let edits = 0;
+  const transport = createIncaDevTransport(() => {
+    edits++;
+    wake();
+  });
   const runner = new ModuleRunner(
     {
-      transport: {
-        ...createIncaDevTransport(() => {
-          edits++;
-          wake();
-        }),
-        timeout: 0,
-      },
+      transport: { connect: transport.connect, send: transport.send, timeout: 0 },
       hmr: { logger: { debug: () => {}, error: () => {} } },
       sourcemapInterceptor: false,
     },
@@ -66,9 +68,13 @@ export async function start(
     const changed = new Promise<void>((resolve) => {
       wake = resolve;
     });
+    transport.hold();
     try {
-      return await runner.import(entryId);
+      const exports = await runner.import(entryId);
+      transport.release(true);
+      return exports;
     } catch (error) {
+      transport.release(false);
       if (!isServerFailure(error)) void Promise.reject(error);
       globalThis.__inca_dev__?.setLoadFailed?.(true);
     }
