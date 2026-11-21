@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use inca_document::EventPayload;
+use inca_document::{EventPayload, deliver, path_from};
 use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 use rquickjs::{Ctx, Result as JsResult};
@@ -13,7 +13,7 @@ use super::construct::create;
 use super::{Flags, IncaEvent};
 use crate::EventTargetId;
 use crate::bindings::Host;
-use listeners::{JsInvoke, deliver};
+use listeners::JsInvoke;
 
 mod abort;
 mod click;
@@ -23,20 +23,9 @@ mod targets;
 
 pub(crate) use abort::fire_abort;
 pub(crate) use click::click;
+pub(crate) use inca_document::Walk;
 pub(crate) use script::{dispatch_event, lose_focus};
 pub(super) use targets::targets_of;
-
-/// What one walk needs to know.
-pub(crate) struct Walk<'a> {
-    pub(crate) name: &'a str,
-    pub(crate) flags: Flags,
-    pub(crate) target: EventTargetId,
-    /// The nodes whose listeners do not run. A cut silences window too.
-    pub(crate) cut: &'a [NodeId],
-    pub(crate) payload: &'a EventPayload,
-    /// The value of `isTrusted` on the event the walk creates.
-    pub(crate) trusted: bool,
-}
 
 /// What a walk asked of its caller.
 #[derive(Default)]
@@ -45,44 +34,6 @@ pub(crate) struct Outcome {
     pub(crate) canceled: bool,
     /// The walk entered the engine, so jobs may be queued.
     pub(crate) entered: bool,
-}
-
-/// The targets an event fired at `target` travels through, nearest first: the
-/// nodes from `target` up to the document, then window. A node outside the
-/// document never reaches window. A signal is a path of its own.
-pub(crate) fn path_from(host: &Host, target: EventTargetId) -> Vec<EventTargetId> {
-    if let EventTargetId::Signal(_) = target {
-        return vec![target];
-    }
-    let mut path = Vec::new();
-    if let EventTargetId::Node(node) = target {
-        let ancestors: Vec<_> = host.tree.ancestors(node).collect();
-        let connected = ancestors.last().copied() == host.tree.document();
-        path.extend(ancestors.into_iter().map(EventTargetId::Node));
-        if !connected {
-            return path;
-        }
-    }
-    path.push(EventTargetId::Window);
-    path
-}
-
-/// The targets whose bubble listeners the event reaches.
-fn bubble_targets(flags: Flags, path: &[EventTargetId]) -> &[EventTargetId] {
-    if flags.bubbles {
-        path
-    } else {
-        &path[..path.len().min(1)]
-    }
-}
-
-/// Whether `target` stays silent: a cut node, or window while any node is cut.
-fn is_cut(target: EventTargetId, cut: &[NodeId]) -> bool {
-    match target {
-        EventTargetId::Node(node) => cut.contains(&node),
-        EventTargetId::Window => !cut.is_empty(),
-        EventTargetId::Signal(_) => false,
-    }
 }
 
 /// Whether a listener of `name` exists that an event with `flags` fired at
@@ -94,23 +45,11 @@ pub(crate) fn listened(
     target: EventTargetId,
     cut: &[NodeId],
 ) -> bool {
-    path_from(host, target)
-        .into_iter()
-        .enumerate()
-        .any(|(depth, on_path)| {
-            !is_cut(on_path, cut)
-                && host
-                    .listeners
-                    .listeners_for(on_path, name)
-                    .iter()
-                    .any(|l| l.capture || flags.bubbles || depth == 0)
-        })
+    inca_document::listened(&host.tree, &host.listeners, name, flags, target, cut)
 }
 
 pub(super) fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
-    let mut host = host.borrow_mut();
-    host.last_event_id += 1;
-    host.last_event_id
+    inca_document::next_event_id(&mut host.borrow_mut().last_event_id)
 }
 
 /// Runs the listeners of `walk.name` along the path of `walk.target` with one
@@ -149,7 +88,7 @@ pub(super) fn script_walk<'a>(
 }
 
 pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Outcome {
-    let path = path_from(&host.borrow(), walk.target);
+    let path = path_from(&host.borrow().tree, walk.target);
     let created = targets_of(ctx, &path).and_then(|targets| create(ctx, walk, id, targets));
     let event = match created {
         Ok(event) => event,
@@ -159,7 +98,6 @@ pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: 
         }
     };
     let canceled = deliver(
-        host,
         walk,
         &path,
         &JsInvoke {
@@ -434,27 +372,5 @@ mod tests {
         );
 
         assert_eq!(got, serde_json::json!(false));
-    }
-
-    #[rstest::rstest]
-    #[case::bubbling(true)]
-    #[case::not_bubbling(false)]
-    fn the_path_of_a_signal_is_the_signal_alone(#[case] bubbles: bool) {
-        let host = Host::default();
-        let flags = Flags {
-            bubbles,
-            cancelable: false,
-            composed: false,
-        };
-
-        let path = path_from(&host, EventTargetId::Signal(5));
-
-        assert_eq!(path, [EventTargetId::Signal(5)]);
-        assert_eq!(bubble_targets(flags, &path), [EventTargetId::Signal(5)]);
-    }
-
-    #[test]
-    fn a_signal_is_never_cut() {
-        assert!(!is_cut(EventTargetId::Signal(5), &[1, 2]));
     }
 }

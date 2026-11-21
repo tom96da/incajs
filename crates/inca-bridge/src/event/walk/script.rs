@@ -10,10 +10,10 @@ use inca_document::EventPayload;
 use inca_node::NodeId;
 use rquickjs::{Class, Ctx, Exception, Result as JsResult, Value};
 
-use super::listeners::{JsInvoke, deliver, end_dispatch};
-use super::{IncaEvent, Walk, listened, next_event_id, path_from, run, script_walk, targets_of};
+use super::listeners::{JsInvoke, end_dispatch};
+use super::{IncaEvent, Walk, listened, next_event_id, run, script_walk, targets_of};
 use crate::bindings::Host;
-use inca_document::EventTargetId;
+use inca_document::{EventTargetId, deliver, path_from};
 
 /// Dispatches a script-built `event` at `target` and returns `false` when a
 /// listener canceled it. Listener errors go to `Host::failures`.
@@ -50,7 +50,7 @@ pub(crate) fn dispatch_event<'js>(
             ),
         ));
     }
-    let path = path_from(&host.borrow(), target);
+    let path = path_from(&host.borrow().tree, target);
     let name = state.name.borrow().clone();
     let walk = script_walk(&name, state.flags.get(), target, &EventPayload::None);
     let targets = targets_of(ctx, &path)?;
@@ -62,7 +62,6 @@ pub(crate) fn dispatch_event<'js>(
         // Last, so a failure above leaves the event free to dispatch again.
         state.dispatching.set(true);
         deliver(
-            host,
             &walk,
             &path,
             &JsInvoke {
