@@ -21,4 +21,68 @@ describe("createIncaDevTransport", () => {
       "a host that serves the development protocol",
     );
   });
+
+  describe("while held", () => {
+    const invoke = { type: "custom", event: "vite:invoke", data: { id: "response:1" } };
+    const changed = { type: "custom", event: "file-changed", data: { file: "/a.css" } };
+    const update = { type: "update", updates: [] };
+    const prune = { type: "prune", paths: [] };
+    const reload = { type: "full-reload" };
+    const error = { type: "error", err: { message: "x", stack: "" } };
+    const reply = { type: "custom", event: "x:reply", data: {} };
+    const connected = { type: "connected" };
+    const ping = { type: "ping" };
+
+    /** Connects a transport whose runner records what it receives, and holds it. */
+    function held() {
+      const received: unknown[] = [];
+      let fileChanges = 0;
+      globalThis.__inca_dev__ = { send() {} };
+      const transport = createIncaDevTransport(() => fileChanges++);
+      void transport.connect({
+        onMessage: (payload) => received.push(payload),
+        onDisconnection() {},
+      });
+      transport.hold();
+      const receive = (payload: object) =>
+        globalThis.__inca_dev__?.receive?.("vite", JSON.stringify(payload));
+      return { transport, received, receive, fileChanges: () => fileChanges };
+    }
+
+    it("passes the custom events, connected and ping and counts a changed file at once", () => {
+      const { received, receive, fileChanges } = held();
+
+      receive(changed);
+      receive(invoke);
+      receive(reply);
+      receive(connected);
+      receive(ping);
+
+      expect(received).toEqual([changed, invoke, reply, connected, ping]);
+      expect(fileChanges()).toBe(1);
+    });
+
+    it("holds the updates, prunes, reloads and errors and delivers them in order", () => {
+      const { transport, received, receive } = held();
+
+      receive(update);
+      receive(prune);
+      receive(reload);
+      receive(error);
+      expect(received).toEqual([]);
+      transport.release(true);
+
+      expect(received).toEqual([update, prune, reload, error]);
+    });
+
+    it("drops the held payloads on a release that does not deliver", () => {
+      const { transport, received, receive } = held();
+
+      receive(update);
+      transport.release(false);
+      receive(changed);
+
+      expect(received).toEqual([changed]);
+    });
+  });
 });

@@ -114,6 +114,10 @@ interface Session {
   buildErrors: BuildFailure[];
   /** The payloads the dev server sent to the host. */
   sent: unknown[];
+  /** Sees each payload on its way to the host and calls `forward` to pass it on. */
+  relay: (payload: unknown, forward: () => void) => void;
+  /** Sees each payload the host sends to the dev server. */
+  watch: (payload: unknown) => void;
 }
 
 const sessions: Session[] = [];
@@ -125,7 +129,12 @@ async function startSession(files: Record<string, string>): Promise<Session> {
   for (const [name, text] of Object.entries(files)) await writeFile(path.join(dir, name), text);
 
   let stderr = "";
-  const session = { buildErrors: [], sent: [] } as unknown as Session;
+  const session = {
+    buildErrors: [],
+    sent: [],
+    relay: (_payload: unknown, forward: () => void) => forward(),
+    watch: () => {},
+  } as unknown as Session;
   const channel = await defaultBundler.hmr!({
     entry: path.join(dir, "entry.mts"),
     cwd: dir,
@@ -134,7 +143,7 @@ async function startSession(files: Record<string, string>): Promise<Session> {
     quiet: true,
     notify: (payload) => {
       session.sent.push(payload);
-      session.client?.notify("vite", payload);
+      session.relay(payload, () => session.client?.notify("vite", payload));
     },
     reload: () => reloadHost(session.client, RELOAD_TIMEOUT_MS),
     onError: (error) => session.buildErrors.push(error),
@@ -146,7 +155,12 @@ async function startSession(files: Record<string, string>): Promise<Session> {
     onStderr: (line) => {
       stderr += line;
     },
-    integrations: { vite: (params) => channel.dispatch(params) },
+    integrations: {
+      vite: (params) => {
+        session.watch(params);
+        channel.dispatch(params);
+      },
+    },
   });
   Object.assign(session, { dir, channel, client, stderr: () => stderr });
   sessions.push(session);
@@ -222,6 +236,62 @@ it.each([
     await vi.waitFor(() => expect(session.stderr()).toContain(line(SHEET_V2, 0)), {
       timeout: WAIT_TIMEOUT_MS,
     });
+  },
+  WAIT_TIMEOUT_MS * 2 + 10_000,
+);
+
+/** A runner call or its reply, and an update. */
+interface Payload {
+  type?: string;
+  event?: string;
+  data?: { id?: string; name?: string; data?: unknown[] };
+  updates?: { path: string }[];
+}
+
+it(
+  "applies a stylesheet saved while the retry waits on the imports of its old text",
+  async () => {
+    const session = await startSession({
+      "entry.mts": RETRY_ENTRY,
+      "App.vue": APP.replace("__STYLE__", ""),
+      "a.css": SHEET_V1,
+      "b.mts": "export const b = ;\n",
+    });
+    onTestFailed(() => console.error(`--- host stderr ---\n${session.stderr()}`));
+
+    await vi.waitFor(() => expect(session.buildErrors).not.toHaveLength(0), {
+      timeout: WAIT_TIMEOUT_MS,
+    });
+    // The stylesheet accepts its updates only after its first import resolves.
+    let reply: string | undefined;
+    session.watch = (payload) => {
+      const { id, name, data } = (payload as Payload).data ?? {};
+      const [url, importer] = data ?? [];
+      if (reply || name !== "fetchModule" || url !== "/@vite/client") return;
+      if (String(importer).endsWith("/a.css")) reply = id?.replace("send:", "response:");
+    };
+    let held: (() => void) | undefined;
+    let state: "waiting" | "holding" | "released" = "waiting";
+    session.relay = (payload, forward) => {
+      const { event, data, updates } = payload as Payload;
+      if (state === "waiting" && event === "vite:invoke" && data?.id === reply) {
+        state = "holding";
+        held = forward;
+        void writeFile(path.join(session.dir, "a.css"), SHEET_V2);
+        return;
+      }
+      forward();
+      if (state === "holding" && updates?.some((update) => update.path === "/a.css")) {
+        state = "released";
+        held?.();
+      }
+    };
+    await writeFile(path.join(session.dir, "b.mts"), "export const b = 1;\n");
+
+    await vi.waitFor(() => expect(session.stderr()).toContain(line(SHEET_V2, 0)), {
+      timeout: WAIT_TIMEOUT_MS,
+    });
+    expect(state).toBe("released");
   },
   WAIT_TIMEOUT_MS * 2 + 10_000,
 );
