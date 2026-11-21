@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
-use inca_document::{AriaKind, AriaReferences, aria_reflection};
+use inca_document::{AriaReferences, element_aria_attribute};
 
 use super::Natives;
 use super::convert::{JsNodeId, or_null};
@@ -27,13 +27,12 @@ pub(super) fn install_aria(n: &Natives<'_, '_>) -> JsResult<()> {
 /// Throws a `TypeError` unless `attribute` is a row of kind `Element` or `Elements`. Returns the
 /// name of the attribute of the row.
 fn element_row(ctx: &Ctx<'_>, attribute: &str) -> JsResult<&'static str> {
-    match aria_reflection(attribute) {
-        Some(row) if row.kind != AriaKind::Text => Ok(row.attribute),
-        _ => Err(Exception::throw_type(
+    element_aria_attribute(attribute).ok_or_else(|| {
+        Exception::throw_type(
             ctx,
             &format!("{attribute} is not an attribute that refers to elements"),
-        )),
-    }
+        )
+    })
 }
 
 /// The ids of the elements the attribute `attribute` of `node_id` refers to, `null` when it

@@ -143,11 +143,7 @@ pub(super) fn remove_style<'js>(
 
 /// Queues the focus re-check an attribute change needs.
 pub(super) fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
-    match key {
-        "tabindex" | "disabled" | "href" | "xlink:href" => host.focus.mark_tab_dirty(node_id),
-        "hidden" | "inert" | "style" => host.mark_focus_dirty(node_id),
-        _ => {}
-    }
+    host.focus.mark_attribute_dirty(&host.tree, node_id, key);
 }
 
 fn attribute_value_from_js<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<AttributeValue> {

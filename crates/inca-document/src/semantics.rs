@@ -6,5 +6,8 @@
 mod aria;
 mod tab_index;
 
-pub use aria::{ARIA_REFLECTIONS, AriaKind, AriaReferences, AriaReflection, aria_reflection};
+pub use aria::{
+    ARIA_REFLECTIONS, AriaKind, AriaReferences, AriaReflection, aria_reflection,
+    element_aria_attribute,
+};
 pub use tab_index::TabIndex;

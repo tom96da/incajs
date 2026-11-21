@@ -117,6 +117,15 @@ pub fn aria_reflection(attribute: &str) -> Option<&'static AriaReflection> {
         .find(|row| row.attribute == attribute)
 }
 
+/// The attribute of the row `attribute` when the row refers to elements, `None` for a text row or
+/// an attribute outside the table.
+#[must_use]
+pub fn element_aria_attribute(attribute: &str) -> Option<&'static str> {
+    aria_reflection(attribute)
+        .filter(|row| row.kind != AriaKind::Text)
+        .map(|row| row.attribute)
+}
+
 const ASCII_WHITESPACE: [char; 5] = [' ', '\t', '\n', '\x0c', '\r'];
 
 /// The element references of the `aria` attributes of a tree.
@@ -220,6 +229,15 @@ mod tests {
 
     use super::*;
     use inca_node::tree::AttributeValue;
+
+    #[rstest::rstest]
+    #[case::element("aria-activedescendant", Some("aria-activedescendant"))]
+    #[case::elements("aria-owns", Some("aria-owns"))]
+    #[case::text("aria-label", None)]
+    #[case::outside_the_table("title", None)]
+    fn an_element_row_names_its_attribute(#[case] attribute: &str, #[case] want: Option<&str>) {
+        assert_eq!(element_aria_attribute(attribute), want);
+    }
 
     /// A `div` root under a document with the children `names`, each with an `id` of its name.
     fn page(names: &[&str]) -> (VirtualTree, NodeId, Vec<NodeId>) {

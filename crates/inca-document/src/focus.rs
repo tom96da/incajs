@@ -116,6 +116,15 @@ pub struct FocusModel {
 }
 
 impl FocusModel {
+    /// Queues the focus re-check the change of the attribute `key` of `node_id` needs.
+    pub fn mark_attribute_dirty(&mut self, tree: &VirtualTree, node_id: NodeId, key: &str) {
+        match key {
+            "tabindex" | "disabled" | "href" | "xlink:href" => self.mark_tab_dirty(node_id),
+            "hidden" | "inert" | "style" => self.mark_subtree_dirty(tree, node_id),
+            _ => {}
+        }
+    }
+
     /// Whether a request, a changed `tabindex` or a blur owed by a tree change waits for
     /// [`Self::apply_pending`].
     #[must_use]
@@ -278,6 +287,32 @@ mod tests {
         assert_eq!(registry.active_node(&tree, &StyleCache::new()), Some(id));
         tree.remove_attribute(id, "tabindex").unwrap();
         assert_eq!(registry.active_node(&tree, &StyleCache::new()), None);
+    }
+
+    #[rstest::rstest]
+    #[case::tabindex("tabindex", true, false)]
+    #[case::disabled("disabled", true, false)]
+    #[case::href("href", true, false)]
+    #[case::xlink_href("xlink:href", true, false)]
+    #[case::hidden("hidden", false, true)]
+    #[case::inert("inert", false, true)]
+    #[case::style("style", false, true)]
+    #[case::other("label", false, false)]
+    fn an_attribute_change_queues_a_recheck_for_the_focus_attributes(
+        #[case] key: &str,
+        #[case] node_queued: bool,
+        #[case] child_queued: bool,
+    ) {
+        let (mut tree, id) = tree_with("div", None);
+        let child = tree.create_node("button").unwrap();
+        tree.append_child(id, child).unwrap();
+        let mut registry = FocusModel::default();
+
+        registry.mark_attribute_dirty(&tree, id, key);
+
+        let queued = registry.take_tab_dirty();
+        assert_eq!(queued.contains(&id), node_queued);
+        assert_eq!(queued.contains(&child), child_queued);
     }
 
     #[test]

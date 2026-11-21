@@ -8,7 +8,7 @@ use std::rc::Rc;
 use gpui::{Pixels, ScrollHandle, point, px};
 
 use inca_document::geometry::{Align, scroll_chain};
-use inca_document::{InputState, StyleWarnings, apply_removals};
+use inca_document::{InputState, StyleWarnings, apply_removals, new_document_tree};
 use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
 use inca_node::{NodeId, Removal, VirtualTree};
@@ -92,23 +92,9 @@ impl Default for Host {
 
 impl Host {
     /// A host whose timers read `clock`. [`Host::default`] reads the system clock.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a new tree has no free node id.
     #[must_use]
     pub fn with_clock(clock: Clock) -> Self {
-        let mut tree = VirtualTree::new();
-        let root = tree
-            .create_node("div")
-            .expect("a new tree has free node ids");
-        let document = tree
-            .create_node("#document")
-            .expect("a new tree has free node ids");
-        tree.append_child(document, root)
-            .expect("a new document takes its first element");
-        tree.set_root(root);
-        tree.set_document(document);
+        let tree = new_document_tree();
         let (sender, wake) = async_channel::bounded(1);
         let send: Rc<dyn Fn()> = Rc::new(move || {
             let _ = sender.try_send(());
