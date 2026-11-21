@@ -9,7 +9,8 @@ use gpui::{Pixels, ScrollHandle, point, px};
 
 use inca_document::geometry::{Align, scroll_chain};
 use inca_document::{
-    EventListeners, InputState, Signals, StyleWarnings, apply_removals, new_document_tree,
+    EventListeners, InputState, NodeBox, ScrollRange, Signals, StyleWarnings, View, apply_removals,
+    new_document_tree,
 };
 use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
@@ -163,7 +164,7 @@ impl Host {
 }
 
 /// A scroll `offset` clamped into `[-max, 0]`, the range gpui draws.
-pub(super) fn clamped_offset(offset: Pixels, max: Pixels) -> Pixels {
+fn clamped_offset(offset: Pixels, max: Pixels) -> Pixels {
     offset.clamp(-max, px(0.))
 }
 
@@ -345,17 +346,125 @@ impl DocumentState {
     }
 }
 
+impl View for WindowState {
+    fn node_box(&self, id: NodeId) -> Option<NodeBox> {
+        self.layout_of(id).map(|layout| NodeBox {
+            rect: rect_of(layout.bounds, px(0.0)),
+            border: layout.border.into(),
+            scroll: (layout.scroll.x.into(), layout.scroll.y.into()),
+            gutter: (layout.gutter.width.into(), layout.gutter.height.into()),
+        })
+    }
+
+    fn scroll_range(&self, id: NodeId) -> ScrollRange {
+        let handle = self.scroll_handle(id);
+        let (offset, max) = (handle.offset(), handle.max_offset());
+        // gpui clamps on the next draw; report the same value.
+        ScrollRange {
+            offset: (
+                (-clamped_offset(offset.x, max.x)).into(),
+                (-clamped_offset(offset.y, max.y)).into(),
+            ),
+            max: (max.x.into(), max.y.into()),
+        }
+    }
+
+    fn scroll_to(&self, tree: &VirtualTree, id: NodeId, left: Option<f64>, top: Option<f64>) {
+        let handle = self.scroll_handle(id);
+        let mut offset = handle.offset();
+        // Narrowing is fine for pixel offsets; the upper clamp is gpui's.
+        #[allow(clippy::cast_possible_truncation)]
+        let negated = |v: f64| px(-(v.max(0.0) as f32));
+        if let Some(left) = left {
+            offset.x = negated(left);
+        }
+        if let Some(top) = top {
+            offset.y = negated(top);
+        }
+        let (before, max) = (handle.offset(), handle.max_offset());
+        let clamped = |v, max| -f32::from(clamped_offset(v, max));
+        handle.set_offset(offset);
+        // Recorded boxes follow the new offset, so a reveal in the same tick
+        // starts from where the content now is.
+        self.shift_descendants(
+            tree,
+            id,
+            clamped(offset.x, max.x) - clamped(before.x, max.x),
+            clamped(offset.y, max.y) - clamped(before.y, max.y),
+        );
+    }
+
+    fn reveal(
+        &self,
+        tree: &VirtualTree,
+        style: &StyleCache,
+        node: NodeId,
+        block: Align,
+        inline: Align,
+    ) -> bool {
+        let (own, chain) = {
+            let layout = self.layout.borrow();
+            let Some(own) = layout.get(&node) else {
+                return false;
+            };
+            let mut chain = Vec::new();
+            for id in tree.ancestors(node).skip(1) {
+                if tree.get(id).is_none() {
+                    break;
+                }
+                if is_scroll_container(tree, style, id)
+                    && let Some(l) = layout.get(&id)
+                {
+                    chain.push((id, l.client_rect()));
+                }
+            }
+            (rect_of(own.bounds, px(0.0)), chain)
+        };
+        scroll_chain(own, &chain, block, inline, |id, dx, dy| {
+            let handle = self.scroll_handle(id);
+            let (offset, max) = (handle.offset(), handle.max_offset());
+            let step = |wanted: f32, offset: Pixels, max: Pixels| {
+                let from = -f32::from(clamped_offset(offset, max));
+                let to = (from + wanted).clamp(0.0, f32::from(max));
+                (to, to - from)
+            };
+            let (mut x, mut y) = (offset.x, offset.y);
+            let (mut applied_x, mut applied_y) = (0.0, 0.0);
+            if dx != 0.0 {
+                let (to, applied) = step(dx, offset.x, max.x);
+                (x, applied_x) = (px(-to), applied);
+            }
+            if dy != 0.0 {
+                let (to, applied) = step(dy, offset.y, max.y);
+                (y, applied_y) = (px(-to), applied);
+            }
+            handle.set_offset(point(x, y));
+            self.shift_descendants(tree, id, applied_x, applied_y);
+            (applied_x, applied_y)
+        });
+        true
+    }
+
+    /// Queues a `scrollIntoViewNode` call whose node has no box yet for the next
+    /// [`Host::reveal_focus`].
+    fn queue_reveal(&mut self, node: NodeId, block: Align, inline: Align) {
+        self.scroll_fresh.push((node, block, inline));
+    }
+
+    fn held_buttons(&self) -> u8 {
+        self.held_buttons
+    }
+
+    fn set_held_buttons(&mut self, held: u8) {
+        self.held_buttons = held;
+    }
+}
+
 impl WindowState {
     /// The box of node `id` in the last drawn frame, `None` for a node that frame did not draw.
     #[must_use]
     pub fn layout_of(&self, id: NodeId) -> Option<NodeLayout> {
         self.layout.borrow().get(&id).copied()
-    }
-
-    /// Queues a `scrollIntoViewNode` call whose node has no box yet for the next
-    /// [`Host::reveal_focus`].
-    pub(crate) fn queue_reveal(&mut self, node: NodeId, block: Align, inline: Align) {
-        self.scroll_fresh.push((node, block, inline));
     }
 
     /// Returns a clone of the node's handle, creating it on first ask.
@@ -434,59 +543,6 @@ impl WindowState {
         )
     }
 
-    /// Scrolls every scroll container above `node` so the node shows. Returns
-    /// false when the last frame recorded no box for the node.
-    pub(crate) fn reveal(
-        &self,
-        tree: &VirtualTree,
-        style: &StyleCache,
-        node: NodeId,
-        block: Align,
-        inline: Align,
-    ) -> bool {
-        let (own, chain) = {
-            let layout = self.layout.borrow();
-            let Some(own) = layout.get(&node) else {
-                return false;
-            };
-            let mut chain = Vec::new();
-            for id in tree.ancestors(node).skip(1) {
-                if tree.get(id).is_none() {
-                    break;
-                }
-                if is_scroll_container(tree, style, id)
-                    && let Some(l) = layout.get(&id)
-                {
-                    chain.push((id, l.client_rect()));
-                }
-            }
-            (rect_of(own.bounds, px(0.0)), chain)
-        };
-        scroll_chain(own, &chain, block, inline, |id, dx, dy| {
-            let handle = self.scroll_handle(id);
-            let (offset, max) = (handle.offset(), handle.max_offset());
-            let step = |wanted: f32, offset: Pixels, max: Pixels| {
-                let from = -f32::from(clamped_offset(offset, max));
-                let to = (from + wanted).clamp(0.0, f32::from(max));
-                (to, to - from)
-            };
-            let (mut x, mut y) = (offset.x, offset.y);
-            let (mut applied_x, mut applied_y) = (0.0, 0.0);
-            if dx != 0.0 {
-                let (to, applied) = step(dx, offset.x, max.x);
-                (x, applied_x) = (px(-to), applied);
-            }
-            if dy != 0.0 {
-                let (to, applied) = step(dy, offset.y, max.y);
-                (y, applied_y) = (px(-to), applied);
-            }
-            handle.set_offset(point(x, y));
-            self.shift_descendants(tree, id, applied_x, applied_y);
-            (applied_x, applied_y)
-        });
-        true
-    }
-
     /// Moves the recorded boxes below `container` by the scroll just applied, so a
     /// second reveal before the next draw starts from where the content now is. The
     /// direct children also take it into their recorded scroll offset.
@@ -522,6 +578,9 @@ impl WindowState {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use gpui::{point, px};
+    use inca_document::{ScrollRange, View};
+
     use super::Host;
 
     #[test]
@@ -545,5 +604,20 @@ mod tests {
             .unwrap();
 
         assert_eq!(host.container_at(1.0, 1.0), document);
+    }
+
+    #[test]
+    fn scroll_range_clamps_an_offset_past_the_end_to_the_range() {
+        let host = Host::default();
+        let window = host.window.borrow();
+        window.scroll_handle(7).set_offset(point(px(-5.0), px(4.0)));
+
+        assert_eq!(
+            window.scroll_range(7),
+            ScrollRange {
+                offset: (0.0, 0.0),
+                max: (0.0, 0.0)
+            }
+        );
     }
 }

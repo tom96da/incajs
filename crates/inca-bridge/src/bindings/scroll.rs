@@ -3,16 +3,16 @@
 
 use std::rc::Rc;
 
-use gpui::px;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
 use inca_document::geometry::Align;
+use inca_document::{ScrollRange, View};
 use inca_node::NodeId;
 use inca_style::is_scroll_container;
 
 use super::Natives;
 use super::convert::{JsAlign, JsNodeId, existing_node, or_null};
-use super::host::{Host, clamped_offset};
+use super::host::Host;
 
 pub(super) fn install_scroll(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("scrollOf", scroll_of)?;
@@ -53,48 +53,19 @@ fn scroll_into_view_node<'js>(
 pub(super) fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
     let document = host.document.borrow();
     is_scroll_container(&document.tree, &document.style, id).then(|| {
-        let handle = host.window.borrow().scroll_handle(id);
-        let (offset, max) = (handle.offset(), handle.max_offset());
-        // gpui clamps on the next draw; report the same value.
-        [
-            -clamped_offset(offset.x, max.x),
-            -clamped_offset(offset.y, max.y),
-            max.x,
-            max.y,
-        ]
-        .map(|px: gpui::Pixels| f64::from(f32::from(px)))
+        let ScrollRange { offset, max } = host.window.borrow().scroll_range(id);
+        [offset.0, offset.1, max.0, max.1].map(f64::from)
     })
 }
 
 /// Moves the scroll offset of the node `id` on the given axes. A negative value counts as `0`.
 pub(super) fn scroll_to(host: &Host, id: NodeId, left: Option<f64>, top: Option<f64>) {
     let document = host.document.borrow();
-    if !is_scroll_container(&document.tree, &document.style, id) {
-        return;
+    if is_scroll_container(&document.tree, &document.style, id) {
+        host.window
+            .borrow()
+            .scroll_to(&document.tree, id, left, top);
     }
-    let window = host.window.borrow();
-    let handle = window.scroll_handle(id);
-    let mut offset = handle.offset();
-    // Narrowing is fine for pixel offsets; the upper clamp is gpui's.
-    #[allow(clippy::cast_possible_truncation)]
-    let negated = |v: f64| px(-(v.max(0.0) as f32));
-    if let Some(left) = left {
-        offset.x = negated(left);
-    }
-    if let Some(top) = top {
-        offset.y = negated(top);
-    }
-    let (before, max) = (handle.offset(), handle.max_offset());
-    let clamped = |v, max| -f32::from(clamped_offset(v, max));
-    handle.set_offset(offset);
-    // Recorded boxes follow the new offset, so a reveal in the same tick
-    // starts from where the content now is.
-    window.shift_descendants(
-        &document.tree,
-        id,
-        clamped(offset.x, max.x) - clamped(before.x, max.x),
-        clamped(offset.y, max.y) - clamped(before.y, max.y),
-    );
 }
 
 /// Reveals the node `id` now, or at the next frame when it has no box yet.
@@ -108,7 +79,7 @@ pub(super) fn scroll_into_view(host: &Host, id: NodeId, block: Align, inline: Al
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use gpui::{Bounds, point};
+    use gpui::{Bounds, point, px};
 
     use crate::test_support::engine_with_bindings;
 

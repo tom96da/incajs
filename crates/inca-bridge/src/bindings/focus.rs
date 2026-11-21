@@ -3,10 +3,10 @@
 
 use std::rc::Rc;
 
-use gpui::Bounds;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
 use super::Natives;
+use inca_document::View;
 use inca_node::NodeId;
 
 use super::convert::{Flag, JsNodeId, existing_node, or_null};
@@ -48,20 +48,19 @@ pub(super) fn node_box(host: &Host, id: NodeId) -> Option<[f64; 9]> {
     if !host.document.borrow().tree.is_connected(id) {
         return None;
     }
-    host.window.borrow().layout_of(id).map(|layout| {
-        let Bounds { origin, size } = layout.bounds;
+    host.window.borrow().node_box(id).map(|b| {
         [
-            origin.x,
-            origin.y,
-            size.width,
-            size.height,
-            layout.border,
-            layout.scroll.x,
-            layout.scroll.y,
-            layout.gutter.width,
-            layout.gutter.height,
+            b.rect.x,
+            b.rect.y,
+            b.rect.width,
+            b.rect.height,
+            b.border,
+            b.scroll.0,
+            b.scroll.1,
+            b.gutter.0,
+            b.gutter.1,
         ]
-        .map(|px| f64::from(f32::from(px)))
+        .map(f64::from)
     })
 }
 
@@ -77,6 +76,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::test_support::engine_with_bindings;
+    use gpui::Bounds;
     use inca_gpui::NodeLayout;
     use inca_node::AttributeValue;
 

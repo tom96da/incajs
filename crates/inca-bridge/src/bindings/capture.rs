@@ -6,6 +6,7 @@ use std::rc::Rc;
 use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, Exception, Result as JsResult};
 
+use inca_document::View;
 use inca_node::NodeId;
 
 use super::Natives;
@@ -43,7 +44,7 @@ pub(super) fn set_capture(
     pointer_id: i32,
 ) -> JsResult<()> {
     known_pointer(ctx, pointer_id)?;
-    let held = host.window.borrow().held_buttons != 0;
+    let held = host.window.borrow().held_buttons() != 0;
     let mut host = host.document.borrow_mut();
     if !host.tree.is_connected(node) {
         return Err(Exception::throw_dom(
@@ -106,13 +107,15 @@ mod tests {
 
     use rstest::rstest;
 
+    use inca_document::View;
+
     use super::Host;
     use crate::test_support::{engine_with_bindings, error_name};
 
     /// A mounted node, and the engine and host it lives in.
     fn mounted(held: u8) -> (inca_jsenv::Engine, Rc<Host>, u32) {
         let (engine, host) = engine_with_bindings();
-        host.window.borrow_mut().held_buttons = held;
+        host.window.borrow_mut().set_held_buttons(held);
         let node: u32 = engine
             .eval(
                 r"
