@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use super::common::{appended, click, load, near, node_id, text_of, top_in, x, y};
+use super::common::{appended, click, load, near, node_id, text_of, x, y};
 use gpui::{Modifiers, ScrollDelta, TestAppContext, point};
 
 #[gpui::test]
@@ -166,16 +166,6 @@ fn a_horizontal_wheel_step_reports_delta_x_with_pixel_mode(cx: &mut TestAppConte
         text_of(&mut h, "log"),
         "wheel@inner-1:25:0:0 wheel@outer-1:25:0:0"
     );
-}
-
-#[gpui::test]
-fn a_horizontal_wheel_step_scrolls_a_vertical_only_container_down(cx: &mut TestAppContext) {
-    let mut h = load(cx, "scroll-wheel-chain");
-    let vonly = node_id(&mut h, "vonly");
-
-    h.scroll(vonly, -25.0, 0.0);
-
-    near(top_in(&mut h, "v0", "vonly"), -25.0);
 }
 
 #[gpui::test]

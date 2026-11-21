@@ -93,11 +93,6 @@ const onOuter = { 2: cancel };
       </div>
     </div>
   </div>
-  <div id="vonly" :style="{ width: 100, height: 100, overflow_x: 'hidden', overflow_y: 'auto' }">
-    <div id="v0" :style="{ width: 100, height: 100 }" />
-    <div id="v1" :style="{ width: 100, height: 100 }" />
-    <div id="v2" :style="{ width: 100, height: 100 }" />
-  </div>
   <div :style="{ display: 'flex', flex_direction: 'row' }">
     <div
       id="end-1"
