@@ -49,7 +49,7 @@ None at the moment.
 
 - **Release**: `v0.0.35`.
 - **Node.js**: 22.18 or newer.
-- **Toolchain**: zed `v1.24.3` for `gpui`, rquickjs `0.14.0`.
+- **Toolchain**: zed `v1.29.3` for `gpui`, rquickjs `0.14.0`.
 - **QuickJS test run**: `vitest-pool-quickjs` `^0.2.2`.
 - **Linux binaries**: built in an `ubuntu:22.04` container by both workflows,
   for a glibc 2.35 floor.
