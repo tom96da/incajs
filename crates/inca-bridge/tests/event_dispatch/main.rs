@@ -7,7 +7,6 @@
 
 #![allow(clippy::unwrap_used, clippy::float_cmp)]
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{
@@ -42,14 +41,14 @@ fn clicks(engine: &Engine) -> f64 {
 }
 
 struct ClickableRoot {
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     node: NodeId,
     dispatcher: EventDispatcher,
 }
 
 impl Render for ClickableRoot {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         render_tree_with_events(
             &host.tree,
             &host.style,
@@ -61,9 +60,9 @@ impl Render for ClickableRoot {
     }
 }
 
-fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
-    let host = Rc::new(RefCell::new(Host::default()));
-    let mut host_mut = host.borrow_mut();
+fn build_clickable_tree() -> (Rc<Host>, NodeId) {
+    let host = Rc::new(Host::default());
+    let mut host_mut = host.document.borrow_mut();
     let node = host_mut.tree.create_node("div").unwrap();
     set_style(&mut host_mut.tree, node, "width", 100.0).unwrap();
     set_style(&mut host_mut.tree, node, "height", 100.0).unwrap();
@@ -75,7 +74,7 @@ fn build_clickable_tree() -> (Rc<RefCell<Host>>, NodeId) {
 /// frame.
 fn mount_clickable(
     cx: &mut TestAppContext,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     engine: &Rc<Engine>,
     node: NodeId,
 ) -> VisualTestContext {
@@ -95,7 +94,7 @@ fn mount_clickable(
 /// `a_events` are registered on A and `root_events` on the row; B has no
 /// listener.
 struct Panes {
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     root: NodeId,
     a: NodeId,
     b: NodeId,
@@ -113,9 +112,9 @@ fn build_panes(a_events: &[&str], root_events: &[&str]) -> Panes {
 
 /// [`build_panes`] with `record`, a JS function, as every listener.
 fn build_panes_recording(a_events: &[&str], root_events: &[&str], record: &str) -> Panes {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let (root, a, b) = {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let root = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, root, "display", "flex").unwrap();
         set_style(&mut host.tree, root, "flex_direction", "row").unwrap();
@@ -186,9 +185,9 @@ fn mount_recording_pair_with(
     events: &[&str],
     record: &str,
 ) -> (VisualTestContext, Rc<Engine>, NodeId, NodeId) {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let (parent, child) = {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let parent = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, parent, "width", 100.0).unwrap();
         set_style(&mut host.tree, parent, "height", 100.0).unwrap();

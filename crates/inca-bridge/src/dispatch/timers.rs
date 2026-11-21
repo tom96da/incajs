@@ -3,7 +3,6 @@
 
 //! Runs the timers a script started when they fall due and its frame callbacks in the next frame.
 
-use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 use std::time::Duration;
 
@@ -22,14 +21,14 @@ impl EventDispatcher {
         let script = Rc::downgrade(&self.script);
         let host = Rc::downgrade(&self.host);
         let state = Rc::downgrade(&self.state);
-        let wake = self.host.borrow().wake.clone();
+        let wake = self.host.window.borrow().wake.clone();
         // A foreground task on the main thread. It sleeps on the wake channel and one executor
         // timer until the earliest timer is due.
         let task = cx.spawn(async move |cx| {
             loop {
                 let (wait, wants_frame) = match (host.upgrade(), state.upgrade()) {
                     (Some(host), Some(state)) => {
-                        let host = host.borrow();
+                        let host = host.js.borrow();
                         (
                             host.timers.wait(),
                             host.frames.is_pending() && !state.frame_requested.get(),
@@ -101,7 +100,7 @@ impl EventDispatcher {
     /// The time left until the earliest timer is due, or `None` with no timer.
     #[must_use]
     pub fn next_timer_wait(&self) -> Option<Duration> {
-        self.host.borrow().timers.wait()
+        self.host.js.borrow().timers.wait()
     }
 }
 
@@ -110,7 +109,7 @@ impl EventDispatcher {
 fn request_frame(
     window: &Window,
     script: &Weak<dyn Script>,
-    host: &Weak<RefCell<Host>>,
+    host: &Weak<Host>,
     state: &Weak<State>,
 ) {
     let Some(strong) = state.upgrade() else {
@@ -132,7 +131,7 @@ fn request_frame(
 /// with no pending callback changes nothing.
 fn run_frame_callbacks(
     script: &dyn Script,
-    host: &RefCell<Host>,
+    host: &Host,
     state: &State,
     window: &mut Window,
     cx: &App,
@@ -148,7 +147,7 @@ fn run_frame_callbacks(
 
 /// One turn: the due callbacks, then the redraw and the failures they caused.
 /// A turn with no due callback changes nothing.
-fn fire_timers(script: &dyn Script, host: &RefCell<Host>, window: &mut Window, cx: &App) {
+fn fire_timers(script: &dyn Script, host: &Host, window: &mut Window, cx: &App) {
     observe_focus(host, window, cx);
     if script.run_timers() == 0 {
         return;
@@ -167,13 +166,13 @@ mod tests {
     use crate::{EventDispatcher, Host};
     use gpui::AppContext as _;
     use gpui::{TestAppContext, WindowHandle};
-    use std::cell::RefCell;
+
     use std::rc::Rc;
     use std::time::Duration;
 
     struct Scene {
         window: WindowHandle<TestRoot>,
-        host: Rc<RefCell<Host>>,
+        host: Rc<Host>,
         engine: Rc<inca_jsenv::Engine>,
         reported: Reported,
     }
@@ -336,7 +335,7 @@ mod tests {
         advance(cx, 10);
 
         assert_eq!(log(&scene), "");
-        assert_eq!(scene.host.borrow().wake.receiver_count(), 1);
+        assert_eq!(scene.host.window.borrow().wake.receiver_count(), 1);
         drop(keep);
     }
 
@@ -346,7 +345,7 @@ mod tests {
         let engine = engine_for(&host);
         let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
         let node = {
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             let node = host.tree.create_node("div").unwrap();
             let root = host.root();
             host.tree.append_child(root, node).unwrap();
@@ -366,7 +365,7 @@ mod tests {
         let window = cx.add_empty_window();
         window.update(|window, cx| {
             {
-                let mut host = host.borrow_mut();
+                let mut host = host.document.borrow_mut();
                 let host = &mut *host;
                 host.focus.mark_tab_dirty(node);
                 let _ = host
@@ -428,7 +427,7 @@ mod tests {
     fn without_start_timers_a_timer_never_runs(cx: &mut TestAppContext) {
         let host = host_on_executor_clock(cx);
         let engine = engine_for(&host);
-        let root = host.borrow().root();
+        let root = host.document.borrow().root();
         let _window = mount_active(cx, &host, &engine, root);
         engine
             .eval::<()>(
@@ -442,7 +441,7 @@ mod tests {
         advance(cx, 10);
 
         assert_eq!(engine.eval::<String>("log.join(',')").unwrap(), "");
-        assert!(host.borrow().timers.next_due().is_some());
+        assert!(host.js.borrow().timers.next_due().is_some());
     }
 
     #[gpui::test]
@@ -480,7 +479,7 @@ mod tests {
             .eval::<()>("clearTimeout(setTimeout(() => {}, 10));")
             .unwrap();
 
-        assert!(host.borrow().timers.next_due().is_none());
+        assert!(host.js.borrow().timers.next_due().is_none());
     }
 
     #[gpui::test]
@@ -593,7 +592,15 @@ mod tests {
         next_frame(cx, &scene);
 
         let node = scene.engine.eval::<u32>("box").unwrap();
-        assert!(scene.host.borrow().layout.borrow().contains_key(&node));
+        assert!(
+            scene
+                .host
+                .window
+                .borrow()
+                .layout
+                .borrow()
+                .contains_key(&node)
+        );
     }
 
     #[gpui::test]

@@ -3,7 +3,6 @@
 
 //! The static methods of `AbortSignal`: `abort()`, `timeout()` and `any()`.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use inca_jsenv::callbacks;
@@ -22,11 +21,7 @@ const MAX_DELAY: f64 = 4_294_967_295.0;
 const MAX_SAFE: f64 = 9_007_199_254_740_991.0;
 
 /// Defines `abort`, `timeout` and `any` on the constructor `class`.
-pub(super) fn define<'js>(
-    ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
-    class: &Object<'js>,
-) -> JsResult<()> {
+pub(super) fn define<'js>(ctx: &Ctx<'js>, host: &Rc<Host>, class: &Object<'js>) -> JsResult<()> {
     let state = Rc::clone(host);
     define_sized_method(
         ctx,
@@ -57,7 +52,7 @@ pub(super) fn define<'js>(
 /// `AbortSignal.abort(reason)`: an aborted signal, with no event.
 fn abort<'js>(
     ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     reason: Option<&Value<'js>>,
 ) -> JsResult<Class<'js, IncaSignal<'js>>> {
     let signal = new_signal(ctx, host, &Table::open(ctx)?, false)?;
@@ -65,7 +60,10 @@ fn abort<'js>(
         Some(reason) => reason.clone(),
         None => dom_exception(ctx, "AbortError", "signal is aborted without reason"),
     };
-    host.borrow_mut().signals.mark_aborted(signal.borrow().id());
+    host.document
+        .borrow_mut()
+        .signals
+        .mark_aborted(signal.borrow().id());
     signal.borrow().set_reason(reason);
     Ok(signal)
 }
@@ -89,7 +87,7 @@ fn delay_of<'js>(ctx: &Ctx<'js>, value: Option<&Value<'js>>) -> JsResult<f64> {
 /// `AbortSignal.timeout(milliseconds)`: a signal that aborts with a `TimeoutError` after the delay.
 fn timeout<'js>(
     ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     delay: Option<&Value<'js>>,
 ) -> JsResult<Class<'js, IncaSignal<'js>>> {
     let delay = delay_of(ctx, delay)?;
@@ -107,7 +105,7 @@ fn timeout<'js>(
         .ok_or_else(|| Exception::throw_range(ctx, "timer ids are exhausted. restart the app"))?;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let wait = delay.min(MAX_DELAY) as u32;
-    host.borrow().timers.start_without_handle(id, wait);
+    host.js.borrow().timers.start_without_handle(id, wait);
     Ok(signal)
 }
 
@@ -268,7 +266,7 @@ mod tests {
             error_name(&f.engine, "AbortSignal.timeout(5)"),
             "RangeError"
         );
-        assert!(f.host.borrow().timers.next_due().is_none());
+        assert!(f.host.js.borrow().timers.next_due().is_none());
     }
 
     #[test]

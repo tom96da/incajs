@@ -3,7 +3,6 @@
 
 //! The natives for element names: `createElement`, `createElementNS` and `attributeKey`.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, Result as JsResult};
@@ -18,7 +17,7 @@ use super::host::Host;
 /// Creates the element `local_name` names, lowered in ASCII, and gives its id and tag. A name
 /// that is no valid element local name throws `InvalidCharacterError`.
 pub(super) fn create_element<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, String) -> JsResult<Array<'js>> {
     move |ctx, local_name| {
         if !is_element_local_name(&local_name) {
@@ -30,6 +29,7 @@ pub(super) fn create_element<'js>(
         }
         let tag = local_name.to_ascii_lowercase();
         let id = host
+            .document
             .borrow_mut()
             .tree
             .create_node(tag.clone())
@@ -46,13 +46,13 @@ pub(super) fn create_element<'js>(
 /// name throws `InvalidCharacterError` and a prefix the namespace does not allow throws
 /// `NamespaceError`.
 pub(super) fn create_element_ns<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, Option<String>, String) -> JsResult<Array<'js>> {
     move |ctx, namespace, qualified_name| {
         let namespace = namespace.filter(|text| !text.is_empty());
         let (prefix, local_name) = validate_and_extract(namespace.as_deref(), &qualified_name)
             .map_err(|err| throw_name_error(&ctx, err))?;
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let id = host
             .tree
             .create_element_ns(namespace.as_deref(), prefix, local_name)
@@ -66,9 +66,9 @@ pub(super) fn create_element_ns<'js>(
 
 /// The key an attribute called `name` has on the node `node_id`.
 pub(super) fn attribute_key<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<String> {
-    move |ctx, JsNodeId(node_id), name| folded_key(&ctx, &host.borrow(), node_id, &name)
+    move |ctx, JsNodeId(node_id), name| folded_key(&ctx, &host.document.borrow(), node_id, &name)
 }
 
 /// `[id, localName, namespace, prefix, tagName]` of the element `node`.
@@ -129,7 +129,10 @@ mod tests {
         let id: u32 = engine.eval("pair[0]").unwrap();
         let given: String = engine.eval("pair[1]").unwrap();
 
-        assert_eq!(host.borrow().tree.get(id).unwrap().local_name(), tag);
+        assert_eq!(
+            host.document.borrow().tree.get(id).unwrap().local_name(),
+            tag
+        );
         assert_eq!(given, tag);
     }
 
@@ -179,7 +182,10 @@ mod tests {
             .eval("__inca_native__.createElementNS(null, 'a')[0]")
             .unwrap();
 
-        assert_eq!(host.borrow().tree.get(id).unwrap().local_name(), "a");
+        assert_eq!(
+            host.document.borrow().tree.get(id).unwrap().local_name(),
+            "a"
+        );
     }
 
     #[test]

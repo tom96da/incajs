@@ -62,14 +62,14 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let first = self.host.borrow().held_buttons == 0;
+        let first = self.host.window.borrow().held_buttons == 0;
         self.update_held_buttons("mousedown", button);
         self.begin_pointer(payload, button, window, cx);
         let target = self.captured_or(target);
         self.state.press_target.set(Some(target));
         if button <= 1 {
             let path = self.path_from(target);
-            let changed = self.host.borrow_mut().tree.set_active_path(&path);
+            let changed = self.host.document.borrow_mut().tree.set_active_path(&path);
             self.restyle(changed, true, window);
         }
         let pointer = pointer_payload(payload, button);
@@ -118,8 +118,8 @@ impl EventDispatcher {
         }
         if last {
             self.state.pointerdown_canceled.set(false);
-            if self.host.borrow().capture_active.is_some() {
-                self.host.borrow_mut().capture_pending = None;
+            if self.host.window.borrow().capture_active.is_some() {
+                self.host.document.borrow_mut().capture_pending = None;
                 self.process_capture(payload, button, window, cx);
                 self.state.captured_release.set(Some((target, button)));
             }
@@ -128,34 +128,34 @@ impl EventDispatcher {
 
     /// Clears the pressed path and redraws when a rule reads it.
     pub(super) fn clear_press(&self, window: &mut Window) {
-        let changed = self.host.borrow_mut().tree.set_active_path(&[]);
+        let changed = self.host.document.borrow_mut().tree.set_active_path(&[]);
         self.restyle(changed, true, window);
     }
 
     /// Returns `payload` with its `buttons` bitmask set to
-    /// [`Host::held_buttons`](crate::Host::held_buttons) unless the event carries the buttons of
+    /// [`WindowState::held_buttons`](crate::WindowState::held_buttons) unless the event carries the buttons of
     /// its own press or release.
     pub(super) fn with_held_buttons(&self, event: &str, mut payload: EventPayload) -> EventPayload {
-        let held = self.host.borrow().held_buttons;
+        let held = self.host.window.borrow().held_buttons;
         if let Some(mouse) = payload.mouse_mut().filter(|_| !spec_of(event).own_buttons) {
             mouse.buttons = held;
         }
         payload
     }
 
-    /// Updates [`Host::held_buttons`](crate::Host::held_buttons) for a raw `"mousedown"` or
+    /// Updates [`WindowState::held_buttons`](crate::WindowState::held_buttons) for a raw `"mousedown"` or
     /// `"mouseup"` of `button` and returns the new value. `button` is `MousePayload`'s own field, a
     /// public part of `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever produced by
     /// this crate) is handled: [`buttons_mask`] maps it to 0.
     pub(crate) fn update_held_buttons(&self, event: &str, button: u8) -> u8 {
         let bit = buttons_mask(button);
-        let mut host = self.host.borrow_mut();
+        let mut window = self.host.window.borrow_mut();
         match event {
-            "mousedown" => host.held_buttons |= bit,
-            "mouseup" => host.held_buttons &= !bit,
+            "mousedown" => window.held_buttons |= bit,
+            "mouseup" => window.held_buttons &= !bit,
             _ => {}
         }
-        host.held_buttons
+        window.held_buttons
     }
 
     /// Returns `payload` with `movementX`/`movementY` set to the delta of the
@@ -335,7 +335,7 @@ mod tests {
             }
             ",
         );
-        let root = s.host.borrow().root();
+        let root = s.host.document.borrow().root();
         s.listen(
             root,
             "click",
@@ -460,9 +460,10 @@ mod tests {
             [&format!("pointermove@{b}"), &format!("mousemove@{b}")]
         );
         assert!(!got.iter().any(|e| e.starts_with("lostpointercapture")));
-        let host = s.host.borrow();
+        let pending = s.host.document.borrow().capture_pending;
+        let window = s.host.window.borrow();
         assert_eq!(
-            (host.held_buttons, host.capture_pending, host.capture_active),
+            (window.held_buttons, pending, window.capture_active),
             (0, None, None)
         );
     }
@@ -566,7 +567,7 @@ mod tests {
     }
 
     fn pressed(s: &Scene, node: NodeId) -> bool {
-        state(&s.host.borrow(), node, ":active")
+        state(&s.host.document.borrow(), node, ":active")
     }
 
     fn read_active(node: NodeId) -> String {
@@ -616,7 +617,7 @@ mod tests {
     ) {
         let mut s = scene(cx);
         let (button, child) = {
-            let tree = &mut s.host.borrow_mut().tree;
+            let tree = &mut s.host.document.borrow_mut().tree;
             let button = tree.create_node("button").unwrap();
             let child = tree.create_node("span").unwrap();
             tree.set_attribute(button, "disabled", true).unwrap();
@@ -627,7 +628,7 @@ mod tests {
         s.down(if on_child { child } else { button }, 0);
 
         assert!(pressed(&s, button));
-        assert!(pressed(&s, s.host.borrow().root()));
+        assert!(pressed(&s, s.host.document.borrow().root()));
     }
 
     #[gpui::test]
@@ -669,7 +670,7 @@ mod tests {
     fn a_move_out_of_the_pressed_node_moves_the_hover(cx: &mut TestAppContext) {
         let mut s = scene(cx);
         drag_out(&mut s);
-        let host = s.host.borrow();
+        let host = s.host.document.borrow();
 
         assert!(state(&host, s.b, ":hover"));
         assert!(!state(&host, s.a, ":hover"));
@@ -702,7 +703,7 @@ mod tests {
         let mut s = scene(cx);
         s.down(s.a, 0);
         {
-            let tree = &mut s.host.borrow_mut().tree;
+            let tree = &mut s.host.document.borrow_mut().tree;
             let root = tree.root().unwrap();
             tree.remove_child(root, s.a).unwrap();
             tree.insert_before(root, s.a, Some(s.b)).unwrap();

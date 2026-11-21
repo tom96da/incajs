@@ -5,7 +5,6 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{AppContext as _, Context, TestAppContext, Window, point, px};
@@ -15,10 +14,10 @@ use inca_jsenv::Clock;
 use inca_node::NodeId;
 
 use crate::test_support::{Reported, capture_reporter, engine_for, engine_on_clock};
-use crate::{EventDispatcher, Host};
+use crate::{DocumentState, EventDispatcher, Host};
 
-pub(crate) fn dispatcher_with_engine() -> (EventDispatcher, Rc<RefCell<Host>>, Reported) {
-    let host = Rc::new(RefCell::new(Host::default()));
+pub(crate) fn dispatcher_with_engine() -> (EventDispatcher, Rc<Host>, Reported) {
+    let host = Rc::new(Host::default());
     let engine = engine_for(&host);
     engine.eval::<()>("globalThis.out = [];").unwrap();
 
@@ -29,8 +28,8 @@ pub(crate) fn dispatcher_with_engine() -> (EventDispatcher, Rc<RefCell<Host>>, R
 }
 
 /// [`dispatcher_with_engine`] on an engine whose clock is `clock`.
-pub(crate) fn dispatcher_on_clock(clock: Clock) -> (EventDispatcher, Rc<RefCell<Host>>) {
-    let host = Rc::new(RefCell::new(Host::default()));
+pub(crate) fn dispatcher_on_clock(clock: Clock) -> (EventDispatcher, Rc<Host>) {
+    let host = Rc::new(Host::default());
     let engine = engine_on_clock(&host, clock);
     engine.eval::<()>("globalThis.out = [];").unwrap();
     let dispatcher = EventDispatcher::new(engine, Rc::clone(&host));
@@ -134,8 +133,8 @@ pub(crate) fn listen_global(
         .unwrap();
 }
 
-pub(crate) fn tree_of_three(host: &Rc<RefCell<Host>>) -> [NodeId; 3] {
-    let mut h = host.borrow_mut();
+pub(crate) fn tree_of_three(host: &Rc<Host>) -> [NodeId; 3] {
+    let mut h = host.document.borrow_mut();
     let outer = h.tree.create_node("div").unwrap();
     let parent = h.tree.create_node("div").unwrap();
     let child = h.tree.create_node("div").unwrap();
@@ -145,8 +144,8 @@ pub(crate) fn tree_of_three(host: &Rc<RefCell<Host>>) -> [NodeId; 3] {
 }
 
 /// A new node under the host root, so an event at it also reaches document and window.
-pub(crate) fn node_under_root(host: &Rc<RefCell<Host>>) -> NodeId {
-    let mut h = host.borrow_mut();
+pub(crate) fn node_under_root(host: &Rc<Host>) -> NodeId {
+    let mut h = host.document.borrow_mut();
     let node = h.tree.create_node("div").unwrap();
     let root = h.root();
     h.tree.append_child(root, node).unwrap();
@@ -187,13 +186,13 @@ pub(crate) fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::V
 }
 
 /// Whether `node` matches the state class `class`.
-pub(crate) fn state(host: &Host, node: NodeId, class: &str) -> bool {
+pub(crate) fn state(host: &DocumentState, node: NodeId, class: &str) -> bool {
     inca_style::matches_selector(&host.tree, node, class).unwrap()
 }
 
 /// Appends a `<style>` element that holds `css` under the root.
-pub(crate) fn add_sheet(host: &RefCell<Host>, css: &str) {
-    let host = &mut *host.borrow_mut();
+pub(crate) fn add_sheet(host: &Host, css: &str) {
+    let host = &mut *host.document.borrow_mut();
     let [style, text] = ["style", "#text"].map(|tag| host.tree.create_node(tag).unwrap());
     host.tree.set_data(text, css).unwrap();
     host.tree.append_child(style, text).unwrap();
@@ -201,7 +200,7 @@ pub(crate) fn add_sheet(host: &RefCell<Host>, css: &str) {
 }
 
 pub(crate) mod keys {
-    use std::cell::RefCell;
+
     use std::rc::Rc;
 
     use gpui::{App, AppContext as _, Keystroke, TestAppContext, Window, WindowHandle, WindowId};
@@ -220,7 +219,7 @@ pub(crate) mod keys {
     pub(crate) struct Scene {
         pub(crate) window: WindowHandle<TestRoot>,
         pub(crate) dispatcher: EventDispatcher,
-        pub(crate) host: Rc<RefCell<Host>>,
+        pub(crate) host: Rc<Host>,
         pub(crate) engine: Rc<inca_jsenv::Engine>,
         pub(crate) parent: NodeId,
         pub(crate) first: NodeId,
@@ -233,7 +232,7 @@ pub(crate) mod keys {
         let (host, parent, children) = focusable_tree(1, false);
         let field = children[0];
         let (first, second, plain) = {
-            let mut h = host.borrow_mut();
+            let mut h = host.document.borrow_mut();
             let plain = h.tree.create_node("div").unwrap();
             h.tree.append_child(parent, plain).unwrap();
             let first = h.tree.create_node("button").unwrap();
@@ -304,20 +303,24 @@ pub(crate) mod keys {
 
     impl Scene {
         pub(crate) fn focus(&self, cx: &mut TestAppContext, node: NodeId) {
-            self.host.borrow_mut().focus.request_focus(node, false);
+            self.host
+                .document
+                .borrow_mut()
+                .focus
+                .request_focus(node, false);
             self.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
             cx.run_until_parked();
         }
 
         pub(crate) fn blur(&self, cx: &mut TestAppContext, node: NodeId) {
-            self.host.borrow_mut().focus.request_blur(node);
+            self.host.document.borrow_mut().focus.request_blur(node);
             self.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
             cx.run_until_parked();
         }
 
         pub(crate) fn focused(&self, cx: &mut TestAppContext) -> Option<NodeId> {
             self.in_window(cx, |scene, window, cx| {
-                scene.host.borrow().focus.focused_node(window, cx)
+                scene.host.document.borrow().focus.focused_node(window, cx)
             })
         }
 
@@ -412,7 +415,7 @@ pub(crate) mod pointer {
     /// A listener records `type@target` into `globalThis.out` where the event is at its target.
     pub(crate) struct Scene {
         pub(crate) dispatcher: EventDispatcher,
-        pub(crate) host: Rc<RefCell<Host>>,
+        pub(crate) host: Rc<Host>,
         pub(crate) cx: VisualTestContext,
         pub(crate) a: NodeId,
         pub(crate) b: NodeId,
@@ -567,8 +570,8 @@ const SEEN: &str = r"
     globalThis.mark = (e) => { globalThis.seen.push(e.type + ':' + e.target); };
     ";
 
-pub(crate) fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<RefCell<Host>>) -> NodeId {
-    let mut host = host.borrow_mut();
+pub(crate) fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<Host>) -> NodeId {
+    let mut host = host.document.borrow_mut();
     let node = host.tree.create_node("div").unwrap();
     let root = host.root();
     host.tree.append_child(root, node).unwrap();
@@ -618,7 +621,7 @@ pub(crate) fn set_active(
     .unwrap();
 }
 
-pub(crate) fn is_focused(host: &Host, node: NodeId) -> bool {
+pub(crate) fn is_focused(host: &DocumentState, node: NodeId) -> bool {
     state(host, node, ":focus")
 }
 
@@ -626,7 +629,7 @@ pub(crate) fn focus_scene(
     cx: &mut TestAppContext,
 ) -> (
     Rc<crate::EventDispatcher>,
-    Rc<std::cell::RefCell<crate::Host>>,
+    Rc<crate::Host>,
     gpui::WindowHandle<Frame>,
     u32,
 ) {

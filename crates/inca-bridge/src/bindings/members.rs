@@ -11,7 +11,6 @@ mod markup;
 mod node;
 mod semantics;
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Ctx, IntoJs, Object, Result as JsResult, Value};
@@ -23,7 +22,7 @@ use super::handle::{Rule, receiver_of};
 use super::host::Host;
 
 /// The host a member reads and writes.
-type Shared = Rc<RefCell<Host>>;
+type Shared = Rc<Host>;
 
 /// Defines the getter `key` of `proto`. `read` gets the node and the kind of the receiver.
 fn getter<'js, R: IntoJs<'js> + 'js>(
@@ -87,7 +86,7 @@ fn method<'js, R: IntoJs<'js> + 'js>(
 }
 
 /// Defines the host members on the prototypes `interfaces::install` stored.
-pub(super) fn install_members(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+pub(super) fn install_members(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     node::install(ctx, host)?;
     element::install(ctx, host)?;
     markup::install(ctx, host)?;

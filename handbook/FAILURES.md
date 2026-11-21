@@ -42,7 +42,7 @@ fails and names the file.
 | an error the running app raised and the host caught | an `appError` notification, see [PROTOCOL.md](./PROTOCOL.md#messages) |
 | a listener that throws | an error the running app raised; the other listeners still run. A host event reports it after its walk. A `dispatchEvent()` or `click()` from script reports it at the next report point: the host walk, timer turn, frame drain or load that ran the script |
 | a timer handler that throws | an error the running app raised; a listener error it caused is reported after the timer turn |
-| the `__inca_released__` hook that throws | an error the running app raised, reported after the call and its jobs; the frame goes on. A throw from a script that aborts a signal, from the timer of `AbortSignal.timeout()` or from the collection of a signal is filed in `Host::failures` and reported at the next report point |
+| the `__inca_released__` hook that throws | an error the running app raised, reported after the call and its jobs; the frame goes on. A throw from a script that aborts a signal, from the timer of `AbortSignal.timeout()` or from the collection of a signal is filed in `JsState::failures` and reported at the next report point |
 | a failed job or an unhandled promise rejection | an error the running app raised, reported before the listener errors of the same drain |
 | a config or entry failure before the first build | `build failed`, then a retry on the next edit |
 | `inca-host` exiting before `ready`, which includes a first bundle that throws or rejects | `ERR_INCA_HOST_EXITED_EARLY`, after `inca dev` prints the cause |

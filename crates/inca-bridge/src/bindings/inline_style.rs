@@ -6,7 +6,6 @@
 //! A declaration block holds the id of its node and reads the inline style at every call. A block
 //! of a freed node reads empty, and its writes change nothing.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 // `IncaStyle` derives `JsLifetime`, and the class holds a node id and no JS value.
@@ -59,7 +58,7 @@ pub(super) fn install_style(n: &Natives<'_, '_>) -> JsResult<()> {
 
 /// The block of the node `node_id`, which may be freed.
 fn style_of<'js>(
-    _host: Rc<RefCell<Host>>,
+    _host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Class<'js, IncaStyle>> {
     move |ctx, JsNodeId(node)| {
         let proto = required_prototype(&ctx, "CSSStyleDeclaration")?;
@@ -72,20 +71,19 @@ fn node_of<'js>(ctx: &Ctx<'js>, this: &Value<'js>) -> JsResult<NodeId> {
 }
 
 /// What `read` makes of the node, the default when the node is freed.
-fn read<T: Default>(host: &RefCell<Host>, node: NodeId, read: impl Fn(&VirtualNode) -> T) -> T {
-    host.borrow().tree.get(node).map_or_else(T::default, read)
+fn read<T: Default>(host: &Host, node: NodeId, read: impl Fn(&VirtualNode) -> T) -> T {
+    host.document
+        .borrow()
+        .tree
+        .get(node)
+        .map_or_else(T::default, read)
 }
 
 /// Prints the warning lines of a write that reached the node and queues the focus re-check when
 /// the write touched `display`. A write to a freed node is dropped.
-fn finish(
-    host: &RefCell<Host>,
-    node: NodeId,
-    display: bool,
-    result: Result<Vec<String>, TreeError>,
-) {
+fn finish(host: &Host, node: NodeId, display: bool, result: Result<Vec<String>, TreeError>) {
     let Ok(lines) = result else { return };
-    let mut host = host.borrow_mut();
+    let mut host = host.document.borrow_mut();
     for line in &lines {
         host.warn_style(node, line);
     }
@@ -106,11 +104,7 @@ fn value_text<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<String> {
     text(ctx, value)
 }
 
-fn define_members<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
-) -> JsResult<()> {
+fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> JsResult<()> {
     let h = host.clone();
     define_this_getter(ctx, proto, "length", move |ctx, this| {
         let length = read(&h, node_of(ctx, &this)?, style_length);
@@ -125,7 +119,7 @@ fn define_members<'js>(
         move |ctx, this, value: Value<'js>| {
             let node = node_of(ctx, &this)?;
             let value = value_text(ctx, &value)?;
-            let result = set_style_text(&mut set.borrow_mut().tree, node, &value);
+            let result = set_style_text(&mut set.document.borrow_mut().tree, node, &value);
             finish(&set, node, true, result);
             Ok(())
         },
@@ -152,7 +146,7 @@ fn define_members<'js>(
         if priority_refuses_value(&priority) && !value.is_empty() {
             return Ok(());
         }
-        let result = set_style_property(&mut h.borrow_mut().tree, node, &name, &value);
+        let result = set_style_property(&mut h.document.borrow_mut().tree, node, &name, &value);
         finish(&h, node, is_display(&name), result);
         Ok(())
     })?;
@@ -161,9 +155,9 @@ fn define_members<'js>(
         let node = node_of(ctx, &this)?;
         require(ctx, "removeProperty", args, 1)?;
         let name = text(ctx, &args[0])?;
-        let former = remove_style_property(&mut h.borrow_mut().tree, node, &name);
+        let former = remove_style_property(&mut h.document.borrow_mut().tree, node, &name);
         if former.is_ok() && is_display(&name) {
-            h.borrow_mut().mark_focus_dirty(node);
+            h.document.borrow_mut().mark_focus_dirty(node);
         }
         Ok(former.unwrap_or_default())
     })?;
@@ -187,11 +181,7 @@ fn define_members<'js>(
 
 /// The accessor of every property name: each key and CSS alias of the host in camelCase and in
 /// kebab-case.
-fn define_properties<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
-) -> JsResult<()> {
+fn define_properties<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> JsResult<()> {
     for (name, css) in property_names() {
         let (get, set) = (host.clone(), host.clone());
         let (read_name, write_name) = (css.clone(), css);
@@ -208,8 +198,12 @@ fn define_properties<'js>(
             move |ctx, this, value: Value<'js>| {
                 let node = node_of(ctx, &this)?;
                 let value = value_text(ctx, &value)?;
-                let result =
-                    set_style_property(&mut set.borrow_mut().tree, node, &write_name, &value);
+                let result = set_style_property(
+                    &mut set.document.borrow_mut().tree,
+                    node,
+                    &write_name,
+                    &value,
+                );
                 finish(&set, node, is_display(&write_name), result);
                 Ok(())
             },
@@ -236,7 +230,8 @@ mod tests {
         let (engine, host) = engine_with_bindings();
         let warnings = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&warnings);
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .warnings
             .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
         let json: String = engine
@@ -723,11 +718,11 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.borrow_mut().focus.take_tab_dirty();
+        host.document.borrow_mut().focus.take_tab_dirty();
 
         engine.eval::<()>(write).unwrap();
 
-        let dirty = host.borrow_mut().focus.take_tab_dirty();
+        let dirty = host.document.borrow_mut().focus.take_tab_dirty();
         assert_eq!(dirty.contains(&node), queued);
     }
 }

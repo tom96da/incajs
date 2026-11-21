@@ -120,7 +120,7 @@ impl<'js> JsClass<'js> for IncaController<'js> {
 
 /// The body of the `AbortController` constructor.
 struct Construct {
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 }
 
 impl<'js> IntoJsFunc<'js, ()> for Construct {
@@ -145,7 +145,7 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
 }
 
 /// Defines both classes and the table.
-pub(super) fn install<'js>(ctx: &Ctx<'js>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+pub(super) fn install<'js>(ctx: &Ctx<'js>, host: &Rc<Host>) -> JsResult<()> {
     let Some(event_target) = stored_prototype(ctx, "EventTarget")? else {
         return Err(Exception::throw_type(
             ctx,
@@ -163,7 +163,7 @@ pub(super) fn install<'js>(ctx: &Ctx<'js>, host: &Rc<RefCell<Host>>) -> JsResult
     define_signal(ctx, host, &event_target)
 }
 
-fn define_controller(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+fn define_controller(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let proto = Object::new(ctx.clone())?;
     let class = define_class(
         ctx,
@@ -191,17 +191,13 @@ fn define_controller(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     store_prototype(ctx, "AbortController", &proto)
 }
 
-fn define_signal<'js>(
-    ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
-    event_target: &Object<'js>,
-) -> JsResult<()> {
+fn define_signal<'js>(ctx: &Ctx<'js>, host: &Rc<Host>, event_target: &Object<'js>) -> JsResult<()> {
     let proto = Object::new(ctx.clone())?;
     let state = Rc::clone(host);
     define_this_getter(ctx, &proto, "aborted", move |ctx, this| {
         let signal = receiver::<IncaSignal>(ctx, &this)?;
         let id = signal.borrow().id;
-        Ok(state.borrow().signals.is_aborted(id))
+        Ok(state.document.borrow().signals.is_aborted(id))
     })?;
     define_this_getter(ctx, &proto, "reason", |ctx, this| {
         let signal = receiver::<IncaSignal>(ctx, &this)?;

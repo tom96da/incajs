@@ -6,7 +6,6 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{App, AppContext as _, Keystroke, TestAppContext, WindowHandle};
@@ -26,7 +25,7 @@ use inca_style::set_style;
 pub(crate) struct InputScene {
     pub(crate) window: WindowHandle<TestRoot>,
     pub(crate) dispatcher: EventDispatcher,
-    pub(crate) host: Rc<RefCell<Host>>,
+    pub(crate) host: Rc<Host>,
     pub(crate) engine: Rc<inca_jsenv::Engine>,
     pub(crate) parent: NodeId,
     pub(crate) input: NodeId,
@@ -34,9 +33,9 @@ pub(crate) struct InputScene {
 }
 
 pub(crate) fn input_scene(cx: &mut TestAppContext, value: &str) -> InputScene {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let (parent, input, button) = {
-        let mut h = host.borrow_mut();
+        let mut h = host.document.borrow_mut();
         let root = h.root();
         let [parent, input, button] =
             ["div", "input", "button"].map(|tag| h.tree.create_node(tag).unwrap());
@@ -86,7 +85,11 @@ impl InputScene {
     }
 
     pub(crate) fn focus(&self, cx: &mut TestAppContext, node: NodeId) {
-        self.host.borrow_mut().focus.request_focus(node, false);
+        self.host
+            .document
+            .borrow_mut()
+            .focus
+            .request_focus(node, false);
         self.draw(cx);
         cx.run_until_parked();
     }
@@ -143,18 +146,18 @@ impl InputScene {
     }
 
     pub(crate) fn state(&self) -> InputState {
-        self.host.borrow().inputs.borrow()[&self.input].clone()
+        self.host.document.borrow().inputs.borrow()[&self.input].clone()
     }
 
     /// Selects `anchor` to `focus` in the input.
     pub(crate) fn select(&self, anchor: usize, focus: usize) {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         let mut inputs = host.inputs.borrow_mut();
         inputs.get_mut(&self.input).unwrap().select(anchor, focus);
     }
 
     pub(crate) fn set_attribute(&self, name: &str) {
-        let mut host = self.host.borrow_mut();
+        let mut host = self.host.document.borrow_mut();
         host.tree.set_attribute(self.input, name, true).unwrap();
     }
 }

@@ -56,7 +56,7 @@ pub struct EventDispatcher {
     #[cfg(test)]
     pub(crate) engine: Rc<inca_jsenv::Engine>,
     pub(crate) script: Rc<dyn Script>,
-    pub(crate) host: Rc<RefCell<Host>>,
+    pub(crate) host: Rc<Host>,
     pub(crate) state: Rc<State>,
 }
 
@@ -111,13 +111,13 @@ pub(crate) struct State {
 }
 
 /// Records the node the window focuses in `host`.
-pub(crate) fn observe_focus(host: &RefCell<Host>, window: &Window, cx: &App) {
-    host.borrow_mut().focus.observe(window, cx);
+pub(crate) fn observe_focus(host: &Host, window: &Window, cx: &App) {
+    host.document.borrow_mut().focus.observe(window, cx);
 }
 
 impl EventDispatcher {
     /// Reports failures through [`stderr_reporter`].
-    pub fn new(engine: Rc<inca_jsenv::Engine>, host: Rc<RefCell<Host>>) -> Self {
+    pub fn new(engine: Rc<inca_jsenv::Engine>, host: Rc<Host>) -> Self {
         #[cfg(test)]
         let kept = Rc::clone(&engine);
         let script = JsScript::new(engine, Rc::clone(&host), stderr_reporter());
@@ -143,7 +143,7 @@ impl EventDispatcher {
     /// focus or a style rule names `:hover` or `:active`. The render path asks once per frame.
     #[must_use]
     pub fn tracks_pointer(&self) -> bool {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         !host.listeners.is_empty()
             || host.focus.has_handles()
             || host.style.uses_pointer_state(&host.tree)
@@ -202,7 +202,7 @@ mod tests {
     #[gpui::test]
     fn a_stale_callback_id_is_skipped_rather_than_reported(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        let node_id = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(&format!(
@@ -249,7 +249,7 @@ mod tests {
     #[gpui::test]
     fn a_pending_job_waits_when_no_listener_ran(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        let node_id = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(
@@ -271,7 +271,7 @@ mod tests {
     #[gpui::test]
     fn a_throwing_callback_is_reported(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        let node_id = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node_id,
@@ -293,7 +293,7 @@ mod tests {
     #[gpui::test]
     fn one_throwing_callback_does_not_stop_the_others(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        let node_id = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>("globalThis.ran = false;")
@@ -325,7 +325,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -353,16 +353,21 @@ mod tests {
     #[gpui::test]
     fn drain_jobs_and_refresh_shows_js_the_focus_the_window_applied(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        let root = host.borrow().root();
-        host.borrow_mut().tree.append_child(root, node).unwrap();
-        host.borrow_mut()
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let root = host.document.borrow().root();
+        host.document
+            .borrow_mut()
+            .tree
+            .append_child(root, node)
+            .unwrap();
+        host.document
+            .borrow_mut()
             .tree
             .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
             .unwrap();
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             let host = &mut *host;
             host.focus.mark_tab_dirty(node);
             let _ = host

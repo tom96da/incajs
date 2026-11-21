@@ -11,7 +11,7 @@ use crate::dispatch::EventDispatcher;
 
 impl EventDispatcher {
     pub(super) fn focused_enabled_button(&self, window: &Window, cx: &App) -> Option<NodeId> {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         host.focus.focused_node(window, cx).filter(|id| {
             host.tree
                 .get(*id)
@@ -99,6 +99,7 @@ mod tests {
 
         fn disable(&self, node: NodeId) {
             self.host
+                .document
                 .borrow_mut()
                 .tree
                 .set_attribute(node, "disabled", true)
@@ -107,6 +108,7 @@ mod tests {
 
         fn enable(&self, node: NodeId) {
             self.host
+                .document
                 .borrow_mut()
                 .tree
                 .remove_attribute(node, "disabled")
@@ -212,12 +214,13 @@ mod tests {
         let s = scene(cx);
         let button = s
             .host
+            .document
             .borrow_mut()
             .tree
             .create_element_ns(Some(SVG), None, "button")
             .unwrap();
         {
-            let mut host = s.host.borrow_mut();
+            let mut host = s.host.document.borrow_mut();
             host.tree.set_attribute(button, "tabindex", "0").unwrap();
             host.tree.append_child(s.parent, button).unwrap();
             host.focus.mark_tab_dirty(button);
@@ -640,7 +643,7 @@ mod tests {
     ) {
         let s = scene(cx);
         {
-            let mut host = s.host.borrow_mut();
+            let mut host = s.host.document.borrow_mut();
             set_style(&mut host.tree, s.first, "width", 100.0).unwrap();
             set_style(&mut host.tree, s.first, "height", 50.0).unwrap();
         }
@@ -673,7 +676,7 @@ mod tests {
     fn a_focused_descendant_of_a_button_does_not_click_it(cx: &mut TestAppContext, key: &str) {
         let s = scene(cx);
         let inner = {
-            let mut host = s.host.borrow_mut();
+            let mut host = s.host.document.borrow_mut();
             let inner = host.tree.create_node("div").unwrap();
             host.tree.set_attribute(inner, "tabindex", "-1").unwrap();
             host.tree.append_child(s.first, inner).unwrap();
@@ -691,12 +694,12 @@ mod tests {
     fn a_press_on_a_disabled_button_focuses_its_focusable_ancestor(cx: &mut TestAppContext) {
         let s = scene(cx);
         {
-            let mut host = s.host.borrow_mut();
+            let mut host = s.host.document.borrow_mut();
             host.tree.set_attribute(s.parent, "tabindex", "0").unwrap();
             host.focus.mark_tab_dirty(s.parent);
         }
         s.disable(s.first);
-        s.host.borrow_mut().focus.mark_tab_dirty(s.first);
+        s.host.document.borrow_mut().focus.mark_tab_dirty(s.first);
         s.focus(cx, s.second);
         s.mouse_down(cx, s.first);
         assert_eq!(s.focused(cx), Some(s.parent));

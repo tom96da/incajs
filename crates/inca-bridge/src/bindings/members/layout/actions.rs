@@ -3,7 +3,6 @@
 
 //! The members that act on an element: `focus`, `blur` and `click`.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
@@ -23,11 +22,7 @@ fn prevent_scroll<'js>(ctx: &Ctx<'js>, args: &[Value<'js>]) -> JsResult<bool> {
 }
 
 /// Defines `focus` and `blur` on `proto`.
-fn define_focus<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
-) -> JsResult<()> {
+fn define_focus<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> JsResult<()> {
     method(
         ctx,
         proto,
@@ -37,7 +32,7 @@ fn define_focus<'js>(
         &HTML_OR_SVG,
         |ctx, host, id, _, args| {
             let prevent = prevent_scroll(ctx, args)?;
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             if host.tree.is_connected(id) {
                 host.focus.request_focus(id, !prevent);
             }
@@ -52,7 +47,7 @@ fn define_focus<'js>(
         0,
         &HTML_OR_SVG,
         |_, host, id, _, _| {
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             if host.tree.get(id).is_some() {
                 host.focus.request_blur(id);
             }
@@ -63,11 +58,7 @@ fn define_focus<'js>(
 
 /// Defines `click` on `proto`, the prototype of `HTMLElement`, and `focus` and `blur` on it and on
 /// the foreign element.
-pub(super) fn install<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
-) -> JsResult<()> {
+pub(super) fn install<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> JsResult<()> {
     method(
         ctx,
         proto,
@@ -76,7 +67,7 @@ pub(super) fn install<'js>(
         0,
         &HTML_ELEMENT,
         |ctx, host, id, _, _| {
-            if host.borrow().tree.get(id).is_some() {
+            if host.document.borrow().tree.get(id).is_some() {
                 crate::event::click(ctx, host, id);
             }
             Ok(())
@@ -90,7 +81,6 @@ pub(super) fn install<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::RefCell;
     use std::rc::Rc;
 
     use gpui::{AppContext as _, TestAppContext};
@@ -102,7 +92,7 @@ mod tests {
     use crate::test_support::{engine_for, engine_with_bindings, mount_active};
 
     /// An engine with the global `el`, a `div` the tree has and that has no parent.
-    fn with_loose_node() -> (Engine, Rc<RefCell<Host>>) {
+    fn with_loose_node() -> (Engine, Rc<Host>) {
         let (engine, host) = engine_with_bindings();
         engine
             .eval::<()>(
@@ -118,11 +108,11 @@ mod tests {
     #[test]
     fn blur_of_a_node_the_tree_has_queues_a_request() {
         let (engine, host) = with_loose_node();
-        assert!(!host.borrow().focus.has_queued_work());
+        assert!(!host.document.borrow().focus.has_queued_work());
 
         engine.eval::<()>("el.blur()").unwrap();
 
-        assert!(host.borrow().focus.has_queued_work());
+        assert!(host.document.borrow().focus.has_queued_work());
     }
 
     #[test]
@@ -134,7 +124,7 @@ mod tests {
 
         engine.eval::<()>("el.blur()").unwrap();
 
-        assert!(!host.borrow().focus.has_queued_work());
+        assert!(!host.document.borrow().focus.has_queued_work());
     }
 
     #[rstest]
@@ -146,7 +136,7 @@ mod tests {
 
         engine.eval::<()>("el.focus()").unwrap();
 
-        assert!(!host.borrow().focus.has_queued_work());
+        assert!(!host.document.borrow().focus.has_queued_work());
     }
 
     #[test]
@@ -189,7 +179,7 @@ mod tests {
     /// runs `call`, whose `el` is the seventh child, then draws the frame that applies it. Returns
     /// the vertical scroll offset of the container and whether `el` is focused.
     fn scroll_after(cx: &mut TestAppContext, call: &str) -> (f32, bool) {
-        let host = Rc::new(RefCell::new(Host::default()));
+        let host = Rc::new(Host::default());
         let engine = engine_for(&host);
         let container: u32 = engine
             .eval(
@@ -212,13 +202,13 @@ mod tests {
                 ",
             )
             .unwrap();
-        let root = host.borrow().root();
+        let root = host.document.borrow().root();
         let window = mount_active(cx, &host, &engine, root);
 
         engine.eval::<()>(call).unwrap();
         draw(cx, window);
 
-        let offset = host.borrow().scroll_handle(container).offset();
+        let offset = host.window.borrow().scroll_handle(container).offset();
         let focused = engine
             .eval::<bool>("__inca_native__.focusedNode() === ids[6]")
             .unwrap();

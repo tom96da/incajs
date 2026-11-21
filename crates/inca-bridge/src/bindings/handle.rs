@@ -7,7 +7,6 @@
 //! An instance holds the node id, the kind and the space of the node. It has the stored prototype
 //! of its interface and the own property `__node_id`.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 // The derive of `JsLifetime` on `NodeHandle`.
@@ -180,11 +179,9 @@ pub(super) fn install_handle(n: &Natives<'_, '_>) -> JsResult<()> {
 /// A new handle of the node `id`, on the stored prototype of the node's interface:
 /// `[handle, parented, special]`, where `parented` tells whether the node has a parent and `special`
 /// is `"input"`, `"template"` or `null`. An id the tree does not have gives `null`.
-fn node_handle<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
+fn node_handle<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
-        let host = host.borrow();
+        let host = host.document.borrow();
         let Some(node) = host.tree.get(node_id) else {
             return Ok(Value::new_null(ctx));
         };

@@ -23,7 +23,7 @@ pub(crate) mod scene;
 impl EventDispatcher {
     /// Whether `node` is an HTML `input`.
     pub(super) fn is_input(&self, node: NodeId) -> bool {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         host.tree
             .get(node)
             .is_some_and(|node| node.is_html("input"))
@@ -31,7 +31,7 @@ impl EventDispatcher {
 
     /// Reads `node` once: whether it is an `input`, has `readonly`, and is a disabled control.
     fn input_flags(&self, node: NodeId) -> Option<(bool, bool, bool)> {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         host.tree.get(node).map(|node| {
             let attributes = node.attributes();
             (
@@ -55,7 +55,7 @@ impl EventDispatcher {
 
     /// Whether the text state of `node` has a composition.
     fn composing(&self, node: NodeId) -> bool {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         let inputs = host.inputs.borrow();
         inputs
             .get(&node)
@@ -64,14 +64,15 @@ impl EventDispatcher {
 
     /// A copy of the text state of `node`, the default state without one.
     pub(super) fn input_state(&self, node: NodeId) -> InputState {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         host.inputs.borrow().get(&node).cloned().unwrap_or_default()
     }
 
     /// Where the last frame drew the text of `node`, empty without one.
     pub(super) fn input_layout(&self, node: NodeId) -> InputLayout {
-        let host = self.host.borrow();
-        host.input_layouts
+        let window = self.host.window.borrow();
+        window
+            .input_layouts
             .borrow()
             .get(&node)
             .cloned()
@@ -81,7 +82,7 @@ impl EventDispatcher {
     /// Runs `f` on the text state of `node`, created when missing. The borrows of the host
     /// end when it returns.
     fn with_input<R>(&self, node: NodeId, f: impl FnOnce(&mut InputState) -> R) -> R {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         let mut inputs = host.inputs.borrow_mut();
         f(inputs.entry(node).or_default())
     }
@@ -100,7 +101,7 @@ impl EventDispatcher {
 
     /// Whether the focused node is an `input` with a composition.
     pub(super) fn composing_at_focus(&self, window: &Window, cx: &App) -> bool {
-        let focused = self.host.borrow().focus.focused_node(window, cx);
+        let focused = self.host.document.borrow().focus.focused_node(window, cx);
         focused.is_some_and(|node| self.composing(node))
     }
 
@@ -143,7 +144,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        let focused = self.host.borrow().focus.focused_node(window, cx);
+        let focused = self.host.document.borrow().focus.focused_node(window, cx);
         let Some(node) = focused.filter(|&node| self.is_input(node) && !self.composing(node))
         else {
             return false;
@@ -520,15 +521,16 @@ mod tests {
             )
             .unwrap();
         let node: inca_node::NodeId = engine.eval("globalThis.node").unwrap();
-        host.borrow()
+        host.window
+            .borrow()
             .input_layouts
             .borrow_mut()
             .insert(node, InputLayout::default());
         engine
             .eval::<()>("__inca_native__.destroyNode(globalThis.node)")
             .unwrap();
-        assert!(host.borrow().inputs.borrow().is_empty());
-        assert!(host.borrow().input_layouts.borrow().is_empty());
+        assert!(host.document.borrow().inputs.borrow().is_empty());
+        assert!(host.window.borrow().input_layouts.borrow().is_empty());
     }
 
     #[gpui::test]
@@ -551,16 +553,19 @@ mod tests {
         let s = input_scene(cx, "");
         let svg_input = s
             .host
+            .document
             .borrow_mut()
             .tree
             .create_element_ns(Some(SVG), None, "input")
             .unwrap();
         s.host
+            .document
             .borrow_mut()
             .tree
             .append_child(s.parent, svg_input)
             .unwrap();
         s.host
+            .document
             .borrow_mut()
             .inputs
             .get_mut()
@@ -578,8 +583,14 @@ mod tests {
     #[test]
     fn click_on_a_disabled_input_runs_nothing() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let input = host.borrow_mut().tree.create_node("input").unwrap();
-        host.borrow_mut()
+        let input = host
+            .document
+            .borrow_mut()
+            .tree
+            .create_node("input")
+            .unwrap();
+        host.document
+            .borrow_mut()
             .tree
             .set_attribute(input, "disabled", true)
             .unwrap();

@@ -9,7 +9,6 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{App, Bounds, Context, Window, WindowBounds, WindowOptions, prelude::*, px, size};
@@ -23,14 +22,14 @@ use inca_node::{NodeId, VirtualTree};
 use inca_style::set_style;
 
 struct ClickCounter {
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     root: NodeId,
     dispatcher: EventDispatcher,
 }
 
 impl Render for ClickCounter {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         render_tree_with_events(
             &host.tree,
             &host.style,
@@ -86,8 +85,8 @@ fn install_click_handler(engine: &Engine, outer: NodeId, label: NodeId) {
 
 fn run_example() {
     application().run(|cx: &mut App| {
-        let host = Rc::new(RefCell::new(Host::default()));
-        let (outer, label) = build_tree(&mut host.borrow_mut().tree);
+        let host = Rc::new(Host::default());
+        let (outer, label) = build_tree(&mut host.document.borrow_mut().tree);
 
         let engine = Engine::new().unwrap();
         engine.with(|ctx| install(&ctx, &host)).unwrap();

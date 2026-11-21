@@ -4,7 +4,6 @@
 //! Drives a mounted app headlessly: reads its tree, sends input and waits
 //! for it to go idle.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
@@ -29,7 +28,7 @@ use crate::snapshot::{Node, snapshot};
 pub struct Harness {
     pub(crate) cx: VisualTestContext,
     pub(crate) window: WindowHandle<HostedApp>,
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     // Each selector string is leaked once per node id, because
     // `debug_bounds` takes `&'static str`.
     selectors: HashMap<NodeId, &'static str>,
@@ -70,7 +69,7 @@ impl Harness {
     /// Panics when the app has no root node.
     pub fn snapshot(&mut self) -> Node {
         let host = Rc::clone(&self.host);
-        let host = host.borrow();
+        let host = host.document.borrow();
         snapshot(&host.tree, &host.style, host.root(), &mut |id| {
             self.bounds_of(id)
         })
@@ -197,7 +196,7 @@ impl Harness {
         self.cx.run_until_parked();
         self.window
             .update(&mut self.cx, |app, window, cx| {
-                if app.session.host.borrow().frames.is_pending() {
+                if app.session.host.js.borrow().frames.is_pending() {
                     app.session.dispatcher.run_frame_callbacks(window, cx);
                 }
             })

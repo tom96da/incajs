@@ -113,7 +113,7 @@ impl Render for HostedApp {
         session.dispatcher.begin_frame(window, cx);
         session.dispatcher.clear_layout();
         let mode = Scrollbars::of(cx);
-        let host = session.host.borrow();
+        let host = session.host.document.borrow();
         let top = host.tree.document_element();
         let spec = top.and_then(|id| build_spec(&host.tree, &host.style, id));
         let element = spec.as_ref().map_or_else(
@@ -186,7 +186,7 @@ pub(crate) fn open(
     menu::install(cx, app_config.name.as_deref().unwrap_or(DEFAULT_APP_NAME));
 
     let window_config = app_config.window.as_ref();
-    let content = content_window_size(&session.host.borrow(), session.root());
+    let content = content_window_size(&session.host.document.borrow(), session.root());
     let (width, height) = window_size(window_config, content);
     let title = window_title(window_config, app_config.name.as_deref());
 

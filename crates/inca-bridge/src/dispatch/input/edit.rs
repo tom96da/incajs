@@ -27,7 +27,7 @@ impl EventDispatcher {
         if edit.range.is_empty() && edit.text.is_empty() {
             return;
         }
-        let connected = self.host.borrow().tree.is_connected(node);
+        let connected = self.host.document.borrow().tree.is_connected(node);
         if !connected || self.input_state(node).value() != before {
             return;
         }
@@ -510,7 +510,15 @@ mod tests {
         );
         s.key(cx, "enter");
         assert_eq!(types(&s), Vec::<String>::new());
-        assert!(s.host.borrow().inputs.borrow().get(&s.input).is_none());
+        assert!(
+            s.host
+                .document
+                .borrow()
+                .inputs
+                .borrow()
+                .get(&s.input)
+                .is_none()
+        );
     }
 
     #[gpui::test]

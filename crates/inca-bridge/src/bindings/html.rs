@@ -6,7 +6,6 @@
 //! subtrees, and `insertAdjacentHtml` returns nothing. The tests of these natives sit in the same
 //! file.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, Result as JsResult};
@@ -19,7 +18,7 @@ use inca_node::{NodeId, Removal, VirtualTree};
 
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
-use super::host::Host;
+use super::host::{DocumentState, Host};
 use super::mutation::removed_subtrees;
 
 mod finish;
@@ -31,13 +30,19 @@ pub(super) fn install_html(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("insertAdjacentHtml", insert_adjacent_html)
 }
 
-impl MarkupContext for Host {
+/// The document cell of `host` as the context of a markup change.
+struct Markup<'a> {
+    host: &'a Host,
+    document: &'a mut DocumentState,
+}
+
+impl MarkupContext for Markup<'_> {
     fn tree(&mut self) -> &mut VirtualTree {
-        &mut self.tree
+        &mut self.document.tree
     }
 
     fn settle(&mut self, removals: &[Removal]) {
-        Host::settle(self, removals);
+        self.host.settle(self.document, removals);
     }
 }
 
@@ -57,18 +62,26 @@ fn parse_position(ctx: &Ctx<'_>, text: &str) -> JsResult<Position> {
 /// Replaces all children of `node_id`, or of its content for a template, with the nodes `markup`
 /// parses to in the context of the node. Returns the removed subtrees.
 fn set_inner_html<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let (container, parsed) = parse_inner(&mut host.borrow_mut().tree, node_id, &markup)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        let old = children_of(&host.borrow().tree, container);
+        let (container, parsed) =
+            parse_inner(&mut host.document.borrow_mut().tree, node_id, &markup)
+                .map_err(|err| throw_tree_error(&ctx, err))?;
+        let old = children_of(&host.document.borrow().tree, container);
         lose_focus_in(&ctx, &host, &old);
-        let mut host = host.borrow_mut();
-        let old = replace_children(&mut *host, container, &parsed)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        finish(&mut host, &parsed);
-        removed_subtrees(&ctx, &host.tree, &old)
+        let mut document = host.document.borrow_mut();
+        let old = replace_children(
+            &mut Markup {
+                host: &host,
+                document: &mut document,
+            },
+            container,
+            &parsed,
+        )
+        .map_err(|err| throw_tree_error(&ctx, err))?;
+        finish(&mut document, &parsed);
+        removed_subtrees(&ctx, &document.tree, &old)
     }
 }
 
@@ -76,47 +89,64 @@ fn set_inner_html<'js>(
 /// the removed subtrees. A node without a parent changes nothing and gives none. A node whose
 /// parent is a document throws.
 fn set_outer_html<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let Some(parsed) = parse_outer(&mut host.borrow_mut().tree, node_id, &markup)
+        let Some(parsed) = parse_outer(&mut host.document.borrow_mut().tree, node_id, &markup)
             .map_err(|err| throw_tree_error(&ctx, err))?
         else {
             return Array::new(ctx.clone());
         };
         lose_focus_in(&ctx, &host, &[node_id]);
-        let mut host = host.borrow_mut();
-        if !replace_with(&mut *host, node_id, &parsed).map_err(|err| throw_tree_error(&ctx, err))? {
+        let mut document = host.document.borrow_mut();
+        let replaced = replace_with(
+            &mut Markup {
+                host: &host,
+                document: &mut document,
+            },
+            node_id,
+            &parsed,
+        )
+        .map_err(|err| throw_tree_error(&ctx, err))?;
+        if !replaced {
             return Array::new(ctx.clone());
         }
-        finish(&mut host, &parsed);
-        removed_subtrees(&ctx, &host.tree, &[node_id])
+        finish(&mut document, &parsed);
+        removed_subtrees(&ctx, &document.tree, &[node_id])
     }
 }
 
 /// Parses `markup` and inserts the nodes at `position` relative to `node_id`. Nothing leaves the
 /// tree.
 fn insert_adjacent_html<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), position, markup| {
         let position = parse_position(&ctx, &position)?;
-        let mut host = host.borrow_mut();
+        let mut document = host.document.borrow_mut();
         let (container, reference, parsed) =
-            parse_adjacent(&mut host.tree, node_id, position, &markup)
+            parse_adjacent(&mut document.tree, node_id, position, &markup)
                 .map_err(|err| throw_tree_error(&ctx, err))?;
-        insert_parsed(&mut *host, &parsed, container, reference)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        finish(&mut host, &parsed);
+        insert_parsed(
+            &mut Markup {
+                host: &host,
+                document: &mut document,
+            },
+            &parsed,
+            container,
+            reference,
+        )
+        .map_err(|err| throw_tree_error(&ctx, err))?;
+        finish(&mut document, &parsed);
         Ok(())
     }
 }
 
 /// Fires `blur` and `focusout` at the focused node when it sits in a subtree of `roots`. A
 /// listener may change the tree, so the caller resolves its nodes again afterwards.
-fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, roots: &[NodeId]) {
+fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<Host>, roots: &[NodeId]) {
     let focused = {
-        let host = host.borrow();
+        let host = host.document.borrow();
         host.focus
             .visual_focus(&host.tree, &host.style)
             .filter(|&focused| {
@@ -134,7 +164,6 @@ fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, roots: &[NodeId]) {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::RefCell;
     use std::rc::Rc;
 
     use inca_jsenv::Engine;
@@ -178,7 +207,7 @@ mod tests {
         const html = (id) => n.nodeHandle(id)[0].innerHTML;
         ";
 
-    fn engine() -> (Engine, Rc<RefCell<Host>>) {
+    fn engine() -> (Engine, Rc<Host>) {
         let (engine, host) = engine_with_bindings();
         engine.eval::<()>(LISTEN_JS).unwrap();
         engine.eval::<()>(SETUP).unwrap();
@@ -565,14 +594,14 @@ mod tests {
 
         let _ = error_name(&engine, "n.insertAdjacentHtml(host, 'inside', '<i></i>')");
 
-        assert!(!host.borrow().tree.has_orphans());
+        assert!(!host.document.borrow().tree.has_orphans());
     }
 
     #[test]
     fn nothing_fires_in_an_inactive_window() {
         let (engine, host) = engine();
         engine.eval::<()>(FOCUSED).unwrap();
-        host.borrow_mut().focus.set_window_blurred(true);
+        host.document.borrow_mut().focus.set_window_blurred(true);
 
         let got = eval(&engine, "n.setInnerHtml(host, ''); return out;");
 

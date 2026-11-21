@@ -4,7 +4,6 @@
 //! The reads of the box of an element: the rect, the client and offset reads. A node that is not
 //! connected has no box and reads `0`.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Ctx, Object, Result as JsResult};
@@ -29,7 +28,7 @@ pub(super) fn rounded(value: f64) -> f64 {
 
 /// The box of the node `id`, `None` when it has none.
 pub(super) fn box_of(host: &Shared, id: NodeId) -> Option<[f64; 9]> {
-    node_box(&host.borrow(), id)
+    node_box(host, id)
 }
 
 pub(super) fn client_width(host: &Shared, id: NodeId) -> f64 {
@@ -46,7 +45,7 @@ fn offset_of(host: &Shared, id: NodeId) -> (f64, f64) {
     let Some(b) = box_of(host, id) else {
         return (0.0, 0.0);
     };
-    let parent = host.borrow().tree.linked(id, Link::Parent, true);
+    let parent = host.document.borrow().tree.linked(id, Link::Parent, true);
     let origin = parent.and_then(|parent| box_of(host, parent));
     let (ox, oy) = origin.map_or((0.0, 0.0), |o| (o[0] + o[4], o[1] + o[4]));
     // The box moved with the scroll its parent applied when it was recorded.
@@ -57,7 +56,7 @@ fn offset_of(host: &Shared, id: NodeId) -> (f64, f64) {
 pub(super) fn install_client<'js>(
     ctx: &Ctx<'js>,
     proto: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
 ) -> JsResult<()> {
     method(
         ctx,
@@ -99,7 +98,7 @@ pub(super) fn install_client<'js>(
 pub(super) fn install_offset<'js>(
     ctx: &Ctx<'js>,
     proto: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
 ) -> JsResult<()> {
     getter(
         ctx,

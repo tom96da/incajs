@@ -1,7 +1,6 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use inca_jsenv::callbacks;
@@ -26,7 +25,7 @@ pub(super) fn install_events(n: &Natives<'_, '_>) -> JsResult<()> {
 }
 
 /// The target that names the window in the listener and dispatch calls.
-fn window_target_id(_host: Rc<RefCell<Host>>) -> impl Fn() -> HookTarget {
+fn window_target_id(_host: Rc<Host>) -> impl Fn() -> HookTarget {
     || HookTarget::Window
 }
 
@@ -38,7 +37,7 @@ const NOT_A_SIGNAL: &str =
 /// and returns its id, or `null` when `signal` is aborted already, which stores nothing. A
 /// registration with a signal is removed when the signal aborts.
 fn add_event_listener<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(
     Ctx<'js>,
     JsEventTargetId,
@@ -49,7 +48,7 @@ fn add_event_listener<'js>(
     Opt<Value<'js>>,
 ) -> JsResult<Value<'js>> {
     move |ctx, JsEventTargetId(target), event, callback, capture, passive, signal| {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         if let EventTargetId::Node(node_id) = target {
             existing_node(&ctx, &host.tree, node_id)?;
         }
@@ -99,10 +98,10 @@ fn add_event_listener<'js>(
 }
 
 fn remove_event_listener<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsEventTargetId, String, JsCallbackId) -> JsResult<bool> {
     move |ctx, JsEventTargetId(target), event, JsCallbackId(callback_id)| {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let removed = host.listeners.remove(target, &event, callback_id);
         if removed {
             callbacks::release(&ctx, &[callback_id])?;
@@ -116,19 +115,19 @@ fn remove_event_listener<'js>(
 }
 
 fn dispatch_event<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsEventTargetId, Value<'js>) -> JsResult<bool> {
     move |ctx, JsEventTargetId(target), event| {
         if let EventTargetId::Node(node_id) = target {
-            existing_node(&ctx, &host.borrow().tree, node_id)?;
+            existing_node(&ctx, &host.document.borrow().tree, node_id)?;
         }
         crate::event::dispatch_event(&ctx, &host, target, &event)
     }
 }
 
-fn click<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<()> {
+fn click<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<()> {
     move |ctx, JsNodeId(node_id)| {
-        existing_node(&ctx, &host.borrow().tree, node_id)?;
+        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
         crate::event::click(&ctx, &host, node_id);
         Ok(())
     }
@@ -158,7 +157,7 @@ mod tests {
                 ",
             )
             .unwrap();
-        let host = host.borrow();
+        let host = host.document.borrow();
         let flags: Vec<_> = host
             .listeners
             .listeners_for(EventTargetId::Node(2), "a")
@@ -182,7 +181,7 @@ mod tests {
                 ",
             )
             .unwrap();
-        let host = host.borrow();
+        let host = host.document.borrow();
         let flags: Vec<_> = host
             .listeners
             .listeners_for(EventTargetId::Node(2), "a")
@@ -206,7 +205,7 @@ mod tests {
                 ",
             )
             .unwrap();
-        let host = host.borrow();
+        let host = host.document.borrow();
 
         assert_eq!(
             callback_ids(&host.listeners, EventTargetId::Node(2), "click"),
@@ -317,7 +316,7 @@ mod tests {
             .unwrap();
 
         assert!(type_error);
-        assert!(host.borrow().listeners.is_empty());
+        assert!(host.document.borrow().listeners.is_empty());
         assert!(!callback_stored(&engine, 1));
     }
 
@@ -339,7 +338,7 @@ mod tests {
             .unwrap();
 
         assert!(range_error);
-        assert!(host.borrow().listeners.is_empty());
+        assert!(host.document.borrow().listeners.is_empty());
     }
 
     #[test]
@@ -355,7 +354,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            callback_ids(&host.borrow().listeners, EventTargetId::Window, "click"),
+            callback_ids(
+                &host.document.borrow().listeners,
+                EventTargetId::Window,
+                "click"
+            ),
             [1]
         );
     }
@@ -373,7 +376,7 @@ mod tests {
                 ",
             )
             .unwrap();
-        let host = host.borrow();
+        let host = host.document.borrow();
 
         assert_eq!(
             node_callbacks,
@@ -401,7 +404,14 @@ mod tests {
             .unwrap();
 
         assert!(removed);
-        assert!(callback_ids(&host.borrow().listeners, EventTargetId::Node(2), "click").is_empty());
+        assert!(
+            callback_ids(
+                &host.document.borrow().listeners,
+                EventTargetId::Node(2),
+                "click"
+            )
+            .is_empty()
+        );
     }
 
     #[test]
@@ -487,7 +497,11 @@ mod tests {
 
         assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
         assert_eq!(
-            callback_ids(&host.borrow().listeners, EventTargetId::Node(2), "click"),
+            callback_ids(
+                &host.document.borrow().listeners,
+                EventTargetId::Node(2),
+                "click"
+            ),
             [1, 2],
             "{bad}"
         );

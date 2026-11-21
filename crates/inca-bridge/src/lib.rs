@@ -18,7 +18,7 @@ pub mod test_support;
 #[cfg(test)]
 mod tests;
 
-pub use bindings::{Host, install};
+pub use bindings::{DocumentState, Host, JsState, WindowState, install};
 pub use dispatch::EventDispatcher;
 pub use focus::FocusRegistry;
 pub(crate) use inca_document::EventTargetId;

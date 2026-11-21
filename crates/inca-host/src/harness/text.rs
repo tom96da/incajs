@@ -85,7 +85,7 @@ impl Harness {
     pub(super) fn focused_input(&mut self) -> Option<(NodeId, bool)> {
         let host = Rc::clone(&self.host);
         self.cx.update(|window, cx| {
-            let host = host.borrow();
+            let host = host.document.borrow();
             let node = host.focus.focused_node(window, cx)?;
             match build_spec(&host.tree, &host.style, node)?.tag {
                 ElementTag::Input { editable, .. } => Some((node, editable)),

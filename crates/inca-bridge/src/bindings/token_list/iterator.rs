@@ -6,7 +6,7 @@
 //! An iterator holds the node id and a position, and reads the `class` attribute at every `next`
 //! call. An iterator of a freed node is done.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
 
 // `TokenListIterator` derives `JsLifetime`, and the class holds a node id and a position and no JS
@@ -50,7 +50,7 @@ struct TokenListIterator {
 plain_class!(TokenListIterator, "DOMTokenList Iterator");
 
 /// Defines the iterator prototype with `next` and keeps it in the prototype store.
-pub(super) fn install_iterator(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+pub(super) fn install_iterator(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let iterator = iterator_prototype(ctx)?;
     define_next(ctx, &iterator, host)?;
     store_prototype(ctx, ITERATOR, &iterator)
@@ -66,11 +66,7 @@ pub(super) fn new_iterator<'js>(ctx: &Ctx<'js>, node: NodeId, kind: Kind) -> JsR
     Ok(Class::instance_proto(iterator, required_prototype(ctx, ITERATOR)?)?.into_value())
 }
 
-fn define_next<'js>(
-    ctx: &Ctx<'js>,
-    iterator: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
-) -> JsResult<()> {
+fn define_next<'js>(ctx: &Ctx<'js>, iterator: &Object<'js>, host: &Rc<Host>) -> JsResult<()> {
     iterator.prop(
         PredefinedAtom::SymbolToStringTag,
         Property::from("Array Iterator").configurable(),

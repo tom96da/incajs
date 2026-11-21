@@ -16,7 +16,7 @@ impl EventDispatcher {
     /// the document drop out of the set.
     pub(super) fn deepest_hovered(&self) -> Option<NodeId> {
         let mut set = self.state.hovered.borrow_mut();
-        set.retain(|id| self.host.borrow().tree.is_connected(*id));
+        set.retain(|id| self.host.document.borrow().tree.is_connected(*id));
         set.iter()
             .copied()
             .max_by_key(|id| (self.path_from(*id).len(), *id))
@@ -58,7 +58,7 @@ impl EventDispatcher {
     ) {
         let physical = self.state.bar_drag.get().or(physical);
         let path = physical.map(|id| self.path_from(id)).unwrap_or_default();
-        let changed = self.host.borrow_mut().tree.set_hover_path(&path);
+        let changed = self.host.document.borrow_mut().tree.set_hover_path(&path);
         self.restyle(changed, true, window);
         let mouse = mouse_at(window.mouse_position(), window.modifiers());
         self.process_capture(&EventPayload::Mouse(mouse), button, window, cx);
@@ -73,7 +73,7 @@ impl EventDispatcher {
         let old_path: Vec<_> = old_path.into_iter().skip_while(|id| !live(id)).collect();
         // A pointer over a removed root leaves the document alone in the old path. It sends no
         // event.
-        if next.is_none() && old_path == [self.host.borrow().document()] {
+        if next.is_none() && old_path == [self.host.document.borrow().document()] {
             self.state.hover_prev.replace(old_path);
             return;
         }
@@ -137,7 +137,7 @@ mod tests {
     fn hover_tree() -> (EventDispatcher, [NodeId; 4]) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [a, b, c, d] = {
-            let mut h = host.borrow_mut();
+            let mut h = host.document.borrow_mut();
             let ids = [(); 4].map(|()| h.tree.create_node("div").unwrap());
             h.tree.append_child(ids[0], ids[1]).unwrap();
             h.tree.append_child(ids[1], ids[2]).unwrap();
@@ -249,7 +249,7 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
         let (root, document) = {
-            let host = host.borrow();
+            let host = host.document.borrow();
             (host.root(), host.document())
         };
         dispatcher
@@ -277,7 +277,7 @@ mod tests {
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
-        let root = host.borrow().root();
+        let root = host.document.borrow().root();
         dispatcher
             .engine
             .eval::<()>("globalThis.seen = [];")
@@ -312,7 +312,7 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         let other = {
-            let mut h = host.borrow_mut();
+            let mut h = host.document.borrow_mut();
             let other = h.tree.create_node("div").unwrap();
             h.tree.append_child(parent, other).unwrap();
             other
@@ -328,7 +328,7 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, parent, a] = tree_of_three(&host);
         let (b, apart) = {
-            let mut h = host.borrow_mut();
+            let mut h = host.document.borrow_mut();
             let b = h.tree.create_node("div").unwrap();
             h.tree.append_child(parent, b).unwrap();
             (b, h.tree.create_node("div").unwrap())
@@ -354,7 +354,7 @@ mod tests {
         assert_eq!(clicked(Some(a), apart), 0, "no common ancestor");
         assert_eq!(clicked(None, a), 0, "no press container");
 
-        host.borrow_mut().tree.destroy_node(b);
+        host.document.borrow_mut().tree.destroy_node(b);
         assert_eq!(clicked(Some(a), b), 0, "the release node is gone");
         assert_eq!(clicked(Some(b), a), 0, "the press node is gone");
     }
@@ -364,7 +364,7 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, _] = tree_of_three(&host);
         {
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             let root = host.root();
             host.tree.append_child(root, outer).unwrap();
         }
@@ -415,7 +415,7 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         {
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             let root = host.root();
             host.tree.append_child(root, outer).unwrap();
         }
@@ -436,7 +436,7 @@ mod tests {
         let cx = cx.add_empty_window();
         cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
         seen(&dispatcher);
-        host.borrow_mut().tree.destroy_node(child);
+        host.document.borrow_mut().tree.destroy_node(child);
         cx.update(|window, cx| dispatcher.report_hover(Some(parent), window, cx));
         assert_eq!(seen(&dispatcher), serde_json::json!([]));
         cx.update(|window, cx| dispatcher.report_hover(Some(outer), window, cx));
@@ -448,7 +448,11 @@ mod tests {
         // A detached deepest container gets no mouseout.
         cx.update(|window, cx| dispatcher.report_hover(Some(parent), window, cx));
         seen(&dispatcher);
-        host.borrow_mut().tree.remove_child(outer, parent).unwrap();
+        host.document
+            .borrow_mut()
+            .tree
+            .remove_child(outer, parent)
+            .unwrap();
         cx.update(|window, cx| dispatcher.report_hover(None, window, cx));
         assert_eq!(seen(&dispatcher), serde_json::json!([]));
     }
@@ -457,7 +461,7 @@ mod tests {
     fn connected_hover_tree() -> (EventDispatcher, [NodeId; 4]) {
         let (dispatcher, ids) = hover_tree();
         {
-            let mut host = dispatcher.host.borrow_mut();
+            let mut host = dispatcher.host.document.borrow_mut();
             let root = host.root();
             host.tree.append_child(root, ids[0]).unwrap();
         }
@@ -465,7 +469,7 @@ mod tests {
     }
 
     fn hovered(dispatcher: &EventDispatcher, ids: [NodeId; 4]) -> [bool; 4] {
-        let host = dispatcher.host.borrow();
+        let host = dispatcher.host.document.borrow();
         ids.map(|id| state(&host, id, ":hover"))
     }
 
@@ -500,6 +504,7 @@ mod tests {
         hover(cx, &dispatcher, Some(c));
         dispatcher
             .host
+            .document
             .borrow_mut()
             .tree
             .remove_child(b, c)
@@ -507,6 +512,7 @@ mod tests {
         hover(cx, &dispatcher, Some(b));
         dispatcher
             .host
+            .document
             .borrow_mut()
             .tree
             .insert_before(b, c, None)
@@ -538,7 +544,7 @@ mod tests {
         let (dispatcher, [a, b, c, d]) = connected_hover_tree();
         hover(cx, &dispatcher, Some(c));
         {
-            let tree = &mut dispatcher.host.borrow_mut().tree;
+            let tree = &mut dispatcher.host.document.borrow_mut().tree;
             tree.remove_child(b, c).unwrap();
             tree.insert_before(b, c, Some(d)).unwrap();
         }
@@ -554,7 +560,7 @@ mod tests {
         let (dispatcher, [a, b, c, d]) = connected_hover_tree();
         hover(cx, &dispatcher, Some(c));
         {
-            let tree = &mut dispatcher.host.borrow_mut().tree;
+            let tree = &mut dispatcher.host.document.borrow_mut().tree;
             tree.remove_child(b, c).unwrap();
             tree.append_child(d, c).unwrap();
         }
@@ -573,7 +579,7 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
         let (root, document) = {
-            let host = host.borrow();
+            let host = host.document.borrow();
             (host.root(), host.document())
         };
         dispatcher
@@ -600,7 +606,7 @@ mod tests {
     fn resting_pointer() -> (EventDispatcher, [NodeId; 4]) {
         let (dispatcher, ids) = connected_hover_tree();
         let (root, document) = {
-            let host = dispatcher.host.borrow();
+            let host = dispatcher.host.document.borrow();
             (host.root(), host.document())
         };
         for node in [root, document] {
@@ -627,7 +633,7 @@ mod tests {
     }
 
     fn remove_the_root(dispatcher: &EventDispatcher) {
-        let host = &mut *dispatcher.host.borrow_mut();
+        let host = &mut *dispatcher.host.document.borrow_mut();
         let (document, root) = (host.document(), host.root());
         host.tree.remove_child(document, root).unwrap();
     }
@@ -653,11 +659,11 @@ mod tests {
         report_deepest(cx, &dispatcher);
         dispatcher.state.hovered.borrow_mut().insert(c);
         {
-            let host = &mut *dispatcher.host.borrow_mut();
+            let host = &mut *dispatcher.host.document.borrow_mut();
             let (document, root) = (host.document(), host.root());
             host.tree.append_child(document, root).unwrap();
         }
-        let document = dispatcher.host.borrow().document();
+        let document = dispatcher.host.document.borrow().document();
 
         let got = report_deepest(cx, &dispatcher);
 
@@ -674,12 +680,13 @@ mod tests {
     fn an_inner_node_removed_under_the_pointer_leaves_its_live_ancestors(cx: &mut TestAppContext) {
         let (dispatcher, [a, b, c, _]) = resting_pointer();
         let (root, document) = {
-            let host = dispatcher.host.borrow();
+            let host = dispatcher.host.document.borrow();
             (host.root(), host.document())
         };
         report_deepest(cx, &dispatcher);
         dispatcher
             .host
+            .document
             .borrow_mut()
             .tree
             .remove_child(b, c)

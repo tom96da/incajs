@@ -34,7 +34,7 @@ fn repeated_builds_with_no_event_never_touch_the_js_engine() {
     let dispatcher = EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host));
 
     for _ in 0..5 {
-        let host = host.borrow();
+        let host = host.document.borrow();
         let _ = render_tree_with_events(
             &host.tree,
             &host.style,
@@ -109,9 +109,9 @@ fn click_dispatches_to_js_exactly_once(cx: &mut TestAppContext) {
 /// re-render that follows.
 #[gpui::test]
 fn a_listener_registered_after_the_first_render_still_fires(cx: &mut TestAppContext) {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let node = {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let node = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, node, "width", 100.0).unwrap();
         set_style(&mut host.tree, node, "height", 100.0).unwrap();

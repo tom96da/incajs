@@ -23,7 +23,7 @@ use inca_bridge::test_support;
 use inca_style::set_style;
 
 struct Root {
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     dispatcher: EventDispatcher,
     /// The mode the scrollbars are rendered in.
     mode: Scrollbars,
@@ -32,7 +32,7 @@ struct Root {
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.dispatcher.begin_frame(window, cx);
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         let element =
             render_tree_with_events(&host.tree, &host.style, 0, &self.dispatcher, self.mode)
                 .unwrap();
@@ -51,7 +51,7 @@ impl Render for Root {
 }
 
 struct Scene {
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     engine: Rc<Engine>,
     dispatcher: EventDispatcher,
     cx: VisualTestContext,
@@ -81,7 +81,7 @@ impl Scene {
         before_draw: &str,
         mode: Scrollbars,
     ) -> Self {
-        let host = Rc::new(RefCell::new(host));
+        let host = Rc::new(host);
         let engine = test_support::engine_for(&host);
         engine.eval::<()>("globalThis.ran = [];").unwrap();
         engine.eval::<()>(js).unwrap();
@@ -165,17 +165,27 @@ fn on_wheel(node: NodeId, f: &str) -> String {
 /// Adds a sized div under `parent`, or styles the root when there is none.
 fn add_div(host: &mut Host, parent: Option<NodeId>, height: f64, scrolls: bool) -> NodeId {
     let node = if parent.is_some() {
-        host.tree.create_node("div").unwrap()
+        host.document.get_mut().tree.create_node("div").unwrap()
     } else {
-        host.root()
+        host.document.get_mut().root()
     };
-    set_style(&mut host.tree, node, "width", 100.0).unwrap();
-    set_style(&mut host.tree, node, "height", height).unwrap();
+    set_style(&mut host.document.get_mut().tree, node, "width", 100.0).unwrap();
+    set_style(&mut host.document.get_mut().tree, node, "height", height).unwrap();
     if scrolls {
-        set_style(&mut host.tree, node, "overflow_y", "scroll").unwrap();
+        set_style(
+            &mut host.document.get_mut().tree,
+            node,
+            "overflow_y",
+            "scroll",
+        )
+        .unwrap();
     }
     if let Some(parent) = parent {
-        host.tree.append_child(parent, node).unwrap();
+        host.document
+            .get_mut()
+            .tree
+            .append_child(parent, node)
+            .unwrap();
     }
     node
 }
@@ -202,16 +212,20 @@ fn nested_containers() -> Host {
 /// A container of 100x100 with `styles` over a 300x300 child.
 fn styled_container(styles: &[(&str, &str)]) -> Host {
     let mut host = Host::default();
-    let root = host.root();
-    set_style(&mut host.tree, root, "width", 100.0).unwrap();
-    set_style(&mut host.tree, root, "height", 100.0).unwrap();
+    let root = host.document.get_mut().root();
+    set_style(&mut host.document.get_mut().tree, root, "width", 100.0).unwrap();
+    set_style(&mut host.document.get_mut().tree, root, "height", 100.0).unwrap();
     for (key, value) in styles {
-        set_style(&mut host.tree, root, *key, *value).unwrap();
+        set_style(&mut host.document.get_mut().tree, root, *key, *value).unwrap();
     }
-    let child = host.tree.create_node("div").unwrap();
-    set_style(&mut host.tree, child, "width", 300.0).unwrap();
-    set_style(&mut host.tree, child, "height", 300.0).unwrap();
-    host.tree.append_child(root, child).unwrap();
+    let child = host.document.get_mut().tree.create_node("div").unwrap();
+    set_style(&mut host.document.get_mut().tree, child, "width", 300.0).unwrap();
+    set_style(&mut host.document.get_mut().tree, child, "height", 300.0).unwrap();
+    host.document
+        .get_mut()
+        .tree
+        .append_child(root, child)
+        .unwrap();
     host
 }
 

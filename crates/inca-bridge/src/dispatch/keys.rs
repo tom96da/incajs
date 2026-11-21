@@ -91,21 +91,18 @@ impl EventDispatcher {
         let click = match (key, up) {
             ("tab", false) if plain => {
                 let moved = {
-                    let host = &mut *self.host.borrow_mut();
-                    let moved = host.focus.tab_move(
+                    let host = &mut *self.host.document.borrow_mut();
+                    host.focus.tab_move(
                         &host.tree,
                         &host.style,
                         host.document(),
                         window,
                         cx,
                         modifiers.shift,
-                    );
-                    if let Some(node) = moved {
-                        host.reveal(node, Align::Reveal, Align::CenterOutside);
-                    }
-                    moved
+                    )
                 };
                 if let Some(node) = moved {
+                    self.host.reveal(node, Align::Reveal, Align::CenterOutside);
                     self.select_input(node);
                 }
                 None
@@ -532,6 +529,7 @@ mod tests {
         /// Moves `plain` between `first` and `second`.
         fn plain_between_the_buttons(&self) {
             self.host
+                .document
                 .borrow_mut()
                 .tree
                 .insert_before(self.parent, self.plain, Some(self.second))
@@ -572,7 +570,7 @@ mod tests {
         let s = scene(cx);
         s.plain_between_the_buttons();
         s.mouse_down(cx, s.plain);
-        let root = s.host.borrow().root();
+        let root = s.host.document.borrow().root();
         s.mouse_down(cx, root);
         s.key(cx, "shift-tab", false, false);
         assert_eq!(s.focused(cx), Some(s.field));

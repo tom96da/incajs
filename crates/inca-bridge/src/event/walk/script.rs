@@ -3,7 +3,6 @@
 
 //! The `dispatchEvent` and `click` natives that start a walk from a script.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use inca_document::EventPayload;
@@ -16,7 +15,7 @@ use crate::bindings::Host;
 use inca_document::{EventTargetId, deliver, path_from};
 
 /// Dispatches a script-built `event` at `target` and returns `false` when a
-/// listener canceled it. Listener errors go to `Host::failures`.
+/// listener canceled it. Listener errors go to `JsState::failures`.
 ///
 /// # Errors
 ///
@@ -25,7 +24,7 @@ use inca_document::{EventTargetId, deliver, path_from};
 /// Throws what `__inca_targets__` throws.
 pub(crate) fn dispatch_event<'js>(
     ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     target: EventTargetId,
     event: &Value<'js>,
 ) -> JsResult<bool> {
@@ -50,13 +49,19 @@ pub(crate) fn dispatch_event<'js>(
             ),
         ));
     }
-    let path = path_from(&host.borrow().tree, target);
+    let path = path_from(&host.document.borrow().tree, target);
     let name = state.name.borrow().clone();
     let walk = script_walk(&name, state.flags.get(), target, &EventPayload::None);
     let targets = targets_of(ctx, &path)?;
     drop(record.held.target.replace(targets.first().cloned()));
     state.trusted.set(false);
-    if listened(&host.borrow(), walk.name, walk.flags, target, walk.cut) {
+    if listened(
+        &host.document.borrow(),
+        walk.name,
+        walk.flags,
+        target,
+        walk.cut,
+    ) {
         state.event_id.set(Some(next_event_id(host)));
         drop(record.held.path.replace(targets));
         // Last, so a failure above leaves the event free to dispatch again.
@@ -78,7 +83,7 @@ pub(crate) fn dispatch_event<'js>(
 
 /// Fires `blur` and then `focusout` at `target`, the focused node that is about to leave the
 /// tree. Both events carry no `relatedTarget`.
-pub(crate) fn lose_focus(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
+pub(crate) fn lose_focus(ctx: &Ctx<'_>, host: &Rc<Host>, target: NodeId) {
     let payload = EventPayload::Focus {
         related_target: None,
     };
@@ -91,7 +96,13 @@ pub(crate) fn lose_focus(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId
             payload: &payload,
             trusted: true,
         };
-        if listened(&host.borrow(), walk.name, walk.flags, walk.target, walk.cut) {
+        if listened(
+            &host.document.borrow(),
+            walk.name,
+            walk.flags,
+            walk.target,
+            walk.cut,
+        ) {
             run(ctx, host, &walk, next_event_id(host));
         }
     }
@@ -175,7 +186,7 @@ mod tests {
     #[test]
     fn a_dispatched_event_calls_the_function_stored_under_the_returned_id() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         let got = eval_json(
             &dispatcher,
             &format!(
@@ -196,7 +207,7 @@ mod tests {
     #[test]
     fn dispatch_event_returns_false_for_a_canceled_cancelable_event_only() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(&dispatcher, node, "ping", "(e) => e.preventDefault()");
         let got = eval_json(
             &dispatcher,
@@ -213,7 +224,7 @@ mod tests {
     #[test]
     fn a_canceled_event_stays_canceled_when_dispatched_again() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -237,7 +248,7 @@ mod tests {
     #[test]
     fn a_redispatched_event_gets_a_new_event_id() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -261,7 +272,7 @@ mod tests {
     #[test]
     fn an_event_nobody_hears_takes_no_event_id_but_gets_its_target() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         let got = eval_json(
             &dispatcher,
             &format!(
@@ -275,13 +286,13 @@ mod tests {
             ),
         );
         assert_eq!(got, serde_json::json!([true, node, true]));
-        assert_eq!(host.borrow().last_event_id, 0);
+        assert_eq!(host.document.borrow().last_event_id, 0);
     }
 
     #[test]
     fn dispatch_event_while_dispatching_throws_invalid_state_and_the_walk_continues() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -303,7 +314,7 @@ mod tests {
     #[test]
     fn a_nested_dispatch_throws_an_error_that_is_a_domexception_instance() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -329,7 +340,7 @@ mod tests {
     #[test]
     fn dispatch_event_throws_for_anything_that_is_not_an_event_of_this_host() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         let got = eval_json(
             &dispatcher,
             &format!(
@@ -364,7 +375,7 @@ mod tests {
     #[test]
     fn a_listener_that_throws_during_dispatch_event_lets_the_others_run() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -382,7 +393,7 @@ mod tests {
     #[test]
     fn a_listener_that_throws_during_dispatch_event_is_reported_once_idle() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -411,7 +422,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -443,7 +454,7 @@ mod tests {
     #[test]
     fn a_frozen_event_dispatches_again() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -478,7 +489,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -525,7 +536,7 @@ mod tests {
     #[test]
     fn a_custom_event_shows_its_detail_to_the_listener_it_is_dispatched_to() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -545,9 +556,19 @@ mod tests {
     fn dispatch_event_of_a_click_reaches_a_disabled_button_and_its_ancestors() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, parent, _] = tree_of_three(&host);
-        let button = host.borrow_mut().tree.create_node("button").unwrap();
-        host.borrow_mut().tree.append_child(parent, button).unwrap();
-        host.borrow_mut()
+        let button = host
+            .document
+            .borrow_mut()
+            .tree
+            .create_node("button")
+            .unwrap();
+        host.document
+            .borrow_mut()
+            .tree
+            .append_child(parent, button)
+            .unwrap();
+        host.document
+            .borrow_mut()
             .tree
             .set_attribute(button, "disabled", true)
             .unwrap();
@@ -577,7 +598,7 @@ mod tests {
             format!("(e) => out.push(['{label}', e.target, e.currentTarget, e.eventPhase])")
         };
         listen(dispatcher, node, "ping", &record("node"));
-        let document = dispatcher.host.borrow().document();
+        let document = dispatcher.host.document.borrow().document();
         listen(dispatcher, document, "ping", &record("document"));
         listen_global(dispatcher, "$window", "ping", false, &record("window"));
         dispatcher
@@ -594,7 +615,7 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
 
-        let document = host.borrow().document();
+        let document = host.document.borrow().document();
 
         let out = ping_from(&dispatcher, node, &node.to_string());
 
@@ -613,7 +634,7 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
 
-        let document = host.borrow().document();
+        let document = host.document.borrow().document();
 
         let out = ping_from(&dispatcher, node, &document.to_string());
 
@@ -686,7 +707,7 @@ mod tests {
     fn lose_focus_reaches_the_document_with_focusout_only() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
-        let document = host.borrow().document();
+        let document = host.document.borrow().document();
         for event in ["blur", "focusout"] {
             listen(&dispatcher, document, event, "(e) => out.push(e.type)");
         }

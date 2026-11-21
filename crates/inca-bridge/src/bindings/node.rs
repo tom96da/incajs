@@ -3,7 +3,6 @@
 
 //! Natives that read the identity, the links and the text of a node.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
@@ -31,10 +30,10 @@ pub(super) fn install_node(n: &Natives<'_, '_>) -> JsResult<()> {
 /// The node `link` names from the node `id`, or `null`. `link` is `"parent"`, `"first"`,
 /// `"last"`, `"previous"` or `"next"`. With `elementOnly`, the nearest element in that direction.
 fn linked_node<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, Flag) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), link, element_only| {
-        let host = host.borrow();
+        let host = host.document.borrow();
         existing_node(&ctx, &host.tree, node_id)?;
         let link = match link.as_str() {
             "parent" => Link::Parent,
@@ -62,10 +61,10 @@ fn linked_node<'js>(
 
 /// The ids of the children of the node `id` in order, only the elements with `elementOnly`.
 fn child_node_ids<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Flag) -> JsResult<Vec<NodeId>> {
     move |ctx, JsNodeId(node_id), element_only| {
-        let host = host.borrow();
+        let host = host.document.borrow();
         existing_node(&ctx, &host.tree, node_id)?;
         Ok(host
             .tree
@@ -73,9 +72,10 @@ fn child_node_ids<'js>(
     }
 }
 
-fn root_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<NodeId> {
+fn root_of<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<NodeId> {
     move |ctx, JsNodeId(node_id)| {
-        host.borrow()
+        host.document
+            .borrow()
             .tree
             .root_of(node_id)
             .map_err(|err| throw_tree_error(&ctx, err))
@@ -83,30 +83,30 @@ fn root_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsRes
 }
 
 fn compare_node_position<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<u32> {
     move |ctx, JsNodeId(node_id), JsNodeId(other_id)| {
-        host.borrow()
+        host.document
+            .borrow()
             .tree
             .compare_position(node_id, other_id)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
 
-fn is_equal_node<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<bool> {
+fn is_equal_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<bool> {
     move |ctx, JsNodeId(node_id), JsNodeId(other_id)| {
-        host.borrow()
+        host.document
+            .borrow()
             .tree
             .is_equal(node_id, other_id)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
 
-fn text_content<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<String> {
+fn text_content<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<String> {
     move |ctx, JsNodeId(node_id)| {
-        let host = host.borrow();
+        let host = host.document.borrow();
         host.tree
             .text_content(node_id)
             .map_err(|err| throw_tree_error(&ctx, err))
@@ -115,11 +115,10 @@ fn text_content<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> 
 
 /// Replaces the data of the text node or comment `id`. A node that holds no data throws a
 /// `TypeError`.
-fn set_character_data<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
+fn set_character_data<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), data| {
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .tree
             .set_data(node_id, data)
             .map_err(|err| throw_tree_error(&ctx, err))
@@ -127,10 +126,10 @@ fn set_character_data<'js>(
 }
 
 fn split_text<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>) -> JsResult<NodeId> {
     move |ctx, JsNodeId(node_id), offset| {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         host.tree
             .split_text(node_id, unsigned(offset))
             .map_err(|err| throw_tree_error(&ctx, err))

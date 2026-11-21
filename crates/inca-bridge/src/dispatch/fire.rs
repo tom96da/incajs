@@ -92,7 +92,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        if self.host.borrow().tree.get(start).is_none() {
+        if self.host.document.borrow().tree.get(start).is_none() {
             return false;
         }
         self.fire_inner(start, event, payload, window, cx)
@@ -106,7 +106,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        self.host.borrow_mut().focus.observe(window, cx);
+        self.host.document.borrow_mut().focus.observe(window, cx);
         let payload = &self.prepare(event, start, payload, window);
         let cut = self.cut_by_disabled_control(event, payload, cx);
         let (canceled, entered) = self.walk(EventTargetId::Node(start), event, payload, &cut);
@@ -120,8 +120,7 @@ impl EventDispatcher {
     /// `target` in the last drawn frame, or equal to the client position when
     /// `target` has no recorded box.
     fn with_offset(&self, target: NodeId, mut payload: EventPayload) -> EventPayload {
-        let host = self.host.borrow();
-        let layout = host.layout_of(target);
+        let layout = self.host.window.borrow().layout_of(target);
         if let Some(mouse) = payload.mouse_mut() {
             let (left, top) = layout.map_or((0.0, 0.0), |l| {
                 let border = f32::from(l.border);
@@ -138,7 +137,7 @@ impl EventDispatcher {
 
     /// `payload` with a `related_target` that left the tree set to `None`.
     fn live_related(&self, mut payload: EventPayload) -> EventPayload {
-        let gone = |id: &NodeId| self.host.borrow().tree.get(*id).is_none();
+        let gone = |id: &NodeId| self.host.document.borrow().tree.get(*id).is_none();
         match &mut payload {
             EventPayload::Focus { related_target } => {
                 if related_target.as_ref().is_some_and(gone) {
@@ -158,7 +157,7 @@ impl EventDispatcher {
 
     /// `found` when that node is still in the tree, else `node_id`.
     pub(super) fn resolve(&self, found: Option<NodeId>, node_id: NodeId) -> NodeId {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         found
             .filter(|id| host.tree.get(*id).is_some())
             .unwrap_or(node_id)
@@ -166,7 +165,7 @@ impl EventDispatcher {
 
     /// `target` and its ancestors up to the document, nearest first.
     pub(super) fn path_from(&self, target: NodeId) -> Vec<NodeId> {
-        self.host.borrow().tree.ancestors(target).collect()
+        self.host.document.borrow().tree.ancestors(target).collect()
     }
 
     /// The nearest node that is `a`, `b` or an ancestor of both.
@@ -195,7 +194,7 @@ impl EventDispatcher {
         if keyboard || !matches!(event, "mousedown" | "mouseup" | "click" | "dblclick") {
             return Vec::new();
         }
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         let disabled = |id: &NodeId| host.tree.get(*id).is_some_and(is_disabled_control);
         let button = match payload {
             EventPayload::Mouse(mouse) => Some(mouse.button),
@@ -225,7 +224,7 @@ impl EventDispatcher {
     ) {
         let path = self.path_from(target);
         let handle = {
-            let mut host = self.host.borrow_mut();
+            let mut host = self.host.document.borrow_mut();
             let focusing = if prevented {
                 None
             } else {
@@ -250,7 +249,7 @@ impl EventDispatcher {
 
     pub(super) fn key_target(&self, window: &mut Window, cx: &mut App) -> NodeId {
         let (top, focused) = {
-            let host = self.host.borrow();
+            let host = self.host.document.borrow();
             (host.top(), host.focus.focused_node(window, cx))
         };
         self.resolve(focused, top)
@@ -270,7 +269,7 @@ mod tests {
     use inca_document::{EventPayload, MousePayload};
     use inca_gpui::EventSink;
     use inca_node::NodeId;
-    use std::cell::RefCell;
+
     use std::rc::Rc;
 
     #[gpui::test]
@@ -302,26 +301,32 @@ mod tests {
     #[gpui::test]
     fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        let root = host.borrow().root();
-        host.borrow_mut().tree.append_child(root, node).unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let root = host.document.borrow().root();
+        host.document
+            .borrow_mut()
+            .tree
+            .append_child(root, node)
+            .unwrap();
         assert!(!dispatcher.tracks_pointer());
 
         listen(&dispatcher, node, "keydown", "() => {}");
         assert!(dispatcher.tracks_pointer());
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .listeners
             .remove(crate::EventTargetId::Node(node), "keydown", 1);
         assert!(!dispatcher.tracks_pointer());
 
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .tree
             .set_attribute(node, "tabindex", "0")
             .unwrap();
-        host.borrow_mut().focus.mark_tab_dirty(node);
+        host.document.borrow_mut().focus.mark_tab_dirty(node);
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            let host = &mut *host.borrow_mut();
+            let host = &mut *host.document.borrow_mut();
             let _ = host
                 .focus
                 .apply_pending(&host.tree, &host.style, window, cx);
@@ -332,7 +337,7 @@ mod tests {
     #[gpui::test]
     fn an_event_nobody_keeps_is_collected_with_its_state(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -353,7 +358,7 @@ mod tests {
     #[gpui::test]
     fn an_unlistened_pointer_or_key_input_leaves_the_engine_untouched(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(&dispatcher, node, "click", "() => {}");
         dispatcher
             .engine
@@ -378,7 +383,7 @@ mod tests {
         for event in ["mousemove", "wheel", "keydown"] {
             // A key goes to the root when nothing is focused.
             let listener = if event == "keydown" {
-                host.borrow().root()
+                host.document.borrow().root()
             } else {
                 node
             };
@@ -427,7 +432,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(
@@ -482,8 +487,8 @@ mod tests {
         assert_eq!(dispatcher.tracks_pointer(), expected);
     }
 
-    fn record_box(host: &Rc<RefCell<Host>>, node: NodeId, left: f32, top: f32, border: f32) {
-        host.borrow().layout.borrow_mut().insert(
+    fn record_box(host: &Rc<Host>, node: NodeId, left: f32, top: f32, border: f32) {
+        host.window.borrow().layout.borrow_mut().insert(
             node,
             inca_gpui::NodeLayout {
                 bounds: gpui::Bounds::new(

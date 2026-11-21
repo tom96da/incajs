@@ -34,7 +34,7 @@ fn node(f: &Clocked) -> u32 {
 
 fn clicks(f: &Clocked) -> Vec<u32> {
     callback_ids(
-        &f.host.borrow().listeners,
+        &f.host.document.borrow().listeners,
         EventTargetId::Node(node(f)),
         "click",
     )
@@ -112,7 +112,7 @@ fn one_signal_removes_listeners_of_two_nodes() {
     let other: u32 = f.engine.eval("other").unwrap();
 
     let left = callback_ids(
-        &f.host.borrow().listeners,
+        &f.host.document.borrow().listeners,
         EventTargetId::Node(other),
         "click",
     );
@@ -145,7 +145,7 @@ fn a_registration_removed_in_another_way_leaves_no_link() {
         )
         .unwrap();
 
-    assert_eq!(f.host.borrow().listeners.links.len(), 0);
+    assert_eq!(f.host.document.borrow().listeners.links.len(), 0);
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn the_free_of_a_node_unlinks_its_listeners() {
         .eval::<()>("add(node, () => {}, s); n.destroyNode(node);")
         .unwrap();
 
-    assert_eq!(f.host.borrow().listeners.links.len(), 0);
+    assert_eq!(f.host.document.borrow().listeners.links.len(), 0);
 }
 
 #[test]
@@ -219,7 +219,7 @@ fn a_throwing_released_hook_is_filed_and_the_abort_goes_on() {
         .unwrap();
 
     assert_eq!(f.json("log"), json!(["event"]));
-    assert_eq!(f.host.borrow().failures.len(), 1);
+    assert_eq!(f.host.js.borrow().failures.len(), 1);
 }
 
 #[test]
@@ -353,7 +353,7 @@ fn a_listener_that_removes_itself_leaves_no_link_after_it_runs() {
         .unwrap();
 
     assert_eq!(f.json("log"), json!(["ran"]));
-    assert_eq!(f.host.borrow().listeners.links.len(), 0);
+    assert_eq!(f.host.document.borrow().listeners.links.len(), 0);
 }
 
 /// A dependent signal with two linked listeners, the first removed.
@@ -455,7 +455,7 @@ fn a_collected_signal_drops_its_links() {
     f.engine.with(|ctx| ctx.run_gc());
     drop(f.engine.run_jobs());
 
-    assert_eq!(f.host.borrow().listeners.links.len(), 0);
+    assert_eq!(f.host.document.borrow().listeners.links.len(), 0);
     assert_eq!(clicks(&f).len(), 1);
 }
 

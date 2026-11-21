@@ -21,7 +21,7 @@ impl EventDispatcher {
         self.warn_style_sheets();
         self.sync_modifiers(window, false);
         let transitions = {
-            let host = &mut *self.host.borrow_mut();
+            let host = &mut *self.host.document.borrow_mut();
             let transitions = host
                 .focus
                 .apply_pending(&host.tree, &host.style, window, cx);
@@ -33,18 +33,18 @@ impl EventDispatcher {
             dispatch_transition(transition, self, window, cx);
         }
         self.release_orphans(window, cx);
-        self.host.borrow_mut().reveal_focus(window);
+        self.host.reveal_focus(window);
         self.fire_scrolls(window, cx);
         // A refresh requested while drawing has no effect, so a listener's own focus changes need
         // the next frame.
-        if self.host.borrow().focus.has_queued_work() {
+        if self.host.document.borrow().focus.has_queued_work() {
             window.request_animation_frame();
         }
     }
 
     /// Prints each warning of the sheets parsed since the last frame, prefixed with `<style>: `.
     fn warn_style_sheets(&self) {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         for line in host.style.take_style_warnings(&host.tree) {
             host.warnings.emit(&format!("<style>: {line}"));
         }
@@ -56,17 +56,17 @@ impl EventDispatcher {
     /// reported and the frame goes on. Nodes the hook leaves orphaned wait
     /// for the next frame, which this requests.
     fn release_orphans(&self, window: &mut Window, cx: &mut App) {
-        let swept = self.host.borrow_mut().sweep_orphans();
+        let swept = self.host.sweep_orphans();
         let Some((nodes, callback_ids)) = swept else {
             return;
         };
-        self.host.borrow_mut().focus.observe(window, cx);
+        self.host.document.borrow_mut().focus.observe(window, cx);
         let entered = self.script.release(&nodes, &callback_ids);
         if entered {
             self.drain_observed(window);
         }
         // The requests end when a frame leaves no orphan.
-        if self.host.borrow().tree.has_orphans() {
+        if self.host.document.borrow().tree.has_orphans() {
             window.request_animation_frame();
         }
     }
@@ -80,7 +80,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        self.host.borrow_mut().focus.observe(window, cx);
+        self.host.document.borrow_mut().focus.observe(window, cx);
         let payload = self.with_held_buttons(event, payload.clone());
         let payload = with_screen(payload, window);
         let (_, entered) = self.walk(target, event, &payload, &[]);
@@ -93,7 +93,7 @@ impl EventDispatcher {
     /// call and that a `scroll` listener reaches. A script write and a wheel
     /// scroll each fire once. Only the containers a listener reaches run JS.
     pub fn fire_scrolls(&self, window: &mut Window, cx: &mut App) {
-        let moved = self.host.borrow_mut().scrolled_nodes();
+        let moved = self.host.scrolled_nodes();
         let any = !moved.is_empty();
         for node in moved {
             self.fire(node, "scroll", &EventPayload::None, window, cx);
@@ -122,11 +122,12 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let printed = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&printed);
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .warnings
             .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
         {
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             let root = host.root();
             let style = host.tree.create_node("style").unwrap();
             let text = host.tree.create_node("#text").unwrap();
@@ -154,7 +155,7 @@ mod tests {
 
     struct Scene {
         dispatcher: Rc<EventDispatcher>,
-        host: Rc<RefCell<Host>>,
+        host: Rc<Host>,
         reported: Reported,
         window: gpui::WindowHandle<Frame>,
     }
@@ -209,7 +210,7 @@ mod tests {
             scene.json("[globalThis.released, [top, leaf, cb]]"),
             serde_json::json!([[[[2, 3], [1]]], [2, 3, 1]])
         );
-        assert!(scene.host.borrow().tree.get(2).is_none());
+        assert!(scene.host.document.borrow().tree.get(2).is_none());
     }
 
     #[gpui::test]
@@ -289,7 +290,12 @@ mod tests {
         );
         scene.js("__inca_native__.createNode('div');");
         let node = focusable_node(&scene.dispatcher, &scene.host);
-        scene.host.borrow_mut().focus.request_focus(node, true);
+        scene
+            .host
+            .document
+            .borrow_mut()
+            .focus
+            .request_focus(node, true);
 
         draw(cx, scene.window);
 
@@ -381,7 +387,12 @@ mod tests {
         );
         scene.js("__inca_native__.createNode('div');");
         let node = focusable_node(&scene.dispatcher, &scene.host);
-        scene.host.borrow_mut().focus.request_focus(node, true);
+        scene
+            .host
+            .document
+            .borrow_mut()
+            .focus
+            .request_focus(node, true);
 
         draw(cx, scene.window);
 
@@ -389,7 +400,7 @@ mod tests {
             scene.json("globalThis.seen"),
             serde_json::json!([format!("focus:{node}")])
         );
-        assert!(!scene.host.borrow().tree.has_orphans());
+        assert!(!scene.host.document.borrow().tree.has_orphans());
     }
 
     #[gpui::test]
@@ -433,8 +444,8 @@ mod tests {
 
         draw(cx, scene.window);
 
-        assert!(scene.host.borrow().tree.get(2).is_none());
-        assert!(scene.host.borrow().listeners.is_empty());
+        assert!(scene.host.document.borrow().tree.get(2).is_none());
+        assert!(scene.host.document.borrow().listeners.is_empty());
     }
 
     #[gpui::test]
@@ -467,7 +478,12 @@ mod tests {
     fn a_removed_focused_node_is_swept_without_a_blur(cx: &mut TestAppContext) {
         let scene = scene(cx, RELEASED);
         let node = focusable_node(&scene.dispatcher, &scene.host);
-        scene.host.borrow_mut().focus.request_focus(node, true);
+        scene
+            .host
+            .document
+            .borrow_mut()
+            .focus
+            .request_focus(node, true);
         draw(cx, scene.window);
         scene.js("globalThis.seen = [];");
 
@@ -481,7 +497,7 @@ mod tests {
             scene.json("globalThis.released.map(([n]) => n)"),
             serde_json::json!([[node]])
         );
-        assert!(scene.host.borrow().tree.get(node).is_none());
+        assert!(scene.host.document.borrow().tree.get(node).is_none());
     }
 
     #[gpui::test]
@@ -499,27 +515,27 @@ mod tests {
     #[gpui::test]
     fn a_frame_writes_the_focus_a_request_asked_for(cx: &mut TestAppContext) {
         let (_dispatcher, host, window, node) = focus_scene(cx);
-        host.borrow_mut().focus.request_focus(node, true);
+        host.document.borrow_mut().focus.request_focus(node, true);
 
         draw(cx, window);
 
-        assert!(is_focused(&host.borrow(), node));
+        assert!(is_focused(&host.document.borrow(), node));
     }
 
     #[gpui::test]
     fn a_frame_clears_the_focus_of_a_node_that_stops_being_focusable(cx: &mut TestAppContext) {
         let (_dispatcher, host, window, node) = focus_scene(cx);
-        host.borrow_mut().focus.request_focus(node, true);
+        host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
         {
-            let host = &mut *host.borrow_mut();
+            let host = &mut *host.document.borrow_mut();
             host.tree.remove_attribute(node, "tabindex").unwrap();
             host.focus.mark_tab_dirty(node);
         }
 
         draw(cx, window);
 
-        assert!(!is_focused(&host.borrow(), node));
+        assert!(!is_focused(&host.document.borrow(), node));
     }
 
     /// A scene with `count` focusable nodes, settled by one draw.
@@ -544,14 +560,19 @@ mod tests {
             }}, false, false);
             "
         ));
-        scene.host.borrow_mut().focus.request_focus(first, false);
+        scene
+            .host
+            .document
+            .borrow_mut()
+            .focus
+            .request_focus(first, false);
 
         draw(cx, scene.window);
-        assert!(!is_focused(&scene.host.borrow(), second));
+        assert!(!is_focused(&scene.host.document.borrow(), second));
         assert_eq!(scene.requested_frames(cx), 1);
         draw(cx, scene.window);
 
-        assert!(is_focused(&scene.host.borrow(), second));
+        assert!(is_focused(&scene.host.document.borrow(), second));
     }
 
     #[gpui::test]
@@ -568,23 +589,33 @@ mod tests {
             }}, false, false);
             "
         ));
-        scene.host.borrow_mut().focus.request_focus(first, false);
+        scene
+            .host
+            .document
+            .borrow_mut()
+            .focus
+            .request_focus(first, false);
 
         draw(cx, scene.window);
-        assert!(is_focused(&scene.host.borrow(), first));
-        assert!(!is_focused(&scene.host.borrow(), second));
+        assert!(is_focused(&scene.host.document.borrow(), first));
+        assert!(!is_focused(&scene.host.document.borrow(), second));
         // Running a requested frame draws it, and each draw requests one frame in turn.
         assert_eq!(scene.requested_frames(cx), 1);
-        assert!(is_focused(&scene.host.borrow(), second));
+        assert!(is_focused(&scene.host.document.borrow(), second));
         assert_eq!(scene.requested_frames(cx), 1);
 
-        assert!(is_focused(&scene.host.borrow(), first));
+        assert!(is_focused(&scene.host.document.borrow(), first));
     }
 
     #[gpui::test]
     fn a_settled_frame_with_no_owed_work_requests_no_frame(cx: &mut TestAppContext) {
         let (scene, nodes) = settled(cx, 1);
-        scene.host.borrow_mut().focus.request_focus(nodes[0], false);
+        scene
+            .host
+            .document
+            .borrow_mut()
+            .focus
+            .request_focus(nodes[0], false);
 
         draw(cx, scene.window);
         scene.requested_frames(cx);
@@ -606,13 +637,18 @@ mod tests {
             }}, false, false);
             "
         ));
-        scene.host.borrow_mut().focus.request_focus(node, false);
+        scene
+            .host
+            .document
+            .borrow_mut()
+            .focus
+            .request_focus(node, false);
 
         draw(cx, scene.window);
-        assert!(is_focused(&scene.host.borrow(), node));
+        assert!(is_focused(&scene.host.document.borrow(), node));
         assert_eq!(scene.requested_frames(cx), 1);
         draw(cx, scene.window);
 
-        assert!(!is_focused(&scene.host.borrow(), node));
+        assert!(!is_focused(&scene.host.document.borrow(), node));
     }
 }

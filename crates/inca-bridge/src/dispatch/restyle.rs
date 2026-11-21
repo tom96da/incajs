@@ -11,7 +11,7 @@ impl EventDispatcher {
     /// Redraws the window when `changed` and a connected rule names the pointer state (`pointer`)
     /// or the focus state. Returns whether it requested the redraw.
     pub(crate) fn restyle(&self, changed: bool, pointer: bool, window: &mut Window) -> bool {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         let redraw = changed
             && if pointer {
                 host.style.uses_pointer_state(&host.tree)

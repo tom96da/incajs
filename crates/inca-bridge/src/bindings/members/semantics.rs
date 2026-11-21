@@ -5,7 +5,6 @@
 //! members that reflect text. A node the host has freed reads -1 for `tabIndex` and `null` for the
 //! text members, and ignores a write.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
@@ -23,7 +22,7 @@ use crate::bindings::host::Host;
 
 /// Defines the text members of the ARIA table on the prototype of `Element`, and `tabIndex` on the
 /// prototypes of `HTMLElement` and the foreign element.
-pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let element = required_prototype(ctx, "Element")?;
     for row in ARIA_REFLECTIONS
         .iter()
@@ -39,7 +38,8 @@ pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
             move |ctx, host, id, _| {
                 or_null(
                     ctx,
-                    host.borrow()
+                    host.document
+                        .borrow()
                         .tree
                         .get(id)
                         .and_then(|node| node.attributes().get(attribute))
@@ -52,7 +52,7 @@ pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
                 } else {
                     Some(Coerced::<String>::from_js(ctx, value)?.0)
                 };
-                let mut host = host.borrow_mut();
+                let mut host = host.document.borrow_mut();
                 if host.tree.get(id).is_some() {
                     let _ = match text {
                         Some(text) => host.tree.set_attribute(id, attribute, text),
@@ -70,10 +70,10 @@ pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
             host,
             "tabIndex",
             &HTML_OR_SVG,
-            |_, host, id, _| Ok(host.borrow().tree.tab_index(id).unwrap_or(-1)),
+            |_, host, id, _| Ok(host.document.borrow().tree.tab_index(id).unwrap_or(-1)),
             |ctx, host, id, _, value| {
                 let index = Coerced::<i32>::from_js(ctx, value)?.0;
-                let mut host = host.borrow_mut();
+                let mut host = host.document.borrow_mut();
                 if host.tree.get(id).is_some() {
                     let _ = host.tree.set_attribute(
                         id,
@@ -196,7 +196,7 @@ mod tests {
         );
 
         assert_eq!(got, json!(-1));
-        assert!(!host.borrow().focus.has_queued_work());
+        assert!(!host.document.borrow().focus.has_queued_work());
     }
 
     #[test]

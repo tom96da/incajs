@@ -23,12 +23,13 @@ impl EventDispatcher {
         cx: &mut App,
     ) -> bool {
         let (lost, got) = {
-            let mut host = self.host.borrow_mut();
+            let mut host = self.host.document.borrow_mut();
+            let mut window_state = self.host.window.borrow_mut();
             let pending = host
                 .capture_pending
                 .filter(|&node| host.tree.is_connected(node));
             host.capture_pending = pending;
-            let lost = host.capture_active.map(|node| {
+            let lost = window_state.capture_active.map(|node| {
                 if host.tree.is_connected(node) {
                     EventTargetId::Node(node)
                 } else {
@@ -39,7 +40,7 @@ impl EventDispatcher {
             if lost == got {
                 return false;
             }
-            host.capture_active = pending;
+            window_state.capture_active = pending;
             (lost, got)
         };
         let capture = pointer_payload(payload, button);
@@ -57,7 +58,7 @@ impl EventDispatcher {
 
     /// The node holding the capture.
     pub(super) fn captured(&self) -> Option<NodeId> {
-        self.host.borrow().capture_active
+        self.host.window.borrow().capture_active
     }
 
     /// The node the pointer events of an input over `target` go to.
@@ -309,7 +310,12 @@ mod tests {
         let mut s = captured(cx, "a");
         let (a, b) = (s.a, s.b);
         s.moved(a, (2.0, 2.0));
-        s.host.borrow_mut().tree.append_child(b, a).unwrap();
+        s.host
+            .document
+            .borrow_mut()
+            .tree
+            .append_child(b, a)
+            .unwrap();
         s.take();
         s.moved(b, (5.0, 5.0));
         let got = s.take();
@@ -385,14 +391,14 @@ mod tests {
         let mut s = captured(cx, "a");
         let (a, b) = (s.a, s.b);
         s.moved(a, (2.0, 2.0));
-        let document = s.host.borrow().document();
+        let document = s.host.document.borrow().document();
         s.listen(
             document,
             "lostpointercapture",
             "(e) => out.push(`${e.type}@${e.target}`)",
         );
         s.take();
-        s.host.borrow_mut().tree.destroy_node(a);
+        s.host.document.borrow_mut().tree.destroy_node(a);
         s.moved(b, (5.0, 5.0));
         let got = s.take();
         assert_eq!(
@@ -423,7 +429,7 @@ mod tests {
         let a = s.a;
         s.moved(a, (2.0, 2.0));
         s.moved(a, (3.0, 3.0));
-        let host = s.host.borrow();
+        let host = s.host.document.borrow();
 
         assert!(state(&host, s.a, ":hover"));
         assert!(!state(&host, s.b, ":hover"));

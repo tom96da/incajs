@@ -3,7 +3,6 @@
 
 //! The native that inserts nodes and texts in one checked step.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, FromJs, Result as JsResult, Value};
@@ -68,24 +67,25 @@ impl<'js> FromJs<'js> for JsPlacement {
 /// `ReplaceWith` on a node without a parent.
 pub(super) fn insert_planned(
     ctx: &Ctx<'_>,
-    host: &mut Host,
+    host: &Host,
     node_id: NodeId,
     placement: Placement,
     nodes: &[InsertArg],
 ) -> JsResult<Option<Inserted>> {
-    let planned = host
+    let mut document = host.document.borrow_mut();
+    let planned = document
         .tree
         .plan_insertion(node_id, placement, nodes)
         .map_err(|err| throw_tree_error(ctx, err))?;
     let Some(insertion) = planned else {
         return Ok(None);
     };
-    let left = host.tree.removals(&insertion.leaving());
-    let inserted = host
+    let left = document.tree.removals(&insertion.leaving());
+    let inserted = document
         .tree
         .apply_insertion(insertion)
         .map_err(|err| throw_tree_error(ctx, err))?;
-    host.settle(&left);
+    host.settle(&mut document, &left);
     Ok(Some(inserted))
 }
 
@@ -95,17 +95,19 @@ pub(super) fn insert_planned(
 /// a change for `before`, `after` and `replaceWith` on a node without a parent. A failed check
 /// throws and changes nothing. A removed node keeps its listeners.
 fn insert_nodes<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsPlacement, Vec<JsInsertArg>) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), JsPlacement(placement), nodes| {
         let nodes: Vec<InsertArg> = nodes.into_iter().map(|JsInsertArg(arg)| arg).collect();
-        let mut host = host.borrow_mut();
-        let Some(inserted) = insert_planned(&ctx, &mut host, node_id, placement, &nodes)? else {
+        let Some(inserted) = insert_planned(&ctx, &host, node_id, placement, &nodes)? else {
             return Ok(Value::new_null(ctx.clone()));
         };
         let array = Array::new(ctx.clone())?;
         array.set(0, inserted.texts)?;
-        array.set(1, removed_subtrees(&ctx, &host.tree, &inserted.removed)?)?;
+        array.set(
+            1,
+            removed_subtrees(&ctx, &host.document.borrow().tree, &inserted.removed)?,
+        )?;
         Ok(array.into_value())
     }
 }
@@ -114,7 +116,6 @@ fn insert_nodes<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::RefCell;
     use std::rc::Rc;
 
     use inca_jsenv::Engine;
@@ -147,7 +148,7 @@ mod tests {
         };
         ";
 
-    fn engine_with_family() -> (Engine, Rc<RefCell<Host>>) {
+    fn engine_with_family() -> (Engine, Rc<Host>) {
         let (engine, host) = engine_with_bindings();
         engine.eval::<()>(LISTEN_JS).unwrap();
         engine.eval::<()>(SETUP).unwrap();
@@ -289,7 +290,7 @@ mod tests {
             )
             .unwrap();
 
-        let host = host.borrow();
+        let host = host.document.borrow();
         assert_eq!(
             callback_ids(&host.listeners, EventTargetId::Node(id), "click").len(),
             1

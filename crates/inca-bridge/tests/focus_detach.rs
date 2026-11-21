@@ -37,10 +37,10 @@ fn focus_then_run(
 ) -> Outcome {
     let (host, parent, children) = test_support::focusable_tree(2, false);
     let (leaf, sibling) = (children[0], children[1]);
-    let root = host.borrow().root();
+    let root = host.document.borrow().root();
     let mut top = leaf;
     if nested {
-        let mut host_mut = host.borrow_mut();
+        let mut host_mut = host.document.borrow_mut();
         let mid = host_mut.tree.create_node("div").unwrap();
         host_mut.tree.remove_child(parent, leaf).unwrap();
         host_mut.tree.append_child(mid, leaf).unwrap();
@@ -58,7 +58,7 @@ fn focus_then_run(
     );
     let window = test_support::mount_active(cx, &host, &engine, parent);
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(leaf, true);
+        host.document.borrow_mut().focus.request_focus(leaf, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -76,7 +76,7 @@ fn focus_then_run(
     let after_frame = cx
         .update_window(window.into(), |_root, window, cx| {
             window.draw(cx).clear(cx);
-            host.borrow().focus.focused_node(window, cx)
+            host.document.borrow().focus.focused_node(window, cx)
         })
         .unwrap();
     cx.run_until_parked();

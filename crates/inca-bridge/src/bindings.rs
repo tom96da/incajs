@@ -31,9 +31,8 @@ mod selector;
 mod token_list;
 mod tree;
 
-pub use host::Host;
+pub use host::{DocumentState, Host, JsState, WindowState};
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::function::IntoJsFunc;
@@ -72,7 +71,7 @@ use tree::install_tree;
 /// Returns an error if defining a global or a method on `ctx` fails, or the
 /// realm has no vault (a context no `Engine` made). A second call on the same
 /// `ctx` fails, as the globals are already defined.
-pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+pub fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let native = Object::new(ctx.clone())?;
     let natives = Natives {
         ctx,
@@ -102,8 +101,8 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     natives.set("registerUncloneable", |_host| {
         crate::interfaces::register_uncloneable()
     })?;
-    inca_jsenv::timers::install(ctx, &host.borrow().timers)?;
-    inca_jsenv::frames::install(ctx, &host.borrow().frames)?;
+    inca_jsenv::timers::install(ctx, &host.js.borrow().timers)?;
+    inca_jsenv::frames::install(ctx, &host.js.borrow().frames)?;
     crate::event::install(ctx)?;
     crate::interfaces::install(ctx)?;
     install_members(ctx, host)?;
@@ -116,12 +115,12 @@ pub fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
 pub(super) struct Natives<'a, 'js> {
     ctx: &'a Ctx<'js>,
     native: &'a Object<'js>,
-    host: &'a Rc<RefCell<Host>>,
+    host: &'a Rc<Host>,
 }
 
 impl<'js> Natives<'_, 'js> {
     /// Sets the native `name`, built by `make` from a clone of the host.
-    fn set<P, F>(&self, name: &str, make: impl FnOnce(Rc<RefCell<Host>>) -> F) -> JsResult<()>
+    fn set<P, F>(&self, name: &str, make: impl FnOnce(Rc<Host>) -> F) -> JsResult<()>
     where
         F: IntoJsFunc<'js, P> + 'js,
     {

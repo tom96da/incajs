@@ -7,7 +7,6 @@
 //! as an empty dataset and ignores writes. A write still checks its name, so it throws for a
 //! name that is invalid on a freed node too.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, IntoJs, Object, Result as JsResult, Value};
@@ -31,11 +30,9 @@ pub(super) fn install_dataset(n: &Natives<'_, '_>) -> JsResult<()> {
 
 /// The value of the attribute `key` of the node `node_id` as text, `undefined` when the attribute
 /// is absent or the key is not supported.
-fn dataset_get<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
+fn dataset_get<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), key| {
-        let host = host.borrow();
+        let host = host.document.borrow();
         let Ok(name) = data_attribute(&key) else {
             return Ok(Value::new_undefined(ctx));
         };
@@ -53,9 +50,7 @@ fn dataset_get<'js>(
 /// Writes the attribute of `key` with the text `value`. A key with a dash before a lower case
 /// letter throws a `SyntaxError`, and an invalid attribute name throws an `InvalidCharacterError`.
 /// A freed node ignores the write.
-fn dataset_set<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String, String) -> JsResult<()> {
+fn dataset_set<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), key, value| {
         let name = data_attribute(&key).map_err(|_| {
             Exception::throw_dom(
@@ -77,7 +72,7 @@ fn dataset_set<'js>(
                 ),
             ));
         }
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         if host.tree.get(node_id).is_none() {
             return Ok(());
         }
@@ -89,14 +84,12 @@ fn dataset_set<'js>(
 
 /// Removes the attribute of `key`. Returns `true` in every case, also for an absent or unsupported
 /// key and a freed node.
-fn dataset_delete<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<bool> {
+fn dataset_delete<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<bool> {
     move |_ctx, JsNodeId(node_id), key| {
         let Ok(name) = data_attribute(&key) else {
             return Ok(true);
         };
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         if host.tree.get(node_id).is_some() {
             // The node exists here, so the removal cannot fail and its result is dropped.
             let _ = host.tree.remove_attribute(node_id, &name);
@@ -106,11 +99,10 @@ fn dataset_delete<'js>(
 }
 
 /// The dataset keys of the node `node_id` in attribute order, empty for a freed node.
-fn dataset_keys<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<String>> {
+fn dataset_keys<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<String>> {
     move |_ctx, JsNodeId(node_id)| {
         Ok(host
+            .document
             .borrow()
             .tree
             .get(node_id)
@@ -121,7 +113,7 @@ fn dataset_keys<'js>(
 
 /// A new plain object whose prototype is the `DOMStringMap` prototype. The proxy of `dataset`
 /// uses it as its target.
-fn dataset_target<'js>(_host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>) -> JsResult<Object<'js>> {
+fn dataset_target<'js>(_host: Rc<Host>) -> impl Fn(Ctx<'js>) -> JsResult<Object<'js>> {
     move |ctx| {
         let target = Object::new(ctx.clone())?;
         target.set_prototype(Some(&required_prototype(&ctx, "DOMStringMap")?))?;
@@ -329,7 +321,7 @@ mod tests {
     fn a_freed_node_reads_no_key_and_deletes_nothing(#[case] check: &str) {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.borrow_mut().sweep_orphans().unwrap();
+        host.sweep_orphans().unwrap();
 
         let got: bool = engine
             .eval(&check.replace("NODE", &node.to_string()))
@@ -342,7 +334,7 @@ mod tests {
     fn a_freed_node_ignores_a_write_of_a_valid_key() {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.borrow_mut().sweep_orphans().unwrap();
+        host.sweep_orphans().unwrap();
 
         engine
             .eval::<()>(&format!("__inca_native__.datasetSet({node}, 'x', 'v')"))
@@ -353,7 +345,7 @@ mod tests {
     fn a_freed_node_still_throws_for_an_invalid_name() {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.borrow_mut().sweep_orphans().unwrap();
+        host.sweep_orphans().unwrap();
 
         assert_eq!(
             error_name(

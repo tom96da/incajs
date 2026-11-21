@@ -1,7 +1,6 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
@@ -23,11 +22,9 @@ pub(super) fn install_selector(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("querySelectorAll", query_all)
 }
 
-fn closest<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
+fn closest<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), selector| {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         host.sync_focus_style();
         let syntax =
             |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
@@ -40,11 +37,9 @@ fn closest<'js>(
     }
 }
 
-fn query<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
+fn query<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), selector| {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         host.sync_focus_style();
         let syntax =
             |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
@@ -57,11 +52,9 @@ fn query<'js>(
     }
 }
 
-fn query_all<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Vec<NodeId>> {
+fn query_all<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Vec<NodeId>> {
     move |ctx, JsNodeId(node_id), selector| {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         host.sync_focus_style();
         let syntax =
             |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());

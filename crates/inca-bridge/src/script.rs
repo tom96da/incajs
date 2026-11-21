@@ -17,7 +17,7 @@ use crate::bindings::Host;
 use crate::event::{self, Outcome, Walk};
 
 /// What the dispatch needs of the JS side. A method that runs JS files what the script threw in
-/// `Host::failures`, and [`report_pending`](Self::report_pending) sends it on. Call every method
+/// `JsState::failures`, and [`report_pending`](Self::report_pending) sends it on. Call every method
 /// outside any [`Engine::with`] and with no borrow of the host held.
 pub(crate) trait Script {
     /// Runs the listeners of `walk` and reports whether one canceled the event and whether the
@@ -47,16 +47,12 @@ pub(crate) trait Script {
 /// The [`Script`] of a `QuickJS` engine and the host its bindings write to.
 pub(crate) struct JsScript {
     engine: Rc<Engine>,
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     reporter: RefCell<ErrorReporter>,
 }
 
 impl JsScript {
-    pub(crate) fn new(
-        engine: Rc<Engine>,
-        host: Rc<RefCell<Host>>,
-        reporter: ErrorReporter,
-    ) -> Self {
+    pub(crate) fn new(engine: Rc<Engine>, host: Rc<Host>, reporter: ErrorReporter) -> Self {
         Self {
             engine,
             host,
@@ -75,26 +71,28 @@ impl Script for JsScript {
     }
 
     fn run_timers(&self) -> usize {
-        let timers = Rc::clone(&self.host.borrow().timers);
+        let timers = Rc::clone(&self.host.js.borrow().timers);
         run_timers(&self.engine, &timers, &self.reporter())
     }
 
     fn run_frames(&self) -> usize {
-        let frames = Rc::clone(&self.host.borrow().frames);
+        let frames = Rc::clone(&self.host.js.borrow().frames);
         run_frames(&self.engine, &frames, &self.reporter())
     }
 
     fn release(&self, nodes: &[NodeId], callback_ids: &[u32]) -> bool {
         let host = &self.host;
         self.engine.with(|ctx| {
-            let settled = crate::abort::settle_freed(&ctx, &mut host.borrow_mut());
+            let settled = crate::abort::settle_freed(&ctx, &mut host.document.borrow_mut());
             if let Err(err) = settled {
-                host.borrow_mut()
+                host.js
+                    .borrow_mut()
                     .failures
                     .push(EngineError::capture(&ctx, &err));
             }
             if let Err(err) = callbacks::release(&ctx, callback_ids) {
-                host.borrow_mut()
+                host.js
+                    .borrow_mut()
                     .failures
                     .push(EngineError::capture(&ctx, &err));
             }
@@ -107,7 +105,7 @@ impl Script for JsScript {
     }
 
     fn report_pending(&self) {
-        let pending = std::mem::take(&mut self.host.borrow_mut().failures);
+        let pending = std::mem::take(&mut self.host.js.borrow_mut().failures);
         let reporter = self.reporter();
         for failure in &pending {
             reporter(failure);
@@ -120,11 +118,11 @@ impl Script for JsScript {
 }
 
 /// Calls the global `__inca_released__(nodeIds, callbackIds)` and files a throw in
-/// `Host::failures`. The global is looked up per call and skipped when it is not a function.
+/// `JsState::failures`. The global is looked up per call and skipped when it is not a function.
 /// Returns whether it was a function.
 pub(crate) fn notify_released(
     ctx: &rquickjs::Ctx<'_>,
-    host: &RefCell<Host>,
+    host: &Host,
     nodes: &[NodeId],
     callback_ids: &[u32],
 ) -> bool {
@@ -139,7 +137,8 @@ pub(crate) fn notify_released(
         hook.call::<_, ()>((nodes, callback_ids))
     });
     if let Err(err) = called {
-        host.borrow_mut()
+        host.js
+            .borrow_mut()
             .failures
             .push(EngineError::capture(ctx, &err));
     }
@@ -155,17 +154,17 @@ mod tests {
 
     #[test]
     fn pending_failures_go_to_the_reporter_set_last() {
-        let host = Rc::new(RefCell::new(Host::default()));
+        let host = Rc::new(Host::default());
         let engine = engine_for(&host);
         let failure = engine.eval::<()>("throw new Error('boom');").unwrap_err();
         let script = JsScript::new(engine, Rc::clone(&host), stderr_reporter());
         let (report, reported) = capture_reporter();
         script.set_reporter(report);
-        host.borrow_mut().failures.push(failure.clone());
+        host.js.borrow_mut().failures.push(failure.clone());
 
         script.report_pending();
 
         assert_eq!(*reported.borrow(), vec![failure]);
-        assert!(host.borrow().failures.is_empty());
+        assert!(host.js.borrow().failures.is_empty());
     }
 }

@@ -576,7 +576,7 @@ mod tests {
     #[test]
     fn a_built_mouse_event_shows_its_fields_to_a_listener() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,

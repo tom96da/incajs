@@ -11,7 +11,7 @@ use crate::dispatch::EventDispatcher;
 impl EventDispatcher {
     /// The focused node when it is a link. A link has no disabled state.
     pub(in crate::dispatch) fn focused_link(&self, window: &Window, cx: &App) -> Option<NodeId> {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         host.focus
             .focused_node(window, cx)
             .filter(|id| host.tree.get(*id).is_some_and(VirtualNode::is_link))
@@ -37,7 +37,7 @@ mod tests {
             attributes: &[(&str, &str)],
         ) -> NodeId {
             let node = {
-                let mut host = self.host.borrow_mut();
+                let mut host = self.host.document.borrow_mut();
                 let node = host
                     .tree
                     .create_element_ns(Some(namespace), None, tag)

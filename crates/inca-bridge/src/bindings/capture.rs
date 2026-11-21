@@ -1,7 +1,6 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
@@ -11,7 +10,7 @@ use inca_node::NodeId;
 
 use super::Natives;
 use super::convert::JsNodeId;
-use super::host::Host;
+use super::host::{DocumentState, Host};
 
 /// The id of the one pointer the host has: the mouse.
 const MOUSE_POINTER: i32 = 1;
@@ -39,12 +38,13 @@ fn known_pointer(ctx: &Ctx<'_>, pointer_id: i32) -> JsResult<()> {
 /// throws `InvalidStateError`.
 pub(super) fn set_capture(
     ctx: &Ctx<'_>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     node: NodeId,
     pointer_id: i32,
 ) -> JsResult<()> {
     known_pointer(ctx, pointer_id)?;
-    let mut host = host.borrow_mut();
+    let held = host.window.borrow().held_buttons != 0;
+    let mut host = host.document.borrow_mut();
     if !host.tree.is_connected(node) {
         return Err(Exception::throw_dom(
             ctx,
@@ -52,14 +52,14 @@ pub(super) fn set_capture(
             "the node is not in the mounted tree. mount it before capturing the pointer",
         ));
     }
-    if host.held_buttons != 0 {
+    if held {
         host.capture_pending = Some(node);
     }
     Ok(())
 }
 
 /// Whether `node` has the capture of the pointer.
-pub(super) fn has_capture(host: &Host, node: NodeId, pointer_id: i32) -> bool {
+pub(super) fn has_capture(host: &DocumentState, node: NodeId, pointer_id: i32) -> bool {
     pointer_id == MOUSE_POINTER
         && host.capture_pending == Some(node)
         && host.tree.is_connected(node)
@@ -68,12 +68,12 @@ pub(super) fn has_capture(host: &Host, node: NodeId, pointer_id: i32) -> bool {
 /// Releases the capture of the pointer when `node` has it.
 pub(super) fn release_capture(
     ctx: &Ctx<'_>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     node: NodeId,
     pointer_id: i32,
 ) -> JsResult<()> {
     known_pointer(ctx, pointer_id)?;
-    let mut host = host.borrow_mut();
+    let mut host = host.document.borrow_mut();
     if host.capture_pending == Some(node) {
         host.capture_pending = None;
     }
@@ -81,17 +81,19 @@ pub(super) fn release_capture(
 }
 
 fn set_pointer_capture<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>) -> JsResult<()> {
     move |ctx, JsNodeId(node), Coerced(pointer_id)| set_capture(&ctx, &host, node, pointer_id)
 }
 
-fn has_pointer_capture(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId, Coerced<i32>) -> bool {
-    move |JsNodeId(node), Coerced(pointer_id)| has_capture(&host.borrow(), node, pointer_id)
+fn has_pointer_capture(host: Rc<Host>) -> impl Fn(JsNodeId, Coerced<i32>) -> bool {
+    move |JsNodeId(node), Coerced(pointer_id)| {
+        has_capture(&host.document.borrow(), node, pointer_id)
+    }
 }
 
 fn release_pointer_capture<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>) -> JsResult<()> {
     move |ctx, JsNodeId(node), Coerced(pointer_id)| release_capture(&ctx, &host, node, pointer_id)
 }
@@ -100,7 +102,6 @@ fn release_pointer_capture<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::RefCell;
     use std::rc::Rc;
 
     use rstest::rstest;
@@ -109,9 +110,9 @@ mod tests {
     use crate::test_support::{engine_with_bindings, error_name};
 
     /// A mounted node, and the engine and host it lives in.
-    fn mounted(held: u8) -> (inca_jsenv::Engine, Rc<RefCell<Host>>, u32) {
+    fn mounted(held: u8) -> (inca_jsenv::Engine, Rc<Host>, u32) {
         let (engine, host) = engine_with_bindings();
-        host.borrow_mut().held_buttons = held;
+        host.window.borrow_mut().held_buttons = held;
         let node: u32 = engine
             .eval(
                 r"
@@ -155,7 +156,7 @@ mod tests {
         engine
             .eval::<()>("__inca_native__.setPointerCapture(n, 1)")
             .unwrap();
-        assert_eq!(host.borrow().capture_pending, None);
+        assert_eq!(host.document.borrow().capture_pending, None);
     }
 
     #[test]
@@ -164,7 +165,7 @@ mod tests {
         engine
             .eval::<()>("__inca_native__.setPointerCapture(n, 1)")
             .unwrap();
-        assert_eq!(host.borrow().capture_pending, Some(node));
+        assert_eq!(host.document.borrow().capture_pending, Some(node));
     }
 
     #[test]
@@ -187,7 +188,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(flags, [true, false, false, true, false]);
-        assert_eq!(host.borrow().capture_pending, None);
+        assert_eq!(host.document.borrow().capture_pending, None);
     }
 
     #[test]

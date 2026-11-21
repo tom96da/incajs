@@ -6,7 +6,6 @@
 //! An attribute outside the element rows of the table throws a `TypeError`. A freed node reads
 //! `null` and ignores a write.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
@@ -38,22 +37,28 @@ fn element_row(ctx: &Ctx<'_>, attribute: &str) -> JsResult<&'static str> {
 /// The ids of the elements the attribute `attribute` of `node_id` refers to, `null` when it
 /// refers to none.
 fn aria_elements<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), attribute| {
         let attribute = element_row(&ctx, &attribute)?;
-        or_null(&ctx, host.borrow().tree.aria_elements(node_id, attribute))
+        or_null(
+            &ctx,
+            host.document
+                .borrow()
+                .tree
+                .aria_elements(node_id, attribute),
+        )
     }
 }
 
 /// Keeps `ids` as the elements the attribute refers to, or removes the attribute for `null`.
 fn set_aria_elements<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, Option<Vec<JsNodeId>>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), attribute, ids| {
         let attribute = element_row(&ctx, &attribute)?;
         let ids = ids.map(|ids| ids.into_iter().map(|JsNodeId(id)| id).collect());
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         if host.tree.get(node_id).is_some() {
             let _ = host.tree.set_aria_elements(node_id, attribute, ids);
         }

@@ -5,7 +5,7 @@
 
 use gpui::{Size, Window, px};
 
-use inca_bridge::Host;
+use inca_bridge::DocumentState;
 use inca_node::NodeId;
 use inca_style::declared_window_size;
 
@@ -15,14 +15,17 @@ use crate::config::{self, usable, window_size};
 /// Reads the window size straight from the app the bundle mounted, so the
 /// window fits its content.
 ///
-/// `root` is the empty container the [`Host`] allocates for the bundle to
-/// `mount()` against. The mounted app becomes `root`'s first (and only)
+/// `root` is the empty container in the document cell's tree that the bundle
+/// `mount()`s against. The mounted app becomes `root`'s first (and only)
 /// child, never `root` itself, so `width`/`height` are read from that
 /// child's style, not `root`'s.
 ///
 /// A dimension the app's root doesn't declare, or declares as a negative size or one too large for
 /// a window, comes back as `None`.
-pub(super) fn content_window_size(host: &Host, root: NodeId) -> (Option<f32>, Option<f32>) {
+pub(super) fn content_window_size(
+    host: &DocumentState,
+    root: NodeId,
+) -> (Option<f32>, Option<f32>) {
     let Some(&content) = host.tree.get(root).and_then(|node| node.children().first()) else {
         return (None, None);
     };
@@ -48,7 +51,7 @@ pub(crate) fn maybe_auto_resize_to_content(app: &HostedApp, window: &mut Window)
         return;
     }
     let window_config = app.window_config.as_ref();
-    let content = content_window_size(&app.session.host.borrow(), app.session.root());
+    let content = content_window_size(&app.session.host.document.borrow(), app.session.root());
     let ready =
         |done: bool, pick: fn(&config::WindowConfig) -> Option<f32>, content: Option<f32>| {
             !done
@@ -89,6 +92,7 @@ mod tests {
     use gpui::{
         Bounds, TestAppContext, WindowBounds, WindowHandle, WindowOptions, prelude::*, size,
     };
+    use inca_bridge::Host;
     use inca_jsenv::stderr_reporter;
     use inca_node::AttributeValue;
     use inca_style::set_style;
@@ -133,7 +137,7 @@ mod tests {
     /// `width`/`height`, replacing any prior mount, which simulates content
     /// becoming available after the window already opened.
     fn mount_content(app: &HostedApp, width: f32, height: f32) {
-        let mut host = app.session.host.borrow_mut();
+        let mut host = app.session.host.document.borrow_mut();
         let root = host.root();
         let existing = host.tree.get(root).unwrap().children().first().copied();
         let content = if let Some(id) = existing {
@@ -296,7 +300,7 @@ mod tests {
     /// Mounts an empty `div` under the session's root, then declares each
     /// given dimension on it.
     fn mount_partial(app: &HostedApp, width: Option<f64>, height: Option<f64>) {
-        let mut host = app.session.host.borrow_mut();
+        let mut host = app.session.host.document.borrow_mut();
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
         host.tree.append_child(root, content).unwrap();
@@ -427,26 +431,28 @@ mod tests {
 
     #[test]
     fn content_window_size_reads_the_mounted_root_childs_style() {
-        let mut host = Host::default();
+        let mut state = Host::default();
+        let host = state.document.get_mut();
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, content, "width", 300.0).unwrap();
         set_style(&mut host.tree, content, "height", 150.0).unwrap();
         host.tree.append_child(root, content).unwrap();
 
-        assert_eq!(content_window_size(&host, root), (Some(300.0), Some(150.0)));
+        assert_eq!(content_window_size(host, root), (Some(300.0), Some(150.0)));
     }
 
     #[test]
     fn content_window_size_reads_a_px_string() {
-        let mut host = Host::default();
+        let mut state = Host::default();
+        let host = state.document.get_mut();
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, content, "width", "800px").unwrap();
         set_style(&mut host.tree, content, "height", "150px").unwrap();
         host.tree.append_child(root, content).unwrap();
 
-        assert_eq!(content_window_size(&host, root), (Some(800.0), Some(150.0)));
+        assert_eq!(content_window_size(host, root), (Some(800.0), Some(150.0)));
     }
 
     #[rstest]
@@ -454,28 +460,31 @@ mod tests {
     #[case::negative_px(AttributeValue::String("-5px".into()))]
     #[case::too_large_px(AttributeValue::String("1e999px".into()))]
     fn content_window_size_drops_a_negative_or_too_large_dimension(#[case] value: AttributeValue) {
-        let mut host = Host::default();
+        let mut state = Host::default();
+        let host = state.document.get_mut();
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, content, "width", value).unwrap();
         host.tree.append_child(root, content).unwrap();
 
-        assert_eq!(content_window_size(&host, root), (None, None));
+        assert_eq!(content_window_size(host, root), (None, None));
     }
 
     #[test]
     fn content_window_size_is_none_when_unset() {
-        let mut host = Host::default();
+        let mut state = Host::default();
+        let host = state.document.get_mut();
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
         host.tree.append_child(root, content).unwrap();
 
-        assert_eq!(content_window_size(&host, root), (None, None));
+        assert_eq!(content_window_size(host, root), (None, None));
     }
 
     #[test]
     fn content_window_size_is_none_when_nothing_mounted() {
         let host = Host::default();
+        let host = host.document.borrow();
 
         assert_eq!(content_window_size(&host, host.root()), (None, None));
     }

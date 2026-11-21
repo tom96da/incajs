@@ -19,12 +19,12 @@ impl EventDispatcher {
         cx: &mut App,
     ) {
         let (target, x, y) = {
-            let host = self.host.borrow();
-            let boxed = host.focus.focused_node(window, cx).and_then(|node| {
-                let center = host.layout_of(node)?.bounds.center();
+            let focused = self.host.document.borrow().focus.focused_node(window, cx);
+            let boxed = focused.and_then(|node| {
+                let center = self.host.window.borrow().layout_of(node)?.bounds.center();
                 Some((node, f32::from(center.x), f32::from(center.y)))
             });
-            boxed.unwrap_or_else(|| (host.container_at(1.0, 1.0), 1.0, 1.0))
+            boxed.unwrap_or_else(|| (self.host.container_at(1.0, 1.0), 1.0, 1.0))
         };
         let payload = EventPayload::Mouse(MousePayload {
             client_x: x,
@@ -76,7 +76,15 @@ mod tests {
     }
 
     fn center_of(s: &Scene, node: NodeId) -> (f64, f64) {
-        let layout = s.host.borrow().layout.borrow().get(&node).copied().unwrap();
+        let layout = s
+            .host
+            .window
+            .borrow()
+            .layout
+            .borrow()
+            .get(&node)
+            .copied()
+            .unwrap();
         let center = layout.bounds.center();
         (
             f64::from(f32::from(center.x)),
@@ -185,10 +193,16 @@ mod tests {
     fn contextmenu_key_without_focus_targets_the_container_at_1_1(cx: &mut TestAppContext) {
         let s = scene(cx);
         for style in ["width", "height"] {
-            set_style(&mut s.host.borrow_mut().tree, s.first, style, 100.0).unwrap();
+            set_style(
+                &mut s.host.document.borrow_mut().tree,
+                s.first,
+                style,
+                100.0,
+            )
+            .unwrap();
         }
         s.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
-        let root = s.host.borrow().root();
+        let root = s.host.document.borrow().root();
         record(&s, root);
         s.key(cx, "menu", false, false);
         assert_eq!(
@@ -216,11 +230,23 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let s = scene(cx);
-        set_style(&mut s.host.borrow_mut().tree, s.first, "width", 100.0).unwrap();
-        set_style(&mut s.host.borrow_mut().tree, s.first, "height", 100.0).unwrap();
+        set_style(
+            &mut s.host.document.borrow_mut().tree,
+            s.first,
+            "width",
+            100.0,
+        )
+        .unwrap();
+        set_style(
+            &mut s.host.document.borrow_mut().tree,
+            s.first,
+            "height",
+            100.0,
+        )
+        .unwrap();
         s.focus(cx, s.field);
-        s.host.borrow().layout.borrow_mut().remove(&s.field);
-        let root = s.host.borrow().root();
+        s.host.window.borrow().layout.borrow_mut().remove(&s.field);
+        let root = s.host.document.borrow().root();
         record(&s, root);
         s.key(cx, "menu", false, false);
         let log = log(&s);
@@ -234,7 +260,7 @@ mod tests {
     #[gpui::test]
     fn contextmenu_key_outside_every_box_targets_the_root(cx: &mut TestAppContext) {
         let s = scene(cx);
-        let root = s.host.borrow().root();
+        let root = s.host.document.borrow().root();
         record(&s, root);
         s.key(cx, "menu", false, false);
         assert_eq!(log(&s)[1][1], serde_json::json!(root));

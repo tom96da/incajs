@@ -15,7 +15,6 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::cell::RefCell;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
@@ -39,7 +38,7 @@ fn compiled_inca_bundle_drives_the_real_virtual_tree() {
     });
     let dist_dir = Path::new(BUNDLE_PATH).parent().unwrap();
 
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let engine = Engine::builder().module_root(dist_dir).build().unwrap();
     engine.with(|ctx| install(&ctx, &host)).unwrap();
 
@@ -57,7 +56,7 @@ fn compiled_inca_bundle_drives_the_real_virtual_tree() {
         })
         .unwrap();
 
-    let host = host.borrow();
+    let host = host.document.borrow();
     let node = host.tree.get(node_id).unwrap();
     assert_eq!(node.local_name(), "div");
     assert_eq!(
@@ -67,12 +66,12 @@ fn compiled_inca_bundle_drives_the_real_virtual_tree() {
 }
 
 /// Loads the bundle into a real host and gives the script its exports as `core`.
-fn engine_with_core() -> (Engine, Rc<RefCell<Host>>) {
+fn engine_with_core() -> (Engine, Rc<Host>) {
     let source = fs::read_to_string(BUNDLE_PATH).unwrap_or_else(|_| {
         panic!("{BUNDLE_PATH} is missing. run `pnpm --filter incajs build` first")
     });
     let dist_dir = Path::new(BUNDLE_PATH).parent().unwrap();
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let engine = Engine::builder().module_root(dist_dir).build().unwrap();
     engine.with(|ctx| install(&ctx, &host)).unwrap();
     engine
@@ -101,7 +100,7 @@ fn append_gives_the_host_the_text_node_of_a_string() {
         .unwrap();
 
     let (data, last_is_x, p, x): (String, bool, u32, u32) = serde_json::from_str(&outcome).unwrap();
-    let host = host.borrow();
+    let host = host.document.borrow();
     let children = host.tree.get(p).unwrap().children();
     assert_eq!((data.as_str(), last_is_x), ("a", true));
     assert_eq!(host.tree.get(children[0]).unwrap().local_name(), "#text");
@@ -125,7 +124,10 @@ fn replace_children_leaves_no_child() {
         .unwrap();
 
     let (p, detached): (u32, bool) = serde_json::from_str(&outcome).unwrap();
-    assert_eq!(host.borrow().tree.get(p).unwrap().children().len(), 0);
+    assert_eq!(
+        host.document.borrow().tree.get(p).unwrap().children().len(),
+        0
+    );
     assert!(detached);
 }
 

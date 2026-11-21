@@ -4,7 +4,6 @@
 //! The scroll reads and writes of an element and its scroll methods. A node that is not connected
 //! reads `0` and ignores a write.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
@@ -21,11 +20,8 @@ use crate::bindings::scroll::{node_scroll, scroll_into_view, scroll_to};
 
 /// The scroll state of the node `id`, `None` for a node that is not connected or scrolls nothing.
 fn scroll_of(host: &Shared, id: NodeId) -> Option<[f64; 4]> {
-    let host = host.borrow();
-    host.tree
-        .is_connected(id)
-        .then(|| node_scroll(&host, id))
-        .flatten()
+    let connected = host.document.borrow().tree.is_connected(id);
+    connected.then(|| node_scroll(host, id)).flatten()
 }
 
 /// The value of the property `name` of an options argument, `undefined` for any other argument.
@@ -64,7 +60,7 @@ fn move_scroll<'js>(
     args: &[Value<'js>],
     relative: bool,
 ) -> JsResult<()> {
-    if !host.borrow().tree.is_connected(id) {
+    if !host.document.borrow().tree.is_connected(id) {
         return Ok(());
     }
     let undefined = Value::new_undefined(ctx.clone());
@@ -83,7 +79,7 @@ fn move_scroll<'js>(
         axis(ctx, &x, relative, left)?,
         axis(ctx, &y, relative, top)?,
     );
-    scroll_to(&host.borrow(), id, target.0, target.1);
+    scroll_to(host, id, target.0, target.1);
     Ok(())
 }
 
@@ -115,11 +111,7 @@ fn alignments<'js>(ctx: &Ctx<'js>, arg: Option<&Value<'js>>) -> JsResult<(Align,
 }
 
 /// Defines the scroll members on `proto`, the prototype of `Element`.
-pub(super) fn install<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
-) -> JsResult<()> {
+pub(super) fn install<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> JsResult<()> {
     accessor(
         ctx,
         proto,
@@ -187,11 +179,11 @@ pub(super) fn install<'js>(
         0,
         &ELEMENT,
         |ctx, host, id, _, args| {
-            if !host.borrow().tree.is_connected(id) {
+            if !host.document.borrow().tree.is_connected(id) {
                 return Ok(());
             }
             let (block, inline) = alignments(ctx, args.first())?;
-            scroll_into_view(&mut host.borrow_mut(), id, block, inline);
+            scroll_into_view(host, id, block, inline);
             Ok(())
         },
     )
@@ -224,7 +216,7 @@ mod tests {
             )
             .unwrap();
 
-        let offset = host.borrow().scroll_handle(id).offset();
+        let offset = host.window.borrow().scroll_handle(id).offset();
         assert_eq!((f32::from(offset.x), f32::from(offset.y)), (0.0, 0.0));
     }
 
@@ -234,18 +226,18 @@ mod tests {
     fn a_scroll_into_view_of_a_node_without_a_box_waits_for_nothing(#[case] remove: &str) {
         let (engine, host, id) = with_box([0.0; 9]);
         engine.eval::<()>(remove).unwrap();
-        host.borrow().layout.borrow_mut().remove(&id);
+        host.window.borrow().layout.borrow_mut().remove(&id);
 
         engine.eval::<()>("el.scrollIntoView()").unwrap();
 
-        assert!(host.borrow().scroll_fresh.is_empty());
+        assert!(host.window.borrow().scroll_fresh.is_empty());
     }
 
     #[test]
     fn scroll_to_moves_the_offset_with_numbers_and_with_options() {
         let (engine, host, id) = with_box([0.0; 9]);
         let offset = || {
-            let offset = host.borrow().scroll_handle(id).offset();
+            let offset = host.window.borrow().scroll_handle(id).offset();
             (f32::from(offset.x), f32::from(offset.y))
         };
 
@@ -270,9 +262,9 @@ mod tests {
     fn scroll_by_adds_to_the_current_offset() {
         let (engine, host, id) = with_box([0.0; 9]);
         engine.eval::<()>("el.scrollBy(2, 3)").unwrap();
-        let first = host.borrow().scroll_handle(id).offset();
+        let first = host.window.borrow().scroll_handle(id).offset();
         engine.eval::<()>("el.scrollBy({ left: 1 })").unwrap();
-        let second = host.borrow().scroll_handle(id).offset();
+        let second = host.window.borrow().scroll_handle(id).offset();
 
         // The maximum offset is zero in a unit test, so the base is the clamped offset 0.
         assert_eq!(
@@ -307,11 +299,11 @@ mod tests {
         #[case] inline: Align,
     ) {
         let (engine, host, id) = with_box([0.0; 9]);
-        host.borrow().layout.borrow_mut().remove(&id);
+        host.window.borrow().layout.borrow_mut().remove(&id);
 
         engine.eval::<()>(call).unwrap();
 
-        assert_eq!(host.borrow().scroll_fresh, [(id, block, inline)]);
+        assert_eq!(host.window.borrow().scroll_fresh, [(id, block, inline)]);
     }
 
     #[test]
@@ -320,6 +312,6 @@ mod tests {
 
         engine.eval::<()>("el.scrollIntoView()").unwrap();
 
-        assert!(host.borrow().scroll_fresh.is_empty());
+        assert!(host.window.borrow().scroll_fresh.is_empty());
     }
 }
