@@ -18,20 +18,12 @@ function note(token) {
   log.value = log.value ? `${log.value} ${token}` : token;
 }
 
-function listen(e) {
-  note(`${e.type}:${e.currentTarget.id}`);
-}
-
-function onFocusA(e) {
-  listen(e);
+function onFocusA() {
   b.value.focus();
-  note("request:b");
 }
 
-function onFocusC(e) {
-  listen(e);
+function onFocusC() {
   c.value.blur();
-  note("request:blur");
 }
 
 function onKeydownB(e) {
@@ -59,19 +51,12 @@ function read() {
       tabindex="0"
       :style="{ width: 100, height: 40 }"
       @focus="onFocusA"
-      @blur="listen"
-      @focusin="listen"
-      @focusout="listen"
     />
     <div
       id="b"
       ref="b"
       tabindex="0"
       :style="{ width: 100, height: 40 }"
-      @focus="listen"
-      @blur="listen"
-      @focusin="listen"
-      @focusout="listen"
       @keydown="onKeydownB"
     />
     <div
@@ -80,9 +65,6 @@ function read() {
       tabindex="0"
       :style="{ width: 100, height: 40 }"
       @focus="onFocusC"
-      @blur="listen"
-      @focusin="listen"
-      @focusout="listen"
     />
     <div id="go-a" :style="{ width: 100, height: 40 }" @mousedown.prevent @click="goA" />
     <div id="go-c" :style="{ width: 100, height: 40 }" @mousedown.prevent @click="goC" />

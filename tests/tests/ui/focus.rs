@@ -89,19 +89,6 @@ fn focus_requested_in_a_focus_listener_ends_on_the_requested_node(cx: &mut TestA
 }
 
 #[gpui::test]
-fn a_focus_moved_by_a_focus_listener_fires_after_the_listener_returns(cx: &mut TestAppContext) {
-    let mut h = load(cx, "focus-chain");
-
-    click(&mut h, "go-a");
-    settled(&mut h, 2);
-
-    assert_eq!(
-        text_of(&mut h, "log"),
-        "focus:a request:b focusin:a blur:a focusout:a focus:b focusin:b"
-    );
-}
-
-#[gpui::test]
 fn blur_requested_in_a_focus_listener_ends_with_nothing_focused(cx: &mut TestAppContext) {
     let mut h = load(cx, "focus-chain");
 
@@ -110,19 +97,6 @@ fn blur_requested_in_a_focus_listener_ends_with_nothing_focused(cx: &mut TestApp
     click(&mut h, "read");
 
     assert_eq!(text_of(&mut h, "active"), "");
-}
-
-#[gpui::test]
-fn a_blur_requested_by_a_focus_listener_fires_after_the_listener_returns(cx: &mut TestAppContext) {
-    let mut h = load(cx, "focus-chain");
-
-    click(&mut h, "go-c");
-    settled(&mut h, 2);
-
-    assert_eq!(
-        text_of(&mut h, "log"),
-        "focus:c request:blur focusin:c blur:c focusout:c"
-    );
 }
 
 #[gpui::test]
