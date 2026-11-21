@@ -9,7 +9,7 @@
 
 mod aria;
 mod attributes;
-mod capture;
+pub(crate) mod capture;
 pub(crate) mod convert;
 mod create_element;
 mod dataset;

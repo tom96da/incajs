@@ -79,10 +79,7 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::{
-        Frame, dispatcher_with_engine, draw, focus_scene, focusable_node, is_focused, listen,
-        listen_global, seen_text, set_active, state,
-    };
+    use crate::tests::{FakeScript, Frame, draw, fake_focus_scene, is_focused, set_active, state};
     use crate::{EventDispatcher, Host};
     use gpui::{AppContext as _, TestAppContext};
     use inca_node::NodeId;
@@ -91,41 +88,57 @@ mod tests {
 
     type Handle = gpui::WindowHandle<Frame>;
 
-    /// A window over one focusable node whose `focus` and `blur` are listened to, with the window
-    /// deactivated.
+    /// The focus events fired since the last call, as `type:target`.
+    fn focus_events(fake: &FakeScript) -> Vec<String> {
+        fake.take()
+            .iter()
+            .filter(|walked| {
+                ["focus", "blur", "focusin", "focusout"].contains(&walked.name.as_str())
+            })
+            .map(|walked| format!("{}:{}", walked.name, walked.target_text()))
+            .collect()
+    }
+
+    /// A window over one focusable node, with the window deactivated.
     fn inactive_scene(
         cx: &mut TestAppContext,
     ) -> (
         Rc<EventDispatcher>,
         Rc<Host>,
-        gpui::WindowHandle<Frame>,
+        Rc<FakeScript>,
+        Handle,
         NodeId,
     ) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = focusable_node(&dispatcher, &host);
-        let dispatcher = Rc::new(dispatcher);
-        let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
+        let (dispatcher, host, fake, window, node) = fake_focus_scene(cx);
         draw(cx, window);
         set_active(cx, window, &dispatcher, false);
-        (dispatcher, host, window, node)
+        fake.take();
+        (dispatcher, host, fake, window, node)
     }
 
     #[gpui::test]
     fn focusing_in_an_inactive_window_fires_focus_when_it_activates(cx: &mut TestAppContext) {
-        let (dispatcher, host, window, node) = inactive_scene(cx);
+        let (dispatcher, host, fake, window, node) = inactive_scene(cx);
 
         host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
-        let held = seen_text(&dispatcher);
+        let held = focus_events(&fake);
         set_active(cx, window, &dispatcher, true);
 
-        assert_eq!(held, "[]");
-        assert_eq!(seen_text(&dispatcher), format!(r#"["focus:{node}"]"#));
+        assert!(held.is_empty());
+        assert_eq!(
+            focus_events(&fake),
+            [
+                "focus:$window".to_owned(),
+                format!("focus:{node}"),
+                format!("focusin:{node}")
+            ]
+        );
     }
 
     #[gpui::test]
     fn focusing_then_blurring_in_an_inactive_window_fires_nothing(cx: &mut TestAppContext) {
-        let (dispatcher, host, window, node) = inactive_scene(cx);
+        let (dispatcher, host, fake, window, node) = inactive_scene(cx);
 
         host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
@@ -133,40 +146,18 @@ mod tests {
         draw(cx, window);
         set_active(cx, window, &dispatcher, true);
 
-        assert_eq!(seen_text(&dispatcher), "[]");
-    }
-
-    #[gpui::test]
-    fn toggling_the_activation_of_a_window_with_nothing_focused_fires_no_focus_event(
-        cx: &mut TestAppContext,
-    ) {
-        let (dispatcher, host, window, node) = inactive_scene(cx);
-        let root = host.document.borrow().root();
-        for target in [root, node] {
-            for event in ["blur", "focus", "focusout", "focusin"] {
-                listen(&dispatcher, target, event, "mark");
-            }
-        }
-
-        set_active(cx, window, &dispatcher, true);
-        assert_eq!(seen_text(&dispatcher), "[]");
-
-        set_active(cx, window, &dispatcher, false);
-        assert_eq!(seen_text(&dispatcher), "[]");
+        assert_eq!(focus_events(&fake), ["focus:$window"]);
     }
 
     #[gpui::test]
     fn a_node_made_inert_while_the_window_is_inactive_fires_no_second_blur(
         cx: &mut TestAppContext,
     ) {
-        let (dispatcher, host, window, node) = inactive_scene(cx);
+        let (dispatcher, host, fake, window, node) = inactive_scene(cx);
         set_active(cx, window, &dispatcher, true);
         host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
-        dispatcher
-            .engine
-            .eval::<()>("globalThis.seen = [];")
-            .unwrap();
+        fake.take();
 
         set_active(cx, window, &dispatcher, false);
         {
@@ -177,60 +168,52 @@ mod tests {
         draw(cx, window);
         set_active(cx, window, &dispatcher, true);
 
-        assert_eq!(seen_text(&dispatcher), format!(r#"["blur:{node}"]"#));
+        let blurs: Vec<_> = focus_events(&fake)
+            .into_iter()
+            .filter(|event| event.starts_with("blur:"))
+            .collect();
+        assert_eq!(blurs, [format!("blur:{node}"), "blur:$window".to_owned()]);
     }
 
     #[gpui::test]
     fn window_activation_reports_the_four_focus_events_without_a_related_target(
         cx: &mut TestAppContext,
     ) {
-        let (dispatcher, host, window, node) = inactive_scene(cx);
+        let (dispatcher, host, fake, window, node) = inactive_scene(cx);
         set_active(cx, window, &dispatcher, true);
         host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
-        dispatcher
-            .engine
-            .eval::<()>("globalThis.seen = [];")
-            .unwrap();
-        for event in ["focusin", "focusout"] {
-            listen(
-                &dispatcher,
-                node,
-                event,
-                "(e) => seen.push(e.type + ':' + e.relatedTarget)",
-            );
-        }
+        fake.take();
 
         set_active(cx, window, &dispatcher, false);
         set_active(cx, window, &dispatcher, true);
 
+        let rows: Vec<_> = fake
+            .take()
+            .iter()
+            .filter(|walked| walked.target_text() == node.to_string())
+            .map(|walked| format!("{}:{:?}", walked.name, walked.related()))
+            .collect();
         assert_eq!(
-            seen_text(&dispatcher),
-            format!(r#"["blur:{node}","focusout:null","focus:{node}","focusin:null"]"#)
+            rows,
+            ["blur:None", "focusout:None", "focus:None", "focusin:None"]
         );
-    }
-
-    /// Marks every `focus` and `blur` that reaches `window`, as `type:target` in `seen`.
-    fn listen_at_window(dispatcher: &EventDispatcher) {
-        for event in ["focus", "blur"] {
-            listen_global(dispatcher, "$window", event, false, "mark");
-        }
     }
 
     #[gpui::test]
     fn activating_the_window_fires_focus_at_window_before_the_focused_node(
         cx: &mut TestAppContext,
     ) {
-        let (dispatcher, host, window, node) = inactive_scene(cx);
-        listen_at_window(&dispatcher);
+        let (dispatcher, host, fake, window, node) = inactive_scene(cx);
         host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
 
         set_active(cx, window, &dispatcher, true);
 
+        let events = focus_events(&fake);
         assert_eq!(
-            seen_text(&dispatcher),
-            format!(r#"["focus:$window","focus:{node}"]"#)
+            events[..2],
+            ["focus:$window".to_owned(), format!("focus:{node}")]
         );
     }
 
@@ -238,73 +221,58 @@ mod tests {
     fn deactivating_the_window_fires_blur_at_window_after_the_focused_node(
         cx: &mut TestAppContext,
     ) {
-        let (dispatcher, host, window, node) = inactive_scene(cx);
+        let (dispatcher, host, fake, window, node) = inactive_scene(cx);
         set_active(cx, window, &dispatcher, true);
         host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
-        listen_at_window(&dispatcher);
-        dispatcher
-            .engine
-            .eval::<()>("globalThis.seen = [];")
-            .unwrap();
+        fake.take();
 
         set_active(cx, window, &dispatcher, false);
 
-        assert_eq!(
-            seen_text(&dispatcher),
-            format!(r#"["blur:{node}","blur:$window"]"#)
-        );
+        let events = focus_events(&fake);
+        let blur = |target: &str| events.iter().position(|e| *e == format!("blur:{target}"));
+        assert!(blur(&node.to_string()).unwrap() < blur("$window").unwrap());
     }
 
     #[gpui::test]
     fn toggling_the_activation_with_nothing_focused_fires_focus_and_blur_at_window(
         cx: &mut TestAppContext,
     ) {
-        let (dispatcher, _host, window, _node) = inactive_scene(cx);
-        listen_at_window(&dispatcher);
+        let (dispatcher, _host, fake, window, _node) = inactive_scene(cx);
 
         set_active(cx, window, &dispatcher, true);
         set_active(cx, window, &dispatcher, false);
 
-        assert_eq!(
-            seen_text(&dispatcher),
-            r#"["focus:$window","blur:$window"]"#
-        );
+        assert_eq!(focus_events(&fake), ["focus:$window", "blur:$window"]);
     }
 
     /// Focuses a node, then drops its focus the way `removeChild` does, with no
     /// frame in between.
     fn focused_then_dropped(
         cx: &mut TestAppContext,
-    ) -> (Rc<EventDispatcher>, gpui::WindowHandle<Frame>, NodeId) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = focusable_node(&dispatcher, &host);
-        let dispatcher = Rc::new(dispatcher);
-        let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
+    ) -> (Rc<EventDispatcher>, Rc<FakeScript>, Handle) {
+        let (dispatcher, host, fake, window, node) = fake_focus_scene(cx);
         host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
-        dispatcher
-            .engine
-            .eval::<()>("globalThis.seen = [];")
-            .unwrap();
+        fake.take();
         {
             let host = &mut *host.document.borrow_mut();
             host.focus.drop_focus_in(&host.tree, node);
         }
-        (dispatcher, window, node)
+        (dispatcher, fake, window)
     }
 
     #[gpui::test]
-    fn a_window_that_deactivates_and_reactivates_after_a_drop_fires_nothing(
+    fn a_window_that_deactivates_and_reactivates_after_a_drop_fires_no_node_event(
         cx: &mut TestAppContext,
     ) {
-        let (dispatcher, window, _node) = focused_then_dropped(cx);
+        let (dispatcher, fake, window) = focused_then_dropped(cx);
 
         for active in [false, true] {
             set_active(cx, window, &dispatcher, active);
         }
 
-        assert_eq!(seen_text(&dispatcher), "[]");
+        assert_eq!(focus_events(&fake), ["blur:$window", "focus:$window"]);
     }
 
     /// Whether `node` is focused for style rules right after `window_activated(active)` returned.
@@ -323,7 +291,7 @@ mod tests {
 
     #[gpui::test]
     fn deactivating_the_window_clears_the_focus_state(cx: &mut TestAppContext) {
-        let (dispatcher, host, window, node) = focus_scene(cx);
+        let (dispatcher, host, _fake, window, node) = fake_focus_scene(cx);
         host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
 
@@ -337,7 +305,7 @@ mod tests {
 
     #[gpui::test]
     fn activating_the_window_restores_the_focus_state(cx: &mut TestAppContext) {
-        let (dispatcher, host, window, node) = focus_scene(cx);
+        let (dispatcher, host, _fake, window, node) = fake_focus_scene(cx);
         host.document.borrow_mut().focus.request_focus(node, true);
         draw(cx, window);
         set_active(cx, window, &dispatcher, false);
@@ -352,8 +320,8 @@ mod tests {
 
     #[gpui::test]
     fn activating_the_window_writes_the_node_gpui_focused_meanwhile(cx: &mut TestAppContext) {
-        let (dispatcher, host, window, first) = focus_scene(cx);
-        let second = focusable_node(&dispatcher, &host);
+        let (dispatcher, host, _fake, window, first) = fake_focus_scene(cx);
+        let second = crate::tests::fake_focusable_node(&host);
         host.document.borrow_mut().focus.request_focus(first, true);
         draw(cx, window);
         set_active(cx, window, &dispatcher, false);
@@ -373,7 +341,7 @@ mod tests {
 
     #[gpui::test]
     fn deactivating_the_window_clears_the_press_state(cx: &mut TestAppContext) {
-        let (dispatcher, host, window, node) = focus_scene(cx);
+        let (dispatcher, host, _fake, window, node) = fake_focus_scene(cx);
         let path: Vec<_> = host.document.borrow().tree.ancestors(node).collect();
         host.document.borrow_mut().tree.set_active_path(&path);
         set_active(cx, window, &dispatcher, false);

@@ -44,19 +44,25 @@ pub(super) fn set_capture(
     pointer_id: i32,
 ) -> JsResult<()> {
     known_pointer(ctx, pointer_id)?;
-    let held = host.window.borrow().held_buttons() != 0;
-    let mut host = host.document.borrow_mut();
-    if !host.tree.is_connected(node) {
+    if !request_capture(host, node) {
         return Err(Exception::throw_dom(
             ctx,
             "InvalidStateError",
             "the node is not in the mounted tree. mount it before capturing the pointer",
         ));
     }
-    if held {
-        host.capture_pending = Some(node);
-    }
     Ok(())
+}
+
+/// Asks for the capture of the mouse pointer for `node`. Returns whether `node` is connected.
+pub(crate) fn request_capture(host: &Host, node: NodeId) -> bool {
+    let held = host.window.borrow().held_buttons() != 0;
+    let mut document = host.document.borrow_mut();
+    let connected = document.tree.is_connected(node);
+    if held && connected {
+        document.capture_pending = Some(node);
+    }
+    connected
 }
 
 /// Whether `node` has the capture of the pointer.
@@ -74,11 +80,16 @@ pub(super) fn release_capture(
     pointer_id: i32,
 ) -> JsResult<()> {
     known_pointer(ctx, pointer_id)?;
-    let mut host = host.document.borrow_mut();
-    if host.capture_pending == Some(node) {
-        host.capture_pending = None;
-    }
+    drop_capture(host, node);
     Ok(())
+}
+
+/// Drops the pending capture when `node` has it.
+pub(crate) fn drop_capture(host: &Host, node: NodeId) {
+    let mut document = host.document.borrow_mut();
+    if document.capture_pending == Some(node) {
+        document.capture_pending = None;
+    }
 }
 
 fn set_pointer_capture<'js>(

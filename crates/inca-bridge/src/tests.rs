@@ -7,14 +7,19 @@
 
 use std::rc::Rc;
 
+use std::cell::Cell;
+
 use gpui::{AppContext as _, Context, TestAppContext, Window, point, px};
-use inca_document::{EventPayload, MousePayload, PointerSource, WheelPayload};
+use inca_document::{EventPayload, EventTargetId, MousePayload, PointerSource, WheelPayload};
 use inca_gpui::EventSink;
 use inca_jsenv::Clock;
 use inca_node::NodeId;
 
 use crate::test_support::{Reported, capture_reporter, engine_for, engine_on_clock};
 use crate::{DocumentState, EventDispatcher, Host};
+mod fake_script;
+
+pub(crate) use fake_script::*;
 
 pub(crate) fn dispatcher_with_engine() -> (EventDispatcher, Rc<Host>, Reported) {
     let host = Rc::new(Host::default());
@@ -411,17 +416,34 @@ pub(crate) mod pointer {
         "click",
     ];
 
-    /// Two nodes `a` and `b` under the host root, each listening for every pointer and mouse event.
-    /// A listener records `type@target` into `globalThis.out` where the event is at its target.
+    /// Two nodes `a` and `b` under the host root. [`scene`] runs the dispatch on a [`FakeScript`]
+    /// and [`js_scene`] on an engine whose listeners on `a` and `b` record `type@target` into
+    /// `globalThis.out`, for the tests of what JS reads.
     pub(crate) struct Scene {
         pub(crate) dispatcher: EventDispatcher,
         pub(crate) host: Rc<Host>,
+        pub(crate) fake: Option<Rc<FakeScript>>,
         pub(crate) cx: VisualTestContext,
         pub(crate) a: NodeId,
         pub(crate) b: NodeId,
+        watched: Vec<NodeId>,
     }
 
     pub(crate) fn scene(cx: &mut TestAppContext) -> Scene {
+        let (dispatcher, host, fake) = fake_dispatcher();
+        let (a, b) = (node_under_root(&host), node_under_root(&host));
+        Scene {
+            dispatcher,
+            host,
+            fake: Some(fake),
+            cx: cx.add_empty_window().clone(),
+            a,
+            b,
+            watched: vec![a, b],
+        }
+    }
+
+    pub(crate) fn js_scene(cx: &mut TestAppContext) -> Scene {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let (a, b) = (node_under_root(&host), node_under_root(&host));
         let record = r"
@@ -439,17 +461,62 @@ pub(crate) mod pointer {
         Scene {
             dispatcher,
             host,
+            fake: None,
             cx: cx.add_empty_window().clone(),
             a,
             b,
+            watched: vec![a, b],
         }
     }
 
     impl Scene {
-        /// The events recorded since the last call.
+        /// The events at `a` and `b` and at the nodes of [`Self::watch`] since the last call.
         pub(crate) fn take(&self) -> Vec<String> {
-            let out = eval_json(&self.dispatcher, "out.splice(0)");
-            serde_json::from_value(out).unwrap()
+            let Some(fake) = &self.fake else {
+                let out = eval_json(&self.dispatcher, "out.splice(0)");
+                return serde_json::from_value(out).unwrap();
+            };
+            fake.take()
+                .iter()
+                .filter(|walked| {
+                    matches!(walked.target, EventTargetId::Node(node) if self.watched.contains(&node))
+                })
+                .map(Walked::label)
+                .collect()
+        }
+
+        /// The walks since the last call, at every node.
+        pub(crate) fn take_walks(&self) -> Vec<Walked> {
+            self.fake.as_ref().unwrap().take()
+        }
+
+        /// Makes [`Self::take`] report the events at `node` too.
+        pub(crate) fn watch(&mut self, node: NodeId) {
+            self.watched.push(node);
+        }
+
+        /// Cancels each event of type `name` while `cancel` is set.
+        pub(crate) fn cancel(&self, name: &'static str, cancel: Rc<Cell<bool>>) {
+            self.fake
+                .as_ref()
+                .unwrap()
+                .on_walk(move |walked| walked.name == name && cancel.get());
+        }
+
+        /// Makes the `pointerdown` walk capture the pointer for `node`.
+        pub(crate) fn capture_on_pointerdown(&self, node: NodeId) {
+            let host = Rc::clone(&self.host);
+            self.fake.as_ref().unwrap().on_walk(move |walked| {
+                if walked.name == "pointerdown" {
+                    request_capture(&host, node);
+                }
+                false
+            });
+        }
+
+        /// Runs `f` on each walk, and cancels the event when it returns true.
+        pub(crate) fn on_walk(&self, f: impl Fn(&Walked) -> bool + 'static) {
+            self.fake.as_ref().unwrap().on_walk(f);
         }
 
         pub(crate) fn listen(&self, node: NodeId, event: &str, f: &str) {
@@ -547,8 +614,14 @@ pub(crate) mod pointer {
             });
         }
 
-        pub(crate) fn eval(&self, js: &str) {
-            self.dispatcher.engine.eval::<()>(js).unwrap();
+        /// A script asking to capture the pointer for `node`.
+        pub(crate) fn set_capture(&self, node: NodeId) {
+            request_capture(&self.host, node);
+        }
+
+        /// A script releasing the capture of `node`.
+        pub(crate) fn release_capture(&self, node: NodeId) {
+            release_capture(&self.host, node);
         }
     }
 
@@ -602,13 +675,6 @@ pub(crate) fn draw(cx: &mut TestAppContext, window: gpui::WindowHandle<Frame>) {
         .unwrap();
 }
 
-pub(crate) fn seen_text(dispatcher: &EventDispatcher) -> String {
-    dispatcher
-        .engine
-        .eval::<String>("JSON.stringify(globalThis.seen)")
-        .unwrap()
-}
-
 pub(crate) fn set_active(
     cx: &mut TestAppContext,
     window: gpui::WindowHandle<Frame>,
@@ -638,6 +704,36 @@ pub(crate) fn focus_scene(
     let dispatcher = Rc::new(dispatcher);
     let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
     (dispatcher, host, window, node)
+}
+
+/// A focusable node under the root of `host`, on which no script listens.
+pub(crate) fn fake_focusable_node(host: &Rc<Host>) -> NodeId {
+    let mut host = host.document.borrow_mut();
+    let node = host.tree.create_node("div").unwrap();
+    let root = host.root();
+    host.tree.append_child(root, node).unwrap();
+    host.tree
+        .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
+        .unwrap();
+    host.focus.mark_tab_dirty(node);
+    node
+}
+
+/// A window over one focusable node, on a [`FakeScript`].
+pub(crate) fn fake_focus_scene(
+    cx: &mut TestAppContext,
+) -> (
+    Rc<EventDispatcher>,
+    Rc<Host>,
+    Rc<FakeScript>,
+    gpui::WindowHandle<Frame>,
+    NodeId,
+) {
+    let (dispatcher, host, fake) = fake_dispatcher();
+    let node = fake_focusable_node(&host);
+    let dispatcher = Rc::new(dispatcher);
+    let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
+    (dispatcher, host, fake, window, node)
 }
 
 /// Runs `body` as a function body next to the natives `n`, a new div `id` and its list `list`.

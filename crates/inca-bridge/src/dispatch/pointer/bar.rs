@@ -113,7 +113,7 @@ mod tests {
     #[gpui::test]
     fn a_canceled_pointerdown_on_a_bar_suppresses_the_mouse_events(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.listen(s.a, "pointerdown", "(e) => e.preventDefault()");
+        s.cancel("pointerdown", std::rc::Rc::new(std::cell::Cell::new(true)));
         s.bar_down(s.a, 0);
         s.bar_up(s.a, 0);
         let a = s.a;
@@ -150,11 +150,7 @@ mod tests {
     #[gpui::test]
     fn the_last_release_on_a_bar_ends_a_pointer_capture(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.listen(
-            s.a,
-            "pointerdown",
-            &format!("(e) => __inca_native__.setPointerCapture({}, 1)", s.a),
-        );
+        s.capture_on_pointerdown(s.a);
         s.bar_down(s.a, 0);
         s.bar_up(s.a, 0);
         let a = s.a;
@@ -236,11 +232,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let mut s = scene(cx);
-        s.listen(
-            s.a,
-            "pointerdown",
-            &format!("(e) => __inca_native__.setPointerCapture({}, 1)", s.a),
-        );
+        s.capture_on_pointerdown(s.a);
         s.hover(s.a);
         s.bar_down(s.a, 0);
         *s.dispatcher.state.hovered.borrow_mut() = [s.b].into();

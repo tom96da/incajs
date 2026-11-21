@@ -88,7 +88,7 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::pointer::{Scene, scene};
+    use crate::tests::pointer::{Scene, js_scene, scene};
     use crate::tests::state;
     use gpui::TestAppContext;
     use inca_document::{EventPayload, MousePayload, PointerSource};
@@ -100,11 +100,7 @@ mod tests {
     fn captured(cx: &mut TestAppContext, capturer: &str) -> Scene {
         let mut s = scene(cx);
         let target = if capturer == "a" { s.a } else { s.b };
-        s.listen(
-            s.a,
-            "pointerdown",
-            &format!("() => __inca_native__.setPointerCapture({target}, 1)"),
-        );
+        s.capture_on_pointerdown(target);
         s.hover(s.a);
         s.down(s.a, 0);
         s.take();
@@ -121,11 +117,7 @@ mod tests {
     #[gpui::test]
     fn pointer_capture_starts_before_the_next_pointer_event(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.listen(
-            s.a,
-            "pointerdown",
-            &format!("() => __inca_native__.setPointerCapture({}, 1)", s.b),
-        );
+        s.capture_on_pointerdown(s.b);
         s.hover(s.a);
         s.take();
         s.down(s.a, 0);
@@ -220,11 +212,7 @@ mod tests {
         click: &str,
     ) {
         let mut s = scene(cx);
-        s.listen(
-            s.a,
-            "pointerdown",
-            &format!("() => __inca_native__.setPointerCapture({}, 1)", s.b),
-        );
+        s.capture_on_pointerdown(s.b);
         s.down(s.a, button);
         s.moved(s.a, (5.0, 5.0));
         s.take();
@@ -236,13 +224,7 @@ mod tests {
     #[gpui::test]
     fn captured_dblclick_keeps_the_pointerup_target(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.listen(s.a, "dblclick", "(e) => out.push(`${e.type}@${e.target}`)");
-        s.listen(s.b, "dblclick", "(e) => out.push(`${e.type}@${e.target}`)");
-        s.listen(
-            s.a,
-            "pointerdown",
-            &format!("() => __inca_native__.setPointerCapture({}, 1)", s.b),
-        );
+        s.capture_on_pointerdown(s.b);
         s.down(s.a, 0);
         s.moved(s.a, (5.0, 5.0));
         s.take();
@@ -257,7 +239,7 @@ mod tests {
         let (a, b) = (s.a, s.b);
         s.moved(a, (2.0, 2.0));
         s.take();
-        s.eval(&format!("__inca_native__.setPointerCapture({b}, 1);"));
+        s.set_capture(b);
         s.moved(a, (3.0, 3.0));
         assert_eq!(
             only(&s.take(), &["lost", "got"]),
@@ -272,9 +254,9 @@ mod tests {
     fn setting_the_same_pointer_capture_is_a_noop(cx: &mut TestAppContext) {
         let mut s = captured(cx, "a");
         let a = s.a;
-        s.eval(&format!("__inca_native__.setPointerCapture({a}, 1);"));
+        s.set_capture(a);
         s.moved(a, (2.0, 2.0));
-        s.eval(&format!("__inca_native__.setPointerCapture({a}, 1);"));
+        s.set_capture(a);
         s.moved(a, (3.0, 3.0));
         let got = s.take();
         assert_eq!(
@@ -289,7 +271,7 @@ mod tests {
         let (a, b) = (s.a, s.b);
         s.moved(b, (5.0, 5.0));
         s.take();
-        s.eval(&format!("__inca_native__.releasePointerCapture({a}, 1);"));
+        s.release_capture(a);
         assert!(s.take().is_empty());
         s.moved(b, (6.0, 6.0));
         let got = s.take();
@@ -332,7 +314,7 @@ mod tests {
         release: bool,
         want: &str,
     ) {
-        let mut s = scene(cx);
+        let mut s = js_scene(cx);
         s.listen(
             s.a,
             "pointerdown",
@@ -358,21 +340,7 @@ mod tests {
     #[gpui::test]
     fn the_contextmenu_of_a_captured_press_goes_to_the_pointerdown_target(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.listen(
-            s.a,
-            "contextmenu",
-            "(e) => out.push(`${e.type}@${e.target}`)",
-        );
-        s.listen(
-            s.b,
-            "contextmenu",
-            "(e) => out.push(`${e.type}@${e.target}`)",
-        );
-        s.listen(
-            s.a,
-            "pointerdown",
-            &format!("() => __inca_native__.setPointerCapture({}, 1)", s.a),
-        );
+        s.capture_on_pointerdown(s.a);
         s.down(s.a, 2);
         s.moved(s.b, (5.0, 5.0));
         s.down(s.b, 0);
@@ -392,11 +360,7 @@ mod tests {
         let (a, b) = (s.a, s.b);
         s.moved(a, (2.0, 2.0));
         let document = s.host.document.borrow().document();
-        s.listen(
-            document,
-            "lostpointercapture",
-            "(e) => out.push(`${e.type}@${e.target}`)",
-        );
+        s.watch(document);
         s.take();
         s.host.document.borrow_mut().tree.destroy_node(a);
         s.moved(b, (5.0, 5.0));
