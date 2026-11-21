@@ -14,21 +14,74 @@ use crate::EventTargetId;
 use crate::bindings::Host;
 use inca_document::Listener;
 
-/// Calls the listeners along `path` with `event`, then leaves the event
-/// idle. Returns whether it ended canceled.
-pub(super) fn deliver<'js>(
-    ctx: &Ctx<'js>,
+/// How the walk reaches one event and its listeners. The walk sets the position, calls
+/// each listener through this seam and reads the stop flags the listeners left.
+pub(super) trait Invoke {
+    /// Whether `stopPropagation()` ran.
+    fn stopped(&self) -> bool;
+    /// Whether `stopImmediatePropagation()` ran.
+    fn immediately_stopped(&self) -> bool;
+    /// Sets `currentTarget` to the path entry `index` and `eventPhase` to `phase`.
+    fn at(&self, index: usize, phase: u8);
+    /// Calls `listener`. Listener errors are filed by the implementation.
+    fn call(&self, listener: Listener);
+    /// Leaves the event idle. Returns whether it ended canceled.
+    fn end(&self) -> bool;
+}
+
+/// Calls a listener of a JS event object in the engine context of the walk.
+pub(super) struct JsInvoke<'a, 'js> {
+    pub(super) ctx: &'a Ctx<'js>,
+    pub(super) host: &'a Rc<RefCell<Host>>,
+    pub(super) event: &'a Class<'js, IncaEvent<'js>>,
+}
+
+impl Invoke for JsInvoke<'_, '_> {
+    fn stopped(&self) -> bool {
+        self.event.borrow().state.stop.get()
+    }
+
+    fn immediately_stopped(&self) -> bool {
+        self.event.borrow().state.immediate.get()
+    }
+
+    fn at(&self, index: usize, phase: u8) {
+        let record = self.event.borrow();
+        record.state.current.set(Some(index));
+        record.state.phase.set(phase);
+    }
+
+    fn call(&self, listener: Listener) {
+        let called = callbacks::get(self.ctx, listener.callback).and_then(|stored| {
+            let Some(callback) = stored.and_then(Value::into_function) else {
+                return Ok(());
+            };
+            self.event.borrow().state.passive.set(listener.passive);
+            callback.call::<_, ()>((self.event.clone(),))
+        });
+        note(self.ctx, self.host, called);
+    }
+
+    fn end(&self) -> bool {
+        let record = self.event.borrow();
+        let canceled = record.state.canceled.get();
+        end_dispatch(&record);
+        canceled
+    }
+}
+
+/// Calls the listeners along `path`, then leaves the event idle. Returns whether it ended
+/// canceled.
+pub(super) fn deliver(
     host: &Rc<RefCell<Host>>,
     walk: &Walk<'_>,
     path: &[EventTargetId],
-    event: &Class<'js, IncaEvent<'js>>,
+    invoke: &impl Invoke,
 ) -> bool {
-    let record = event.borrow();
-    let state = &record.state;
     let down = (0..path.len()).rev().map(|index| (true, index));
     let up = (0..bubble_targets(walk.flags, path).len()).map(|index| (false, index));
     for (capture, index) in down.chain(up) {
-        if state.stop.get() {
+        if invoke.stopped() {
             break;
         }
         let target = path[index];
@@ -51,10 +104,9 @@ pub(super) fn deliver<'js>(
             (false, true) => 1,
             (false, false) => 3,
         };
-        state.current.set(Some(index));
-        state.phase.set(phase);
+        invoke.at(index, phase);
         for listener in listeners {
-            if state.immediate.get() {
+            if invoke.immediately_stopped() {
                 break;
             }
             // The full value is compared. Flags change only through remove, then add.
@@ -66,19 +118,10 @@ pub(super) fn deliver<'js>(
             {
                 continue;
             }
-            let called = callbacks::get(ctx, listener.callback).and_then(|stored| {
-                let Some(callback) = stored.and_then(Value::into_function) else {
-                    return Ok(());
-                };
-                state.passive.set(listener.passive);
-                callback.call::<_, ()>((event.clone(),))
-            });
-            note(ctx, host, called);
+            invoke.call(listener);
         }
     }
-    let canceled = state.canceled.get();
-    end_dispatch(&record);
-    canceled
+    invoke.end()
 }
 
 /// Leaves `event` as a dispatch leaves it: no walk state, no stop flags,

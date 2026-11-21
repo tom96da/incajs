@@ -13,7 +13,7 @@ use super::construct::create;
 use super::{Flags, IncaEvent};
 use crate::EventTargetId;
 use crate::bindings::Host;
-use listeners::deliver;
+use listeners::{JsInvoke, deliver};
 
 mod abort;
 mod click;
@@ -158,7 +158,16 @@ pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: 
             return Outcome::default();
         }
     };
-    let canceled = deliver(ctx, host, walk, &path, &event);
+    let canceled = deliver(
+        host,
+        walk,
+        &path,
+        &JsInvoke {
+            ctx,
+            host,
+            event: &event,
+        },
+    );
     Outcome {
         canceled,
         entered: false,

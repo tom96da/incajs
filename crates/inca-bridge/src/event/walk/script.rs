@@ -10,7 +10,7 @@ use inca_document::EventPayload;
 use inca_node::NodeId;
 use rquickjs::{Class, Ctx, Exception, Result as JsResult, Value};
 
-use super::listeners::{deliver, end_dispatch};
+use super::listeners::{JsInvoke, deliver, end_dispatch};
 use super::{IncaEvent, Walk, listened, next_event_id, path_from, run, script_walk, targets_of};
 use crate::bindings::Host;
 use inca_document::EventTargetId;
@@ -61,7 +61,16 @@ pub(crate) fn dispatch_event<'js>(
         drop(record.held.path.replace(targets));
         // Last, so a failure above leaves the event free to dispatch again.
         state.dispatching.set(true);
-        deliver(ctx, host, &walk, &path, &event);
+        deliver(
+            host,
+            &walk,
+            &path,
+            &JsInvoke {
+                ctx,
+                host,
+                event: &event,
+            },
+        );
     } else {
         end_dispatch(&record);
     }
