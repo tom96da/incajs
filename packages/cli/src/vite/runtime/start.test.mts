@@ -93,6 +93,8 @@ function installDev(fetches: Fetch[]) {
         "vite",
         JSON.stringify({ type: "custom", event: "file-changed", data: { file: "/a.vue" } }),
       ),
+    custom: (event: string) =>
+      dev.receive?.("vite", JSON.stringify({ type: "custom", event, data: {} })),
     /** Sends the update of a module that accepts itself. */
     update: (path: string) =>
       dev.receive?.(
@@ -347,6 +349,28 @@ describe("start", () => {
       "/dep.js",
       "/bad.js",
     ]);
+  });
+
+  it("passes a custom event that a module waits on during the import", async () => {
+    const log = captureLog();
+    const dev = installDev([
+      () => module(importing("/dep.js")),
+      () =>
+        module(
+          `globalThis.__log.push("dep waits"); await new Promise((resolve) => __vite_ssr_import_meta__.hot.on("x:reply", resolve)); ${accepting("dep v1")}`,
+          "/dep.js",
+        ),
+      () => module(accepting("dep v2"), "/dep.js", true),
+    ]);
+
+    const started = start("/entry.js");
+    await vi.waitFor(() => expect(log).toEqual(["dep waits"]));
+    dev.update("/dep.js");
+    dev.custom("x:reply");
+
+    await vi.waitFor(() => expect(log).toEqual(["dep waits", "dep v1", "entry", "dep v2"]));
+    await started;
+    expect(dev.urls).toEqual(["/entry.js", "/dep.js", "/dep.js"]);
   });
 
   it("applies the updates that arrived during the import in their order", async () => {

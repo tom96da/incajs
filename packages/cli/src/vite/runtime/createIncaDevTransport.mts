@@ -6,11 +6,18 @@ import type { ModuleRunnerTransport, ModuleRunnerTransportHandlers } from "vite/
 const NO_HOST =
   "this code needs a host that serves the development protocol. start the app with `inca dev`.";
 
-/** A `ModuleRunnerTransport` that can hold the payloads it receives. */
+/**
+ * The payload types that change modules or report on them, which a hold keeps from a module that
+ * is still loading. A custom event can be what a loading module waits on, so it is never held,
+ * and `connected`, `ping` and `bundled-dev-update` change nothing in the runner.
+ */
+const HELD_TYPES = new Set(["update", "prune", "full-reload", "error"]);
+
+/** A `ModuleRunnerTransport` that can hold the module changes it receives. */
 export interface IncaDevTransport extends Required<
   Pick<ModuleRunnerTransport, "connect" | "send">
 > {
-  /** Holds every payload from now on, except the replies to the runner's own calls. */
+  /** Holds the updates, prunes, full reloads and errors from now on. */
   hold(): void;
   /**
    * Ends the hold.
@@ -39,10 +46,8 @@ export function createIncaDevTransport(onFileChanged?: () => void): IncaDevTrans
       dev.receive = (method, paramsJson) => {
         if (method !== "vite") return;
         const payload = JSON.parse(paramsJson);
-        const custom = payload?.type === "custom";
-        if (custom && payload.event === "file-changed") onFileChanged?.();
-        // A held reply would stall the call that waits on it.
-        if (held && !(custom && payload.event === "vite:invoke")) held.push(payload);
+        if (payload?.type === "custom" && payload.event === "file-changed") onFileChanged?.();
+        if (held && HELD_TYPES.has(payload?.type)) held.push(payload);
         else onMessage(payload);
       };
     },

@@ -26,9 +26,9 @@ function isServerFailure(error: unknown): boolean {
  * is rethrown as an unhandled rejection. `__inca_dev__.setLoadFailed(true)` follows a failed
  * attempt and `setLoadFailed(false)` precedes each retry.
  *
- * The payloads that arrive during an attempt wait until it ends, so an update never meets a
- * module that is still loading. A successful attempt then delivers them in order, and a failed
- * one drops them, since the retry loads every module again.
+ * The updates, prunes, full reloads and errors that arrive during an attempt wait until it ends,
+ * so an update never meets a module that is still loading. A successful attempt then delivers
+ * them in order, and a failed one drops them, since the retry loads every module again.
  *
  * Every inlined module runs through `__inca_dev__.compile`; the import fails
  * when the host lacks it.
