@@ -5,6 +5,7 @@
 //! style, the order of shorthand and longhand keys, the cache and the warnings.
 
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -71,9 +72,13 @@ fn shorthands_first<'a>(
     entries
 }
 
-/// The sheets of the connected `<style>` elements, kept until the tree changes.
+/// The sheets of the connected `<style>` elements, kept until the tree changes. It lives beside
+/// the tree and every read takes the tree it was built from.
 #[derive(Debug, Default)]
-pub(super) struct SheetCache {
+pub struct StyleCache(RefCell<Collected>);
+
+#[derive(Debug, Default)]
+struct Collected {
     /// The generation of the tree the cache was built for.
     generation: Option<u64>,
     /// The sheets in tree order.
@@ -86,46 +91,51 @@ pub(super) struct SheetCache {
     warnings: Vec<String>,
 }
 
-impl VirtualTree {
-    /// The connected `<style>` elements in tree order. None while the tree has no document or root.
-    fn style_elements(&self) -> Vec<NodeId> {
-        let mut found = Vec::new();
-        let mut pending: Vec<NodeId> = self.document.or(self.root).into_iter().collect();
-        while let Some(id) = pending.pop() {
-            let Some(node) = self.get(id) else { continue };
-            if node.is_style() {
-                found.push(id);
-                // The children of a `<style>` element are its text.
-                continue;
-            }
-            pending.extend(node.children().iter().rev());
+/// The connected `<style>` elements in tree order. None while the tree has no document or root.
+fn style_elements(tree: &VirtualTree) -> Vec<NodeId> {
+    let mut found = Vec::new();
+    let mut pending: Vec<NodeId> = tree.document().or(tree.root()).into_iter().collect();
+    while let Some(id) = pending.pop() {
+        let Some(node) = tree.get(id) else { continue };
+        if node.is_style() {
+            found.push(id);
+            // The children of a `<style>` element are its text.
+            continue;
         }
-        found
+        pending.extend(node.children().iter().rev());
     }
+    found
+}
 
-    /// The data of the text children of `id`, in order.
-    fn child_text(&self, id: NodeId) -> String {
-        self.get(id)
-            .into_iter()
-            .flat_map(VirtualNode::children)
-            .filter_map(|&child| self.get(child))
-            .filter(|child| child.kind() == NodeKind::Text)
-            .map(VirtualNode::data)
-            .collect()
+/// The data of the text children of `id`, in order.
+fn child_text(tree: &VirtualTree, id: NodeId) -> String {
+    tree.get(id)
+        .into_iter()
+        .flat_map(VirtualNode::children)
+        .filter_map(|&child| tree.get(child))
+        .filter(|child| child.kind() == NodeKind::Text)
+        .map(VirtualNode::data)
+        .collect()
+}
+
+impl StyleCache {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Collects the sheets again when the tree changed. A sheet whose text is unchanged keeps its
     /// parse.
-    fn refresh_sheets(&self) {
-        let mut cache = self.style_cache.borrow_mut();
-        if cache.generation == Some(self.generation) {
+    fn refresh(&self, tree: &VirtualTree) {
+        let mut cache = self.0.borrow_mut();
+        if cache.generation == Some(tree.generation()) {
             return;
         }
-        cache.generation = Some(self.generation);
+        cache.generation = Some(tree.generation());
         let mut sheets = Vec::new();
         let mut parsed = HashMap::new();
-        for id in self.style_elements() {
-            let text = self.child_text(id);
+        for id in style_elements(tree) {
+            let text = child_text(tree, id);
             let entry = match cache.parsed.remove(&id) {
                 Some((old, sheet)) if old == text => (old, sheet),
                 _ => {
@@ -147,17 +157,29 @@ impl VirtualTree {
         cache.parsed = parsed;
     }
 
+    /// Whether a connected `<style>` rule names `:focus` or `:focus-within`.
+    #[must_use]
+    pub fn uses_focus_state(&self, tree: &VirtualTree) -> bool {
+        self.sheet_flags(tree).focus
+    }
+
+    /// Whether a connected `<style>` rule names `:hover` or `:active`.
+    #[must_use]
+    pub fn uses_pointer_state(&self, tree: &VirtualTree) -> bool {
+        self.sheet_flags(tree).pointer
+    }
+
     /// The state flags of the connected sheets.
-    pub(super) fn sheet_flags(&self) -> StateFlags {
-        self.refresh_sheets();
-        self.style_cache.borrow().flags
+    fn sheet_flags(&self, tree: &VirtualTree) -> StateFlags {
+        self.refresh(tree);
+        self.0.borrow().flags
     }
 
     /// The warning lines of the sheet parses since the last call. A sheet with unchanged text
     /// adds none.
-    pub fn take_style_warnings(&self) -> Vec<String> {
-        self.refresh_sheets();
-        std::mem::take(&mut self.style_cache.borrow_mut().warnings)
+    pub fn take_style_warnings(&self, tree: &VirtualTree) -> Vec<String> {
+        self.refresh(tree);
+        std::mem::take(&mut self.0.borrow_mut().warnings)
     }
 
     /// The style of `id` after the rules of the connected `<style>` elements apply: the matching
@@ -166,19 +188,19 @@ impl VirtualTree {
     /// before it. A node that no rule styles, an unknown id and a tree without a `<style>` element
     /// give the node's own map.
     #[must_use]
-    pub fn computed_style(&self, id: NodeId) -> Cow<'_, StyleMap> {
-        let Some(node) = self.get(id) else {
+    pub fn computed_style<'a>(&self, tree: &'a VirtualTree, id: NodeId) -> Cow<'a, StyleMap> {
+        let Some(node) = tree.get(id) else {
             return Cow::Owned(StyleMap::new());
         };
-        self.refresh_sheets();
-        let sheets = self.style_cache.borrow().sheets.clone();
+        self.refresh(tree);
+        let sheets = self.0.borrow().sheets.clone();
         if sheets.is_empty() {
             return Cow::Borrowed(node.style_props());
         }
         let mut matched: Vec<(u32, usize, usize, &Rule)> = Vec::new();
         for (sheet_index, sheet) in sheets.iter().enumerate() {
             for (rule_index, rule) in sheet.rules.iter().enumerate() {
-                if let Some(specificity) = rule.selectors.specificity_of_match(self, id) {
+                if let Some(specificity) = rule.selectors.specificity_of_match(tree, id) {
                     matched.push((specificity, sheet_index, rule_index, rule));
                 }
             }
@@ -214,11 +236,99 @@ mod tests {
 
     use super::*;
     use crate::build_spec;
+    use crate::set_style;
     use crate::tests::{Fixture, SVG, num, text};
     use crate::tree::TEXT_TAG;
 
+    #[rstest]
+    #[case::focus(":focus")]
+    #[case::focus_within(":focus-within")]
+    #[case::negated(":not(:focus)")]
+    #[case::inside_is(":is(.a:focus)")]
+    #[case::nested_in_has("div:has(:focus)")]
+    fn uses_focus_state_is_true_when_a_rule_names_the_state(#[case] selector: &str) {
+        let mut f = Fixture::new();
+        f.sheet(&format!("{selector} {{ width: 1px }}"));
+
+        assert!(f.cache.uses_focus_state(&f.tree));
+    }
+
+    #[rstest]
+    #[case::no_rule("")]
+    #[case::no_state(".a { width: 1px }")]
+    #[case::an_invalid_rule(":focus:bogus { width: 1px }")]
+    #[case::host_context(":host-context(a:focus) { width: 1px }")]
+    #[case::host_context_in_is(":is(:host-context(a:focus b), p) { width: 1px }")]
+    fn uses_focus_state_is_false_when_no_rule_names_the_state(#[case] css: &str) {
+        let mut f = Fixture::new();
+        f.sheet(css);
+
+        assert!(!f.cache.uses_focus_state(&f.tree));
+    }
+
+    #[test]
+    fn uses_focus_state_is_false_once_the_style_element_is_removed() {
+        let mut f = Fixture::new();
+        let (style, _) = f.sheet(":focus { width: 1px }");
+        let named = f.cache.uses_focus_state(&f.tree);
+        f.tree.remove_child(f.root, style).unwrap();
+
+        assert!(named);
+        assert!(!f.cache.uses_focus_state(&f.tree));
+    }
+
+    #[test]
+    fn uses_focus_state_follows_an_edit_of_the_sheet_text() {
+        let mut f = Fixture::new();
+        let (_, text_node) = f.sheet(".a { width: 1px }");
+        let before = f.cache.uses_focus_state(&f.tree);
+        f.tree.set_data(text_node, ":focus { width: 1px }").unwrap();
+
+        assert!(!before);
+        assert!(f.cache.uses_focus_state(&f.tree));
+    }
+
+    #[rstest]
+    #[case::hover(":hover")]
+    #[case::active(":active")]
+    #[case::negated(":not(:hover)")]
+    #[case::inside_is(":is(.a:hover)")]
+    #[case::nested_in_has("div:has(:active)")]
+    fn uses_pointer_state_is_true_when_a_rule_names_the_state(#[case] selector: &str) {
+        let mut f = Fixture::new();
+        f.sheet(&format!("{selector} {{ width: 1px }}"));
+
+        assert!(f.cache.uses_pointer_state(&f.tree));
+    }
+
+    #[rstest]
+    #[case::no_rule("")]
+    #[case::a_focus_rule(":focus { width: 1px }")]
+    #[case::host_context(":host-context(a:hover) { width: 1px }")]
+    fn uses_pointer_state_is_false_when_no_rule_names_the_state(#[case] css: &str) {
+        let mut f = Fixture::new();
+        f.sheet(css);
+
+        assert!(!f.cache.uses_pointer_state(&f.tree));
+    }
+
+    #[rstest]
+    #[case::two_rules(":focus { width: 1px } :hover { width: 2px }")]
+    #[case::one_selector(":focus:hover { width: 1px }")]
+    fn sheet_flags_keep_both_kinds(#[case] css: &str) {
+        let mut f = Fixture::new();
+        f.sheet(css);
+
+        assert!(f.cache.uses_focus_state(&f.tree));
+        assert!(f.cache.uses_pointer_state(&f.tree));
+    }
+
     fn padding_top(f: &Fixture, node: NodeId) -> Option<f64> {
-        build_spec(&f.tree, node).unwrap().style.padding.top
+        build_spec(&f.tree, &f.cache, node)
+            .unwrap()
+            .style
+            .padding
+            .top
     }
 
     #[test]
@@ -256,7 +366,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet("#a.a { width: 1px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "width", 50.0).unwrap();
+        set_style(&mut f.tree, a, "width", 50.0).unwrap();
 
         assert_eq!(f.computed(a, "width"), Some(num(50.0)));
     }
@@ -266,7 +376,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { display: flex }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "display", "").unwrap();
+        set_style(&mut f.tree, a, "display", "").unwrap();
 
         assert_eq!(f.computed(a, "display"), Some(text("flex")));
     }
@@ -276,7 +386,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { padding-top: 8px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "padding", "").unwrap();
+        set_style(&mut f.tree, a, "padding", "").unwrap();
 
         assert_eq!(padding_top(&f, a), Some(8.0));
     }
@@ -286,9 +396,9 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { padding: 4px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "padding", "").unwrap();
-        f.tree.set_style(a, "padding_top", 2.0).unwrap();
-        let spec = build_spec(&f.tree, a).unwrap();
+        set_style(&mut f.tree, a, "padding", "").unwrap();
+        set_style(&mut f.tree, a, "padding_top", 2.0).unwrap();
+        let spec = build_spec(&f.tree, &f.cache, a).unwrap();
 
         assert_eq!(spec.style.padding.top, Some(2.0));
         assert_eq!(spec.style.padding.left, Some(4.0));
@@ -308,7 +418,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { padding-top: 8px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "padding", 4.0).unwrap();
+        set_style(&mut f.tree, a, "padding", 4.0).unwrap();
 
         assert_eq!(padding_top(&f, a), Some(4.0));
     }
@@ -318,10 +428,10 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { padding-left: 8px }");
         let a = f.boxed("a");
-        f.tree.set_style(a, "padding_x", 4.0).unwrap();
+        set_style(&mut f.tree, a, "padding_x", 4.0).unwrap();
 
         assert_eq!(
-            build_spec(&f.tree, a).unwrap().style.padding.left,
+            build_spec(&f.tree, &f.cache, a).unwrap().style.padding.left,
             Some(4.0)
         );
     }
@@ -346,7 +456,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { padding: 4px; padding-top: 8px }");
         let a = f.boxed("a");
-        let spec = build_spec(&f.tree, a).unwrap();
+        let spec = build_spec(&f.tree, &f.cache, a).unwrap();
 
         assert_eq!(spec.style.padding.top, Some(8.0));
         assert_eq!(spec.style.padding.left, Some(4.0));
@@ -427,20 +537,20 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".a { bogus: 1 }");
         let a = f.boxed("a");
-        let first = f.tree.take_style_warnings();
-        f.tree.set_style(a, "width", 1.0).unwrap();
+        let first = f.cache.take_style_warnings(&f.tree);
+        set_style(&mut f.tree, a, "width", 1.0).unwrap();
 
         assert_eq!(first, ["ignoring unknown style key `bogus`"]);
-        assert!(f.tree.take_style_warnings().is_empty());
+        assert!(f.cache.take_style_warnings(&f.tree).is_empty());
     }
 
     #[test]
     fn a_node_without_a_sheet_in_the_tree_borrows_its_inline_map() {
         let mut f = Fixture::new();
         let a = f.boxed("a");
-        f.tree.set_style(a, "width", 1.0).unwrap();
+        set_style(&mut f.tree, a, "width", 1.0).unwrap();
 
-        assert!(matches!(f.tree.computed_style(a), Cow::Borrowed(map) if map.len() == 1));
+        assert!(matches!(f.cache.computed_style(&f.tree, a), Cow::Borrowed(map) if map.len() == 1));
     }
 
     #[test]
@@ -449,7 +559,10 @@ mod tests {
         f.sheet(".a { width: 1px }");
         let b = f.boxed("b");
 
-        assert!(matches!(f.tree.computed_style(b), Cow::Borrowed(_)));
+        assert!(matches!(
+            f.cache.computed_style(&f.tree, b),
+            Cow::Borrowed(_)
+        ));
     }
 
     #[test]

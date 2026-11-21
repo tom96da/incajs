@@ -379,7 +379,9 @@ mod tests {
         Context, IntoElement, Keystroke, Render, TestAppContext, TextStyle, VisualTestContext,
         point, size,
     };
+    use inca_node::StyleCache;
     use inca_node::VirtualTree;
+    use inca_node::set_style;
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
     use std::ops::Range;
@@ -388,8 +390,8 @@ mod tests {
     fn input_tree(width: f64) -> VirtualTree {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("input").unwrap();
-        tree.set_style(id, "width", width).unwrap();
-        tree.set_style(id, "text_size", 10.0).unwrap();
+        set_style(&mut tree, id, "width", width).unwrap();
+        set_style(&mut tree, id, "text_size", 10.0).unwrap();
         tree
     }
 
@@ -404,7 +406,14 @@ mod tests {
 
     fn drawn(cx: &mut VisualTestContext, probe: &Probe) {
         cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-            render_tree_with_events(&probe.tree.borrow(), 0, probe, Scrollbars::Overlay).unwrap()
+            render_tree_with_events(
+                &probe.tree.borrow(),
+                &StyleCache::new(),
+                0,
+                probe,
+                Scrollbars::Overlay,
+            )
+            .unwrap()
         });
     }
 
@@ -416,7 +425,7 @@ mod tests {
 
     impl Render for PlainView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            render_tree(&self.0, 0).unwrap()
+            render_tree(&self.0, &StyleCache::new(), 0).unwrap()
         }
     }
 

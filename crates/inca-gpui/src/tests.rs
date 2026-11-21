@@ -15,9 +15,10 @@ use gpui::prelude::*;
 use gpui::size;
 use gpui::{App, MouseUpEvent, ScrollHandle, Window, px};
 use gpui::{Context, Render, TestAppContext, VisualTestContext};
+use inca_node::set_style;
 use inca_node::spec::{StyleSpec, build_spec, wheel_axes};
 use inca_node::tree::AttributeValue;
-use inca_node::tree::{NodeId, VirtualTree};
+use inca_node::tree::{NodeId, StyleCache, VirtualTree};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -57,7 +58,7 @@ pub(crate) fn focus_all(
     }
     registry.request_focus(focus, false);
     cx.update(|window, cx| {
-        let _ = registry.apply_pending(tree, window, cx);
+        let _ = registry.apply_pending(tree, &StyleCache::new(), window, cx);
     });
 }
 
@@ -145,7 +146,7 @@ impl EventSink for Probe {
     }
 
     fn wheel_axes(&self, id: NodeId) -> Option<inca_node::WheelAxes> {
-        wheel_axes(&self.tree.borrow(), id)
+        wheel_axes(&self.tree.borrow(), &StyleCache::new(), id)
     }
 
     fn clear_layout(&self) {
@@ -247,7 +248,8 @@ impl Render for ProbeView {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         self.0.renders.set(self.0.renders.get() + 1);
         let mode = self.0.mode_now.get().unwrap_or(self.0.mode);
-        render_tree_with_events(&self.0.tree.borrow(), 0, &self.0, mode).unwrap()
+        render_tree_with_events(&self.0.tree.borrow(), &StyleCache::new(), 0, &self.0, mode)
+            .unwrap()
     }
 }
 
@@ -293,8 +295,8 @@ pub(crate) fn probe_tree(cx: &mut TestAppContext, tracks: bool) -> Scene {
     let mut tree = VirtualTree::new();
     let ids: Vec<_> = (0..3).map(|_| tree.create_node("div").unwrap()).collect();
     for (id, side) in ids.iter().zip([200.0, 100.0, 50.0]) {
-        tree.set_style(*id, "width", side).unwrap();
-        tree.set_style(*id, "height", side).unwrap();
+        set_style(&mut tree, *id, "width", side).unwrap();
+        set_style(&mut tree, *id, "height", side).unwrap();
     }
     tree.append_child(ids[0], ids[1]).unwrap();
     tree.append_child(ids[1], ids[2]).unwrap();
@@ -336,7 +338,7 @@ pub(crate) fn bar_tree(root_props: &[(&str, &str)]) -> VirtualTree {
     let mut tree = VirtualTree::new();
     let root = boxed(&mut tree, None, 100., 100.);
     for (key, value) in root_props {
-        tree.set_style(root, *key, *value).unwrap();
+        set_style(&mut tree, root, *key, *value).unwrap();
     }
     boxed(&mut tree, Some(root), 300., 300.);
     tree
@@ -349,7 +351,7 @@ pub(crate) fn nested_bar_tree(props: &[(&str, &str)]) -> VirtualTree {
     let root = boxed(&mut tree, None, 200., 200.);
     let scroller = boxed(&mut tree, Some(root), 100., 100.);
     for (key, value) in props {
-        tree.set_style(scroller, *key, *value).unwrap();
+        set_style(&mut tree, scroller, *key, *value).unwrap();
     }
     boxed(&mut tree, Some(scroller), 300., 300.);
     boxed(&mut tree, Some(root), 50., 50.);
@@ -442,8 +444,8 @@ impl BarScene {
 
 pub(crate) fn boxed(tree: &mut VirtualTree, parent: Option<NodeId>, w: f64, h: f64) -> NodeId {
     let id = tree.create_node("div").unwrap();
-    tree.set_style(id, "width", w).unwrap();
-    tree.set_style(id, "height", h).unwrap();
+    set_style(tree, id, "width", w).unwrap();
+    set_style(tree, id, "height", h).unwrap();
     if let Some(parent) = parent {
         tree.append_child(parent, id).unwrap();
     }
@@ -460,18 +462,18 @@ pub(crate) fn layout(
     let mut tree = VirtualTree::new();
     let root = tree.create_node("div").unwrap();
     for (key, value) in root_props {
-        tree.set_style(root, *key, value.clone()).unwrap();
+        set_style(&mut tree, root, *key, value.clone()).unwrap();
     }
     for props in children {
         let child = tree.create_node("div").unwrap();
         for (key, value) in *props {
-            tree.set_style(child, *key, value.clone()).unwrap();
+            set_style(&mut tree, child, *key, value.clone()).unwrap();
         }
         tree.append_child(root, child).unwrap();
     }
     let cx = cx.add_empty_window();
     cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-        render_tree(&tree, root).unwrap()
+        render_tree(&tree, &StyleCache::new(), root).unwrap()
     });
     ["node-0", "node-1", "node-2"][..=children.len()]
         .iter()
@@ -496,7 +498,7 @@ pub(crate) fn frame(cx: &mut TestAppContext, window: gpui::AnyWindowHandle) {
 
 pub(crate) fn draw(cx: &mut gpui::VisualTestContext, tree: &VirtualTree, probe: &Probe) {
     cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-        render_tree_with_events(tree, 0, probe, probe.mode).unwrap()
+        render_tree_with_events(tree, &StyleCache::new(), 0, probe, probe.mode).unwrap()
     });
 }
 
@@ -508,7 +510,7 @@ pub(crate) fn style_of(props: &[(&str, AttributeValue)]) -> StyleSpec {
     let mut tree = VirtualTree::new();
     let id = tree.create_node("div").unwrap();
     for (key, value) in props {
-        tree.set_style(id, *key, value.clone()).unwrap();
+        set_style(&mut tree, id, *key, value.clone()).unwrap();
     }
-    build_spec(&tree, id).unwrap().style
+    build_spec(&tree, &StyleCache::new(), id).unwrap().style
 }

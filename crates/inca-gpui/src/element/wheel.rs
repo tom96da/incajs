@@ -158,6 +158,7 @@ mod tests {
     use crate::tests::*;
     use gpui::{Context, Render, ScrollDelta, ScrollEvent, StyleRefinement, Window};
     use gpui::{Pixels, Point, TestAppContext, VisualTestContext, point, px};
+    use inca_node::set_style;
     use inca_node::tree::{NodeId, VirtualTree};
     use inca_test_macros::gpui_cases;
 
@@ -249,7 +250,7 @@ mod tests {
     fn div(tree: &mut VirtualTree, parent: Option<NodeId>, height: f64, scrolls: bool) -> NodeId {
         let node = boxed(tree, parent, 100., height);
         if scrolls {
-            tree.set_style(node, "overflow_y", "scroll").unwrap();
+            set_style(tree, node, "overflow_y", "scroll").unwrap();
         }
         node
     }
@@ -278,7 +279,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
         for (key, value) in styles {
-            tree.set_style(root, *key, *value).unwrap();
+            set_style(&mut tree, root, *key, *value).unwrap();
         }
         boxed(&mut tree, Some(root), 300., 300.);
         tree

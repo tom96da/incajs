@@ -12,11 +12,11 @@ impl VirtualTree {
     /// is no orphan: it lives and dies with the template.
     pub(super) fn create_template(
         &mut self,
-        tag_name: String,
+        local_name: String,
         prefix: Option<String>,
     ) -> Result<NodeId, TreeError> {
         self.next_id.checked_add(2).ok_or(TreeError::IdsExhausted)?;
-        let template = self.allocate(NodeKind::Element, tag_name, Some(ns!(html)), prefix)?;
+        let template = self.allocate(NodeKind::Element, local_name, Some(ns!(html)), prefix)?;
         let content = self.allocate(NodeKind::Fragment, FRAGMENT_TAG.to_owned(), None, None)?;
         self.orphans.remove(&content);
         if let Some(node) = self.nodes.get_mut(&template) {
@@ -54,7 +54,7 @@ mod tests {
         let content = tree.template_content(template).unwrap();
 
         let fragment = tree.get(content).unwrap();
-        assert_eq!(fragment.tag_name(), FRAGMENT_TAG);
+        assert_eq!(fragment.local_name(), FRAGMENT_TAG);
         assert_eq!(fragment.parent(), None);
         assert_eq!(fragment.owner, Some(template));
         assert!(fragment.children().is_empty());

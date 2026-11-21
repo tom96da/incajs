@@ -12,7 +12,7 @@ Everything here is plain data and functions. A caller builds a tree, mutates it 
 of it.
 
 ```rust
-use inca_node::{LengthSpec, VirtualTree, build_spec, query_selector_all};
+use inca_node::{LengthSpec, StyleCache, VirtualTree, build_spec, query_selector_all, set_style};
 
 let mut tree = VirtualTree::new();
 let root = tree.create_node("div")?;
@@ -20,12 +20,12 @@ let item = tree.create_node("p")?;
 tree.set_root(root);
 tree.append_child(root, item)?;
 tree.set_attribute(item, "class", "note")?;
-tree.set_style(item, "width", 120.0)?;
+set_style(&mut tree, item, "width", 120.0)?;
 
 // Every `.note` below `root`: just `item`.
 assert_eq!(query_selector_all(&tree, root, ".note")?, [item]);
 // The style of `item` in plain data: a width of 120 px.
-let spec = build_spec(&tree, root).unwrap();
+let spec = build_spec(&tree, &StyleCache::default(), root).unwrap();
 assert_eq!(spec.children[0].style.width, Some(LengthSpec::Px(120.0)));
 ```
 
@@ -56,9 +56,9 @@ A selector list is evaluated against a node and its subtree: the query and match
 DOM, with a `SelectorError` that names the reason a selector does not parse.
 
 The text of the `<style>` elements of the tree forms its style sheets. A sheet whose text is
-unchanged keeps its parse. `VirtualTree::computed_style` gives the style of a node after the rules
+unchanged keeps its parse. `StyleCache::computed_style` gives the style of a node after the rules
 apply: matching declarations by specificity, then sheet order, then rule order, and the node's own
-style last. The warnings that sheet parses produce are returned once.
+style last. `StyleCache::take_style_warnings` returns the warnings that sheet parses produce once.
 
 ## The element spec
 

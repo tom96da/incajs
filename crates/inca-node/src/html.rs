@@ -138,7 +138,7 @@ impl VirtualTree {
             pending.extend(self.template_content(id).map(|content| (content, id)));
             entries.push(ParsedNode {
                 id,
-                tag: node.tag_name().to_owned(),
+                tag: node.local_name().to_owned(),
                 namespace: node.namespace_uri().map(str::to_owned),
                 parent: Some(parent),
                 data: node.is_character_data().then(|| node.data().to_owned()),
@@ -162,7 +162,7 @@ fn shape(tree: &VirtualTree, id: NodeId) -> String {
     let mut text = if node.kind() == NodeKind::Fragment {
         String::new()
     } else {
-        node.tag_name().to_owned()
+        node.local_name().to_owned()
     };
     if let Some(content) = tree.template_content(id) {
         text.push_str(&format!("{{{}}}", children_shape(tree, content)));

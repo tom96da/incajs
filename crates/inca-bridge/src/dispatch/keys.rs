@@ -93,6 +93,7 @@ impl EventDispatcher {
                     let host = &mut *self.host.borrow_mut();
                     let moved = host.focus.tab_move(
                         &host.tree,
+                        &host.style,
                         host.document(),
                         window,
                         cx,

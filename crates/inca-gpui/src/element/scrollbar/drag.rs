@@ -112,6 +112,7 @@ mod tests {
     use crate::element::scrollbar::view::{ScrollbarState, paint_plan};
     use crate::element::scrollbar::{HIDE_DELAY, THUMB_HOVER, gutter_of, parts};
     use crate::tests::{BarScene, capture_entities, nested_bar_tree};
+    use inca_node::set_style;
 
     const BOTH: [(&str, &str); 1] = [("overflow", "scroll")];
     const Y_SCROLL: [(&str, &str); 2] = [("overflow_x", "hidden"), ("overflow_y", "scroll")];
@@ -211,7 +212,7 @@ mod tests {
     #[gpui::test]
     fn a_press_on_a_bar_with_no_overflow_starts_no_drag(cx: &mut TestAppContext) {
         let mut tree = nested_bar_tree(&Y_SCROLL);
-        tree.set_style(2, "height", 50.0).unwrap();
+        set_style(&mut tree, 2, "height", 50.0).unwrap();
         let mut scene = BarScene::new(cx, Scrollbars::Classic, tree);
         scene.press(THUMB, LEFT);
         assert_eq!(bars(&scene), [("bar_pressed".to_owned(), 1)]);
@@ -231,12 +232,7 @@ mod tests {
     fn a_drag_ends_at_the_next_paint_when_its_axis_has_no_thumb(cx: &mut TestAppContext) {
         let mut scene = classic(cx, &Y_SCROLL);
         scene.press(THUMB, LEFT);
-        scene
-            .probe
-            .tree
-            .borrow_mut()
-            .set_style(2, "height", 50.0)
-            .unwrap();
+        set_style(&mut scene.probe.tree.borrow_mut(), 2, "height", 50.0).unwrap();
         scene.frame();
         assert_eq!(bars(&scene).last(), Some(&("bar_drag_end".to_owned(), 1)));
     }
@@ -245,12 +241,7 @@ mod tests {
     fn the_sink_hears_the_end_of_a_drag_after_the_paint_not_during_it(cx: &mut TestAppContext) {
         let mut scene = classic(cx, &Y_SCROLL);
         scene.press(THUMB, LEFT);
-        scene
-            .probe
-            .tree
-            .borrow_mut()
-            .set_style(2, "height", 50.0)
-            .unwrap();
+        set_style(&mut scene.probe.tree.borrow_mut(), 2, "height", 50.0).unwrap();
         let renders = scene.probe.renders.get();
         scene.frame();
         scene.cx.run_until_parked();
@@ -383,10 +374,10 @@ mod tests {
         let states = capture_entities::<ScrollbarState>(cx);
         let mut tree = nested_bar_tree(&Y_SCROLL);
         let cover = crate::tests::boxed(&mut tree, Some(0), 100., 100.);
-        tree.set_style(cover, "margin_top", -150.0).unwrap();
+        set_style(&mut tree, cover, "margin_top", -150.0).unwrap();
         // The track of a scroller blocks the pointer for what lies beneath it.
-        tree.set_style(cover, "overflow_y", "scroll").unwrap();
-        tree.set_style(cover, "overflow_x", "hidden").unwrap();
+        set_style(&mut tree, cover, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, cover, "overflow_x", "hidden").unwrap();
         let mut scene = BarScene::new(cx, Scrollbars::Classic, tree);
         scene.move_to(THUMB);
         assert_eq!(hover(&mut scene, &states), None);

@@ -4,7 +4,7 @@
 //! The axes a wheel step can scroll.
 
 use super::{DisplaySpec, hidden_by_attribute, style_spec_from_props};
-use crate::tree::{NodeId, VirtualTree};
+use crate::tree::{NodeId, StyleCache, VirtualTree};
 
 /// The axes a wheel step can scroll.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,7 +21,7 @@ pub struct WheelAxes {
 /// overflow is `scroll` or `auto`; a container with any other overflow gives
 /// `Some(WheelAxes { x: false, y: false })`.
 #[must_use]
-pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<WheelAxes> {
+pub fn wheel_axes(tree: &VirtualTree, cache: &StyleCache, id: NodeId) -> Option<WheelAxes> {
     tree.get(id)?;
     if !tree.is_connected(id) {
         return None;
@@ -31,14 +31,15 @@ pub fn wheel_axes(tree: &VirtualTree, id: NodeId) -> Option<WheelAxes> {
             return false;
         };
         node.is_template()
-            || hidden_by_attribute(tree, id)
+            || hidden_by_attribute(tree, cache, id)
             || node.attributes().contains_key("inert")
-            || style_spec_from_props(&tree.computed_style(id)).display == Some(DisplaySpec::None)
+            || style_spec_from_props(&cache.computed_style(tree, id)).display
+                == Some(DisplaySpec::None)
     });
     if out {
         return None;
     }
-    Some(style_spec_from_props(&tree.computed_style(id)).scroll_axes())
+    Some(style_spec_from_props(&cache.computed_style(tree, id)).scroll_axes())
 }
 
 #[cfg(test)]
@@ -48,6 +49,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+    use crate::set_style;
     use crate::spec::tests::{chain, wheel};
     use crate::tests::SVG;
 
@@ -64,7 +66,7 @@ mod tests {
         let (mut tree, [_, _, node]) = chain();
         for (key, value) in [("overflow_x", overflow_x), ("overflow_y", overflow_y)] {
             if let Some(value) = value {
-                tree.set_style(node, key, value).unwrap();
+                set_style(&mut tree, node, key, value).unwrap();
             }
         }
         assert_eq!(wheel(&tree, node), Some(want));
@@ -92,14 +94,14 @@ mod tests {
     #[case::grandparent_display_none(Where::Grandparent, Hide::DisplayNone)]
     fn wheel_axes_is_none_for_a_hidden_or_inert_node(#[case] at: Where, #[case] hide: Hide) {
         let (mut tree, [grandparent, parent, node]) = chain();
-        tree.set_style(node, "overflow", "scroll").unwrap();
+        set_style(&mut tree, node, "overflow", "scroll").unwrap();
         let target = match at {
             Where::Own => node,
             Where::Parent => parent,
             Where::Grandparent => grandparent,
         };
         match hide {
-            Hide::DisplayNone => tree.set_style(target, "display", "none").unwrap(),
+            Hide::DisplayNone => set_style(&mut tree, target, "display", "none").unwrap(),
             Hide::HiddenAttribute => tree.set_attribute(target, "hidden", true).unwrap(),
             Hide::Inert => tree.set_attribute(target, "inert", true).unwrap(),
         }
@@ -114,7 +116,7 @@ mod tests {
     #[test]
     fn wheel_axes_is_none_for_a_detached_node() {
         let (mut tree, [_, parent, node]) = chain();
-        tree.set_style(node, "overflow", "scroll").unwrap();
+        set_style(&mut tree, node, "overflow", "scroll").unwrap();
         tree.remove_child(parent, node).unwrap();
         assert_eq!(wheel(&tree, node), None);
     }
@@ -122,7 +124,7 @@ mod tests {
     #[test]
     fn wheel_axes_is_not_none_under_an_svg_template() {
         let (mut tree, [_, parent, node]) = chain();
-        tree.set_style(node, "overflow", "scroll").unwrap();
+        set_style(&mut tree, node, "overflow", "scroll").unwrap();
         let template = tree.create_element_ns(Some(SVG), None, "template").unwrap();
         tree.append_child(parent, template).unwrap();
         tree.append_child(template, node).unwrap();
@@ -133,7 +135,7 @@ mod tests {
     #[test]
     fn wheel_axes_is_none_under_a_template() {
         let (mut tree, [_, parent, node]) = chain();
-        tree.set_style(node, "overflow", "scroll").unwrap();
+        set_style(&mut tree, node, "overflow", "scroll").unwrap();
         let template = tree.create_node("template").unwrap();
         tree.append_child(parent, template).unwrap();
         tree.append_child(template, node).unwrap();

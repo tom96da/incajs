@@ -20,6 +20,7 @@ use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 
 use inca_bridge::test_support;
+use inca_node::set_style;
 
 struct Root {
     host: Rc<RefCell<Host>>,
@@ -32,7 +33,9 @@ impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.dispatcher.begin_frame(window, cx);
         let host = self.host.borrow();
-        let element = render_tree_with_events(&host.tree, 0, &self.dispatcher, self.mode).unwrap();
+        let element =
+            render_tree_with_events(&host.tree, &host.style, 0, &self.dispatcher, self.mode)
+                .unwrap();
         // The walk records only the children of node 0, which is 100x100.
         let bounds = Bounds::new(Point::default(), gpui::size(px(100.), px(100.)));
         let (border, scroll) = (px(0.), Point::default());
@@ -166,10 +169,10 @@ fn add_div(host: &mut Host, parent: Option<NodeId>, height: f64, scrolls: bool) 
     } else {
         host.root()
     };
-    host.tree.set_style(node, "width", 100.0).unwrap();
-    host.tree.set_style(node, "height", height).unwrap();
+    set_style(&mut host.tree, node, "width", 100.0).unwrap();
+    set_style(&mut host.tree, node, "height", height).unwrap();
     if scrolls {
-        host.tree.set_style(node, "overflow_y", "scroll").unwrap();
+        set_style(&mut host.tree, node, "overflow_y", "scroll").unwrap();
     }
     if let Some(parent) = parent {
         host.tree.append_child(parent, node).unwrap();
@@ -200,14 +203,14 @@ fn nested_containers() -> Host {
 fn styled_container(styles: &[(&str, &str)]) -> Host {
     let mut host = Host::default();
     let root = host.root();
-    host.tree.set_style(root, "width", 100.0).unwrap();
-    host.tree.set_style(root, "height", 100.0).unwrap();
+    set_style(&mut host.tree, root, "width", 100.0).unwrap();
+    set_style(&mut host.tree, root, "height", 100.0).unwrap();
     for (key, value) in styles {
-        host.tree.set_style(root, *key, *value).unwrap();
+        set_style(&mut host.tree, root, *key, *value).unwrap();
     }
     let child = host.tree.create_node("div").unwrap();
-    host.tree.set_style(child, "width", 300.0).unwrap();
-    host.tree.set_style(child, "height", 300.0).unwrap();
+    set_style(&mut host.tree, child, "width", 300.0).unwrap();
+    set_style(&mut host.tree, child, "height", 300.0).unwrap();
     host.tree.append_child(root, child).unwrap();
     host
 }

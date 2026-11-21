@@ -245,6 +245,7 @@ mod tests {
 
     use super::*;
     use crate::tests::{BarScene, bar_tree, capture_entities};
+    use inca_node::set_style;
 
     type States = Rc<RefCell<Vec<Entity<ScrollbarState>>>>;
 
@@ -331,15 +332,10 @@ mod tests {
     fn overflow_that_appears_after_the_thumb_hid_shows_it(cx: &mut TestAppContext) {
         let states: States = capture_entities(cx);
         let mut tree = bar_tree(&Y_ONLY);
-        tree.set_style(1, "height", 50.0).unwrap();
+        set_style(&mut tree, 1, "height", 50.0).unwrap();
         let mut scene = BarScene::new(cx, Scrollbars::Overlay, tree);
         wait(&mut scene, HIDE_DELAY);
-        scene
-            .probe
-            .tree
-            .borrow_mut()
-            .set_style(1, "height", 300.0)
-            .unwrap();
+        set_style(&mut scene.probe.tree.borrow_mut(), 1, "height", 300.0).unwrap();
         scene.frame();
         assert!(thumb_shown(&mut scene, &states));
         wait(&mut scene, HIDE_DELAY);
@@ -408,12 +404,12 @@ mod tests {
         let mut tree = bar_tree(&[]);
         let scroller = tree.create_node("div").unwrap();
         for (key, value) in [("width", 100.0), ("height", 100.0)] {
-            tree.set_style(scroller, key, value).unwrap();
+            set_style(&mut tree, scroller, key, value).unwrap();
         }
-        tree.set_style(scroller, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, scroller, "overflow_y", "scroll").unwrap();
         tree.append_child(0, scroller).unwrap();
         let tall = tree.create_node("div").unwrap();
-        tree.set_style(tall, "height", 300.0).unwrap();
+        set_style(&mut tree, tall, "height", 300.0).unwrap();
         tree.append_child(scroller, tall).unwrap();
         let mut scene = BarScene::new(cx, Scrollbars::Overlay, tree);
         scene
@@ -489,7 +485,7 @@ mod tests {
     fn a_bar_with_no_strip_paints_nothing_when_the_content_fits(cx: &mut TestAppContext) {
         let states: States = capture_entities(cx);
         let mut tree = bar_tree(&Y_ONLY);
-        tree.set_style(1, "height", 50.0).unwrap();
+        set_style(&mut tree, 1, "height", 50.0).unwrap();
         let mut scene = BarScene::new(cx, Scrollbars::Overlay, tree);
         assert!(plan(&mut scene, &states, Scrollbars::Overlay, Size::default()).is_empty());
     }
@@ -522,12 +518,7 @@ mod tests {
         let (mut scene, states) = scene(cx, Scrollbars::Overlay, &Y_ONLY);
         scene.press((95., 10.), gpui::MouseButton::Left);
         wait(&mut scene, HIDE_DELAY);
-        scene
-            .probe
-            .tree
-            .borrow_mut()
-            .set_style(1, "height", 50.0)
-            .unwrap();
+        set_style(&mut scene.probe.tree.borrow_mut(), 1, "height", 50.0).unwrap();
         scene.frame();
         wait(&mut scene, HIDE_DELAY);
         let state = states.borrow()[0].clone();
@@ -551,12 +542,7 @@ mod tests {
     ) {
         let (mut scene, _states) = scene(cx, Scrollbars::Classic, &Y_ONLY);
         scene.press((92., 10.), gpui::MouseButton::Left);
-        scene
-            .probe
-            .tree
-            .borrow_mut()
-            .set_style(1, "height", 50.0)
-            .unwrap();
+        set_style(&mut scene.probe.tree.borrow_mut(), 1, "height", 50.0).unwrap();
         scene.frame();
         let renders = scene.probe.renders.get();
         scene.cx.executor().advance_clock(HIDE_DELAY);

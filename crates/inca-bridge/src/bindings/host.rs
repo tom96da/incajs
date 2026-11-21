@@ -10,7 +10,7 @@ use gpui::{Pixels, ScrollHandle, point, px};
 use inca_gpui::{InputState, NodeLayout, rect_of};
 use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
 use inca_node::scroll::{Align, scroll_chain};
-use inca_node::{NodeId, VirtualTree, is_scroll_container};
+use inca_node::{NodeId, StyleCache, VirtualTree, is_scroll_container};
 
 use crate::abort::Signals;
 use crate::focus::FocusRegistry;
@@ -22,6 +22,8 @@ use super::listeners::EventListeners;
 /// event-listener registrations it records.
 pub struct Host {
     pub tree: VirtualTree,
+    /// The cascade of the tree, rebuilt when the tree changes.
+    pub style: StyleCache,
     /// Receives one line for each style a `setStyle` call stores with an
     /// unknown key, an invalid color or a value of a shape the host does not
     /// support. A node prints each line once. Writes to stderr by default.
@@ -112,6 +114,7 @@ impl Host {
         let frames = Frames::new(send);
         Self {
             tree,
+            style: StyleCache::new(),
             warn: Rc::new(|line| eprintln!("{line}")),
             style_warned: HashMap::new(),
             listeners: EventListeners::default(),
@@ -283,7 +286,7 @@ impl Host {
     /// Writes the focus that style rules read from the focus registry. Returns whether the value
     /// changed.
     pub(crate) fn sync_focus_style(&mut self) -> bool {
-        let node = self.focus.visual_focus(&self.tree);
+        let node = self.focus.visual_focus(&self.tree, &self.style);
         self.tree.set_focus(node)
     }
 
@@ -415,7 +418,7 @@ impl Host {
                 if self.tree.get(id).is_none() {
                     break;
                 }
-                if is_scroll_container(&self.tree, id)
+                if is_scroll_container(&self.tree, &self.style, id)
                     && let Some(l) = layout.get(&id)
                 {
                     chain.push((id, l.client_rect()));

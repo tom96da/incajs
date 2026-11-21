@@ -22,7 +22,8 @@ use gpui::{
 };
 
 use inca_gpui::render_tree;
-use inca_node::{NodeId, VirtualTree};
+use inca_node::set_style;
+use inca_node::{NodeId, StyleCache, VirtualTree};
 
 /// Selectors matching [`build_tree`]'s node creation order, used to tag the
 /// hand-written reference tree the same way `render_tree` tags its own
@@ -44,30 +45,30 @@ fn build_tree() -> (VirtualTree, NodeId) {
     let mut tree = VirtualTree::new();
 
     let outer = tree.create_node("div").unwrap(); // node-0
-    tree.set_style(outer, "display", "flex").unwrap();
-    tree.set_style(outer, "flex_direction", "column").unwrap();
-    tree.set_style(outer, "gap", 12.0).unwrap();
-    tree.set_style(outer, "width", 500.0).unwrap();
-    tree.set_style(outer, "height", 500.0).unwrap();
-    tree.set_style(outer, "justify_content", "center").unwrap();
-    tree.set_style(outer, "align_items", "center").unwrap();
-    tree.set_style(outer, "border_width", 2.0).unwrap();
+    set_style(&mut tree, outer, "display", "flex").unwrap();
+    set_style(&mut tree, outer, "flex_direction", "column").unwrap();
+    set_style(&mut tree, outer, "gap", 12.0).unwrap();
+    set_style(&mut tree, outer, "width", 500.0).unwrap();
+    set_style(&mut tree, outer, "height", 500.0).unwrap();
+    set_style(&mut tree, outer, "justify_content", "center").unwrap();
+    set_style(&mut tree, outer, "align_items", "center").unwrap();
+    set_style(&mut tree, outer, "border_width", 2.0).unwrap();
 
     let label = tree.create_node("#text").unwrap(); // node-1
     tree.set_data(label, "Hello, World!").unwrap();
     tree.append_child(outer, label).unwrap();
 
     let inner = tree.create_node("div").unwrap(); // node-2
-    tree.set_style(inner, "display", "flex").unwrap();
-    tree.set_style(inner, "flex_direction", "row").unwrap();
-    tree.set_style(inner, "gap", 8.0).unwrap();
+    set_style(&mut tree, inner, "display", "flex").unwrap();
+    set_style(&mut tree, inner, "flex_direction", "row").unwrap();
+    set_style(&mut tree, inner, "gap", 8.0).unwrap();
     tree.append_child(outer, inner).unwrap();
 
     for _ in 0..6 {
         let square = tree.create_node("div").unwrap(); // node-3..node-8
-        tree.set_style(square, "width", 32.0).unwrap();
-        tree.set_style(square, "height", 32.0).unwrap();
-        tree.set_style(square, "border_width", 2.0).unwrap();
+        set_style(&mut tree, square, "width", 32.0).unwrap();
+        set_style(&mut tree, square, "height", 32.0).unwrap();
+        set_style(&mut tree, square, "border_width", 2.0).unwrap();
         tree.append_child(inner, square).unwrap();
     }
 
@@ -147,7 +148,8 @@ fn the_virtual_tree_lays_out_like_hand_written_gpui(cx: &mut TestAppContext) {
     let reference_bounds = draw_and_collect_bounds(cx, build_reference);
 
     let (tree, root) = build_tree();
-    let converted_bounds = draw_and_collect_bounds(cx, || render_tree(&tree, root).unwrap());
+    let converted_bounds =
+        draw_and_collect_bounds(cx, || render_tree(&tree, &StyleCache::new(), root).unwrap());
 
     assert_eq!(
         converted_bounds, reference_bounds,
@@ -160,25 +162,25 @@ fn the_virtual_tree_lays_out_like_hand_written_gpui(cx: &mut TestAppContext) {
 fn y_of_boxes_after_empty_text(cx: &mut TestAppContext, gap: Option<f64>) -> (f32, f32) {
     let mut tree = VirtualTree::new();
     let root = tree.create_node("div").unwrap(); // node-0
-    tree.set_style(root, "width", 100.0).unwrap();
-    tree.set_style(root, "height", 100.0).unwrap();
+    set_style(&mut tree, root, "width", 100.0).unwrap();
+    set_style(&mut tree, root, "height", 100.0).unwrap();
     if let Some(gap) = gap {
-        tree.set_style(root, "display", "flex").unwrap();
-        tree.set_style(root, "flex_direction", "column").unwrap();
-        tree.set_style(root, "gap", gap).unwrap();
+        set_style(&mut tree, root, "display", "flex").unwrap();
+        set_style(&mut tree, root, "flex_direction", "column").unwrap();
+        set_style(&mut tree, root, "gap", gap).unwrap();
     }
     for _ in 0..2 {
         let empty = tree.create_node("#text").unwrap();
         tree.set_data(empty, "").unwrap();
         tree.append_child(root, empty).unwrap();
         let boxed = tree.create_node("div").unwrap();
-        tree.set_style(boxed, "width", 20.0).unwrap();
-        tree.set_style(boxed, "height", 20.0).unwrap();
+        set_style(&mut tree, boxed, "width", 20.0).unwrap();
+        set_style(&mut tree, boxed, "height", 20.0).unwrap();
         tree.append_child(root, boxed).unwrap();
     }
     let cx = cx.add_empty_window();
     cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-        render_tree(&tree, root).unwrap()
+        render_tree(&tree, &StyleCache::new(), root).unwrap()
     });
     let mut y = |selector| f32::from(cx.debug_bounds(selector).unwrap().origin.y);
     (y("node-2"), y("node-4"))

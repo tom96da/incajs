@@ -48,6 +48,7 @@ mod tests {
     use gpui::{Keystroke, TestAppContext};
     use inca_gpui::{EventPayload, EventSink as _, KeyPayload};
     use inca_node::NodeId;
+    use inca_node::set_style;
     use inca_test_macros::gpui_cases;
 
     /// Records every `contextmenu` and `keydown` into `globalThis.log`.
@@ -181,11 +182,7 @@ mod tests {
     fn contextmenu_key_without_focus_targets_the_container_at_1_1(cx: &mut TestAppContext) {
         let s = scene(cx);
         for style in ["width", "height"] {
-            s.host
-                .borrow_mut()
-                .tree
-                .set_style(s.first, style, 100.0)
-                .unwrap();
+            set_style(&mut s.host.borrow_mut().tree, s.first, style, 100.0).unwrap();
         }
         s.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
         let root = s.host.borrow().root();
@@ -216,16 +213,8 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let s = scene(cx);
-        s.host
-            .borrow_mut()
-            .tree
-            .set_style(s.first, "width", 100.0)
-            .unwrap();
-        s.host
-            .borrow_mut()
-            .tree
-            .set_style(s.first, "height", 100.0)
-            .unwrap();
+        set_style(&mut s.host.borrow_mut().tree, s.first, "width", 100.0).unwrap();
+        set_style(&mut s.host.borrow_mut().tree, s.first, "height", 100.0).unwrap();
         s.focus(cx, s.field);
         s.host.borrow().layout.borrow_mut().remove(&s.field);
         let root = s.host.borrow().root();

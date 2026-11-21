@@ -3,7 +3,7 @@
 
 //! The `tabindex` of an element: the parsed attribute and the default of each element kind.
 
-use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree, js_number_text};
+use crate::tree::{AttributeValue, NodeId, VirtualNode, VirtualTree, shortest_number_text};
 
 /// Parses a `tabindex` value: optional leading ASCII whitespace, an optional
 /// sign, then digits. Trailing characters are ignored. Returns `None` when the
@@ -32,7 +32,7 @@ impl VirtualTree {
     pub fn explicit_tab_index(&self, node: NodeId) -> Option<i32> {
         match self.get(node)?.attributes().get("tabindex")? {
             AttributeValue::String(value) => parse_tab_index(value),
-            AttributeValue::Number(value) => parse_tab_index(&js_number_text(*value)),
+            AttributeValue::Number(value) => parse_tab_index(&shortest_number_text(*value)),
             AttributeValue::Bool(_) => None,
         }
     }
@@ -57,7 +57,7 @@ impl VirtualTree {
         const HTML: [&str; 9] = [
             "a", "area", "button", "frame", "iframe", "input", "object", "select", "textarea",
         ];
-        element.in_html_namespace() && HTML.contains(&element.tag_name())
+        element.in_html_namespace() && HTML.contains(&element.local_name())
             || element.is_svg("a")
             || element.is_mathml("a")
             || element.is_html("summary") && self.is_summary_of_details(node, element)

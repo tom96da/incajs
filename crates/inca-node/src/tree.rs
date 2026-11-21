@@ -26,7 +26,6 @@
 //! subtree. A node that is created, detached or released is an orphan until
 //! it is inserted, held or destroyed.
 
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -37,6 +36,7 @@ mod class_list;
 mod clone;
 mod collection;
 mod computed;
+pub use computed::StyleCache;
 mod element;
 mod insert_nodes;
 mod insertion;
@@ -46,6 +46,7 @@ mod name;
 mod props;
 mod relations;
 mod state;
+mod style_key;
 mod template;
 mod text;
 
@@ -54,6 +55,10 @@ pub use insert_nodes::{InsertArg, Inserted, Insertion, Placement};
 pub use name::NodeKind;
 pub use props::valid_attribute_name;
 pub use relations::Link;
+pub use style_key::{
+    AlignSpec, DisplaySpec, FlexDirectionSpec, OverflowSpec, STYLE_KEYS, StyleKey, ValueKind,
+};
+pub(crate) use style_key::{css_name, style_key};
 
 /// The tag of a comment.
 pub(crate) const COMMENT_TAG: &str = "#comment";
@@ -94,13 +99,13 @@ impl AttributeValue {
         }
     }
 
-    /// The text of the value: a string as is, a number through [`js_number_text`], a bool as `true`
-    /// or `false`.
+    /// The text of the value: a string as is, a number through [`shortest_number_text`], a bool as
+    /// `true` or `false`.
     #[must_use]
     pub fn text(&self) -> String {
         match self {
             Self::String(text) => text.clone(),
-            Self::Number(number) => js_number_text(*number),
+            Self::Number(number) => shortest_number_text(*number),
             Self::Bool(flag) => flag.to_string(),
         }
     }
@@ -139,10 +144,10 @@ impl From<bool> for AttributeValue {
     }
 }
 
-/// The text JavaScript makes of a number. `-0` prints as `0`, and values from `1e21` up or below
-/// `1e-6` use the exponent form.
+/// The shortest text that reads back as the number. `-0` prints as `0`, and values from `1e21` up
+/// or below `1e-6` use the exponent form.
 #[must_use]
-pub fn js_number_text(value: f64) -> String {
+pub fn shortest_number_text(value: f64) -> String {
     if value.is_nan() {
         return "NaN".to_owned();
     }
@@ -200,7 +205,7 @@ pub type StyleMap = IndexMap<String, AttributeValue>;
 pub struct VirtualNode {
     id: NodeId,
     kind: NodeKind,
-    tag_name: String,
+    local_name: String,
     /// The character data of a text node or a comment, empty for any other node.
     data: String,
     /// The namespace of an element. `None` for a node that is no element and for an element made
@@ -223,14 +228,14 @@ impl VirtualNode {
     fn new(
         id: NodeId,
         kind: NodeKind,
-        tag_name: String,
+        local_name: String,
         namespace: Option<Namespace>,
         prefix: Option<String>,
     ) -> Self {
         Self {
             id,
             kind,
-            tag_name,
+            local_name,
             data: String::new(),
             namespace,
             prefix,
@@ -250,8 +255,8 @@ impl VirtualNode {
     }
 
     #[must_use]
-    pub fn tag_name(&self) -> &str {
-        &self.tag_name
+    pub fn local_name(&self) -> &str {
+        &self.local_name
     }
 
     #[must_use]
@@ -369,7 +374,6 @@ pub struct VirtualTree {
     /// Bumped by every change to a node, a link, the root or the document, so a cache built from
     /// the tree can tell that it is stale.
     generation: u64,
-    style_cache: RefCell<computed::SheetCache>,
     interaction: state::InteractionState,
 }
 
@@ -377,6 +381,13 @@ impl VirtualTree {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The change counter: it grows with every change to a node, a link, the root or the
+    /// document, so a cache built from the tree can tell that it is stale.
+    #[must_use]
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     /// Declares `id` the node the host owns: the sweep never frees it.
@@ -487,6 +498,7 @@ mod tests {
 
     use super::*;
     use crate::tests::{Fixture, node};
+    use crate::{remove_style, set_style};
     use rstest::rstest;
 
     #[rstest]
@@ -533,11 +545,11 @@ mod tests {
             TreeError::NodeNotFound(999)
         );
         assert_eq!(
-            tree.set_style(999, "k", "v").unwrap_err(),
+            set_style(&mut tree, 999, "k", "v").unwrap_err(),
             TreeError::NodeNotFound(999)
         );
         assert_eq!(
-            tree.remove_style(999, "k").unwrap_err(),
+            remove_style(&mut tree, 999, "k").unwrap_err(),
             TreeError::NodeNotFound(999)
         );
     }
@@ -593,11 +605,8 @@ mod tests {
     #[case::decimal_zeros(0.000_001, "0.000001")]
     #[case::exponent_with_digits(1.5e-7, "1.5e-7")]
     #[case::fraction(0.5, "0.5")]
-    fn js_number_text_prints_a_number_as_javascript_does(
-        #[case] value: f64,
-        #[case] expected: &str,
-    ) {
-        assert_eq!(js_number_text(value), expected);
+    fn shortest_number_text_prints_the_shortest_form(#[case] value: f64, #[case] expected: &str) {
+        assert_eq!(shortest_number_text(value), expected);
     }
 
     /// `parent` holds `a`, `b`, `c`. `lone_parent` holds `lone`. `loose` has no parent. The last

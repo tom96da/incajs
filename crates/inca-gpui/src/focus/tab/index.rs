@@ -4,7 +4,8 @@
 //! The tab index of a node and the nodes whose tab index may have changed.
 
 use super::super::{
-    AttributeValue, FocusRegistry, NodeId, VirtualTree, hidden_by_attribute, is_disabled_control,
+    AttributeValue, FocusRegistry, NodeId, StyleCache, VirtualTree, hidden_by_attribute,
+    is_disabled_control,
 };
 
 impl FocusRegistry {
@@ -14,10 +15,11 @@ impl FocusRegistry {
     pub(in crate::focus) fn focusable_after_frame(
         &self,
         tree: &VirtualTree,
+        cache: &StyleCache,
         node_id: NodeId,
     ) -> bool {
         if self.tab_dirty.contains(&node_id) {
-            Self::tab_index_of(tree, node_id).is_some()
+            Self::tab_index_of(tree, cache, node_id).is_some()
         } else {
             self.handles.contains_key(&node_id)
         }
@@ -56,17 +58,21 @@ impl FocusRegistry {
     /// `display: none`, `inert` or a hiding `hidden`, and a `disabled` HTML button
     /// or input have none. An HTML button or input, or a link, whose `tabindex` is missing or
     /// unparsable has 0.
-    pub(in crate::focus) fn tab_index_of(tree: &VirtualTree, node_id: NodeId) -> Option<i32> {
+    pub(in crate::focus) fn tab_index_of(
+        tree: &VirtualTree,
+        cache: &StyleCache,
+        node_id: NodeId,
+    ) -> Option<i32> {
         let node = tree.get(node_id)?;
         if !tree.is_connected(node_id) {
             return None;
         }
         let hidden = tree.ancestors(node_id).any(|id| {
-            hidden_by_attribute(tree, id) || tree.get(id).is_some_and(|ancestor| {
+            hidden_by_attribute(tree, cache, id) || tree.get(id).is_some_and(|ancestor| {
                 ancestor.is_template()
                     || ancestor.attributes().contains_key("inert")
                     || matches!(
-                        tree.computed_style(id).get("display"),
+                        cache.computed_style(tree, id).get("display"),
                         Some(AttributeValue::String(value)) if value.eq_ignore_ascii_case("none")
                     )
             })
@@ -86,6 +92,7 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use gpui::TestAppContext;
+    use inca_node::{remove_style, set_style};
     use rstest::rstest;
     use std::collections::HashSet;
 
@@ -107,31 +114,49 @@ mod tests {
         tree.append_child(ROOT, template).unwrap();
         tree.append_child(template, button).unwrap();
 
-        assert_eq!(FocusRegistry::tab_index_of(&tree, button), None);
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), button),
+            None
+        );
     }
 
     #[test]
     fn a_text_node_and_a_display_none_node_have_no_tab_index() {
         let (tree, id) = tree_with("#text", Some(AttributeValue::from("0")));
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            None
+        );
         let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
-        tree.set_style(id, "display", "none").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
-        tree.set_style(id, "display", "flex").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+        set_style(&mut tree, id, "display", "none").unwrap();
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            None
+        );
+        set_style(&mut tree, id, "display", "flex").unwrap();
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            Some(0)
+        );
     }
 
     #[test]
     fn a_comment_with_a_tabindex_has_no_tab_index() {
         let (tree, id) = tree_with("#comment", Some(AttributeValue::from("0")));
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            None
+        );
     }
 
     #[test]
     fn a_display_none_in_capitals_leaves_no_tab_index() {
         let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
-        tree.set_style(id, "display", "NONE").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
+        set_style(&mut tree, id, "display", "NONE").unwrap();
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            None
+        );
     }
 
     #[rstest]
@@ -145,19 +170,19 @@ mod tests {
         tree.append_child(parent, child).unwrap();
         for (target, name) in [(child, "self"), (parent, "ancestor")] {
             if hide == "display" {
-                tree.set_style(target, "display", "none").unwrap();
+                set_style(&mut tree, target, "display", "none").unwrap();
             } else {
                 tree.set_attribute(target, hide, true).unwrap();
             }
-            if FocusRegistry::tab_index_of(&tree, child).is_some() {
+            if FocusRegistry::tab_index_of(&tree, &StyleCache::new(), child).is_some() {
                 mismatches.push(format!("{hide} on {name} keeps the tab index"));
             }
             if hide == "display" {
-                tree.remove_style(target, "display").unwrap();
+                remove_style(&mut tree, target, "display").unwrap();
             } else {
                 tree.remove_attribute(target, hide).unwrap();
             }
-            if FocusRegistry::tab_index_of(&tree, child) != Some(0) {
+            if FocusRegistry::tab_index_of(&tree, &StyleCache::new(), child) != Some(0) {
                 mismatches.push(format!("removing {hide} on {name} loses the tab index"));
             }
         }
@@ -184,7 +209,10 @@ mod tests {
         tree.append_child(parent, child).unwrap();
         tree.set_attribute(child, "tabindex", "0").unwrap();
 
-        assert_eq!(FocusRegistry::tab_index_of(&tree, child), None);
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), child),
+            None
+        );
     }
 
     #[test]
@@ -196,19 +224,31 @@ mod tests {
         tree.set_attribute(node, "class", "h").unwrap();
         tree.set_attribute(node, "tabindex", "0").unwrap();
 
-        assert_eq!(FocusRegistry::tab_index_of(&tree, node), None);
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), node),
+            None
+        );
     }
 
     #[test]
     fn hidden_with_an_own_display_or_until_found_keeps_the_tab_index() {
         let (mut tree, id) = tree_with("div", Some(AttributeValue::from("0")));
         tree.set_attribute(id, "hidden", "").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None);
-        tree.set_style(id, "display", "flex").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
-        tree.remove_style(id, "display").unwrap();
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            None
+        );
+        set_style(&mut tree, id, "display", "flex").unwrap();
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            Some(0)
+        );
+        remove_style(&mut tree, id, "display").unwrap();
         tree.set_attribute(id, "hidden", "until-found").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            Some(0)
+        );
     }
 
     const SVG: &str = "http://www.w3.org/2000/svg";
@@ -220,7 +260,11 @@ mod tests {
         let (mut tree, _) = rooted_tree(0);
         let id = tree.create_element_ns(Some(SVG), None, tag).unwrap();
         tree.append_child(ROOT, id).unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), None, "{tag}");
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            None,
+            "{tag}"
+        );
     }
 
     #[test]
@@ -229,7 +273,10 @@ mod tests {
         let template = tree.create_element_ns(Some(SVG), None, "template").unwrap();
         tree.append_child(ROOT, template).unwrap();
         tree.append_child(template, button).unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, button), Some(0));
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), button),
+            Some(0)
+        );
     }
 
     #[gpui::test]
@@ -264,13 +311,20 @@ mod tests {
         #[case] want: Option<i32>,
     ) {
         let (tree, id) = tree_with("button", value.clone());
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{value:?}");
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            want,
+            "{value:?}"
+        );
     }
 
     #[test]
     fn an_input_has_tab_index_0_without_a_tabindex() {
         let (tree, id) = tree_with("input", None);
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(0));
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            Some(0)
+        );
     }
 
     #[rstest]
@@ -283,9 +337,17 @@ mod tests {
     ) {
         let (mut tree, id) = tree_with(tag, Some(AttributeValue::from("2")));
         tree.set_attribute(id, "disabled", true).unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), want, "{tag}");
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            want,
+            "{tag}"
+        );
         tree.remove_attribute(id, "disabled").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, id), Some(2), "{tag}");
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), id),
+            Some(2),
+            "{tag}"
+        );
     }
 
     #[gpui::test]
@@ -296,7 +358,8 @@ mod tests {
         registry.mark_tab_dirty(id);
         registry.request_focus(id, false);
 
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(transitions.is_empty());
         assert_eq!(
@@ -314,7 +377,8 @@ mod tests {
 
         tree.set_attribute(id, "disabled", true).unwrap();
         registry.mark_tab_dirty(id);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert_eq!(transitions.len(), 1);
         assert_eq!(transitions[0].blurred, Some(id));
@@ -329,12 +393,13 @@ mod tests {
         focus_all(cx, &mut registry, &tree, &[id], id);
         tree.set_attribute(id, "disabled", true).unwrap();
         registry.mark_tab_dirty(id);
-        cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         tree.remove_attribute(id, "disabled").unwrap();
         registry.mark_tab_dirty(id);
         registry.request_focus(id, false);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert_eq!(transitions.len(), 1);
         assert_eq!(transitions[0].blurred, None);
@@ -349,7 +414,13 @@ mod tests {
         tree.append_child(ROOT, with_href).unwrap();
         tree.append_child(ROOT, without).unwrap();
         tree.set_attribute(with_href, "href", "u").unwrap();
-        assert_eq!(FocusRegistry::tab_index_of(&tree, with_href), Some(0));
-        assert_eq!(FocusRegistry::tab_index_of(&tree, without), None);
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), with_href),
+            Some(0)
+        );
+        assert_eq!(
+            FocusRegistry::tab_index_of(&tree, &StyleCache::new(), without),
+            None
+        );
     }
 }

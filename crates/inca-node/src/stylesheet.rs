@@ -9,8 +9,9 @@ use cssparser::{
 };
 
 use crate::selector::Selectors;
-use crate::spec::{style_key, style_warning};
+use crate::spec::style_warning;
 use crate::tree::AttributeValue;
+use crate::tree::style_key;
 
 /// One qualified rule: its selectors and its declarations in source order.
 #[derive(Debug)]
@@ -234,7 +235,7 @@ mod tests {
         f.sheet(".a { width: bogus }");
 
         assert_eq!(
-            f.tree.take_style_warnings(),
+            f.cache.take_style_warnings(&f.tree),
             ["ignoring unsupported value for style key `width`"]
         );
     }
@@ -245,7 +246,7 @@ mod tests {
         f.sheet(".a { width 10px; height: 2px }");
 
         assert_eq!(
-            f.tree.take_style_warnings(),
+            f.cache.take_style_warnings(&f.tree),
             ["ignoring the declaration `width 10px`"]
         );
     }
@@ -274,7 +275,7 @@ mod tests {
         f.sheet(".a { width: ; height: 2px }");
         let a = f.boxed("a");
 
-        assert!(f.tree.take_style_warnings().is_empty());
+        assert!(f.cache.take_style_warnings(&f.tree).is_empty());
         assert_eq!(f.computed(a, "width"), None);
     }
 
@@ -309,7 +310,7 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(css);
 
-        assert_eq!(f.tree.take_style_warnings(), [warning]);
+        assert_eq!(f.cache.take_style_warnings(&f.tree), [warning]);
     }
 
     #[test]
@@ -328,7 +329,7 @@ mod tests {
         let a = f.boxed("a");
 
         assert_eq!(
-            f.tree.take_style_warnings(),
+            f.cache.take_style_warnings(&f.tree),
             ["ignoring the at-rule `@media`"]
         );
         assert_eq!(f.computed(a, "width"), None);
@@ -341,7 +342,10 @@ mod tests {
         f.sheet(".a { opacity: 1e999 }");
         let a = f.boxed("a");
 
-        assert_eq!(build_spec(&f.tree, a).unwrap().style.opacity, Some(1.0));
+        assert_eq!(
+            build_spec(&f.tree, &f.cache, a).unwrap().style.opacity,
+            Some(1.0)
+        );
     }
 
     #[test]
@@ -350,7 +354,10 @@ mod tests {
         f.sheet(".a { opacity: 50% }");
         let a = f.boxed("a");
 
-        assert_eq!(build_spec(&f.tree, a).unwrap().style.opacity, Some(0.5));
+        assert_eq!(
+            build_spec(&f.tree, &f.cache, a).unwrap().style.opacity,
+            Some(0.5)
+        );
     }
 
     #[test]

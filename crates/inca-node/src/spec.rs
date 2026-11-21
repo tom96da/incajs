@@ -18,13 +18,18 @@ mod number;
 mod parse;
 
 pub use axes::{WheelAxes, wheel_axes};
-pub use keys::{STYLE_KEYS, StyleKey, ValueKind, style_warning};
-pub(crate) use keys::{css_declaration, css_name, style_key, unknown_key_warning};
+pub use keys::style_warning;
+pub(crate) use keys::{css_declaration, unknown_key_warning};
 pub use parse::declared_window_size;
 
 use self::parse::style_spec_from_props;
 use crate::input_text::sanitized;
-use crate::tree::{AttributeValue, NodeId, NodeKind, StyleMap, VirtualNode, VirtualTree};
+pub use crate::tree::{
+    AlignSpec, DisplaySpec, FlexDirectionSpec, OverflowSpec, STYLE_KEYS, StyleKey, ValueKind,
+};
+use crate::tree::{
+    AttributeValue, NodeId, NodeKind, StyleCache, StyleMap, VirtualNode, VirtualTree,
+};
 
 /// What kind of element a [`VirtualNode`] maps to.
 ///
@@ -66,83 +71,6 @@ impl ColorSpec {
     #[must_use]
     pub const fn opaque(rgb: u32) -> Self {
         Self { rgb, alpha: 255 }
-    }
-}
-
-/// Defines a keyword enum: its variants, `NAMES` and `from_name`. A variant
-/// lists every name it takes, separated by `|`.
-macro_rules! keywords {
-    (
-        $(#[$meta:meta])*
-        pub enum $name:ident {
-            $($(#[$vmeta:meta])* $variant:ident = $first:literal $(| $more:literal)*,)*
-        }
-    ) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub enum $name {
-            $($(#[$vmeta])* $variant,)*
-        }
-
-        impl $name {
-            /// Every name a style value of this kind takes, in declaration order.
-            pub const NAMES: &[&str] = &[$($first, $($more,)*)*];
-
-            /// The variant `name` stands for. Names compare without ASCII case.
-            #[must_use]
-            pub fn from_name(name: &str) -> Option<Self> {
-                $(
-                    if name.eq_ignore_ascii_case($first) $(|| name.eq_ignore_ascii_case($more))* {
-                        return Some(Self::$variant);
-                    }
-                )*
-                None
-            }
-        }
-    };
-}
-
-keywords! {
-    /// The values of `display`.
-    pub enum DisplaySpec {
-        Flex = "flex",
-        Block = "block",
-        Grid = "grid",
-        None = "none",
-    }
-}
-
-keywords! {
-    /// The values of `flex-direction`.
-    pub enum FlexDirectionSpec {
-        Row = "row",
-        Column = "column",
-        RowReverse = "row-reverse" | "row_reverse",
-        ColumnReverse = "column-reverse" | "column_reverse",
-    }
-}
-
-keywords! {
-    /// The values of `align-items` and `justify-content`.
-    pub enum AlignSpec {
-        Start = "start" | "flex-start",
-        End = "end" | "flex-end",
-        Center = "center",
-        Stretch = "stretch",
-    }
-}
-
-keywords! {
-    /// The values of `overflow`.
-    pub enum OverflowSpec {
-        Visible = "visible",
-        /// Clips without making a scroll container.
-        Clip = "clip",
-        Hidden = "hidden",
-        /// Scrolls, and a scrollbar of this axis can reserve width.
-        Scroll = "scroll",
-        /// Scrolls, and a scrollbar of this axis draws over the content.
-        Auto = "auto",
     }
 }
 
@@ -262,21 +190,21 @@ pub struct ElementSpec {
 /// (the convention of [`VirtualTree::get`]) or is a comment, a `<style>` element or a template.
 /// The render path is fed by JS-supplied data, so it skips a child id that doesn't resolve.
 #[must_use]
-pub fn build_spec(tree: &VirtualTree, root: NodeId) -> Option<ElementSpec> {
+pub fn build_spec(tree: &VirtualTree, cache: &StyleCache, root: NodeId) -> Option<ElementSpec> {
     let mut inert = false;
     let mut cursor = tree.get(root)?.parent();
     while let Some(ancestor) = cursor.and_then(|id| tree.get(id)) {
         inert |= ancestor.attributes().contains_key("inert");
         cursor = ancestor.parent();
     }
-    build_spec_inner(tree, root, inert)
+    build_spec_inner(tree, cache, root, inert)
 }
 
 /// Whether script can scroll `id`: either overflow axis is `hidden`,
 /// `scroll` or `auto`.
 #[must_use]
-pub fn is_scroll_container(tree: &VirtualTree, id: NodeId) -> bool {
-    style_spec_from_props(&tree.computed_style(id)).is_scroll_container()
+pub fn is_scroll_container(tree: &VirtualTree, cache: &StyleCache, id: NodeId) -> bool {
+    style_spec_from_props(&cache.computed_style(tree, id)).is_scroll_container()
 }
 
 /// Whether the `hidden` attribute hides `node`: it is present in the Hidden
@@ -296,12 +224,17 @@ fn hidden_with(node: &VirtualNode, computed: &StyleMap) -> bool {
 /// state (any value except `until-found`) and the style of the node sets no
 /// `display`. `false` for an unknown id.
 #[must_use]
-pub fn hidden_by_attribute(tree: &VirtualTree, id: NodeId) -> bool {
+pub fn hidden_by_attribute(tree: &VirtualTree, cache: &StyleCache, id: NodeId) -> bool {
     tree.get(id)
-        .is_some_and(|node| hidden_with(node, &tree.computed_style(id)))
+        .is_some_and(|node| hidden_with(node, &cache.computed_style(tree, id)))
 }
 
-fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Option<ElementSpec> {
+fn build_spec_inner(
+    tree: &VirtualTree,
+    cache: &StyleCache,
+    root: NodeId,
+    inert_above: bool,
+) -> Option<ElementSpec> {
     let node = tree.get(root)?;
     // A `<style>` element holds rules, a template holds markup and a comment holds a note. None
     // takes part in the layout.
@@ -328,7 +261,7 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
         _ => ElementTag::Container,
     };
 
-    let computed = tree.computed_style(root);
+    let computed = cache.computed_style(tree, root);
     let mut style = style_spec_from_props(&computed);
     if hidden_with(node, &computed) {
         style.display = Some(DisplaySpec::None);
@@ -338,7 +271,7 @@ fn build_spec_inner(tree: &VirtualTree, root: NodeId, inert_above: bool) -> Opti
     } else {
         node.children()
             .iter()
-            .filter_map(|&child_id| build_spec_inner(tree, child_id, inert))
+            .filter_map(|&child_id| build_spec_inner(tree, cache, child_id, inert))
             .collect()
     };
 
@@ -360,6 +293,7 @@ mod tests {
     use super::*;
     use crate::tests::{Fixture, HTML, SVG};
     use crate::tree::VirtualTree;
+    use crate::{remove_style, set_style};
 
     /// A node with `name` as its class under the root of `f`.
     fn classed(f: &mut Fixture, name: &str) -> NodeId {
@@ -380,7 +314,7 @@ mod tests {
 
     /// `wheel_axes` with the axes as a tuple.
     pub(super) fn wheel(tree: &VirtualTree, id: NodeId) -> Option<(bool, bool)> {
-        wheel_axes(tree, id).map(|axes| (axes.x, axes.y))
+        wheel_axes(tree, &StyleCache::new(), id).map(|axes| (axes.x, axes.y))
     }
 
     /// A style with these overflow values.
@@ -419,7 +353,7 @@ mod tests {
     #[test]
     fn unknown_root_returns_none() {
         let tree = VirtualTree::new();
-        assert!(build_spec(&tree, 42).is_none());
+        assert!(build_spec(&tree, &StyleCache::new(), 42).is_none());
     }
 
     #[test]
@@ -427,7 +361,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
 
-        let spec = build_spec(&tree, id).unwrap();
+        let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(spec.tag, ElementTag::Container);
     }
 
@@ -449,7 +383,7 @@ mod tests {
             placeholder: want.to_owned(),
             editable: true,
         };
-        assert_eq!(build_spec(&tree, id).unwrap().tag, want);
+        assert_eq!(build_spec(&tree, &StyleCache::new(), id).unwrap().tag, want);
     }
 
     #[rstest]
@@ -469,7 +403,7 @@ mod tests {
             placeholder: String::new(),
             editable: want,
         };
-        assert_eq!(build_spec(&tree, id).unwrap().tag, want);
+        assert_eq!(build_spec(&tree, &StyleCache::new(), id).unwrap().tag, want);
     }
 
     #[test]
@@ -478,14 +412,24 @@ mod tests {
         let id = tree.create_node("input").unwrap();
         let child = tree.create_node("div").unwrap();
         tree.append_child(id, child).unwrap();
-        assert!(build_spec(&tree, id).unwrap().children.is_empty());
+        assert!(
+            build_spec(&tree, &StyleCache::new(), id)
+                .unwrap()
+                .children
+                .is_empty()
+        );
     }
 
     #[test]
     fn the_hidden_attribute_makes_the_spec_display_none_unless_display_is_set() {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        let display = |tree: &VirtualTree| build_spec(tree, id).unwrap().style.display;
+        let display = |tree: &VirtualTree| {
+            build_spec(tree, &StyleCache::new(), id)
+                .unwrap()
+                .style
+                .display
+        };
         assert_eq!(display(&tree), None);
         for (value, want) in [
             ("", Some(DisplaySpec::None)),
@@ -498,9 +442,9 @@ mod tests {
         }
         tree.set_attribute(id, "hidden", true).unwrap();
         assert_eq!(display(&tree), Some(DisplaySpec::None));
-        tree.set_style(id, "display", "flex").unwrap();
+        set_style(&mut tree, id, "display", "flex").unwrap();
         assert_eq!(display(&tree), Some(DisplaySpec::Flex));
-        tree.remove_style(id, "display").unwrap();
+        remove_style(&mut tree, id, "display").unwrap();
         tree.remove_attribute(id, "hidden").unwrap();
         assert_eq!(display(&tree), None);
     }
@@ -514,7 +458,7 @@ mod tests {
         tree.append_child(outer, sibling).unwrap();
         tree.set_attribute(inert, "inert", true).unwrap();
         let inerts = |root| {
-            let spec = build_spec(&tree, root).unwrap();
+            let spec = build_spec(&tree, &StyleCache::new(), root).unwrap();
             let mut seen = vec![(spec.id, spec.inert)];
             let mut stack = spec.children;
             while let Some(spec) = stack.pop() {
@@ -540,10 +484,10 @@ mod tests {
     #[test]
     fn a_hidden_attribute_does_not_hide_a_node_whose_display_is_set() {
         let (mut tree, [_, parent, node]) = chain();
-        tree.set_style(node, "overflow_x", "hidden").unwrap();
-        tree.set_style(node, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, node, "overflow_x", "hidden").unwrap();
+        set_style(&mut tree, node, "overflow_y", "scroll").unwrap();
         tree.set_attribute(parent, "hidden", true).unwrap();
-        tree.set_style(parent, "display", "flex").unwrap();
+        set_style(&mut tree, parent, "display", "flex").unwrap();
         assert_eq!(wheel(&tree, node), Some((false, true)));
     }
 
@@ -551,10 +495,10 @@ mod tests {
     fn the_hidden_attribute_hides_a_node_with_an_empty_display_and_no_sheet() {
         let mut tree = VirtualTree::new();
         let node = tree.create_node("div").unwrap();
-        tree.set_style(node, "display", "").unwrap();
+        set_style(&mut tree, node, "display", "").unwrap();
         tree.set_attribute(node, "hidden", true).unwrap();
 
-        assert!(hidden_by_attribute(&tree, node));
+        assert!(hidden_by_attribute(&tree, &StyleCache::new(), node));
     }
 
     #[test]
@@ -562,10 +506,10 @@ mod tests {
         let mut f = Fixture::new();
         f.sheet(".b { width: 1px }");
         let node = classed(&mut f, "a");
-        f.tree.set_style(node, "display", "").unwrap();
+        set_style(&mut f.tree, node, "display", "").unwrap();
         f.attr(node, "hidden", true);
 
-        assert!(hidden_by_attribute(&f.tree, node));
+        assert!(hidden_by_attribute(&f.tree, &f.cache, node));
     }
 
     #[test]
@@ -574,9 +518,9 @@ mod tests {
         let (style, _) = f.sheet(".a { width: 1px }");
         let other = classed(&mut f, "a");
 
-        let spec = build_spec(&f.tree, f.root).unwrap();
+        let spec = build_spec(&f.tree, &f.cache, f.root).unwrap();
 
-        assert!(build_spec(&f.tree, style).is_none());
+        assert!(build_spec(&f.tree, &f.cache, style).is_none());
         assert_eq!(
             spec.children
                 .iter()
@@ -592,7 +536,7 @@ mod tests {
         let comment = f.tree.create_node("#comment").unwrap();
         f.tree.append_child(f.root, comment).unwrap();
 
-        assert!(build_spec(&f.tree, comment).is_none());
+        assert!(build_spec(&f.tree, &f.cache, comment).is_none());
     }
 
     #[test]
@@ -602,7 +546,7 @@ mod tests {
         f.tree.append_child(f.root, comment).unwrap();
         let other = classed(&mut f, "a");
 
-        let spec = build_spec(&f.tree, f.root).unwrap();
+        let spec = build_spec(&f.tree, &f.cache, f.root).unwrap();
 
         assert_eq!(
             spec.children
@@ -620,8 +564,8 @@ mod tests {
         let node = classed(&mut f, "s");
         let plain = classed(&mut f, "plain");
 
-        assert!(is_scroll_container(&f.tree, node));
-        assert!(!is_scroll_container(&f.tree, plain));
+        assert!(is_scroll_container(&f.tree, &f.cache, node));
+        assert!(!is_scroll_container(&f.tree, &f.cache, plain));
     }
 
     #[test]
@@ -642,9 +586,9 @@ mod tests {
         let node = classed(&mut f, "s");
         f.attr(node, "hidden", true);
 
-        assert!(!hidden_by_attribute(&f.tree, node));
+        assert!(!hidden_by_attribute(&f.tree, &f.cache, node));
         assert_eq!(
-            build_spec(&f.tree, node).unwrap().style.display,
+            build_spec(&f.tree, &f.cache, node).unwrap().style.display,
             Some(DisplaySpec::Flex)
         );
     }
@@ -655,7 +599,7 @@ mod tests {
         let id = tree.create_node("text").unwrap();
         tree.set_attribute(id, "value", "hello").unwrap();
 
-        let spec = build_spec(&tree, id).unwrap();
+        let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(spec.tag, ElementTag::Container);
     }
 
@@ -665,7 +609,7 @@ mod tests {
         let id = tree.create_node("#text").unwrap();
         tree.set_data(id, "hello").unwrap();
 
-        let spec = build_spec(&tree, id).unwrap();
+        let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(spec.tag, ElementTag::Text("hello".into()));
     }
 
@@ -674,7 +618,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("#text").unwrap();
 
-        let spec = build_spec(&tree, id).unwrap();
+        let spec = build_spec(&tree, &StyleCache::new(), id).unwrap();
         assert_eq!(spec.tag, ElementTag::Text(String::new()));
     }
 
@@ -687,7 +631,7 @@ mod tests {
         tree.append_child(parent, a).unwrap();
         tree.append_child(parent, b).unwrap();
 
-        let spec = build_spec(&tree, parent).unwrap();
+        let spec = build_spec(&tree, &StyleCache::new(), parent).unwrap();
         let child_ids: Vec<NodeId> = spec.children.iter().map(|c| c.id).collect();
         assert_eq!(child_ids, &[a, b]);
     }
@@ -697,7 +641,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let template = tree.create_node("template").unwrap();
 
-        assert!(build_spec(&tree, template).is_none());
+        assert!(build_spec(&tree, &StyleCache::new(), template).is_none());
     }
 
     #[test]
@@ -707,7 +651,7 @@ mod tests {
         let child = tree.create_node("div").unwrap();
         tree.append_child(template, child).unwrap();
 
-        assert!(build_spec(&tree, template).is_none());
+        assert!(build_spec(&tree, &StyleCache::new(), template).is_none());
     }
 
     #[test]
@@ -715,7 +659,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let template = tree.create_element_ns(Some(SVG), None, "template").unwrap();
 
-        assert!(build_spec(&tree, template).is_some());
+        assert!(build_spec(&tree, &StyleCache::new(), template).is_some());
     }
 
     #[test]
@@ -725,7 +669,7 @@ mod tests {
         let child = tree.create_node("div").unwrap();
         tree.append_child(input, child).unwrap();
 
-        let spec = build_spec(&tree, input).unwrap();
+        let spec = build_spec(&tree, &StyleCache::new(), input).unwrap();
         assert!(matches!(spec.tag, ElementTag::Container));
         assert_eq!(spec.children.len(), 1);
     }
@@ -739,6 +683,6 @@ mod tests {
             .create_element_ns(Some(namespace), None, "style")
             .unwrap();
 
-        assert!(build_spec(&tree, style).is_none());
+        assert!(build_spec(&tree, &StyleCache::new(), style).is_none());
     }
 }

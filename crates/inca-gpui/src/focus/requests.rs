@@ -4,7 +4,8 @@
 //! Queued focus and blur requests, and the frame that applies them.
 
 use super::{
-    App, FocusRegistry, FocusTransition, NodeId, PendingFocus, Start, VirtualTree, Window,
+    App, FocusRegistry, FocusTransition, NodeId, PendingFocus, Start, StyleCache, VirtualTree,
+    Window,
 };
 
 impl FocusRegistry {
@@ -35,10 +36,11 @@ impl FocusRegistry {
     pub fn apply_pending(
         &mut self,
         tree: &VirtualTree,
+        cache: &StyleCache,
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<FocusTransition> {
-        let transitions = self.apply_requests(tree, window, cx);
+        let transitions = self.apply_requests(tree, cache, window, cx);
         let parked = self.parked.get_or_insert_with(|| cx.focus_handle());
         if window.focused(cx).is_none() {
             parked.focus(window, cx);
@@ -49,6 +51,7 @@ impl FocusRegistry {
     fn apply_requests(
         &mut self,
         tree: &VirtualTree,
+        cache: &StyleCache,
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<FocusTransition> {
@@ -59,7 +62,7 @@ impl FocusRegistry {
             window.blur(cx);
         }
         for node_id in std::mem::take(&mut self.tab_dirty) {
-            match Self::tab_index_of(tree, node_id) {
+            match Self::tab_index_of(tree, cache, node_id) {
                 Some(_) => {
                     self.get_or_create(node_id, cx);
                 }
@@ -191,14 +194,15 @@ mod tests {
         registry.mark_tab_dirty(id);
         registry.request_focus(id, true);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
         });
         let held = registry.handle(id).unwrap();
         assert!(cx.update(|window, _| held.is_focused(window)));
 
         tree.remove_attribute(id, "tabindex").unwrap();
         registry.mark_tab_dirty(id);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(!cx.update(|window, _| held.is_focused(window)));
         assert_eq!(transitions.len(), 1);
@@ -215,7 +219,7 @@ mod tests {
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(id);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
         });
         let held = registry.handle(id).unwrap();
         // Focus moved outside the registry, as a click does.
@@ -223,7 +227,8 @@ mod tests {
 
         tree.remove_attribute(id, "tabindex").unwrap();
         registry.mark_tab_dirty(id);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(!cx.update(|window, _| held.is_focused(window)));
         let events: Vec<_> = transitions.iter().map(|t| (t.blurred, t.focused)).collect();
@@ -239,12 +244,20 @@ mod tests {
         let mut registry = FocusRegistry::default();
         registry.mark_tab_dirty(root);
         cx.update(|window, cx| {
-            assert!(registry.apply_pending(&tree, window, cx).is_empty());
+            assert!(
+                registry
+                    .apply_pending(&tree, &StyleCache::new(), window, cx)
+                    .is_empty()
+            );
             registry.request_focus(root, true);
-            let transitions = registry.apply_pending(&tree, window, cx);
+            let transitions = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             assert_eq!(transitions.len(), 1);
             assert_eq!(registry.focused_node(window, cx), Some(root));
-            assert!(registry.apply_pending(&tree, window, cx).is_empty());
+            assert!(
+                registry
+                    .apply_pending(&tree, &StyleCache::new(), window, cx)
+                    .is_empty()
+            );
         });
     }
 
@@ -260,7 +273,8 @@ mod tests {
 
         tree.remove_child(ROOT, id).unwrap();
         registry.mark_tab_dirty(id);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(transitions.is_empty());
         assert!(registry.handle(id).is_none());
@@ -281,7 +295,8 @@ mod tests {
 
         tree.remove_attribute(id, "tabindex").unwrap();
         registry.mark_tab_dirty(id);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert_eq!(transitions.len(), 1);
         assert_eq!(transitions[0].blurred, Some(id));
@@ -298,7 +313,8 @@ mod tests {
         tree.remove_child(ROOT, gone).unwrap();
         registry.mark_tab_dirty(gone);
         registry.request_focus(other, false);
-        let transitions = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert_eq!(
             cx.update(|window, cx| registry.focused_node(window, cx)),
@@ -321,7 +337,8 @@ mod tests {
         registry.drop_focus_in(&tree, gone);
 
         let held = registry.handle(gone).unwrap();
-        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
         assert!(!cx.update(|window, _| held.is_focused(window)));
         assert!(registry.handle(other).is_some());
     }
@@ -334,7 +351,8 @@ mod tests {
         let mut registry = FocusRegistry::default();
         focus_all(cx, &mut registry, &tree, &ids, gone);
         registry.request_focus(gone, true);
-        let _ = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
         registry.retry_reveal(gone);
         registry.retry_reveal(kept);
 
@@ -354,11 +372,13 @@ mod tests {
         registry.set_window_blurred(true);
         registry.drop_focus_in(&tree, id);
 
-        let first = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let first =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
         registry.set_window_blurred(false);
         let held = registry.handle(id).unwrap();
         cx.update(|window, cx| held.focus(window, cx));
-        let second = cx.update(|window, cx| registry.apply_pending(&tree, window, cx));
+        let second =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
 
         assert!(first.is_empty());
         let events: Vec<_> = second.iter().map(|t| (t.blurred, t.focused)).collect();

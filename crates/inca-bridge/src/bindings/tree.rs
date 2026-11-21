@@ -52,10 +52,10 @@ fn document_node_id(host: Rc<RefCell<Host>>) -> impl Fn() -> NodeId {
 }
 
 fn create_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, String) -> JsResult<NodeId> {
-    move |ctx, tag_name| {
+    move |ctx, local_name| {
         let mut host = host.borrow_mut();
         host.tree
-            .create_node(tag_name)
+            .create_node(local_name)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
@@ -430,7 +430,7 @@ mod tests {
 
         let host = host.borrow();
         for _ in 0..3 {
-            inca_node::build_spec(&host.tree, 1).unwrap();
+            inca_node::build_spec(&host.tree, &host.style, 1).unwrap();
         }
         assert_eq!(warnings.borrow().len(), 1);
     }

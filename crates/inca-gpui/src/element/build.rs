@@ -14,7 +14,7 @@ use super::style::{apply_style, clip_scroll_axes, reserve_gutter};
 use super::wheel::{scroll_anchor, wire_scroll};
 use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
 use inca_node::spec::{ElementSpec, ElementTag, WheelAxes, build_spec};
-use inca_node::tree::{NodeId, VirtualTree};
+use inca_node::tree::{NodeId, StyleCache, VirtualTree};
 
 /// The selector `build_element` gives the container with this id. A test
 /// passes it to `gpui`'s `debug_bounds` to read that container's bounds.
@@ -240,8 +240,8 @@ pub fn build_element_with_events<E: EventSink + Clone + 'static>(
 /// whole subtree from `tree` into a real `gpui` element. `None` if `root`
 /// doesn't resolve.
 #[must_use]
-pub fn render_tree(tree: &VirtualTree, root: NodeId) -> Option<AnyElement> {
-    build_spec(tree, root).map(|spec| build_element(&spec))
+pub fn render_tree(tree: &VirtualTree, cache: &StyleCache, root: NodeId) -> Option<AnyElement> {
+    build_spec(tree, cache, root).map(|spec| build_element(&spec))
 }
 
 /// Like [`render_tree`], but input on the containers dispatches into JS via
@@ -249,12 +249,13 @@ pub fn render_tree(tree: &VirtualTree, root: NodeId) -> Option<AnyElement> {
 #[must_use]
 pub fn render_tree_with_events<E: EventSink + Clone + 'static>(
     tree: &VirtualTree,
+    cache: &StyleCache,
     root: NodeId,
     dispatch: &E,
     mode: Scrollbars,
 ) -> Option<AnyElement> {
     dispatch.clear_layout();
-    build_spec(tree, root).map(|spec| build_element_with_events(&spec, dispatch, mode))
+    build_spec(tree, cache, root).map(|spec| build_element_with_events(&spec, dispatch, mode))
 }
 
 #[cfg(test)]
@@ -268,6 +269,7 @@ mod tests {
         VisualTestContext, point, px, size,
     };
     use inca_node::AttributeValue;
+    use inca_node::set_style;
     use inca_test_macros::gpui_cases;
 
     fn row() -> [(&'static str, AttributeValue); 4] {
@@ -283,7 +285,7 @@ mod tests {
 
     impl Render for TreeView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            render_tree(&self.0, 0).unwrap()
+            render_tree(&self.0, &StyleCache::new(), 0).unwrap()
         }
     }
 
@@ -297,13 +299,13 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = tree.create_node("div").unwrap();
         let child = tree.create_node("div").unwrap();
-        tree.set_style(root, "width", 100.0).unwrap();
-        tree.set_style(root, "height", 100.0).unwrap();
+        set_style(&mut tree, root, "width", 100.0).unwrap();
+        set_style(&mut tree, root, "height", 100.0).unwrap();
         for (key, value) in props {
-            tree.set_style(root, *key, *value).unwrap();
+            set_style(&mut tree, root, *key, *value).unwrap();
         }
-        tree.set_style(child, "width", 300.0).unwrap();
-        tree.set_style(child, "height", 300.0).unwrap();
+        set_style(&mut tree, child, "width", 300.0).unwrap();
+        set_style(&mut tree, child, "height", 300.0).unwrap();
         tree.append_child(root, child).unwrap();
 
         let window = cx.add_window(|_, _| TreeView(tree));
@@ -327,9 +329,9 @@ mod tests {
     fn nested_leaf_y(cx: &mut TestAppContext, scale: f32, outer: f32, inner: f32) -> Pixels {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
-        tree.set_style(root, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, root, "overflow_y", "scroll").unwrap();
         let mid = boxed(&mut tree, Some(root), 100., 300.);
-        tree.set_style(mid, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, mid, "overflow_y", "scroll").unwrap();
         let leaf = boxed(&mut tree, Some(mid), 100., 600.);
         let (probe, window) = mounted(cx, tree);
         cx.simulate_window_scale_factor_change(window, scale);
@@ -344,12 +346,12 @@ mod tests {
     fn container_with_fixed_size_lays_out_at_that_size(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = tree.create_node("div").unwrap();
-        tree.set_style(root, "width", 120.0).unwrap();
-        tree.set_style(root, "height", 80.0).unwrap();
+        set_style(&mut tree, root, "width", 120.0).unwrap();
+        set_style(&mut tree, root, "height", 80.0).unwrap();
 
         let cx = cx.add_empty_window();
         cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-            render_tree(&tree, root).unwrap()
+            render_tree(&tree, &StyleCache::new(), root).unwrap()
         });
 
         let bounds = cx
@@ -367,7 +369,7 @@ mod tests {
 
         let cx = cx.add_empty_window();
         cx.draw(point(px(0.), px(0.)), size(px(800.), px(600.)), |_, _| {
-            render_tree(&tree, root).unwrap()
+            render_tree(&tree, &StyleCache::new(), root).unwrap()
         });
     }
 
@@ -548,7 +550,7 @@ mod tests {
     fn the_parents_scroll_offset_moves_the_children(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
-        tree.set_style(root, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, root, "overflow_y", "scroll").unwrap();
         let first = boxed(&mut tree, Some(root), 100., 300.);
         let second = boxed(&mut tree, Some(root), 100., 20.);
         let (probe, window) = mounted(cx, tree);
@@ -568,8 +570,8 @@ mod tests {
     fn a_hidden_container_ignores_the_wheel(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
-        tree.set_style(root, "overflow_x", "hidden").unwrap();
-        tree.set_style(root, "overflow_y", "hidden").unwrap();
+        set_style(&mut tree, root, "overflow_x", "hidden").unwrap();
+        set_style(&mut tree, root, "overflow_y", "hidden").unwrap();
         let _child = boxed(&mut tree, Some(root), 100., 300.);
         let (probe, window) = mounted(cx, tree);
         frame(cx, window);
@@ -588,8 +590,8 @@ mod tests {
     fn a_hidden_container_moves_its_content_by_a_script_offset(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
-        tree.set_style(root, "overflow_x", "hidden").unwrap();
-        tree.set_style(root, "overflow_y", "hidden").unwrap();
+        set_style(&mut tree, root, "overflow_x", "hidden").unwrap();
+        set_style(&mut tree, root, "overflow_y", "hidden").unwrap();
         let child = boxed(&mut tree, Some(root), 100., 300.);
         let (probe, window) = mounted(cx, tree);
         frame(cx, window);
@@ -609,12 +611,12 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 400., 400.);
         let scroller = boxed(&mut tree, Some(root), 120., 100.);
-        tree.set_style(scroller, "padding", 10.0).unwrap();
-        tree.set_style(scroller, "border_width", 3.0).unwrap();
-        tree.set_style(scroller, "overflow", "scroll").unwrap();
+        set_style(&mut tree, scroller, "padding", 10.0).unwrap();
+        set_style(&mut tree, scroller, "border_width", 3.0).unwrap();
+        set_style(&mut tree, scroller, "overflow", "scroll").unwrap();
         for _ in 0..2 {
             let child = boxed(&mut tree, Some(scroller), 300., 120.);
-            tree.set_style(child, "flex_shrink", 0.0).unwrap();
+            set_style(&mut tree, child, "flex_shrink", 0.0).unwrap();
         }
         let (probe, window) = mounted(cx, tree);
         frame(cx, window);
@@ -627,11 +629,11 @@ mod tests {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 400., 400.);
         let scroller = boxed(&mut tree, Some(root), 120., 100.);
-        tree.set_style(scroller, "padding", 10.0).unwrap();
-        tree.set_style(scroller, "overflow", "scroll").unwrap();
+        set_style(&mut tree, scroller, "padding", 10.0).unwrap();
+        set_style(&mut tree, scroller, "overflow", "scroll").unwrap();
         let child = boxed(&mut tree, Some(scroller), 300., 240.);
-        tree.set_style(child, "margin_top", 7.0).unwrap();
-        tree.set_style(child, "margin_left", 7.0).unwrap();
+        set_style(&mut tree, child, "margin_top", 7.0).unwrap();
+        set_style(&mut tree, child, "margin_left", 7.0).unwrap();
         let (probe, window) = mounted(cx, tree);
         frame(cx, window);
         let handle = probe.handles.borrow()[&scroller].clone();
@@ -650,7 +652,7 @@ mod tests {
     ) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
-        tree.set_style(root, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, root, "overflow_y", "scroll").unwrap();
         let child = boxed(&mut tree, Some(root), 100., 300.);
         let (probe, window) = mounted(cx, tree);
         // The test window has a scale factor of 2, so the grid is 0.5px.
@@ -681,7 +683,7 @@ mod tests {
     ) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
-        tree.set_style(root, "overflow_y", "scroll").unwrap();
+        set_style(&mut tree, root, "overflow_y", "scroll").unwrap();
         let child = boxed(&mut tree, Some(root), 100., 300.);
         let (probe, window) = mounted(cx, tree);
         cx.simulate_window_scale_factor_change(window, 1.);
@@ -698,9 +700,9 @@ mod tests {
     fn a_container_without_a_dispatcher_reserves_no_strip(cx: &mut TestAppContext) {
         let mut tree = VirtualTree::new();
         let root = boxed(&mut tree, None, 100., 100.);
-        tree.set_style(root, "overflow", "scroll").unwrap();
+        set_style(&mut tree, root, "overflow", "scroll").unwrap();
         let child = tree.create_node("div").unwrap();
-        tree.set_style(child, "height", 30.0).unwrap();
+        set_style(&mut tree, child, "height", 30.0).unwrap();
         tree.append_child(root, child).unwrap();
         let window = cx.add_window(|_, _| TreeView(tree));
         cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))

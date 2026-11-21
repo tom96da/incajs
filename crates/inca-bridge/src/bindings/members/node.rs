@@ -107,7 +107,7 @@ fn install_node(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
                 .borrow()
                 .tree
                 .get(id)
-                .map_or_else(String::new, |node| node.dom_tag_name().into_owned()),
+                .map_or_else(String::new, |node| node.tag_name().into_owned()),
             NodeKind::Text => "#text".to_owned(),
             NodeKind::Comment => "#comment".to_owned(),
             NodeKind::Document => "#document".to_owned(),

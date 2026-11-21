@@ -19,6 +19,7 @@ use inca_bridge::install;
 use inca_bridge::{EventDispatcher, Host};
 use inca_gpui::{Scrollbars, render_tree_with_events};
 use inca_jsenv::Engine;
+use inca_node::set_style;
 use inca_node::{NodeId, VirtualTree};
 
 struct ClickCounter {
@@ -30,8 +31,14 @@ struct ClickCounter {
 impl Render for ClickCounter {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let host = self.host.borrow();
-        render_tree_with_events(&host.tree, self.root, &self.dispatcher, Scrollbars::Overlay)
-            .unwrap()
+        render_tree_with_events(
+            &host.tree,
+            &host.style,
+            self.root,
+            &self.dispatcher,
+            Scrollbars::Overlay,
+        )
+        .unwrap()
     }
 }
 
@@ -39,20 +46,17 @@ impl Render for ClickCounter {
 /// `(outer, label)`.
 fn build_tree(tree: &mut VirtualTree) -> (NodeId, NodeId) {
     let outer = tree.create_node("div").unwrap();
-    tree.set_style(outer, "display", "flex").unwrap();
-    tree.set_style(outer, "justify_content", "center").unwrap();
-    tree.set_style(outer, "align_items", "center").unwrap();
-    tree.set_style(outer, "width", 300.0).unwrap();
-    tree.set_style(outer, "height", 150.0).unwrap();
-    tree.set_style(outer, "background", f64::from(0x505050))
-        .unwrap();
-    tree.set_style(outer, "border_width", 1.0).unwrap();
-    tree.set_style(outer, "border_color", f64::from(0x0000ff))
-        .unwrap();
-    tree.set_style(outer, "corner_radius", 8.0).unwrap();
-    tree.set_style(outer, "text_color", f64::from(0xffffff))
-        .unwrap();
-    tree.set_style(outer, "text_size", 20.0).unwrap();
+    set_style(tree, outer, "display", "flex").unwrap();
+    set_style(tree, outer, "justify_content", "center").unwrap();
+    set_style(tree, outer, "align_items", "center").unwrap();
+    set_style(tree, outer, "width", 300.0).unwrap();
+    set_style(tree, outer, "height", 150.0).unwrap();
+    set_style(tree, outer, "background", f64::from(0x505050)).unwrap();
+    set_style(tree, outer, "border_width", 1.0).unwrap();
+    set_style(tree, outer, "border_color", f64::from(0x0000ff)).unwrap();
+    set_style(tree, outer, "corner_radius", 8.0).unwrap();
+    set_style(tree, outer, "text_color", f64::from(0xffffff)).unwrap();
+    set_style(tree, outer, "text_size", 20.0).unwrap();
 
     let label = tree.create_node("#text").unwrap();
     tree.set_data(label, "Click me!").unwrap();

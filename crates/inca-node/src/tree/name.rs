@@ -121,33 +121,33 @@ impl VirtualNode {
     /// Whether the node is an element of the HTML namespace named `local_name`.
     #[must_use]
     pub fn is_html(&self, local_name: &str) -> bool {
-        self.in_html_namespace() && self.tag_name == local_name
+        self.in_html_namespace() && self.local_name == local_name
     }
 
     /// Whether the node is an element of the SVG namespace named `local_name`.
     #[must_use]
     pub fn is_svg(&self, local_name: &str) -> bool {
-        self.namespace == Some(ns!(svg)) && self.tag_name == local_name
+        self.namespace == Some(ns!(svg)) && self.local_name == local_name
     }
 
     /// Whether the node is an element of the `MathML` namespace named `local_name`.
     #[must_use]
     pub fn is_mathml(&self, local_name: &str) -> bool {
-        self.namespace == Some(ns!(mathml)) && self.tag_name == local_name
+        self.namespace == Some(ns!(mathml)) && self.local_name == local_name
     }
 
     /// The name with its prefix: `prefix:local`, or the local name alone.
     #[must_use]
     pub fn qualified_name(&self) -> Cow<'_, str> {
         match &self.prefix {
-            Some(prefix) => Cow::Owned(format!("{prefix}:{}", self.tag_name)),
-            None => Cow::Borrowed(&self.tag_name),
+            Some(prefix) => Cow::Owned(format!("{prefix}:{}", self.local_name)),
+            None => Cow::Borrowed(&self.local_name),
         }
     }
 
     /// The qualified name, in ASCII upper case for an element of the HTML namespace.
     #[must_use]
-    pub fn dom_tag_name(&self) -> Cow<'_, str> {
+    pub fn tag_name(&self) -> Cow<'_, str> {
         let name = self.qualified_name();
         if self.in_html_namespace() {
             Cow::Owned(name.to_ascii_uppercase())
@@ -197,7 +197,7 @@ mod tests {
 
         let created = tree.get(id).unwrap();
         assert_eq!(created.qualified_name(), qualified);
-        assert_eq!(created.dom_tag_name(), dom);
+        assert_eq!(created.tag_name(), dom);
     }
 
     #[rstest]

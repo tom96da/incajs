@@ -83,10 +83,10 @@ pub(super) fn element_entry<'js>(
 ) -> JsResult<Array<'js>> {
     let entry = Array::new(ctx.clone())?;
     entry.set(0, id)?;
-    entry.set(1, node.tag_name())?;
+    entry.set(1, node.local_name())?;
     entry.set(2, or_null(ctx, node.namespace_uri())?)?;
     entry.set(3, or_null(ctx, node.prefix())?)?;
-    entry.set(4, node.dom_tag_name().into_owned())?;
+    entry.set(4, node.tag_name().into_owned())?;
     Ok(entry)
 }
 
@@ -192,7 +192,7 @@ mod tests {
         let id: u32 = engine.eval("pair[0]").unwrap();
         let given: String = engine.eval("pair[1]").unwrap();
 
-        assert_eq!(host.borrow().tree.get(id).unwrap().tag_name(), tag);
+        assert_eq!(host.borrow().tree.get(id).unwrap().local_name(), tag);
         assert_eq!(given, tag);
     }
 
@@ -242,7 +242,7 @@ mod tests {
             .eval("__inca_native__.createElementNS(null, 'a')[0]")
             .unwrap();
 
-        assert_eq!(host.borrow().tree.get(id).unwrap().tag_name(), "a");
+        assert_eq!(host.borrow().tree.get(id).unwrap().local_name(), "a");
     }
 
     #[test]

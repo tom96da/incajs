@@ -67,7 +67,8 @@ impl EventSink for EventDispatcher {
     }
 
     fn wheel_axes(&self, node_id: NodeId) -> Option<inca_node::WheelAxes> {
-        inca_node::wheel_axes(&self.host.borrow().tree, node_id)
+        let host = self.host.borrow();
+        inca_node::wheel_axes(&host.tree, &host.style, node_id)
     }
 
     /// The first call of an update computes the delta and defers clearing it,
@@ -702,7 +703,9 @@ mod tests {
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
             let host = &mut *dispatcher.host.borrow_mut();
-            let _ = host.focus.apply_pending(&host.tree, window, cx);
+            let _ = host
+                .focus
+                .apply_pending(&host.tree, &host.style, window, cx);
         });
     }
 

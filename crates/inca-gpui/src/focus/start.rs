@@ -74,6 +74,7 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use gpui::{TestAppContext, VisualTestContext};
+    use inca_node::StyleCache;
 
     /// A rooted tree with one node under the root per entry of `tabindex`, `None` for a node with
     /// no tab index, and a registry that holds a handle for each stop and focuses nothing.
@@ -98,7 +99,7 @@ mod tests {
             registry.mark_tab_dirty(id);
         }
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
         });
         (tree, ids, registry)
     }
@@ -109,7 +110,9 @@ mod tests {
         tree: &VirtualTree,
         backward: bool,
     ) -> Option<NodeId> {
-        cx.update(|window, cx| registry.tab_move(tree, ROOT, window, cx, backward))
+        cx.update(|window, cx| {
+            registry.tab_move(tree, &StyleCache::new(), ROOT, window, cx, backward)
+        })
     }
 
     /// Applies a focus request for `node`, then a blur, each on its own frame.
@@ -121,11 +124,11 @@ mod tests {
     ) {
         registry.request_focus(node, false);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(tree, window, cx);
+            let _ = registry.apply_pending(tree, &StyleCache::new(), window, cx);
         });
         registry.request_blur(node);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(tree, window, cx);
+            let _ = registry.apply_pending(tree, &StyleCache::new(), window, cx);
         });
     }
 
@@ -222,7 +225,7 @@ mod tests {
         let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP, STOP]);
         registry.request_focus(ids[0], false);
         cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, window, cx);
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
         });
         registry.press_start(ids[2], ROOT, None);
 

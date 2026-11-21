@@ -71,8 +71,10 @@ impl Harness {
     pub fn snapshot(&mut self) -> Node {
         let host = Rc::clone(&self.host);
         let host = host.borrow();
-        snapshot(&host.tree, host.root(), &mut |id| self.bounds_of(id))
-            .expect("the root node exists")
+        snapshot(&host.tree, &host.style, host.root(), &mut |id| {
+            self.bounds_of(id)
+        })
+        .expect("the root node exists")
     }
 
     /// Sends space-separated keystrokes, such as `"a cmd-b enter"`, to the

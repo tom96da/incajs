@@ -65,18 +65,6 @@ impl VirtualTree {
             .focus
             .is_some_and(|focus| self.is_connected(focus) && self.ancestors(focus).any(|a| a == id))
     }
-
-    /// Whether a connected `<style>` rule names `:focus` or `:focus-within`.
-    #[must_use]
-    pub fn uses_focus_state(&self) -> bool {
-        self.sheet_flags().focus
-    }
-
-    /// Whether a connected `<style>` rule names `:hover` or `:active`.
-    #[must_use]
-    pub fn uses_pointer_state(&self) -> bool {
-        self.sheet_flags().pointer
-    }
 }
 
 #[cfg(test)]
@@ -120,7 +108,7 @@ mod tests {
     }
 
     fn width(f: &Fixture, node: NodeId) -> Option<crate::AttributeValue> {
-        f.tree.computed_style(node).get("width").cloned()
+        f.cache.computed_style(&f.tree, node).get("width").cloned()
     }
 
     #[test]
@@ -235,56 +223,6 @@ mod tests {
 
         assert!(!s.f.tree.is_focused(s.input));
         assert!(!s.f.tree.is_focus_within(s.card));
-    }
-
-    #[rstest]
-    #[case::focus(":focus")]
-    #[case::focus_within(":focus-within")]
-    #[case::negated(":not(:focus)")]
-    #[case::inside_is(":is(.a:focus)")]
-    #[case::nested_in_has("div:has(:focus)")]
-    fn uses_focus_state_is_true_when_a_rule_names_the_state(#[case] selector: &str) {
-        let mut s = scene();
-        s.f.sheet(&format!("{selector} {{ width: 1px }}"));
-
-        assert!(s.f.tree.uses_focus_state());
-    }
-
-    #[rstest]
-    #[case::no_rule("")]
-    #[case::no_state(".a { width: 1px }")]
-    #[case::an_invalid_rule(":focus:bogus { width: 1px }")]
-    #[case::host_context(":host-context(a:focus) { width: 1px }")]
-    #[case::host_context_in_is(":is(:host-context(a:focus b), p) { width: 1px }")]
-    fn uses_focus_state_is_false_when_no_rule_names_the_state(#[case] css: &str) {
-        let mut s = scene();
-        s.f.sheet(css);
-
-        assert!(!s.f.tree.uses_focus_state());
-    }
-
-    #[test]
-    fn uses_focus_state_is_false_once_the_style_element_is_removed() {
-        let mut s = scene();
-        let (style, _) = s.f.sheet(":focus { width: 1px }");
-        let named = s.f.tree.uses_focus_state();
-        s.f.tree.remove_child(s.f.root, style).unwrap();
-
-        assert!(named);
-        assert!(!s.f.tree.uses_focus_state());
-    }
-
-    #[test]
-    fn uses_focus_state_follows_an_edit_of_the_sheet_text() {
-        let mut s = scene();
-        let (_, text_node) = s.f.sheet(".a { width: 1px }");
-        let before = s.f.tree.uses_focus_state();
-        s.f.tree
-            .set_data(text_node, ":focus { width: 1px }")
-            .unwrap();
-
-        assert!(!before);
-        assert!(s.f.tree.uses_focus_state());
     }
 
     #[test]
@@ -421,41 +359,6 @@ mod tests {
 
         assert!(!detached);
         assert!(s.f.matches(s.input, class));
-    }
-
-    #[rstest]
-    #[case::hover(":hover")]
-    #[case::active(":active")]
-    #[case::negated(":not(:hover)")]
-    #[case::inside_is(":is(.a:hover)")]
-    #[case::nested_in_has("div:has(:active)")]
-    fn uses_pointer_state_is_true_when_a_rule_names_the_state(#[case] selector: &str) {
-        let mut s = scene();
-        s.f.sheet(&format!("{selector} {{ width: 1px }}"));
-
-        assert!(s.f.tree.uses_pointer_state());
-    }
-
-    #[rstest]
-    #[case::no_rule("")]
-    #[case::a_focus_rule(":focus { width: 1px }")]
-    #[case::host_context(":host-context(a:hover) { width: 1px }")]
-    fn uses_pointer_state_is_false_when_no_rule_names_the_state(#[case] css: &str) {
-        let mut s = scene();
-        s.f.sheet(css);
-
-        assert!(!s.f.tree.uses_pointer_state());
-    }
-
-    #[rstest]
-    #[case::two_rules(":focus { width: 1px } :hover { width: 2px }")]
-    #[case::one_selector(":focus:hover { width: 1px }")]
-    fn sheet_flags_keep_both_kinds(#[case] css: &str) {
-        let mut s = scene();
-        s.f.sheet(css);
-
-        assert!(s.f.tree.uses_focus_state());
-        assert!(s.f.tree.uses_pointer_state());
     }
 
     #[test]

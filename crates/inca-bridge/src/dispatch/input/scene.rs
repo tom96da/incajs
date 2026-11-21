@@ -17,6 +17,7 @@ use serde_json::{Value, json};
 use crate::test_support::{TestRoot, engine_for, mount_active};
 use crate::tests::{at, listen};
 use crate::{EventDispatcher, Host};
+use inca_node::set_style;
 
 /// An `input` holding a value (100 px wide, 6 px per char, from x 0) and a `button`, under a `div`
 /// in an active window.
@@ -40,8 +41,8 @@ pub(crate) fn input_scene(cx: &mut TestAppContext, value: &str) -> InputScene {
         h.tree.append_child(root, parent).unwrap();
         h.tree.append_child(parent, input).unwrap();
         h.tree.append_child(parent, button).unwrap();
-        h.tree.set_style(input, "width", 100.0).unwrap();
-        h.tree.set_style(input, "text_size", 10.0).unwrap();
+        set_style(&mut h.tree, input, "width", 100.0).unwrap();
+        set_style(&mut h.tree, input, "text_size", 10.0).unwrap();
         h.focus.mark_tab_dirty(input);
         h.focus.mark_tab_dirty(button);
         h.inputs

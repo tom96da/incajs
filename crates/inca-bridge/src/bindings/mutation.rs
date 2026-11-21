@@ -596,7 +596,9 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            host.borrow().focus.active_node(&host.borrow().tree),
+            host.borrow()
+                .focus
+                .active_node(&host.borrow().tree, &host.borrow().style),
             Some(kid)
         );
 
@@ -609,7 +611,12 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(host.borrow().focus.active_node(&host.borrow().tree), None);
+        assert_eq!(
+            host.borrow()
+                .focus
+                .active_node(&host.borrow().tree, &host.borrow().style),
+            None
+        );
     }
 
     /// `a` gets the child `k` and `listed` evaluates `call` and names each returned id.

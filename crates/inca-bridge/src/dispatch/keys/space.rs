@@ -73,6 +73,7 @@ mod tests {
     use gpui::{TestAppContext, WindowId};
     use inca_gpui::{EventPayload, EventSink};
     use inca_node::NodeId;
+    use inca_node::set_style;
     use inca_test_macros::gpui_cases;
 
     impl Scene {
@@ -639,8 +640,8 @@ mod tests {
         let s = scene(cx);
         {
             let mut host = s.host.borrow_mut();
-            host.tree.set_style(s.first, "width", 100.0).unwrap();
-            host.tree.set_style(s.first, "height", 50.0).unwrap();
+            set_style(&mut host.tree, s.first, "width", 100.0).unwrap();
+            set_style(&mut host.tree, s.first, "height", 50.0).unwrap();
         }
         s.disable(s.first);
         s.engine

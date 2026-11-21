@@ -22,7 +22,9 @@ impl EventDispatcher {
         self.sync_modifiers(window, false);
         let transitions = {
             let host = &mut *self.host.borrow_mut();
-            let transitions = host.focus.apply_pending(&host.tree, window, cx);
+            let transitions = host
+                .focus
+                .apply_pending(&host.tree, &host.style, window, cx);
             host.sync_focus_style();
             transitions
         };
@@ -43,7 +45,7 @@ impl EventDispatcher {
     /// Prints each warning of the sheets parsed since the last frame, prefixed with `<style>: `.
     fn warn_style_sheets(&self) {
         let host = self.host.borrow();
-        for line in host.tree.take_style_warnings() {
+        for line in host.style.take_style_warnings(&host.tree) {
             (host.warn)(&format!("<style>: {line}"));
         }
     }
