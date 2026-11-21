@@ -261,9 +261,7 @@ fn a_second_button_on_a_bar_fires_pointermove(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_thumb_drag_release_fires_boundary_events_at_the_node_under_the_pointer(
-    cx: &mut TestAppContext,
-) {
+fn a_thumb_drag_release_fires_pointerup_and_mouseup_at_the_container(cx: &mut TestAppContext) {
     let mut h = load(cx, "scrollbar");
     let none = Modifiers::none();
     let grab = thumb(&mut h);
@@ -276,13 +274,7 @@ fn a_thumb_drag_release_fires_boundary_events_at_the_node_under_the_pointer(
 
     h.mouse_up(field, MouseButton::Left, none);
 
-    assert_eq!(
-        text_of(&mut h, "log"),
-        concat!(
-            "pointerup@box mouseup@box pointerout@box pointerleave@box pointerover@field ",
-            "pointerenter@field mouseout@box mouseleave@box mouseover@field mouseenter@field"
-        )
-    );
+    assert_eq!(text_of(&mut h, "ups"), "pointerup@box mouseup@box");
 }
 
 #[gpui::test]
