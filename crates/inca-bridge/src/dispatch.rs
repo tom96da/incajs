@@ -13,7 +13,7 @@
 //!
 //! ## Where the real JS function lives
 //!
-//! [`crate::bindings::EventListeners`] stores a [`crate::bindings::Listener`]
+//! [`inca_document::EventListeners`] stores a [`inca_document::Listener`]
 //! per registration: a plain `u32` callback id with its capture and passive
 //! flags, never an `rquickjs::Value`/`Function`/`Persistent<T>`, because a JS
 //! handle kept past the call that produced it outlives the context it
