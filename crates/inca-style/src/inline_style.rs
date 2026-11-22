@@ -3,6 +3,10 @@
 
 //! The inline style of a node as a block of declarations.
 
+use std::iter::once;
+
+use inca_node::STYLE_KEYS;
+
 mod read;
 mod write;
 
@@ -11,11 +15,44 @@ pub use write::{
     remove_style, remove_style_property, set_style, set_style_property, set_style_text,
 };
 
+/// Whether `priority` is neither empty nor `important`. A `setProperty` with such a priority
+/// ignores a non-empty value.
+#[must_use]
+pub fn priority_refuses_value(priority: &str) -> bool {
+    !priority.is_empty() && !priority.eq_ignore_ascii_case("important")
+}
+
+/// The distinct camelCase and kebab-case spellings of every key and CSS alias, each with the CSS
+/// name that reads and writes it.
+#[must_use]
+pub fn property_names() -> Vec<(String, String)> {
+    let mut names: Vec<(String, String)> = Vec::new();
+    for entry in STYLE_KEYS {
+        for raw in once(entry.key).chain(entry.aliases.iter().copied()) {
+            let mut words = raw.split('_');
+            let mut camel = words.next().unwrap_or_default().to_owned();
+            for word in words {
+                camel.extend(word.chars().take(1).flat_map(char::to_uppercase));
+                camel.push_str(word.get(1..).unwrap_or_default());
+            }
+            let css = raw.replace('_', "-");
+            for name in [css.clone(), camel] {
+                if names.iter().all(|(known, _)| *known != name) {
+                    names.push((name, css.clone()));
+                }
+            }
+        }
+    }
+    names
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use super::{css_text, remove_style, set_style, set_style_text};
+    use super::{
+        css_text, priority_refuses_value, property_names, remove_style, set_style, set_style_text,
+    };
     use crate::tests::node;
     use inca_node::tree::{AttributeValue, TreeError, VirtualTree};
     use inca_node::{HtmlScope, NodeId};
@@ -180,5 +217,35 @@ mod tests {
             remove_style(&mut tree, 999, "k").unwrap_err(),
             TreeError::NodeNotFound(999)
         );
+    }
+
+    #[rstest::rstest]
+    #[case::kebab("corner-radius")]
+    #[case::camel("cornerRadius")]
+    fn property_names_lists_a_spelling_of_a_key(#[case] spelling: &str) {
+        let names = property_names();
+
+        assert!(names.contains(&(spelling.into(), "corner-radius".into())));
+    }
+
+    #[test]
+    fn property_names_lists_each_spelling_once() {
+        let names = property_names();
+
+        for (index, (name, _)) in names.iter().enumerate() {
+            assert!(names[..index].iter().all(|(known, _)| known != name));
+        }
+    }
+
+    #[rstest::rstest]
+    #[case::empty("", false)]
+    #[case::important("important", false)]
+    #[case::uppercase_important("IMPORTANT", false)]
+    #[case::other("urgent", true)]
+    fn a_priority_other_than_empty_or_important_refuses_a_value(
+        #[case] priority: &str,
+        #[case] refused: bool,
+    ) {
+        assert_eq!(priority_refuses_value(priority), refused);
     }
 }

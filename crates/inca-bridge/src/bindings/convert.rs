@@ -5,7 +5,7 @@ use rquickjs::convert::Coerced;
 use rquickjs::function::Opt;
 use rquickjs::{Class, Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value};
 
-use inca_node::scroll::Align;
+use inca_document::geometry::Align;
 use inca_node::{NodeId, TreeError, VirtualNode, VirtualTree};
 
 use crate::EventTargetId;

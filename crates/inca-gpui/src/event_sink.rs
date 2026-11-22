@@ -7,7 +7,8 @@ use gpui::{
 };
 
 use crate::element::NodeLayout;
-use crate::input::{InputLayout, InputPayload, InputRequest, InputState, InputType};
+use crate::input::{InputLayout, InputRequest};
+use inca_document::InputPayload;
 use inca_node::tree::NodeId;
 
 mod key;

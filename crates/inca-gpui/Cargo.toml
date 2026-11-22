@@ -25,14 +25,14 @@ name = "gpui_hello_world"
 path = "examples/gpui/hello_world.rs"
 
 [features]
-# Exposes registry internals and the scrollbar setting that a dependent crate's tests read.
+# Exposes the scrollbar setting that a dependent crate's tests read.
 test-support = []
 
 [dependencies]
 gpui.workspace = true
+inca-document = { path = "../inca-document" }
 inca-node = { path = "../inca-node" }
 inca-style = { path = "../inca-style" }
-unicode-segmentation.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

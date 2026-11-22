@@ -5,13 +5,12 @@
 //! input, the editing keys and the mouse selection.
 
 use gpui::{App, ClipboardItem, Keystroke, MouseButton, Window};
-use inca_gpui::{
-    EventPayload, InputPayload, InputState, InputType, Motion, MousePayload, opens_context_menu,
-};
+use inca_document::{InputPayload, InputState, InputType, Motion};
+use inca_gpui::{EventPayload, InputLayout, MousePayload, opens_context_menu};
 use inca_node::input_text::pasted;
 use inca_node::{NodeId, is_disabled_control};
 
-use crate::focus::FocusTransition;
+use inca_document::FocusTransition;
 
 use super::EventDispatcher;
 
@@ -66,6 +65,16 @@ impl EventDispatcher {
     pub(super) fn input_state(&self, node: NodeId) -> InputState {
         let host = self.host.borrow();
         host.inputs.borrow().get(&node).cloned().unwrap_or_default()
+    }
+
+    /// Where the last frame drew the text of `node`, empty without one.
+    pub(super) fn input_layout(&self, node: NodeId) -> InputLayout {
+        let host = self.host.borrow();
+        host.input_layouts
+            .borrow()
+            .get(&node)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Runs `f` on the text state of `node`, created when missing. The borrows of the host
@@ -234,8 +243,8 @@ impl EventDispatcher {
             return;
         }
         let menu = opens_context_menu(MouseButton::Left, mouse.modifiers, macos);
+        let offset = self.input_layout(target).offset_at(mouse.client_x);
         self.with_input(target, |state| {
-            let offset = state.offset_at(mouse.client_x);
             if menu {
                 let selection = state.selection();
                 if !(selection.start..=selection.end).contains(&offset) {
@@ -256,9 +265,8 @@ impl EventDispatcher {
         let Some(node) = self.state.input_drag.get() else {
             return;
         };
-        self.with_input(node, |state| {
-            state.place(state.offset_at(mouse.client_x), true);
-        });
+        let offset = self.input_layout(node).offset_at(mouse.client_x);
+        self.with_input(node, |state| state.place(offset, true));
         Self::input_changed(window);
     }
 
@@ -486,7 +494,7 @@ mod tests {
             stops: vec![(0, 0.0)],
         };
         s.dispatcher.record_input(s.input, layout.clone());
-        assert_eq!(s.dispatcher.input(s.input).unwrap().layout(), &layout);
+        assert_eq!(s.dispatcher.input_layout(s.input), layout);
     }
 
     #[test]
@@ -499,11 +507,20 @@ mod tests {
                 const node = n.createNode('input');
                 n.appendChild(0, node);
                 n.setInputValue(node, 'a');
-                n.destroyNode(node);
+                globalThis.node = node;
                 ",
             )
             .unwrap();
+        let node: inca_node::NodeId = engine.eval("globalThis.node").unwrap();
+        host.borrow()
+            .input_layouts
+            .borrow_mut()
+            .insert(node, InputLayout::default());
+        engine
+            .eval::<()>("__inca_native__.destroyNode(globalThis.node)")
+            .unwrap();
         assert!(host.borrow().inputs.borrow().is_empty());
+        assert!(host.borrow().input_layouts.borrow().is_empty());
     }
 
     #[gpui::test]

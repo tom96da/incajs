@@ -1,0 +1,36 @@
+#:schema https://json.schemastore.org/cargo.json
+
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "inca-document"
+description = "The semantics of the elements, the document and markup steps, the focus model, the box geometry and the text-control model inca renders."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+publish = false
+
+[lib]
+name = "inca_document"
+
+[features]
+# Exposes the queue of changed tab indexes that a dependent crate's tests read.
+test-support = []
+
+[dependencies]
+inca-node = { path = "../inca-node" }
+inca-style = { path = "../inca-style" }
+unicode-segmentation.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+
+[lints]
+workspace = true

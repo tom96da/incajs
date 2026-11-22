@@ -11,10 +11,14 @@ use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 
-use inca_node::{NodeId, ParsedHtml, TreeError, VirtualNode, VirtualTree};
+use inca_document::{
+    MarkupContext, Position, children_of, insert_parsed, parse_adjacent, parse_inner, parse_outer,
+    replace_children, replace_with,
+};
+use inca_node::{NodeId, Removal, VirtualTree};
 
 use super::Natives;
-use super::convert::{JsNodeId, existing_node, throw_tree_error};
+use super::convert::{JsNodeId, throw_tree_error};
 use super::host::Host;
 use super::mutation::removed_subtrees;
 
@@ -27,32 +31,27 @@ pub(super) fn install_html(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("insertAdjacentHtml", insert_adjacent_html)
 }
 
-/// Where `insertAdjacentHtml` puts the nodes, relative to the node it is called on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Position {
-    BeforeBegin,
-    AfterBegin,
-    BeforeEnd,
-    AfterEnd,
+impl MarkupContext for Host {
+    fn tree(&mut self) -> &mut VirtualTree {
+        &mut self.tree
+    }
+
+    fn settle(&mut self, removals: &[Removal]) {
+        Host::settle(self, removals);
+    }
 }
 
-impl Position {
-    /// Reads `text` ignoring ASCII case. Any other string throws a `SyntaxError`.
-    fn parse(ctx: &Ctx<'_>, text: &str) -> JsResult<Self> {
-        match text.to_ascii_lowercase().as_str() {
-            "beforebegin" => Ok(Self::BeforeBegin),
-            "afterbegin" => Ok(Self::AfterBegin),
-            "beforeend" => Ok(Self::BeforeEnd),
-            "afterend" => Ok(Self::AfterEnd),
-            _ => Err(Exception::throw_dom(
-                ctx,
-                "SyntaxError",
-                &format!(
-                    "unknown position: {text}. use beforebegin, afterbegin, beforeend or afterend"
-                ),
-            )),
-        }
-    }
+/// Reads `text` as a position, ignoring ASCII case. Any other string throws a `SyntaxError`.
+fn parse_position(ctx: &Ctx<'_>, text: &str) -> JsResult<Position> {
+    Position::from_name(text).ok_or_else(|| {
+        Exception::throw_dom(
+            ctx,
+            "SyntaxError",
+            &format!(
+                "unknown position: {text}. use beforebegin, afterbegin, beforeend or afterend"
+            ),
+        )
+    })
 }
 
 /// Replaces all children of `node_id`, or of its content for a template, with the nodes `markup`
@@ -61,28 +60,14 @@ fn set_inner_html<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let (container, parsed) = {
-            let mut host = host.borrow_mut();
-            existing_node(&ctx, &host.tree, node_id)?;
-            let container = host.tree.template_content(node_id).unwrap_or(node_id);
-            let parsed = host
-                .tree
-                .parse_html(Some(node_id), &markup)
-                .map_err(|err| throw_tree_error(&ctx, err))?;
-            (container, parsed)
-        };
+        let (container, parsed) = parse_inner(&mut host.borrow_mut().tree, node_id, &markup)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
         let old = children_of(&host.borrow().tree, container);
         lose_focus_in(&ctx, &host, &old);
         let mut host = host.borrow_mut();
-        let old = children_of(&host.tree, container);
-        for &child in &old {
-            let left = host.leaving(&[child]);
-            host.tree
-                .remove_child(container, child)
-                .map_err(|err| throw_tree_error(&ctx, err))?;
-            host.settle(&left);
-        }
-        insert_parsed(&ctx, &mut host, &parsed, container, None)?;
+        let old = replace_children(&mut *host, container, &parsed)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        finish(&mut host, &parsed);
         removed_subtrees(&ctx, &host.tree, &old)
     }
 }
@@ -94,33 +79,16 @@ fn set_outer_html<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let parsed = {
-            let mut host = host.borrow_mut();
-            let Some(parent) = existing_node(&ctx, &host.tree, node_id)?.parent() else {
-                return Array::new(ctx.clone());
-            };
-            if host.tree.get(parent).is_some_and(VirtualNode::is_document) {
-                return Err(throw_tree_error(&ctx, TreeError::DocumentParent(node_id)));
-            }
-            host.tree
-                .parse_html(Some(parent), &markup)
-                .map_err(|err| throw_tree_error(&ctx, err))?
-        };
-        lose_focus_in(&ctx, &host, &[node_id]);
-        let mut host = host.borrow_mut();
-        let Some(parent) = host
-            .tree
-            .get(node_id)
-            .and_then(inca_node::VirtualNode::parent)
+        let Some(parsed) = parse_outer(&mut host.borrow_mut().tree, node_id, &markup)
+            .map_err(|err| throw_tree_error(&ctx, err))?
         else {
             return Array::new(ctx.clone());
         };
-        let mut left = host.leaving(&[node_id]);
-        left.extend(host.leaving(&host.tree.nodes_to_move(parsed.fragment)));
-        host.tree
-            .replace_child(parent, parsed.fragment, node_id)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        host.settle(&left);
+        lose_focus_in(&ctx, &host, &[node_id]);
+        let mut host = host.borrow_mut();
+        if !replace_with(&mut *host, node_id, &parsed).map_err(|err| throw_tree_error(&ctx, err))? {
+            return Array::new(ctx.clone());
+        }
         finish(&mut host, &parsed);
         removed_subtrees(&ctx, &host.tree, &[node_id])
     }
@@ -132,46 +100,16 @@ fn insert_adjacent_html<'js>(
     host: Rc<RefCell<Host>>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), position, markup| {
-        let position = Position::parse(&ctx, &position)?;
+        let position = parse_position(&ctx, &position)?;
         let mut host = host.borrow_mut();
-        let node = existing_node(&ctx, &host.tree, node_id)?;
-        let container = match position {
-            Position::BeforeBegin | Position::AfterEnd => node
-                .parent()
-                .ok_or_else(|| throw_tree_error(&ctx, TreeError::NoParent(node_id)))?,
-            Position::AfterBegin | Position::BeforeEnd => node_id,
-        };
-        if matches!(position, Position::BeforeBegin | Position::AfterEnd)
-            && host
-                .tree
-                .get(container)
-                .is_some_and(VirtualNode::is_document)
-        {
-            return Err(throw_tree_error(&ctx, TreeError::DocumentParent(node_id)));
-        }
-        let context = match host.tree.get(container) {
-            Some(node) if node.is_html("html") => None,
-            _ => Some(container),
-        };
-        let parsed = host
-            .tree
-            .parse_html(context, &markup)
+        let (container, reference, parsed) =
+            parse_adjacent(&mut host.tree, node_id, position, &markup)
+                .map_err(|err| throw_tree_error(&ctx, err))?;
+        insert_parsed(&mut *host, &parsed, container, reference)
             .map_err(|err| throw_tree_error(&ctx, err))?;
-        let reference = match position {
-            Position::BeforeBegin => Some(node_id),
-            Position::AfterBegin => host.tree.first_child(node_id),
-            Position::BeforeEnd => None,
-            Position::AfterEnd => host.tree.next_sibling(node_id),
-        };
-        insert_parsed(&ctx, &mut host, &parsed, container, reference)?;
+        finish(&mut host, &parsed);
         Ok(())
     }
-}
-
-/// The children of `id`, or none when the node is gone.
-fn children_of(tree: &VirtualTree, id: NodeId) -> Vec<NodeId> {
-    tree.get(id)
-        .map_or_else(Vec::new, |node| node.children().to_vec())
 }
 
 /// Fires `blur` and `focusout` at the focused node when it sits in a subtree of `roots`. A
@@ -190,23 +128,6 @@ fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, roots: &[NodeId]) {
     if let Some(focused) = focused {
         crate::event::lose_focus(ctx, host, focused);
     }
-}
-
-/// Moves the nodes of the parse result into `container` before `reference`, or last without one.
-fn insert_parsed(
-    ctx: &Ctx<'_>,
-    host: &mut Host,
-    parsed: &ParsedHtml,
-    container: NodeId,
-    reference: Option<NodeId>,
-) -> JsResult<()> {
-    let left = host.leaving(&host.tree.nodes_to_move(parsed.fragment));
-    host.tree
-        .insert_before(container, parsed.fragment, reference)
-        .map_err(|err| throw_tree_error(ctx, err))?;
-    host.settle(&left);
-    finish(host, parsed);
-    Ok(())
 }
 
 #[cfg(test)]

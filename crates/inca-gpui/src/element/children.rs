@@ -10,7 +10,7 @@ use super::build::NodeLayout;
 use super::scrollbar::{Scrollbars, gutter_of};
 use super::wheel::snapped_extra;
 use crate::event_sink::EventSink;
-use inca_node::scroll::Rect;
+use inca_document::geometry::Rect;
 use inca_node::tree::NodeId;
 use inca_style::spec::{DisplaySpec, ElementSpec, ElementTag};
 

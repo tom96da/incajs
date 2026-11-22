@@ -7,10 +7,11 @@ use std::rc::Rc;
 
 use gpui::{Pixels, ScrollHandle, point, px};
 
-use inca_gpui::{InputState, NodeLayout, rect_of};
+use inca_document::geometry::{Align, scroll_chain};
+use inca_document::{InputState, StyleWarnings, apply_removals, new_document_tree};
+use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_jsenv::{Clock, EngineError, Frames, Timers, system_clock};
-use inca_node::scroll::{Align, scroll_chain};
-use inca_node::{NodeId, VirtualTree};
+use inca_node::{NodeId, Removal, VirtualTree};
 use inca_style::{StyleCache, is_scroll_container};
 
 use crate::abort::Signals;
@@ -25,12 +26,10 @@ pub struct Host {
     pub tree: VirtualTree,
     /// The cascade of the tree, rebuilt when the tree changes.
     pub style: StyleCache,
-    /// Receives one line for each style a `setStyle` call stores with an
-    /// unknown key, an invalid color or a value of a shape the host does not
-    /// support. A node prints each line once. Writes to stderr by default.
-    pub warn: Rc<dyn Fn(&str)>,
-    /// The warnings printed for each node, as the text of the line without the node prefix.
-    pub(crate) style_warned: HashMap<NodeId, HashSet<String>>,
+    /// Receives one line for each style a `setStyle` call stores with an unknown key, an invalid
+    /// color or a value of a shape the host does not support. A node prints each line once.
+    /// Writes to stderr by default.
+    pub warnings: StyleWarnings,
     pub listeners: EventListeners,
     /// The state of every `AbortSignal`, by id. Plain data. The objects live in JS.
     pub(crate) signals: Signals,
@@ -47,6 +46,9 @@ pub struct Host {
     /// The text states of the `input` nodes, created on first use. Its own cell, as the draw runs
     /// under a shared borrow.
     pub(crate) inputs: RefCell<HashMap<NodeId, InputState>>,
+    /// Where the last frame drew the text of each `input` node. Its own cell, as the draw runs
+    /// under a shared borrow.
+    pub(crate) input_layouts: RefCell<HashMap<NodeId, InputLayout>>,
     /// Errors listeners threw, in order; the dispatcher reports them once the engine is idle.
     pub(crate) failures: Vec<EngineError>,
     /// Every mouse button currently held, as the `buttons` bitmask of the events. GPUI's own mouse
@@ -90,23 +92,9 @@ impl Default for Host {
 
 impl Host {
     /// A host whose timers read `clock`. [`Host::default`] reads the system clock.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a new tree has no free node id.
     #[must_use]
     pub fn with_clock(clock: Clock) -> Self {
-        let mut tree = VirtualTree::new();
-        let root = tree
-            .create_node("div")
-            .expect("a new tree has free node ids");
-        let document = tree
-            .create_node("#document")
-            .expect("a new tree has free node ids");
-        tree.append_child(document, root)
-            .expect("a new document takes its first element");
-        tree.set_root(root);
-        tree.set_document(document);
+        let tree = new_document_tree();
         let (sender, wake) = async_channel::bounded(1);
         let send: Rc<dyn Fn()> = Rc::new(move || {
             let _ = sender.try_send(());
@@ -116,8 +104,7 @@ impl Host {
         Self {
             tree,
             style: StyleCache::new(),
-            warn: Rc::new(|line| eprintln!("{line}")),
-            style_warned: HashMap::new(),
+            warnings: StyleWarnings::default(),
             listeners: EventListeners::default(),
             signals: Signals::default(),
             focus: FocusRegistry::default(),
@@ -126,6 +113,7 @@ impl Host {
             scroll_reported: HashMap::new(),
             layout: RefCell::new(HashMap::new()),
             inputs: RefCell::new(HashMap::new()),
+            input_layouts: RefCell::new(HashMap::new()),
             failures: Vec::new(),
             held_buttons: 0,
             capture_pending: None,
@@ -145,77 +133,14 @@ pub(super) fn clamped_offset(offset: Pixels, max: Pixels) -> Pixels {
     offset.clamp(-max, px(0.))
 }
 
-/// A node that leaves its place, as it was before the tree call.
-pub(super) struct Leaving {
-    id: NodeId,
-    attached: bool,
-    /// The node right before its subtree in tree order that does not leave in the same call.
-    before: Option<NodeId>,
-}
-
 impl Host {
-    /// Records where each of `ids` sits before a tree call moves or removes it. The `before` of a
-    /// node is the node right before its subtree in tree order. While that node is one of `ids` or
-    /// lies below one of them, the walk goes on before that one, so Tab starts before the first of
-    /// the nodes that leave.
-    pub(super) fn leaving(&self, ids: &[NodeId]) -> Vec<Leaving> {
-        let leave = |id: NodeId, before: Option<NodeId>| Leaving {
-            id,
-            attached: self
-                .tree
-                .get(id)
-                .is_some_and(|node| node.parent().is_some()),
-            before,
-        };
-        if let [id] = ids {
-            return vec![leave(*id, self.tree.preceding(*id))];
-        }
-        let listed: HashSet<NodeId> = ids.iter().copied().collect();
-        let mut results: HashMap<NodeId, Option<NodeId>> = HashMap::new();
-        ids.iter()
-            .map(|&id| {
-                let before = self.before_past(id, &listed, &results);
-                results.insert(id, before);
-                leave(id, before)
-            })
-            .collect()
-    }
-
-    /// The node right before the subtree of `id` that is neither in `listed` nor below one of
-    /// them. `results` holds the answers of the listed nodes read so far.
-    fn before_past(
-        &self,
-        id: NodeId,
-        listed: &HashSet<NodeId>,
-        results: &HashMap<NodeId, Option<NodeId>>,
-    ) -> Option<NodeId> {
-        let mut found = self.tree.preceding(id)?;
-        loop {
-            let Some(inside) = self
-                .tree
-                .ancestors(found)
-                .find(|node| listed.contains(node))
-            else {
-                return Some(found);
-            };
-            if let Some(&known) = results.get(&inside) {
-                return known;
-            }
-            found = self.tree.preceding(inside)?;
-        }
-    }
-
-    /// Runs the host steps after the tree changed. A node that had a parent drops the focus it
-    /// held and moves the Tab start. Every node queues a focus re-check and resets the scroll
-    /// offsets of its subtree.
-    pub(super) fn settle(&mut self, leaving: &[Leaving]) {
-        for node in leaving {
-            if node.attached {
-                self.focus.drop_focus_in(&self.tree, node.id);
-                self.move_tab_start(node.id, node.before);
-            }
-            self.mark_focus_dirty(node.id);
-            self.reset_scroll(node.id);
+    /// Runs the host steps after the tree changed. The document crate drops the focus, moves the
+    /// Tab start and queues the focus re-check. Every node resets the scroll offsets of its
+    /// subtree.
+    pub(super) fn settle(&mut self, removals: &[Removal]) {
+        apply_removals(&mut self.focus, &self.tree, removals);
+        for removal in removals {
+            self.reset_scroll(removal.id);
         }
     }
 
@@ -303,14 +228,20 @@ impl Host {
             .unwrap_or_else(|| self.top())
     }
 
+    /// Reports a style warning of `node_id` through the sink, once for each node and line.
+    pub(crate) fn warn_style(&mut self, node_id: NodeId, line: &str) {
+        self.warnings.report(&self.tree, node_id, line);
+    }
+
     /// Drops the per-node state of freed nodes and returns the callback ids
     /// their listeners held.
     pub(crate) fn free_ids(&mut self, ids: &[NodeId]) -> Vec<u32> {
         for id in ids {
             self.scroll_handles.get_mut().remove(id);
             self.scroll_reported.remove(id);
-            self.style_warned.remove(id);
+            self.warnings.forget(*id);
             self.inputs.get_mut().remove(id);
+            self.input_layouts.get_mut().remove(id);
         }
         ids.iter()
             .flat_map(|&id| {
@@ -481,55 +412,7 @@ impl Host {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::collections::HashMap;
-
-    use inca_node::NodeId;
-    use rstest::rstest;
-
     use super::Host;
-
-    /// `p > (a > a1, b > b1, c > c1, l > x)`, with each node found by its name.
-    fn family() -> (Host, HashMap<&'static str, NodeId>) {
-        let mut host = Host::default();
-        let mut ids = HashMap::new();
-        for (name, parent) in [
-            ("p", None),
-            ("a", Some("p")),
-            ("b", Some("p")),
-            ("c", Some("p")),
-            ("l", Some("p")),
-            ("a1", Some("a")),
-            ("b1", Some("b")),
-            ("c1", Some("c")),
-            ("x", Some("l")),
-        ] {
-            let id = host.tree.create_node("div").unwrap();
-            if let Some(parent) = parent {
-                host.tree.append_child(ids[parent], id).unwrap();
-            }
-            ids.insert(name, id);
-        }
-        (host, ids)
-    }
-
-    #[rstest]
-    #[case::siblings_with_children(&["a", "b", "c"], "c", "p")]
-    #[case::siblings_in_reverse_order(&["c", "b"], "c", "a1")]
-    #[case::a_node_below_a_listed_node(&["l", "x"], "x", "c1")]
-    #[case::one_node(&["b"], "b", "a1")]
-    fn leaving_takes_each_before_past_the_listed_nodes(
-        #[case] listed: &[&str],
-        #[case] node: &str,
-        #[case] expected: &str,
-    ) {
-        let (host, ids) = family();
-        let listed: Vec<NodeId> = listed.iter().map(|name| ids[name]).collect();
-
-        let leaving = host.leaving(&listed);
-
-        let found = leaving.iter().find(|entry| entry.id == ids[node]);
-        assert_eq!(found.unwrap().before, Some(ids[expected]));
-    }
 
     #[test]
     fn container_at_without_a_box_gives_the_root_while_it_is_in_the_document() {

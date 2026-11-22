@@ -20,6 +20,7 @@ publish = false
 [dependencies]
 async-channel.workspace = true
 gpui.workspace = true
+inca-document = { path = "../inca-document" }
 inca-gpui = { path = "../inca-gpui" }
 inca-jsenv = { path = "../inca-jsenv" }
 inca-node = { path = "../inca-node" }
@@ -29,7 +30,7 @@ serde_json.workspace = true
 
 [features]
 # Exposes `test_support` for tests, and turns on gpui's test platform.
-test-support = ["gpui/test-support", "inca-gpui/test-support"]
+test-support = ["gpui/test-support", "inca-document/test-support", "inca-gpui/test-support"]
 
 [dev-dependencies]
 # Enables the callback test hook of inca-jsenv for this crate's tests.

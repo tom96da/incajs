@@ -4,7 +4,6 @@
 use inca_node::{AttributeValue, ParsedHtml};
 use inca_style::set_style_text;
 
-use super::super::attributes::print_style_warning;
 use super::super::host::Host;
 
 /// The steps that follow a parse once its nodes are in place: applies each `style` attribute as
@@ -21,7 +20,7 @@ pub(super) fn finish(host: &mut Host, parsed: &ParsedHtml) {
         // The node was read one statement ago, so the write cannot find it missing.
         let warnings = style.and_then(|style| set_style_text(&mut host.tree, node.id, &style).ok());
         for line in warnings.into_iter().flatten() {
-            print_style_warning(host, node.id, &line);
+            host.warn_style(node.id, &line);
         }
     }
     for node in &parsed.nodes {
@@ -85,7 +84,9 @@ mod tests {
     fn collect_warnings(host: &Rc<RefCell<Host>>) -> Rc<RefCell<Vec<String>>> {
         let lines = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&lines);
-        host.borrow_mut().warn = Rc::new(move |line| sink.borrow_mut().push(line.to_owned()));
+        host.borrow_mut()
+            .warnings
+            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
         lines
     }
 

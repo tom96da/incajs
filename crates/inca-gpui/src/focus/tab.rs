@@ -1,17 +1,17 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Tab order and tab-index reads.
+//! The Tab move.
 
-mod index;
-mod order;
-
-use super::{App, FocusRegistry, NodeId, PendingFocus, Start, StyleCache, VirtualTree, Window};
+use super::{FocusRegistry, Surface};
+use gpui::{App, Window};
+use inca_node::{NodeId, VirtualTree};
+use inca_style::StyleCache;
 
 impl FocusRegistry {
     /// Moves focus one tab stop forward, or `backward`. With no node focused,
     /// the move starts from the last press or focus (see
-    /// [`Self::press_start`]). Past the last stop nothing holds focus, and the
+    /// [`FocusRegistry::press_start`]). Past the last stop nothing holds focus, and the
     /// next Tab starts over at the first. A move that finds no stop forgets
     /// where it started. The transition is reported by the next
     /// [`Self::apply_pending`]. Returns the node that took focus. The move
@@ -27,66 +27,14 @@ impl FocusRegistry {
         cx: &mut App,
         backward: bool,
     ) -> Option<NodeId> {
-        let focused = self.focused_node(window, cx);
-        let start = if focused.is_none() { self.start } else { None };
-        let mut stops = Vec::new();
-        let from = start.map(Start::node).or(focused);
-        let mut from_at = None;
-        let mut stack = vec![root];
-        while let Some(id) = stack.pop() {
-            let Some(node) = tree.get(id) else { continue };
-            if from == Some(id) {
-                from_at = Some(stops.len());
-            }
-            if self.handles.contains_key(&id)
-                && let Some(index) = Self::tab_index_of(tree, cache, id)
-            {
-                stops.push((id, index));
-            }
-            stack.extend(node.children().iter().rev());
-        }
-        let target = match (start, from.zip(from_at)) {
-            (Some(Start::Press { .. }), Some((node, at))) => {
-                order::after_press(&stops, node, at, backward)
-            }
-            (_, Some((node, at))) if stops.get(at).is_none_or(|stop| stop.0 != node) => {
-                order::after_press(&stops, node, at, backward)
-            }
-            (Some(Start::Focus(node)), _) => order::next_stop(&stops, Some(node), backward),
-            _ => order::next_stop(&stops, focused, backward),
+        let mut surface = Surface {
+            handles: &mut self.handles,
+            parked: &mut self.parked,
+            window,
+            cx,
         };
-        if target.is_none() {
-            self.start = None;
-        }
-        self.reveal.clear();
-        self.retry.clear();
-        if let Some((id, handle)) = target.and_then(|id| Some((id, self.handles.get(&id)?))) {
-            handle.focus(window, cx);
-            Some(id)
-        } else {
-            window.blur(cx);
-            None
-        }
-    }
-
-    /// Takes focus from `node_id` and from every node below it at once. No
-    /// `blur` or `focusout` is reported, and requests to focus those nodes
-    /// are dropped. The window's own focus is released by the next
-    /// [`Self::apply_pending`].
-    pub fn drop_focus_in(&mut self, tree: &VirtualTree, node_id: NodeId) {
-        let inside = |id: NodeId| tree.ancestors(id).any(|ancestor| ancestor == node_id);
-        self.pending.retain(
-            |request| !matches!(request, PendingFocus::Focus { node, .. } if inside(*node)),
-        );
-        self.reveal.retain(|&id| !inside(id));
-        self.retry.retain(|&id| !inside(id));
-        if let Some(held) = self.observed.filter(|&id| inside(id)) {
-            self.observed = None;
-            self.blur_owed = Some(held);
-        }
-        if self.focused.is_some_and(inside) {
-            self.focused = None;
-        }
+        self.model
+            .tab_move(tree, cache, root, &mut surface, backward)
     }
 }
 
@@ -96,9 +44,267 @@ mod tests {
 
     use super::*;
     use crate::tests::*;
-    use gpui::TestAppContext;
+    use gpui::{TestAppContext, VisualTestContext};
     use inca_node::AttributeValue;
     use inca_test_macros::gpui_cases;
+
+    /// A rooted tree with one `button`, disabled when `disabled`.
+    fn rooted_button(disabled: bool) -> (VirtualTree, NodeId) {
+        let (mut tree, _) = rooted_tree(0);
+        let id = tree.create_node("button").unwrap();
+        tree.append_child(ROOT, id).unwrap();
+        if disabled {
+            tree.set_attribute(id, "disabled", true).unwrap();
+        }
+        (tree, id)
+    }
+
+    /// A rooted tree with one node under the root per entry of `tabindex`, `None` for a node with
+    /// no tab index, and a registry that holds a handle for each stop and focuses nothing.
+    fn start_tree(
+        cx: &mut VisualTestContext,
+        tabindex: &[Option<&str>],
+    ) -> (VirtualTree, Vec<NodeId>, FocusRegistry) {
+        let (mut tree, _) = rooted_tree(0);
+        let ids: Vec<NodeId> = tabindex
+            .iter()
+            .map(|value| {
+                let id = tree.create_node("div").unwrap();
+                if let Some(value) = value {
+                    tree.set_attribute(id, "tabindex", *value).unwrap();
+                }
+                tree.append_child(ROOT, id).unwrap();
+                id
+            })
+            .collect();
+        let mut registry = FocusRegistry::default();
+        for &id in &ids {
+            registry.mark_tab_dirty(id);
+        }
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
+        });
+        (tree, ids, registry)
+    }
+
+    fn tab(
+        cx: &mut VisualTestContext,
+        registry: &mut FocusRegistry,
+        tree: &VirtualTree,
+        backward: bool,
+    ) -> Option<NodeId> {
+        cx.update(|window, cx| {
+            registry.tab_move(tree, &StyleCache::new(), ROOT, window, cx, backward)
+        })
+    }
+
+    /// Applies a focus request for `node`, then a blur, each on its own frame.
+    fn focus_then_blur(
+        cx: &mut VisualTestContext,
+        registry: &mut FocusRegistry,
+        tree: &VirtualTree,
+        node: NodeId,
+    ) {
+        registry.request_focus(node, false);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(tree, &StyleCache::new(), window, cx);
+        });
+        registry.request_blur(node);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(tree, &StyleCache::new(), window, cx);
+        });
+    }
+
+    const STOP: Option<&str> = Some("0");
+
+    const PLAIN: Option<&str> = None;
+
+    #[gpui::test]
+    fn tab_after_a_press_moves_to_the_next_stop(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, PLAIN, STOP]);
+        registry.press_start(ids[1], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[2]));
+    }
+
+    #[gpui::test]
+    fn shift_tab_after_a_press_moves_to_the_previous_stop(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, PLAIN, STOP]);
+        registry.press_start(ids[1], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, true), Some(ids[0]));
+    }
+
+    #[gpui::test]
+    fn shift_tab_after_a_press_on_a_stop_focuses_that_stop(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP]);
+        registry.press_start(ids[1], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, true), Some(ids[1]));
+    }
+
+    #[gpui::test]
+    fn tab_after_a_press_on_the_last_stop_focuses_nothing(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP]);
+        registry.press_start(ids[1], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), None);
+    }
+
+    #[gpui::test]
+    fn tab_after_a_press_past_the_last_stop_moves_to_the_first(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP, PLAIN]);
+        registry.press_start(ids[2], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[0]));
+    }
+
+    #[gpui::test]
+    fn shift_tab_after_a_press_before_the_first_stop_focuses_nothing(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[PLAIN, STOP, STOP]);
+        registry.press_start(ids[0], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, true), None);
+    }
+
+    #[gpui::test]
+    fn a_tab_move_that_finds_no_stop_forgets_its_start(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[PLAIN, STOP, STOP]);
+        registry.press_start(ids[0], ROOT, None);
+        tab(cx, &mut registry, &tree, true);
+
+        assert_eq!(tab(cx, &mut registry, &tree, true), Some(ids[2]));
+    }
+
+    #[gpui::test]
+    fn tab_after_a_press_ignores_a_positive_tabindex(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[PLAIN, STOP, Some("1")]);
+        registry.press_start(ids[0], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[1]));
+    }
+
+    #[gpui::test]
+    fn a_press_on_the_root_forgets_the_start(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, PLAIN, STOP]);
+        registry.press_start(ids[1], ROOT, None);
+        registry.press_start(ROOT, ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, true), Some(ids[2]));
+    }
+
+    #[gpui::test]
+    fn tab_from_a_focused_node_ignores_the_start(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP, STOP]);
+        registry.request_focus(ids[0], false);
+        cx.update(|window, cx| {
+            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
+        });
+        registry.press_start(ids[2], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[1]));
+    }
+
+    #[gpui::test]
+    fn tab_after_a_blur_continues_from_the_blurred_node(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP, STOP]);
+        focus_then_blur(cx, &mut registry, &tree, ids[1]);
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[2]));
+    }
+
+    #[gpui::test]
+    fn a_press_that_focuses_a_node_stays_the_start(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP]);
+        registry.press_start(ids[0], ROOT, Some(ids[0]));
+        focus_then_blur(cx, &mut registry, &tree, ids[0]);
+
+        assert_eq!(tab(cx, &mut registry, &tree, true), Some(ids[0]));
+    }
+
+    #[gpui::test]
+    fn a_later_focus_of_the_pressed_node_becomes_the_start(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP]);
+        registry.press_start(ids[0], ROOT, Some(ids[0]));
+        focus_then_blur(cx, &mut registry, &tree, ids[0]);
+        focus_then_blur(cx, &mut registry, &tree, ids[0]);
+
+        assert_eq!(tab(cx, &mut registry, &tree, true), None);
+    }
+
+    #[gpui::test]
+    fn a_start_that_leaves_the_tree_moves_before_its_place(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, ids, mut registry) = start_tree(cx, &[STOP, PLAIN, STOP]);
+        registry.press_start(ids[1], ROOT, None);
+        let before = tree.preceding(ids[1]);
+        tree.remove_child(ROOT, ids[1]).unwrap();
+        registry.start_leaves(&tree, ids[1], before);
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[2]));
+    }
+
+    #[gpui::test]
+    fn a_start_outside_the_leaving_subtree_stays(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, PLAIN, STOP]);
+        registry.press_start(ids[1], ROOT, None);
+        registry.start_leaves(&tree, ids[0], tree.preceding(ids[0]));
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[2]));
+    }
+
+    #[gpui::test]
+    fn a_start_that_leaves_as_the_first_child_of_the_root_clears(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, ids, mut registry) = start_tree(cx, &[PLAIN, STOP, STOP]);
+        registry.press_start(ids[0], ROOT, None);
+        let before = tree.preceding(ids[0]);
+        tree.remove_child(ROOT, ids[0]).unwrap();
+        registry.start_leaves(&tree, ids[0], before);
+
+        assert_eq!(tab(cx, &mut registry, &tree, true), Some(ids[2]));
+    }
+
+    #[gpui::test]
+    fn tab_after_a_press_skips_a_negative_stop(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[PLAIN, Some("-1"), STOP]);
+        registry.press_start(ids[0], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[2]));
+    }
+
+    #[gpui::test]
+    fn shift_tab_after_a_press_skips_a_negative_stop(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, Some("-1"), PLAIN]);
+        registry.press_start(ids[2], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, true), Some(ids[0]));
+    }
+
+    #[gpui::test]
+    fn tab_after_a_press_on_a_trailing_negative_stop_moves_to_the_first(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids, mut registry) = start_tree(cx, &[STOP, Some("-1")]);
+        registry.press_start(ids[1], ROOT, None);
+
+        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[0]));
+    }
 
     #[gpui::test]
     fn tab_move_returns_the_node_it_focused_and_none_past_the_end(cx: &mut TestAppContext) {
@@ -397,5 +603,61 @@ mod tests {
         });
 
         assert_eq!(moved, Some(ids[2]));
+    }
+
+    #[gpui::test]
+    fn focus_on_a_disabled_button_is_ignored(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, id) = rooted_button(true);
+        let mut registry = FocusRegistry::default();
+        registry.mark_tab_dirty(id);
+        registry.request_focus(id, false);
+
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+
+        assert!(transitions.is_empty());
+        assert_eq!(
+            cx.update(|window, cx| registry.focused_node(window, cx)),
+            None
+        );
+    }
+
+    #[gpui::test]
+    fn disabling_a_focused_button_reports_its_blur(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, id) = rooted_button(false);
+        let mut registry = FocusRegistry::default();
+        focus_all(cx, &mut registry, &tree, &[id], id);
+
+        tree.set_attribute(id, "disabled", true).unwrap();
+        registry.mark_tab_dirty(id);
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+
+        assert_eq!(transitions.len(), 1);
+        assert_eq!(transitions[0].blurred(), Some(id));
+        assert_eq!(transitions[0].focused(), None);
+    }
+
+    #[gpui::test]
+    fn an_enabled_button_takes_focus_again(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (mut tree, id) = rooted_button(false);
+        let mut registry = FocusRegistry::default();
+        focus_all(cx, &mut registry, &tree, &[id], id);
+        tree.set_attribute(id, "disabled", true).unwrap();
+        registry.mark_tab_dirty(id);
+        cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+
+        tree.remove_attribute(id, "disabled").unwrap();
+        registry.mark_tab_dirty(id);
+        registry.request_focus(id, false);
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+
+        assert_eq!(transitions.len(), 1);
+        assert_eq!(transitions[0].blurred(), None);
+        assert_eq!(transitions[0].focused(), Some(id));
     }
 }

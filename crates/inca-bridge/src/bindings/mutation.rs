@@ -83,7 +83,7 @@ fn replace_child<'js>(
         let mut host = host.borrow_mut();
         let mut leaving = host.tree.nodes_to_move(node_id);
         leaving.push(child_id);
-        let left = host.leaving(&leaving);
+        let left = host.tree.removals(&leaving);
         host.tree
             .replace_child(parent_id, node_id, child_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
@@ -98,7 +98,7 @@ fn remove_child<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
         let mut host = host.borrow_mut();
-        let left = host.leaving(&[child_id]);
+        let left = host.tree.removals(&[child_id]);
         host.tree
             .remove_child(parent_id, child_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
@@ -146,7 +146,7 @@ fn remove_node<'js>(
             return pair(&ctx, &[], &[]);
         };
         if let Some(parent_id) = parent_id {
-            let left = host.leaving(&[node_id]);
+            let left = host.tree.removals(&[node_id]);
             host.tree
                 .remove_child(parent_id, node_id)
                 .map_err(|err| throw_tree_error(&ctx, err))?;
@@ -183,7 +183,7 @@ fn insert_child(
     node_id: NodeId,
     reference_id: Option<NodeId>,
 ) -> JsResult<usize> {
-    let left = host.leaving(&host.tree.nodes_to_move(node_id));
+    let left = host.tree.removals(&host.tree.nodes_to_move(node_id));
     let position = host
         .tree
         .insert_before(parent_id, node_id, reference_id)

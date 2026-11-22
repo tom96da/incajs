@@ -10,6 +10,7 @@ use inca_jsenv::{EngineError, callbacks};
 
 use super::EventDispatcher;
 use crate::EventTargetId;
+use crate::focus::dispatch_transition;
 
 impl EventDispatcher {
     /// Runs the work a window owes before it draws a frame: prints the warnings of the `<style>`
@@ -30,7 +31,7 @@ impl EventDispatcher {
         };
         for transition in &transitions {
             self.input_focus_moved(transition, window, cx);
-            transition.dispatch(self, window, cx);
+            dispatch_transition(transition, self, window, cx);
         }
         self.release_orphans(window, cx);
         self.host.borrow_mut().reveal_focus(window);
@@ -46,7 +47,7 @@ impl EventDispatcher {
     fn warn_style_sheets(&self) {
         let host = self.host.borrow();
         for line in host.style.take_style_warnings(&host.tree) {
-            (host.warn)(&format!("<style>: {line}"));
+            host.warnings.emit(&format!("<style>: {line}"));
         }
     }
 
@@ -136,7 +137,9 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let printed = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&printed);
-        host.borrow_mut().warn = Rc::new(move |line| sink.borrow_mut().push(line.to_owned()));
+        host.borrow_mut()
+            .warnings
+            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
         {
             let mut host = host.borrow_mut();
             let root = host.root();

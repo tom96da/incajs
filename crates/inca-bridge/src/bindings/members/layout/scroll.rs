@@ -10,8 +10,8 @@ use std::rc::Rc;
 use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, FromJs, Object, Result as JsResult, Value};
 
+use inca_document::geometry::Align;
 use inca_node::NodeId;
-use inca_node::scroll::Align;
 
 use super::super::{Shared, accessor, getter, method};
 use super::boxes::{client_height, client_width, rounded};
@@ -201,7 +201,7 @@ pub(super) fn install<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use inca_node::scroll::Align;
+    use inca_document::geometry::Align;
     use rstest::rstest;
 
     use super::super::fixture::with_box;

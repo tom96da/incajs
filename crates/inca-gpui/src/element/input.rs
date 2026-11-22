@@ -14,9 +14,9 @@ use gpui::{
 
 use crate::event_sink::EventSink;
 use crate::input::{
-    CARET_WIDTH, Highlights, InputLayout, InputRequest, InputState, highlights, scroll_to_caret,
-    stops_of, x_at,
+    CARET_WIDTH, Highlights, InputLayout, InputRequest, highlights, scroll_to_caret, stops_of, x_at,
 };
+use inca_document::InputState;
 use inca_node::tree::NodeId;
 
 /// The selection fill.
@@ -45,6 +45,10 @@ impl<E> TextInputHandler<E> {
 impl<E: EventSink> TextInputHandler<E> {
     fn state(&self) -> Option<InputState> {
         self.sink.input(self.node)
+    }
+
+    fn layout(&self) -> InputLayout {
+        self.sink.input_layout(self.node)
     }
 
     fn request(&self, request: InputRequest, window: &mut Window, cx: &mut App) {
@@ -127,7 +131,8 @@ impl<E: EventSink + 'static> gpui::InputHandler for TextInputHandler<E> {
         _cx: &mut App,
     ) -> Option<Bounds<Pixels>> {
         let state = self.state()?;
-        state.bounds_of(&state.range_from_utf16(&range_utf16))
+        self.layout()
+            .bounds_of(&state.range_from_utf16(&range_utf16))
     }
 
     fn character_index_for_point(
@@ -137,7 +142,7 @@ impl<E: EventSink + 'static> gpui::InputHandler for TextInputHandler<E> {
         _cx: &mut App,
     ) -> Option<usize> {
         let state = self.state()?;
-        Some(state.to_utf16(state.offset_at(f32::from(point.x))))
+        Some(state.to_utf16(self.layout().offset_at(f32::from(point.x))))
     }
 
     fn set_selected_text_range(
@@ -263,7 +268,9 @@ impl<E: EventSink + Clone + 'static> Element for InputElement<E> {
             .as_ref()
             .is_some_and(|handle| handle.is_focused(window));
         let scroll = scroll_to_caret(
-            state.layout().scroll,
+            self.sink
+                .as_ref()
+                .map_or(0.0, |sink| sink.input_layout(self.node).scroll),
             x_at(&stops, state.caret()),
             f32::from(line.width()),
             f32::from(bounds.size.width),
@@ -417,8 +424,8 @@ mod tests {
         });
     }
 
-    fn state_of(probe: &Probe) -> InputState {
-        probe.inputs.borrow()[&0].clone()
+    fn layout_of(probe: &Probe) -> InputLayout {
+        probe.layouts_of_inputs.borrow()[&0].clone()
     }
 
     struct PlainView(VirtualTree);
@@ -445,8 +452,7 @@ mod tests {
     fn an_input_records_a_caret_stop_per_char(cx: &mut TestAppContext) {
         let probe = probe_with(input_tree(100.0), "ab");
         drawn(cx.add_empty_window(), &probe);
-        let state = probe.inputs.borrow()[&0].clone();
-        let layout = state.layout();
+        let layout = layout_of(&probe);
         assert_eq!(layout.stops, [(0, 0.), (1, 6.), (2, 12.)]);
         assert_eq!(layout.x, 0.);
         assert_eq!(layout.height, 16.);
@@ -458,16 +464,16 @@ mod tests {
         tree.set_attribute(0, "placeholder", "hint").unwrap();
         let probe = probe_of(tree);
         drawn(cx.add_empty_window(), &probe);
-        assert_eq!(state_of(&probe).layout().stops, [(0, 0.)]);
+        assert_eq!(layout_of(&probe).stops, [(0, 0.)]);
     }
 
     #[gpui::test]
     fn an_input_shifts_long_text_to_show_the_caret(cx: &mut TestAppContext) {
         let probe = probe_with(input_tree(30.0), "abcdefghij");
         drawn(cx.add_empty_window(), &probe);
-        let state = state_of(&probe);
-        assert_eq!(state.layout().scroll, 31.);
-        assert_eq!(state.layout().x, -31.);
+        let layout = layout_of(&probe);
+        assert_eq!(layout.scroll, 31.);
+        assert_eq!(layout.x, -31.);
     }
 
     #[gpui::test]
@@ -576,23 +582,25 @@ mod tests {
         assert_eq!(*probe.requests.borrow(), [(0, request)]);
     }
 
-    /// A state that recorded a line at window x 10, y 20, 6 px per char.
-    fn recorded(value: &str) -> InputState {
-        let mut state = state_with(value, 0..0, false);
+    /// A state holding `value` whose line the probe recorded at window x 10, y 20, 6 px per
+    /// char.
+    fn recorded(value: &str) -> (InputState, InputLayout) {
         let stops = crate::input::stops_of(value, |at| f32::from(u16::try_from(at).unwrap()) * 6.0);
-        state.record(InputLayout {
+        let layout = InputLayout {
             x: 10.0,
             y: 20.0,
             height: 16.0,
             scroll: 0.0,
             stops,
-        });
-        state
+        };
+        (state_with(value, 0..0, false), layout)
     }
 
     #[gpui::test]
     fn the_handler_reports_the_box_of_a_range(cx: &mut TestAppContext) {
-        let (_, mut handler) = handler_over(Some(recorded("abc")), true);
+        let (state, layout) = recorded("abc");
+        let (probe, mut handler) = handler_over(Some(state), true);
+        probe.layouts_of_inputs.borrow_mut().insert(0, layout);
         let got = cx
             .add_empty_window()
             .update(|window, cx| handler.bounds_for_range(1..2, window, cx));
@@ -602,7 +610,9 @@ mod tests {
 
     #[gpui::test]
     fn the_handler_maps_a_point_to_a_utf16_offset(cx: &mut TestAppContext) {
-        let (_, mut handler) = handler_over(Some(recorded("a😀")), true);
+        let (state, layout) = recorded("a😀");
+        let (probe, mut handler) = handler_over(Some(state), true);
+        probe.layouts_of_inputs.borrow_mut().insert(0, layout);
         let got = cx.add_empty_window().update(|window, cx| {
             handler.character_index_for_point(point(px(19.), px(99.)), window, cx)
         });

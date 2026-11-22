@@ -3,6 +3,8 @@
 
 //! Holding, releasing, sweeping and destroying nodes.
 
+use std::collections::{HashMap, HashSet};
+
 use super::{NodeId, TreeError, VirtualTree};
 
 impl VirtualTree {
@@ -112,11 +114,124 @@ impl VirtualTree {
     }
 }
 
+/// A node that leaves its place, as it was before the tree call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Removal {
+    /// The node that leaves.
+    pub id: NodeId,
+    /// Whether the node had a parent before the call.
+    pub attached: bool,
+    /// The node right before its subtree in tree order that does not leave in the same call.
+    pub before: Option<NodeId>,
+}
+
+impl VirtualTree {
+    /// Records where each of `ids` sits before a tree call moves or removes it. The `before` of a
+    /// node is the node right before its subtree in tree order. While that node is one of `ids` or
+    /// lies below one of them, the walk goes on before that one.
+    #[must_use]
+    pub fn removals(&self, ids: &[NodeId]) -> Vec<Removal> {
+        let removal = |id: NodeId, before: Option<NodeId>| Removal {
+            id,
+            attached: self.get(id).is_some_and(|node| node.parent().is_some()),
+            before,
+        };
+        if let [id] = ids {
+            return vec![removal(*id, self.preceding(*id))];
+        }
+        let listed: HashSet<NodeId> = ids.iter().copied().collect();
+        let mut results: HashMap<NodeId, Option<NodeId>> = HashMap::new();
+        ids.iter()
+            .map(|&id| {
+                let before = self.before_past(id, &listed, &results);
+                results.insert(id, before);
+                removal(id, before)
+            })
+            .collect()
+    }
+
+    /// The node right before the subtree of `id` that is neither in `listed` nor below one of
+    /// them. `results` holds the answers of the listed nodes read so far.
+    fn before_past(
+        &self,
+        id: NodeId,
+        listed: &HashSet<NodeId>,
+        results: &HashMap<NodeId, Option<NodeId>>,
+    ) -> Option<NodeId> {
+        let mut found = self.preceding(id)?;
+        loop {
+            let Some(inside) = self.ancestors(found).find(|node| listed.contains(node)) else {
+                return Some(found);
+            };
+            if let Some(&known) = results.get(&inside) {
+                return known;
+            }
+            found = self.preceding(inside)?;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::tests::{Fixture, node};
+    use rstest::rstest;
+
+    /// `p > (a > a1, b > b1, c > c1, l > x)`, with each node found by its name.
+    fn family() -> (VirtualTree, HashMap<&'static str, NodeId>) {
+        let mut tree = VirtualTree::new();
+        let mut ids = HashMap::new();
+        for (name, parent) in [
+            ("p", None),
+            ("a", Some("p")),
+            ("b", Some("p")),
+            ("c", Some("p")),
+            ("l", Some("p")),
+            ("a1", Some("a")),
+            ("b1", Some("b")),
+            ("c1", Some("c")),
+            ("x", Some("l")),
+        ] {
+            let id = tree.create_node("div").unwrap();
+            if let Some(parent) = parent {
+                tree.append_child(ids[parent], id).unwrap();
+            }
+            ids.insert(name, id);
+        }
+        (tree, ids)
+    }
+
+    #[rstest]
+    #[case::siblings_with_children(&["a", "b", "c"], "c", "p")]
+    #[case::siblings_in_reverse_order(&["c", "b"], "c", "a1")]
+    #[case::a_node_below_a_listed_node(&["l", "x"], "x", "c1")]
+    #[case::one_node(&["b"], "b", "a1")]
+    fn removals_take_each_before_past_the_listed_nodes(
+        #[case] listed: &[&str],
+        #[case] node: &str,
+        #[case] expected: &str,
+    ) {
+        let (tree, ids) = family();
+        let listed: Vec<NodeId> = listed.iter().map(|name| ids[name]).collect();
+
+        let removals = tree.removals(&listed);
+
+        let found = removals.iter().find(|entry| entry.id == ids[node]);
+        assert_eq!(found.unwrap().before, Some(ids[expected]));
+    }
+
+    #[test]
+    fn a_removal_tells_whether_the_node_had_a_parent() {
+        let (tree, ids) = family();
+
+        let removals = tree.removals(&[ids["p"], ids["a"]]);
+
+        assert_eq!(
+            removals.iter().map(|r| r.attached).collect::<Vec<_>>(),
+            [false, true]
+        );
+    }
 
     #[test]
     fn destroy_frees_the_whole_subtree() {

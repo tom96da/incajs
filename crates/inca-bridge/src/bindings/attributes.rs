@@ -8,12 +8,13 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, IntoJs, Result as JsResult, Value};
 
-use inca_node::{AttributeValue, NodeId, VirtualNode, valid_attribute_name};
+use inca_document::store_attribute as store;
+use inca_node::{AttributeValue, NodeId, valid_attribute_name};
 use inca_style::style_warning;
 
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
 use super::host::Host;
-use inca_style::{remove_style as remove_style_prop, set_style as set_style_prop, set_style_text};
+use inca_style::{remove_style as remove_style_prop, set_style as set_style_prop};
 
 pub(super) fn set_attribute<'js>(
     host: Rc<RefCell<Host>>,
@@ -46,18 +47,8 @@ pub(super) fn store_attribute(
     name: &str,
     value: AttributeValue,
 ) -> JsResult<()> {
-    let key = folded_key(ctx, host, node_id, name)?;
-    if key == "style" {
-        let warnings = set_style_text(&mut host.tree, node_id, &value.text())
-            .map_err(|err| throw_tree_error(ctx, err))?;
-        for line in &warnings {
-            print_style_warning(host, node_id, line);
-        }
-    } else {
-        host.tree
-            .set_attribute(node_id, key.clone(), value)
-            .map_err(|err| throw_tree_error(ctx, err))?;
-    }
+    let key = store(&mut host.tree, &mut host.warnings, node_id, name, value)
+        .map_err(|err| throw_tree_error(ctx, err))?;
     mark_focus_dirty_for(host, node_id, &key);
     Ok(())
 }
@@ -130,22 +121,9 @@ pub(super) fn set_style<'js>(
             host.mark_focus_dirty(node_id);
         }
         if let Some(warning) = warning {
-            print_style_warning(&mut host, node_id, &warning);
+            host.warn_style(node_id, &warning);
         }
         Ok(())
-    }
-}
-
-/// Prints the `warning` of a style of `node_id` through `Host::warn`, once for each node and line.
-pub(super) fn print_style_warning(host: &mut Host, node_id: NodeId, warning: &str) {
-    if host
-        .style_warned
-        .entry(node_id)
-        .or_default()
-        .insert(warning.to_owned())
-    {
-        let tag = host.tree.get(node_id).map_or("", VirtualNode::local_name);
-        (host.warn)(&format!("node {node_id} ({tag}): {warning}"));
     }
 }
 
@@ -165,11 +143,7 @@ pub(super) fn remove_style<'js>(
 
 /// Queues the focus re-check an attribute change needs.
 pub(super) fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
-    match key {
-        "tabindex" | "disabled" | "href" | "xlink:href" => host.focus.mark_tab_dirty(node_id),
-        "hidden" | "inert" | "style" => host.mark_focus_dirty(node_id),
-        _ => {}
-    }
+    host.focus.mark_attribute_dirty(&host.tree, node_id, key);
 }
 
 fn attribute_value_from_js<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<AttributeValue> {
