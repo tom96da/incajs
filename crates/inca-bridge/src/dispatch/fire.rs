@@ -262,8 +262,8 @@ mod tests {
     use crate::EventDispatcher;
     use crate::Host;
     use crate::tests::{
-        dispatcher_with_engine, fire_and_read, listen, listen_with, mouse_at, read_out,
-        tree_of_three, wheel_at,
+        FakeScript, Walked, dispatcher_with_engine, fake_dispatcher, fire_and_read, listen,
+        listen_with, mouse_at, tree_of_three, wheel_at,
     };
     use gpui::{TestAppContext, point, px};
     use inca_document::{EventPayload, MousePayload};
@@ -300,7 +300,7 @@ mod tests {
 
     #[gpui::test]
     fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         let root = host.document.borrow().root();
         host.document
@@ -310,7 +310,13 @@ mod tests {
             .unwrap();
         assert!(!dispatcher.tracks_pointer());
 
-        listen(&dispatcher, node, "keydown", "() => {}");
+        host.document.borrow_mut().listeners.insert(
+            crate::EventTargetId::Node(node),
+            "keydown",
+            1,
+            false,
+            false,
+        );
         assert!(dispatcher.tracks_pointer());
         host.document
             .borrow_mut()
@@ -481,7 +487,7 @@ mod tests {
         #[case] css: &str,
         #[case] expected: bool,
     ) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         crate::tests::add_sheet(&host, css);
 
         assert_eq!(dispatcher.tracks_pointer(), expected);
@@ -502,93 +508,113 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn offset_falls_back_to_the_client_position_when_unrecorded(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, parent, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            parent,
-            "click",
-            "(e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-        );
-        let click = EventPayload::Mouse(MousePayload::at(
+    /// Fires `event` at `start` on a fake script and returns the walks it recorded.
+    fn fire_walked(
+        cx: &mut TestAppContext,
+        dispatcher: &EventDispatcher,
+        fake: &FakeScript,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
+    ) -> Vec<Walked> {
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.fire(start, event, payload, window, cx);
+        });
+        fake.take()
+    }
+
+    fn offsets(walked: &Walked) -> (f32, f32, f32, f32) {
+        let mouse = walked.mouse();
+        (
+            mouse.offset_x,
+            mouse.offset_y,
+            mouse.client_x,
+            mouse.client_y,
+        )
+    }
+
+    fn click_at_60_40() -> EventPayload {
+        EventPayload::Mouse(MousePayload::at(
             60.0,
             40.0,
             inca_document::Modifiers::none(),
-        ));
-
-        let out = fire_and_read(cx, &dispatcher, child, "click", &click);
-        assert_eq!(out, serde_json::json!([[child, 60, 40, 60, 40]]));
+        ))
     }
 
     #[gpui::test]
-    fn a_parent_listener_reads_the_targets_offset(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+    fn offset_falls_back_to_the_client_position_when_unrecorded(cx: &mut TestAppContext) {
+        let (dispatcher, host, fake) = fake_dispatcher();
+        let [_, _, child] = tree_of_three(&host);
+
+        let walks = fire_walked(cx, &dispatcher, &fake, child, "click", &click_at_60_40());
+
+        assert_eq!(walks.len(), 1);
+        assert_eq!(offsets(&walks[0]), (60.0, 40.0, 60.0, 40.0));
+    }
+
+    #[gpui::test]
+    fn the_offset_is_measured_from_the_target_not_from_an_ancestor(cx: &mut TestAppContext) {
+        let (dispatcher, host, fake) = fake_dispatcher();
         let [_, parent, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            parent,
-            "click",
-            "(e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-        );
-        let click = EventPayload::Mouse(MousePayload::at(
-            60.0,
-            40.0,
-            inca_document::Modifiers::none(),
-        ));
         record_box(&host, parent, 500.0, 500.0, 9.0);
         record_box(&host, child, 10.0, 20.0, 2.0);
-        let out = fire_and_read(cx, &dispatcher, child, "click", &click);
-        assert_eq!(out, serde_json::json!([[child, 48, 18, 60, 40]]));
+
+        let walks = fire_walked(cx, &dispatcher, &fake, child, "click", &click_at_60_40());
+
+        assert_eq!(walks.len(), 1);
+        assert_eq!(walks[0].target_text(), child.to_string());
+        assert_eq!(offsets(&walks[0]), (48.0, 18.0, 60.0, 40.0));
     }
 
     #[gpui::test]
     fn hover_events_measure_the_offset_from_the_node_they_fire_at(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, parent, child] = tree_of_three(&host);
-        for event in ["mouseover", "mouseenter"] {
-            listen(
-                &dispatcher,
-                parent,
-                event,
-                "(e) => out.push([e.type, e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-            );
-        }
+        let (dispatcher, host, fake) = fake_dispatcher();
+        let [outer, parent, child] = tree_of_three(&host);
         record_box(&host, parent, 10.0, 20.0, 2.0);
         record_box(&host, child, 30.0, 40.0, 0.0);
 
-        // The pointer is over `child`: `mouseover` fires there and bubbles to
-        // `parent`, then `mouseenter` fires at `parent`.
+        // The pointer is over `child`: `mouseover` fires there and then `mouseenter` fires at
+        // each node of the path. The pointer is at (0,0) in the test window.
         let cx = cx.add_empty_window();
         cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
 
-        let out = read_out(&dispatcher);
-        // The pointer is at (0,0) in the test window. Each event reads the box
-        // of its own target.
+        let rows: Vec<_> = fake
+            .take()
+            .iter()
+            .filter(|walked| walked.name.starts_with("mouse"))
+            .map(|walked| (walked.label(), offsets(walked)))
+            .collect();
         assert_eq!(
-            out,
-            serde_json::json!([
-                ["mouseover", child, -30, -40, 0, 0],
-                ["mouseenter", parent, -12, -22, 0, 0]
-            ])
+            rows,
+            [
+                (format!("mouseover@{child}"), (-30.0, -40.0, 0.0, 0.0)),
+                (format!("mouseenter@{outer}"), (0.0, 0.0, 0.0, 0.0)),
+                (format!("mouseenter@{parent}"), (-12.0, -22.0, 0.0, 0.0)),
+                (format!("mouseenter@{child}"), (-30.0, -40.0, 0.0, 0.0)),
+            ]
         );
     }
 
     #[gpui::test]
     fn a_wheel_event_carries_the_offset(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, fake) = fake_dispatcher();
         let [_, _, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            child,
-            "wheel",
-            "(e) => out.push([e.offsetX, e.offsetY])",
-        );
         record_box(&host, child, 10.0, 20.0, 0.0);
 
-        let out = fire_and_read(cx, &dispatcher, child, "wheel", &wheel_at(60.0, 40.0));
+        let walks = fire_walked(
+            cx,
+            &dispatcher,
+            &fake,
+            child,
+            "wheel",
+            &wheel_at(60.0, 40.0),
+        );
 
-        assert_eq!(out, serde_json::json!([[50, 20]]));
+        assert_eq!(walks.len(), 1);
+        let EventPayload::Wheel(wheel) = &walks[0].payload else {
+            panic!("expected a wheel payload");
+        };
+        assert_eq!((wheel.mouse.offset_x, wheel.mouse.offset_y), (50.0, 20.0));
     }
 }

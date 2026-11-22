@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use inca_document::{EventPayload, EventTargetId, MousePayload};
@@ -67,6 +67,9 @@ pub(crate) struct FakeScript {
     walks: RefCell<Vec<Walked>>,
     handler: RefCell<Handler>,
     jobs: RefCell<Vec<Box<dyn FnOnce()>>>,
+    timers: RefCell<Rc<dyn Fn() -> usize>>,
+    frames: RefCell<Rc<dyn Fn() -> usize>>,
+    turns: Cell<[usize; 2]>,
 }
 
 impl Default for FakeScript {
@@ -75,6 +78,9 @@ impl Default for FakeScript {
             walks: RefCell::default(),
             handler: RefCell::new(Rc::new(|_| false)),
             jobs: RefCell::default(),
+            timers: RefCell::new(Rc::new(|| 0)),
+            frames: RefCell::new(Rc::new(|| 0)),
+            turns: Cell::default(),
         }
     }
 }
@@ -88,6 +94,24 @@ impl FakeScript {
     /// Queues `job` for the next [`Script::drain_jobs`].
     pub(crate) fn queue_job(&self, job: impl FnOnce() + 'static) {
         self.jobs.borrow_mut().push(Box::new(job));
+    }
+
+    /// Runs `turn` on each [`Script::run_timers`] call from now on. It returns how many timers it
+    /// ran.
+    pub(crate) fn on_timers(&self, turn: impl Fn() -> usize + 'static) {
+        *self.timers.borrow_mut() = Rc::new(turn);
+    }
+
+    /// Runs `turn` on each [`Script::run_frames`] call from now on. It returns how many frame
+    /// callbacks it ran.
+    pub(crate) fn on_frames(&self, turn: impl Fn() -> usize + 'static) {
+        *self.frames.borrow_mut() = Rc::new(turn);
+    }
+
+    /// How many times the dispatch asked for the due timers and for the frame callbacks.
+    pub(crate) fn turns(&self) -> (usize, usize) {
+        let [timers, frames] = self.turns.get();
+        (timers, frames)
     }
 
     /// The walks recorded since the last call.
@@ -114,11 +138,17 @@ impl Script for FakeScript {
     }
 
     fn run_timers(&self) -> usize {
-        0
+        let [timers, frames] = self.turns.get();
+        self.turns.set([timers + 1, frames]);
+        let turn = Rc::clone(&self.timers.borrow());
+        turn()
     }
 
     fn run_frames(&self) -> usize {
-        0
+        let [timers, frames] = self.turns.get();
+        self.turns.set([timers, frames + 1]);
+        let turn = Rc::clone(&self.frames.borrow());
+        turn()
     }
 
     fn release(&self, _nodes: &[NodeId], _callback_ids: &[u32]) -> bool {

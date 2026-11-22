@@ -32,7 +32,7 @@ mod tests {
     use gpui::TestAppContext;
     use inca_test_macros::gpui_cases;
 
-    use crate::tests::{add_sheet, dispatcher_with_engine};
+    use crate::tests::{add_sheet, fake_dispatcher};
 
     const FOCUS_RULE: &str = "input:focus { width: 60px }";
     const HOVER_RULE: &str = "div:hover { width: 60px }";
@@ -52,7 +52,7 @@ mod tests {
         #[case] css: &str,
         #[case] expected: bool,
     ) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         add_sheet(&host, css);
         let cx = cx.add_empty_window();
 

@@ -272,7 +272,9 @@ impl EventSink for EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::{RECORDER, dispatcher_with_engine, listen, seen, seen_rows, tree_of_three};
+    use crate::tests::{
+        RECORDER, dispatcher_with_engine, fake_dispatcher, listen, seen, seen_rows, tree_of_three,
+    };
     use gpui::TestAppContext;
     use inca_document::EVENTS;
     use inca_document::{EventPayload, MousePayload, PointerSource, WheelPayload};
@@ -284,20 +286,20 @@ mod tests {
     /// range must not panic, only fail to set any bit.
     #[test]
     fn an_out_of_range_button_does_not_panic() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         assert_eq!(dispatcher.update_held_buttons("mousedown", 200), 0);
         assert_eq!(dispatcher.host.window.borrow().held_buttons, 0);
     }
 
     #[test]
     fn a_right_mousedown_sets_the_right_buttons_bit() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         assert_eq!(dispatcher.update_held_buttons("mousedown", 2), 0b0_0010);
     }
 
     #[test]
     fn a_middle_mousedown_sets_the_middle_buttons_bit() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         assert_eq!(dispatcher.update_held_buttons("mousedown", 1), 0b0_0100);
     }
 
@@ -631,7 +633,7 @@ mod tests {
 
     #[test]
     fn a_target_gone_from_the_tree_falls_back_to_the_current_target() {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         let [_, parent, child] = tree_of_three(&host);
         assert_eq!(dispatcher.resolve(Some(child), parent), child);
         host.document.borrow_mut().tree.destroy_node(child);
@@ -731,7 +733,7 @@ mod tests {
 
     #[gpui::test]
     fn the_element_of_the_document_answers_with_the_parked_handle(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         park(cx, &dispatcher);
         let root = host.document.borrow().root();
 
@@ -740,7 +742,7 @@ mod tests {
 
     #[gpui::test]
     fn the_root_outside_the_document_answers_with_no_handle(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         park(cx, &dispatcher);
         let root = {
             let host = &mut *host.document.borrow_mut();

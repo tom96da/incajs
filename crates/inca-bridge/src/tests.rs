@@ -41,41 +41,6 @@ pub(crate) fn dispatcher_on_clock(clock: Clock) -> (EventDispatcher, Rc<Host>) {
     (dispatcher, host)
 }
 
-pub(crate) fn at(x: f32, y: f32) -> gpui::Point<gpui::Pixels> {
-    point(px(x), px(y))
-}
-
-pub(crate) fn mouse_at(x: f32, y: f32) -> EventPayload {
-    EventPayload::Mouse(MousePayload::at(x, y, inca_document::Modifiers::none()))
-}
-
-/// A `click` from the mouse pointer.
-pub(crate) fn pointer_click() -> EventPayload {
-    EventPayload::Mouse(MousePayload {
-        pointer: Some(PointerSource::Mouse),
-        ..MousePayload::at(1.0, 1.0, inca_document::Modifiers::none())
-    })
-}
-
-pub(crate) fn wheel_at(x: f32, y: f32) -> EventPayload {
-    EventPayload::Wheel(WheelPayload {
-        mouse: MousePayload::at(x, y, inca_document::Modifiers::none()),
-        delta_x: 0.0,
-        delta_y: 1.0,
-        delta_z: 0.0,
-        delta_mode: 0,
-    })
-}
-
-pub(crate) fn key_payload(modifiers: inca_document::Modifiers) -> EventPayload {
-    EventPayload::Key(inca_document::KeyPayload {
-        key: "a".into(),
-        repeat: false,
-        modifiers,
-        is_composing: false,
-    })
-}
-
 // Snapshot per call: [type, bubbles, cancelable, composed, defaultPrevented
 // before, defaultPrevented after preventDefault(), eventPhase,
 // currentTarget, isTrusted, timeStamp].
@@ -138,25 +103,6 @@ pub(crate) fn listen_global(
         .unwrap();
 }
 
-pub(crate) fn tree_of_three(host: &Rc<Host>) -> [NodeId; 3] {
-    let mut h = host.document.borrow_mut();
-    let outer = h.tree.create_node("div").unwrap();
-    let parent = h.tree.create_node("div").unwrap();
-    let child = h.tree.create_node("div").unwrap();
-    h.tree.append_child(outer, parent).unwrap();
-    h.tree.append_child(parent, child).unwrap();
-    [outer, parent, child]
-}
-
-/// A new node under the host root, so an event at it also reaches document and window.
-pub(crate) fn node_under_root(host: &Rc<Host>) -> NodeId {
-    let mut h = host.document.borrow_mut();
-    let node = h.tree.create_node("div").unwrap();
-    let root = h.root();
-    h.tree.append_child(root, node).unwrap();
-    node
-}
-
 /// Returns `globalThis.out` as JSON.
 pub(crate) fn read_out(dispatcher: &EventDispatcher) -> serde_json::Value {
     let json = dispatcher
@@ -188,20 +134,6 @@ pub(crate) fn callback_stored(engine: &inca_jsenv::Engine, id: u32) -> bool {
 
 pub(crate) fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::Value {
     crate::test_support::json_of(&dispatcher.engine, js)
-}
-
-/// Whether `node` matches the state class `class`.
-pub(crate) fn state(host: &DocumentState, node: NodeId, class: &str) -> bool {
-    inca_style::matches_selector(&host.tree, node, class).unwrap()
-}
-
-/// Appends a `<style>` element that holds `css` under the root.
-pub(crate) fn add_sheet(host: &Host, css: &str) {
-    let host = &mut *host.document.borrow_mut();
-    let [style, text] = ["style", "#text"].map(|tag| host.tree.create_node(tag).unwrap());
-    host.tree.set_data(text, css).unwrap();
-    host.tree.append_child(style, text).unwrap();
-    host.tree.append_child(host.root(), style).unwrap();
 }
 
 pub(crate) mod keys;
@@ -475,82 +407,6 @@ pub(crate) fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<Host>) -> N
     node
 }
 
-/// A view whose render runs `begin_frame`, as a window's render does.
-pub(crate) struct Frame(pub(crate) Rc<EventDispatcher>);
-
-impl gpui::Render for Frame {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl gpui::IntoElement {
-        self.0.begin_frame(window, cx);
-        gpui::div()
-    }
-}
-
-pub(crate) fn draw(cx: &mut TestAppContext, window: gpui::WindowHandle<Frame>) {
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-}
-
-pub(crate) fn set_active(
-    cx: &mut TestAppContext,
-    window: gpui::WindowHandle<Frame>,
-    dispatcher: &EventDispatcher,
-    active: bool,
-) {
-    cx.update_window(window.into(), |_, window, cx| {
-        dispatcher.window_activated(active, window, cx);
-    })
-    .unwrap();
-}
-
-pub(crate) fn is_focused(host: &DocumentState, node: NodeId) -> bool {
-    state(host, node, ":focus")
-}
-
-pub(crate) fn focus_scene(
-    cx: &mut TestAppContext,
-) -> (
-    Rc<crate::EventDispatcher>,
-    Rc<crate::Host>,
-    gpui::WindowHandle<Frame>,
-    u32,
-) {
-    let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let node = focusable_node(&dispatcher, &host);
-    let dispatcher = Rc::new(dispatcher);
-    let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
-    (dispatcher, host, window, node)
-}
-
-/// A focusable node under the root of `host`, on which no script listens.
-pub(crate) fn fake_focusable_node(host: &Rc<Host>) -> NodeId {
-    let mut host = host.document.borrow_mut();
-    let node = host.tree.create_node("div").unwrap();
-    let root = host.root();
-    host.tree.append_child(root, node).unwrap();
-    host.tree
-        .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
-        .unwrap();
-    host.focus.mark_tab_dirty(node);
-    node
-}
-
-/// A window over one focusable node, on a [`FakeScript`].
-pub(crate) fn fake_focus_scene(
-    cx: &mut TestAppContext,
-) -> (
-    Rc<EventDispatcher>,
-    Rc<Host>,
-    Rc<FakeScript>,
-    gpui::WindowHandle<Frame>,
-    NodeId,
-) {
-    let (dispatcher, host, fake) = fake_dispatcher();
-    let node = fake_focusable_node(&host);
-    let dispatcher = Rc::new(dispatcher);
-    let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
-    (dispatcher, host, fake, window, node)
-}
-
 /// Runs `body` as a function body next to the natives `n`, a new div `id` and its list `list`.
 /// `class` is the class attribute of the div, absent for `None`. A `freed` div is destroyed after
 /// the list is read from it. Returns what `body` returns, as JSON.
@@ -582,3 +438,144 @@ pub(crate) fn list_exec(class: Option<&str>, freed: bool, body: &str) -> serde_j
 pub(crate) fn list_run(class: Option<&str>, body: &str) -> serde_json::Value {
     list_exec(class, false, body)
 }
+
+/// The helpers that need no JS engine: trees, payloads, windows and fake-script scenes. They are
+/// the part of this file that moves with the dispatch.
+pub(crate) mod native {
+    use super::*;
+
+    pub(crate) fn at(x: f32, y: f32) -> gpui::Point<gpui::Pixels> {
+        point(px(x), px(y))
+    }
+
+    pub(crate) fn mouse_at(x: f32, y: f32) -> EventPayload {
+        EventPayload::Mouse(MousePayload::at(x, y, inca_document::Modifiers::none()))
+    }
+
+    /// A `click` from the mouse pointer.
+    pub(crate) fn pointer_click() -> EventPayload {
+        EventPayload::Mouse(MousePayload {
+            pointer: Some(PointerSource::Mouse),
+            ..MousePayload::at(1.0, 1.0, inca_document::Modifiers::none())
+        })
+    }
+
+    pub(crate) fn wheel_at(x: f32, y: f32) -> EventPayload {
+        EventPayload::Wheel(WheelPayload {
+            mouse: MousePayload::at(x, y, inca_document::Modifiers::none()),
+            delta_x: 0.0,
+            delta_y: 1.0,
+            delta_z: 0.0,
+            delta_mode: 0,
+        })
+    }
+
+    pub(crate) fn key_payload(modifiers: inca_document::Modifiers) -> EventPayload {
+        EventPayload::Key(inca_document::KeyPayload {
+            key: "a".into(),
+            repeat: false,
+            modifiers,
+            is_composing: false,
+        })
+    }
+
+    pub(crate) fn tree_of_three(host: &Rc<Host>) -> [NodeId; 3] {
+        let mut h = host.document.borrow_mut();
+        let outer = h.tree.create_node("div").unwrap();
+        let parent = h.tree.create_node("div").unwrap();
+        let child = h.tree.create_node("div").unwrap();
+        h.tree.append_child(outer, parent).unwrap();
+        h.tree.append_child(parent, child).unwrap();
+        [outer, parent, child]
+    }
+
+    /// A new node under the host root, so an event at it also reaches document and window.
+    pub(crate) fn node_under_root(host: &Rc<Host>) -> NodeId {
+        let mut h = host.document.borrow_mut();
+        let node = h.tree.create_node("div").unwrap();
+        let root = h.root();
+        h.tree.append_child(root, node).unwrap();
+        node
+    }
+
+    /// Whether `node` matches the state class `class`.
+    pub(crate) fn state(host: &DocumentState, node: NodeId, class: &str) -> bool {
+        inca_style::matches_selector(&host.tree, node, class).unwrap()
+    }
+
+    /// Appends a `<style>` element that holds `css` under the root.
+    pub(crate) fn add_sheet(host: &Host, css: &str) {
+        let host = &mut *host.document.borrow_mut();
+        let [style, text] = ["style", "#text"].map(|tag| host.tree.create_node(tag).unwrap());
+        host.tree.set_data(text, css).unwrap();
+        host.tree.append_child(style, text).unwrap();
+        host.tree.append_child(host.root(), style).unwrap();
+    }
+
+    /// A view whose render runs `begin_frame`, as a window's render does.
+    pub(crate) struct Frame(pub(crate) Rc<EventDispatcher>);
+
+    impl gpui::Render for Frame {
+        fn render(
+            &mut self,
+            window: &mut Window,
+            cx: &mut Context<Self>,
+        ) -> impl gpui::IntoElement {
+            self.0.begin_frame(window, cx);
+            gpui::div()
+        }
+    }
+
+    pub(crate) fn draw(cx: &mut TestAppContext, window: gpui::WindowHandle<Frame>) {
+        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
+            .unwrap();
+    }
+
+    pub(crate) fn set_active(
+        cx: &mut TestAppContext,
+        window: gpui::WindowHandle<Frame>,
+        dispatcher: &EventDispatcher,
+        active: bool,
+    ) {
+        cx.update_window(window.into(), |_, window, cx| {
+            dispatcher.window_activated(active, window, cx);
+        })
+        .unwrap();
+    }
+
+    pub(crate) fn is_focused(host: &DocumentState, node: NodeId) -> bool {
+        state(host, node, ":focus")
+    }
+
+    /// A focusable node under the root of `host`, on which no script listens.
+    pub(crate) fn fake_focusable_node(host: &Rc<Host>) -> NodeId {
+        let mut host = host.document.borrow_mut();
+        let node = host.tree.create_node("div").unwrap();
+        let root = host.root();
+        host.tree.append_child(root, node).unwrap();
+        host.tree
+            .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
+            .unwrap();
+        host.focus.mark_tab_dirty(node);
+        node
+    }
+
+    /// A window over one focusable node, on a [`FakeScript`].
+    pub(crate) fn fake_focus_scene(
+        cx: &mut TestAppContext,
+    ) -> (
+        Rc<EventDispatcher>,
+        Rc<Host>,
+        Rc<FakeScript>,
+        gpui::WindowHandle<Frame>,
+        NodeId,
+    ) {
+        let (dispatcher, host, fake) = fake_dispatcher();
+        let node = fake_focusable_node(&host);
+        let dispatcher = Rc::new(dispatcher);
+        let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
+        (dispatcher, host, fake, window, node)
+    }
+}
+
+pub(crate) use native::*;
