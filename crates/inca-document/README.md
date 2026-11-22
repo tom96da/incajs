@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # inca-document
 
 What the elements of an `inca-node` tree mean beyond their attributes, how a document is built and
-changed, the focus model and the geometry of boxes.
+changed, the state of a document, the event model, the focus model and the geometry of boxes.
 
 Everything here is plain data and functions.
 
@@ -29,6 +29,21 @@ focus.
 `style` attribute as style props, and warnings go to a `StyleWarnings` sink. `insert_parsed`,
 `replace_children` and `replace_with` are the markup setters, and `apply_removals` carries the focus
 steps of a tree call that moved or removed nodes. The `text` module holds the text-control model.
+`DocumentState` holds the tree with its cascade, the listeners, the signals and the focus, and
+`StyleWarnings` collects the warnings of a style write.
+
+## Events
+
+`EVENTS` and `Flags` describe each event type. `EventPayload`, `Modifiers` and the other plain
+payloads carry what an event reports. `EventListeners`, `Signals` and `Links` hold the listeners and
+the abort signals and links of a document. `EventTargetId` names a target, `Walk` describes one
+dispatch and `deliver` runs it through an `Invoke`. `key_code` and `keypress_code` give the `code`
+of a key.
+
+## View
+
+`View` is the window as the document sees it: the boxes of the last drawn frame, the scroll
+positions, the held mouse buttons and the reveals that wait for a box.
 
 ## Geometry
 

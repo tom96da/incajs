@@ -55,7 +55,7 @@ incajs/
 ├── crates/
 │   ├── inca-node/           # retained tree and input text
 │   ├── inca-style/          # selectors, style sheets, cascade, inline style and element spec
-│   ├── inca-document/       # element semantics, the document and markup steps, the focus model, box geometry and the text-control model
+│   ├── inca-document/       # element semantics, the document state and markup steps, the event model, the focus model, box geometry and the text-control model
 │   ├── inca-gpui/           # GPUI rendering, the focus handles, wheel wiring and the event table
 │   ├── inca-bridge/         # binds a QuickJS realm to the retained tree: the `__inca_native__` bridge and event dispatch
 │   ├── inca-jsenv/          # the QuickJS Engine, module loader, value inspection and host objects such as `console`
