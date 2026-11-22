@@ -3,7 +3,6 @@
 
 //! `AbortSignal.any()`.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use inca_jsenv::class::{Method, iterate, method_of};
@@ -20,7 +19,7 @@ const ITEM: &str = "AbortSignal.any takes signals. pass only AbortSignal items";
 /// abort, or is aborted already with the reason of the first aborted source.
 pub(super) fn any<'js>(
     ctx: &Ctx<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     signals: Option<&Value<'js>>,
 ) -> JsResult<Class<'js, IncaSignal<'js>>> {
     let not_iterable = || Exception::throw_type(ctx, ITERABLE);
@@ -39,10 +38,13 @@ pub(super) fn any<'js>(
     let table = Table::open(ctx)?;
     let aborted = sources
         .iter()
-        .find(|s| host.borrow().signals.is_aborted(s.borrow().id()));
+        .find(|s| host.document.borrow().signals.is_aborted(s.borrow().id()));
     if let Some(source) = aborted {
         let result = new_signal(ctx, host, &table, false)?;
-        host.borrow_mut().signals.mark_aborted(result.borrow().id());
+        host.document
+            .borrow_mut()
+            .signals
+            .mark_aborted(result.borrow().id());
         if let Some(reason) = source.borrow().reason() {
             result.borrow().set_reason(reason);
         }
@@ -50,7 +52,8 @@ pub(super) fn any<'js>(
     }
     let result = new_signal(ctx, host, &table, true)?;
     let ids: Vec<u32> = sources.iter().map(|s| s.borrow().id()).collect();
-    host.borrow_mut()
+    host.document
+        .borrow_mut()
         .signals
         .link_dependent(result.borrow().id(), &ids);
     Ok(result)
@@ -442,7 +445,7 @@ mod tests {
         collect(&f);
 
         assert_eq!(f.json("(c.abort(), s.aborted)"), json!(true));
-        assert!(!f.host.borrow().signals.contains(2));
+        assert!(!f.host.document.borrow().signals.contains(2));
     }
 
     #[test]

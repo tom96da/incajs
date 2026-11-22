@@ -62,14 +62,14 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let first = self.host.borrow().held_buttons == 0;
+        let first = self.host.window.borrow().held_buttons == 0;
         self.update_held_buttons("mousedown", button);
         self.begin_pointer(payload, button, window, cx);
         let target = self.captured_or(target);
         self.state.press_target.set(Some(target));
         if button <= 1 {
             let path = self.path_from(target);
-            let changed = self.host.borrow_mut().tree.set_active_path(&path);
+            let changed = self.host.document.borrow_mut().tree.set_active_path(&path);
             self.restyle(changed, true, window);
         }
         let pointer = pointer_payload(payload, button);
@@ -118,8 +118,8 @@ impl EventDispatcher {
         }
         if last {
             self.state.pointerdown_canceled.set(false);
-            if self.host.borrow().capture_active.is_some() {
-                self.host.borrow_mut().capture_pending = None;
+            if self.host.window.borrow().capture_active.is_some() {
+                self.host.document.borrow_mut().capture_pending = None;
                 self.process_capture(payload, button, window, cx);
                 self.state.captured_release.set(Some((target, button)));
             }
@@ -128,34 +128,34 @@ impl EventDispatcher {
 
     /// Clears the pressed path and redraws when a rule reads it.
     pub(super) fn clear_press(&self, window: &mut Window) {
-        let changed = self.host.borrow_mut().tree.set_active_path(&[]);
+        let changed = self.host.document.borrow_mut().tree.set_active_path(&[]);
         self.restyle(changed, true, window);
     }
 
     /// Returns `payload` with its `buttons` bitmask set to
-    /// [`Host::held_buttons`](crate::Host::held_buttons) unless the event carries the buttons of
+    /// [`WindowState::held_buttons`](crate::WindowState::held_buttons) unless the event carries the buttons of
     /// its own press or release.
     pub(super) fn with_held_buttons(&self, event: &str, mut payload: EventPayload) -> EventPayload {
-        let held = self.host.borrow().held_buttons;
+        let held = self.host.window.borrow().held_buttons;
         if let Some(mouse) = payload.mouse_mut().filter(|_| !spec_of(event).own_buttons) {
             mouse.buttons = held;
         }
         payload
     }
 
-    /// Updates [`Host::held_buttons`](crate::Host::held_buttons) for a raw `"mousedown"` or
+    /// Updates [`WindowState::held_buttons`](crate::WindowState::held_buttons) for a raw `"mousedown"` or
     /// `"mouseup"` of `button` and returns the new value. `button` is `MousePayload`'s own field, a
     /// public part of `inca-gpui`'s API, so an out-of-range value (only 0..=4 are ever produced by
     /// this crate) is handled: [`buttons_mask`] maps it to 0.
     pub(crate) fn update_held_buttons(&self, event: &str, button: u8) -> u8 {
         let bit = buttons_mask(button);
-        let mut host = self.host.borrow_mut();
+        let mut window = self.host.window.borrow_mut();
         match event {
-            "mousedown" => host.held_buttons |= bit,
-            "mouseup" => host.held_buttons &= !bit,
+            "mousedown" => window.held_buttons |= bit,
+            "mouseup" => window.held_buttons &= !bit,
             _ => {}
         }
-        host.held_buttons
+        window.held_buttons
     }
 
     /// Returns `payload` with `movementX`/`movementY` set to the delta of the
@@ -176,9 +176,11 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::pointer::{Scene, scene};
-    use crate::tests::state;
-    use crate::tests::{at, dispatcher_with_engine, mouse_at, wheel_at};
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
+
+    use crate::tests::pointer::{Scene, js_scene, scene};
+    use crate::tests::{at, fake_dispatcher, mouse_at, request_capture, state, wheel_at};
     use gpui::TestAppContext;
     use inca_document::{EventPayload, MousePayload};
     use inca_gpui::EventSink as _;
@@ -246,52 +248,71 @@ mod tests {
     #[gpui::test]
     fn extra_button_changes_fire_pointermove(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.listen(
-            s.a,
-            "pointermove",
-            "(e) => out.push([e.button, e.buttons, e.which].join())",
-        );
         s.down(s.a, 0);
-        s.take();
+        s.take_walks();
         s.down(s.a, 2);
         s.up(s.a, s.a, 0);
-        let got: Vec<_> = s.take().into_iter().filter(|e| !e.contains('@')).collect();
-        assert_eq!(got, ["2,3,3", "0,2,1"]);
+        let got: Vec<_> = s
+            .take_walks()
+            .iter()
+            .filter(|walked| walked.name == "pointermove")
+            .map(|walked| (walked.mouse().button, walked.mouse().buttons))
+            .collect();
+        assert_eq!(got, [(2, 3), (0, 2)]);
     }
 
     #[gpui::test]
     fn pointermove_shares_movement_with_mousemove(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        let note = "(e) => out.push([e.type, e.movementX, e.movementY].join())";
-        s.listen(s.a, "pointermove", note);
-        s.listen(s.a, "mousemove", note);
         s.moved(s.a, (10.0, 10.0));
-        s.take();
+        s.take_walks();
         s.moved(s.a, (30.0, 5.0));
-        let got: Vec<_> = s.take().into_iter().filter(|e| !e.contains('@')).collect();
-        assert_eq!(got, ["pointermove,20,-5", "mousemove,20,-5"]);
+        let got: Vec<_> = s
+            .take_walks()
+            .iter()
+            .filter(|walked| walked.name.ends_with("move"))
+            .map(|walked| {
+                let mouse = walked.mouse();
+                (walked.name.clone(), mouse.movement_x, mouse.movement_y)
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("pointermove".to_owned(), 20.0, -5.0),
+                ("mousemove".to_owned(), 20.0, -5.0)
+            ]
+        );
     }
 
     #[gpui::test]
     fn pointer_boundary_events_report_related_targets(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        let note = "(e) => out.push(`${e.type}<${e.relatedTarget}:${e.bubbles}`)";
-        for event in ["pointerover", "pointerout", "pointerenter", "pointerleave"] {
-            s.listen(s.a, event, note);
-            s.listen(s.b, event, note);
-        }
         s.hover(s.a);
-        s.take();
+        s.take_walks();
         s.hover(s.b);
         let (a, b) = (s.a, s.b);
-        let got: Vec<_> = s.take().into_iter().filter(|e| e.contains('<')).collect();
+        let got: Vec<_> = s
+            .take_walks()
+            .iter()
+            .filter(|walked| walked.name.starts_with("pointer"))
+            .map(|walked| {
+                format!(
+                    "{}@{}<{}:{}",
+                    walked.name,
+                    walked.target_text(),
+                    walked.related().unwrap(),
+                    walked.bubbles
+                )
+            })
+            .collect();
         assert_eq!(
             got,
             [
-                format!("pointerout<{b}:true"),
-                format!("pointerleave<{b}:false"),
-                format!("pointerover<{a}:true"),
-                format!("pointerenter<{a}:false"),
+                format!("pointerout@{a}<{b}:true"),
+                format!("pointerleave@{a}<{b}:false"),
+                format!("pointerover@{b}<{a}:true"),
+                format!("pointerenter@{b}<{a}:false"),
             ]
         );
     }
@@ -323,24 +344,10 @@ mod tests {
     #[gpui::test]
     fn a_canceled_pointerdown_suppresses_mouse_events_until_pointerup(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.eval("globalThis.cancel = true;");
-        s.listen(
-            s.a,
-            "pointerdown",
-            r"
-            (e) => {
-                if (cancel) {
-                    e.preventDefault();
-                }
-            }
-            ",
-        );
-        let root = s.host.borrow().root();
-        s.listen(
-            root,
-            "click",
-            "(e) => e.eventPhase === 2 && out.push(`${e.type}@${e.target}`)",
-        );
+        let cancel = Rc::new(Cell::new(true));
+        s.cancel("pointerdown", Rc::clone(&cancel));
+        let root = s.host.document.borrow().root();
+        s.watch(root);
         s.hover(s.a);
         s.take();
         s.down(s.a, 0);
@@ -348,7 +355,7 @@ mod tests {
         s.up(s.b, s.a, 0);
         let (a, b) = (s.a, s.b);
         let held = s.take();
-        s.eval("globalThis.cancel = false;");
+        cancel.set(false);
         s.moved(s.b, (6.0, 6.0));
         let after_up = s.take();
         s.down(s.a, 0);
@@ -377,9 +384,11 @@ mod tests {
         assert_eq!(next, [format!("pointerdown@{a}"), format!("mousedown@{a}")]);
     }
 
+    // The pointer fields, the button, the buttons, `which` and the pressure are what JS reads of
+    // the payload the dispatch builds, so these three run on an engine.
     #[gpui::test]
     fn pointer_events_carry_the_mouse_pointer_fields(cx: &mut TestAppContext) {
-        let mut s = scene(cx);
+        let mut s = js_scene(cx);
         let note = r"
             (e) => out.push([
                 e.type, e.pointerId, e.pointerType, e.isPrimary, e.width, e.height, e.detail
@@ -407,7 +416,7 @@ mod tests {
         cx: &mut TestAppContext,
         button: u8,
     ) {
-        let mut s = scene(cx);
+        let mut s = js_scene(cx);
         let note = r"
             (e) => out.push([e.type, e.button, e.buttons, e.which, e.pressure].join())
             ";
@@ -428,21 +437,31 @@ mod tests {
     }
 
     #[gpui::test]
-    fn deactivating_the_window_resets_the_pointer_state(cx: &mut TestAppContext) {
-        let mut s = scene(cx);
+    fn pointer_boundary_events_report_no_button(cx: &mut TestAppContext) {
+        let mut s = js_scene(cx);
         s.listen(
             s.a,
-            "pointerdown",
-            &format!(
-                r"
-                (e) => {{
-                    e.preventDefault();
-                    __inca_native__.setPointerCapture({}, 1);
-                }}
-                ",
-                s.a
-            ),
+            "pointerover",
+            "(e) => out.push([e.button, e.buttons, e.which, e.pressure].join())",
         );
+        s.down(s.b, 0);
+        s.hover(s.a);
+        let got: Vec<_> = s.take().into_iter().filter(|e| !e.contains('@')).collect();
+        assert_eq!(got, ["-1,1,0,0.5"]);
+    }
+
+    #[gpui::test]
+    fn deactivating_the_window_resets_the_pointer_state(cx: &mut TestAppContext) {
+        let mut s = scene(cx);
+        let host = Rc::clone(&s.host);
+        let a = s.a;
+        s.on_walk(move |walked| {
+            if walked.name == "pointerdown" {
+                request_capture(&host, a);
+                return true;
+            }
+            false
+        });
         s.moved(s.b, (5.0, 5.0));
         s.down(s.a, 0);
         s.moved(s.b, (6.0, 6.0));
@@ -460,25 +479,12 @@ mod tests {
             [&format!("pointermove@{b}"), &format!("mousemove@{b}")]
         );
         assert!(!got.iter().any(|e| e.starts_with("lostpointercapture")));
-        let host = s.host.borrow();
+        let pending = s.host.document.borrow().capture_pending;
+        let window = s.host.window.borrow();
         assert_eq!(
-            (host.held_buttons, host.capture_pending, host.capture_active),
+            (window.held_buttons, pending, window.capture_active),
             (0, None, None)
         );
-    }
-
-    #[gpui::test]
-    fn pointer_boundary_events_report_no_button(cx: &mut TestAppContext) {
-        let mut s = scene(cx);
-        s.listen(
-            s.a,
-            "pointerover",
-            "(e) => out.push([e.button, e.buttons, e.which, e.pressure].join())",
-        );
-        s.down(s.b, 0);
-        s.hover(s.a);
-        let got: Vec<_> = s.take().into_iter().filter(|e| !e.contains('@')).collect();
-        assert_eq!(got, ["-1,1,0,0.5"]);
     }
 
     fn movement_of(payload: &EventPayload) -> (f32, f32) {
@@ -491,7 +497,7 @@ mod tests {
 
     #[gpui::test]
     fn a_second_pointer_moved_in_one_cycle_keeps_the_first_delta(cx: &mut TestAppContext) {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         let cx = cx.add_empty_window();
         cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
 
@@ -507,7 +513,7 @@ mod tests {
 
     #[gpui::test]
     fn pointer_left_makes_the_next_move_report_zero(cx: &mut TestAppContext) {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         let cx = cx.add_empty_window();
         cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
 
@@ -523,7 +529,7 @@ mod tests {
 
     #[gpui::test]
     fn only_mousemove_takes_the_movement_of_the_raw_move(cx: &mut TestAppContext) {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         let cx = cx.add_empty_window();
         cx.update(|_, cx| dispatcher.pointer_moved(at(10.0, 10.0), cx));
 
@@ -549,7 +555,7 @@ mod tests {
 
     #[test]
     fn a_mousemove_with_no_raw_move_reports_zero() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
 
         let payload = dispatcher.with_movement(mouse_at(90.0, 90.0), "mousemove");
 
@@ -558,7 +564,7 @@ mod tests {
 
     #[test]
     fn a_click_or_key_payload_is_left_alone() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         dispatcher.state.last_position.set(Some((10.0, 10.0)));
 
         let payload = dispatcher.with_movement(EventPayload::None, "click");
@@ -566,11 +572,21 @@ mod tests {
     }
 
     fn pressed(s: &Scene, node: NodeId) -> bool {
-        state(&s.host.borrow(), node, ":active")
+        state(&s.host.document.borrow(), node, ":active")
     }
 
-    fn read_active(node: NodeId) -> String {
-        format!("() => out.push(String(__inca_native__.nodeHandle({node})[0].matches(':active')))")
+    /// Records into the returned cell whether `node` is `:active` at each walk of `name`.
+    fn active_at(s: &Scene, name: &'static str, node: NodeId) -> Rc<RefCell<Vec<bool>>> {
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let (host, log) = (Rc::clone(&s.host), Rc::clone(&seen));
+        s.on_walk(move |walked| {
+            if walked.name == name {
+                log.borrow_mut()
+                    .push(state(&host.document.borrow(), node, ":active"));
+            }
+            false
+        });
+        seen
     }
 
     #[gpui_cases]
@@ -582,20 +598,20 @@ mod tests {
         #[case] button: u8,
     ) {
         let mut s = scene(cx);
-        s.listen(s.a, "pointerdown", &read_active(s.a));
+        let seen = active_at(&s, "pointerdown", s.a);
         s.down(s.a, button);
 
-        assert!(s.take().contains(&"true".to_owned()));
+        assert_eq!(*seen.borrow(), [true]);
     }
 
     #[gpui::test]
     fn the_last_release_clears_the_press_before_pointerup_fires(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.listen(s.a, "pointerup", &read_active(s.a));
+        let seen = active_at(&s, "pointerup", s.a);
         s.down(s.a, 0);
         s.up(s.a, s.a, 0);
 
-        assert!(s.take().contains(&"false".to_owned()));
+        assert_eq!(*seen.borrow(), [false]);
     }
 
     #[gpui::test]
@@ -616,7 +632,7 @@ mod tests {
     ) {
         let mut s = scene(cx);
         let (button, child) = {
-            let tree = &mut s.host.borrow_mut().tree;
+            let tree = &mut s.host.document.borrow_mut().tree;
             let button = tree.create_node("button").unwrap();
             let child = tree.create_node("span").unwrap();
             tree.set_attribute(button, "disabled", true).unwrap();
@@ -627,7 +643,7 @@ mod tests {
         s.down(if on_child { child } else { button }, 0);
 
         assert!(pressed(&s, button));
-        assert!(pressed(&s, s.host.borrow().root()));
+        assert!(pressed(&s, s.host.document.borrow().root()));
     }
 
     #[gpui::test]
@@ -669,7 +685,7 @@ mod tests {
     fn a_move_out_of_the_pressed_node_moves_the_hover(cx: &mut TestAppContext) {
         let mut s = scene(cx);
         drag_out(&mut s);
-        let host = s.host.borrow();
+        let host = s.host.document.borrow();
 
         assert!(state(&host, s.b, ":hover"));
         assert!(!state(&host, s.a, ":hover"));
@@ -702,7 +718,7 @@ mod tests {
         let mut s = scene(cx);
         s.down(s.a, 0);
         {
-            let tree = &mut s.host.borrow_mut().tree;
+            let tree = &mut s.host.document.borrow_mut().tree;
             let root = tree.root().unwrap();
             tree.remove_child(root, s.a).unwrap();
             tree.insert_before(root, s.a, Some(s.b)).unwrap();

@@ -1,13 +1,12 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::Bounds;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
 use super::Natives;
+use inca_document::View;
 use inca_node::NodeId;
 
 use super::convert::{Flag, JsNodeId, existing_node, or_null};
@@ -21,9 +20,9 @@ pub(super) fn install_focus(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("layoutOf", layout_of)
 }
 
-fn focus_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId, Flag) -> JsResult<()> {
+fn focus_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, Flag) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), prevent_scroll| {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         existing_node(&ctx, &host.tree, node_id)?;
         host.focus
             .request_focus(node_id, prevent_scroll.0.flatten() != Some(true));
@@ -31,13 +30,13 @@ fn focus_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId, Flag)
     }
 }
 
-fn blur_node(host: Rc<RefCell<Host>>) -> impl Fn(JsNodeId) {
-    move |JsNodeId(node_id)| host.borrow_mut().focus.request_blur(node_id)
+fn blur_node(host: Rc<Host>) -> impl Fn(JsNodeId) {
+    move |JsNodeId(node_id)| host.document.borrow_mut().focus.request_blur(node_id)
 }
 
-fn focused_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>) -> JsResult<Value<'js>> {
+fn focused_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>) -> JsResult<Value<'js>> {
     move |ctx| {
-        let host = host.borrow();
+        let host = host.document.borrow();
         or_null(&ctx, host.focus.active_node(&host.tree, &host.style))
     }
 }
@@ -46,29 +45,28 @@ fn focused_node<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>) -> JsResult<V
 /// scroll offset applied to the box and the two gutters. A node that is not connected has none,
 /// whatever the frame record still holds, and an id the tree does not have is not connected.
 pub(super) fn node_box(host: &Host, id: NodeId) -> Option<[f64; 9]> {
-    if !host.tree.is_connected(id) {
+    if !host.document.borrow().tree.is_connected(id) {
         return None;
     }
-    host.layout_of(id).map(|layout| {
-        let Bounds { origin, size } = layout.bounds;
+    host.window.borrow().node_box(id).map(|b| {
         [
-            origin.x,
-            origin.y,
-            size.width,
-            size.height,
-            layout.border,
-            layout.scroll.x,
-            layout.scroll.y,
-            layout.gutter.width,
-            layout.gutter.height,
+            b.rect.x,
+            b.rect.y,
+            b.rect.width,
+            b.rect.height,
+            b.border,
+            b.scroll.0,
+            b.scroll.1,
+            b.gutter.0,
+            b.gutter.1,
         ]
-        .map(|px| f64::from(f32::from(px)))
+        .map(f64::from)
     })
 }
 
-fn layout_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
+fn layout_of<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
-        let rect = node_box(&host.borrow(), node_id);
+        let rect = node_box(&host, node_id);
         or_null(&ctx, rect.as_ref().map(<[f64; 9]>::as_slice))
     }
 }
@@ -78,6 +76,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::test_support::engine_with_bindings;
+    use gpui::Bounds;
     use inca_gpui::NodeLayout;
     use inca_node::AttributeValue;
 
@@ -87,7 +86,7 @@ mod tests {
         let node: u32 = engine
             .eval("globalThis.n = __inca_native__.createNode('div')")
             .unwrap();
-        let dirty = |host: &Rc<RefCell<Host>>| host.borrow_mut().focus.take_tab_dirty();
+        let dirty = |host: &Rc<Host>| host.document.borrow_mut().focus.take_tab_dirty();
         assert!(dirty(&host).is_empty());
 
         engine
@@ -124,7 +123,7 @@ mod tests {
         engine
             .eval::<()>("__inca_native__.setAttribute(n, 'tabIndex', 1)")
             .unwrap();
-        let host = host.borrow();
+        let host = host.document.borrow();
         let attrs = host.tree.get(node).unwrap().attributes();
         assert_eq!(attrs.get("tabindex"), Some(&AttributeValue::Number(1.0)));
         assert!(!attrs.contains_key("tabIndex"));
@@ -186,7 +185,11 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.borrow().layout.borrow_mut().insert(node, layout(1.5));
+        host.window
+            .borrow()
+            .layout
+            .borrow_mut()
+            .insert(node, layout(1.5));
 
         let read: Vec<f64> = engine
             .eval(&format!("__inca_native__.layoutOf({node})"))
@@ -221,7 +224,11 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.borrow().layout.borrow_mut().insert(node, layout(1.5));
+        host.window
+            .borrow()
+            .layout
+            .borrow_mut()
+            .insert(node, layout(1.5));
 
         let got: Vec<bool> = engine
             .eval("[__inca_native__.layoutOf(id) === null, __inca_native__.layoutOf(999) === null]")

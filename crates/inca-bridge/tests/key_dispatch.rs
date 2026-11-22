@@ -23,7 +23,7 @@ use inca_test_macros::gpui_cases;
 use inca_bridge::test_support;
 
 /// A focusable parent wrapping a focusable child.
-fn build_key_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
+fn build_key_pair() -> (Rc<Host>, NodeId, NodeId) {
     let (host, parent, children) = test_support::focusable_tree(1, true);
     (host, parent, children[0])
 }
@@ -48,8 +48,12 @@ fn a_keystroke() -> Keystroke {
 #[gpui::test]
 fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
     let (host, parent, child) = build_key_pair();
-    let root = host.borrow().root();
-    host.borrow_mut().tree.append_child(root, parent).unwrap();
+    let root = host.document.borrow().root();
+    host.document
+        .borrow_mut()
+        .tree
+        .append_child(root, parent)
+        .unwrap();
     let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
     listen_for_keys(
@@ -97,7 +101,7 @@ gpui::actions!(key_dispatch_tests, [Bound]);
 
 /// A window of the `build_key_pair` tree with its child focused. The parent
 /// and the child run `js` for `keydown` and `keyup`.
-type Pair = (AnyWindowHandle, Rc<Engine>, Rc<RefCell<Host>>, [NodeId; 2]);
+type Pair = (AnyWindowHandle, Rc<Engine>, Rc<Host>, [NodeId; 2]);
 
 fn focused_pair(cx: &mut TestAppContext, js: &str) -> Pair {
     let (host, parent, child) = build_key_pair();
@@ -106,7 +110,7 @@ fn focused_pair(cx: &mut TestAppContext, js: &str) -> Pair {
     listen_for_keys(&engine, [parent, child], js, false);
     let window = test_support::mount_active(cx, &host, &engine, parent);
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(child, true);
+        host.document.borrow_mut().focus.request_focus(child, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -230,7 +234,7 @@ fn a_key_event_nobody_listens_for_is_reported_to_the_platform_as_unhandled(
     cx: &mut TestAppContext,
 ) {
     let (window, engine, host, _) = focused_pair(cx, "seen.push(e.type); e.preventDefault();");
-    host.borrow_mut().listeners = EventListeners::default();
+    host.document.borrow_mut().listeners = EventListeners::default();
 
     let result = platform_result(cx, window, false, "a");
 
@@ -249,7 +253,7 @@ fn a_passive_key_listener_leaves_the_platform_result_untouched(
 ) {
     let js = "seen.push(e.type); e.preventDefault();";
     let (window, engine, host, nodes) = focused_pair(cx, js);
-    host.borrow_mut().listeners = EventListeners::default();
+    host.document.borrow_mut().listeners = EventListeners::default();
     listen_for_keys(&engine, nodes, js, true);
 
     let result = platform_result(cx, window, up, "a");
@@ -348,8 +352,12 @@ fn a_modifier_alone_fires_its_key_events_in_flag_order(cx: &mut TestAppContext) 
 #[gpui::test]
 fn a_modifier_alone_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
     let (host, parent, child) = build_key_pair();
-    let root = host.borrow().root();
-    host.borrow_mut().tree.append_child(root, parent).unwrap();
+    let root = host.document.borrow().root();
+    host.document
+        .borrow_mut()
+        .tree
+        .append_child(root, parent)
+        .unwrap();
     let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
     listen_for_keys(&engine, [parent, child], "seen.push('below');", false);

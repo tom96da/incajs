@@ -3,7 +3,6 @@
 
 //! Calls a listener of a JS event object and leaves the event idle.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use inca_jsenv::callbacks;
@@ -16,7 +15,7 @@ use inca_document::{EventTargetId, Invoke, Listener};
 /// Calls a listener of a JS event object in the engine context of the walk.
 pub(super) struct JsInvoke<'a, 'js> {
     pub(super) ctx: &'a Ctx<'js>,
-    pub(super) host: &'a Rc<RefCell<Host>>,
+    pub(super) host: &'a Rc<Host>,
     pub(super) event: &'a Class<'js, IncaEvent<'js>>,
 }
 
@@ -31,6 +30,7 @@ impl Invoke for JsInvoke<'_, '_> {
 
     fn listeners(&self, target: EventTargetId, name: &str) -> Vec<Listener> {
         self.host
+            .document
             .borrow()
             .listeners
             .listeners_for(target, name)
@@ -39,6 +39,7 @@ impl Invoke for JsInvoke<'_, '_> {
 
     fn is_registered(&self, target: EventTargetId, name: &str, listener: &Listener) -> bool {
         self.host
+            .document
             .borrow()
             .listeners
             .listeners_for(target, name)

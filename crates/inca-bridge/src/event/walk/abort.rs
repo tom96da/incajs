@@ -3,7 +3,6 @@
 
 //! The walk of the `abort` event of a signal.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use inca_document::EventPayload;
@@ -15,8 +14,8 @@ use crate::bindings::Host;
 
 /// Fires the trusted `abort` event at signal `id`. The event does not bubble and cannot be
 /// canceled. It enters the engine only when a listener of the signal exists. Listener errors go to
-/// `Host::failures`.
-pub(crate) fn fire_abort(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, id: u32) {
+/// `JsState::failures`.
+pub(crate) fn fire_abort(ctx: &Ctx<'_>, host: &Rc<Host>, id: u32) {
     let walk = Walk {
         name: "abort",
         flags: Flags::NONE,
@@ -25,7 +24,13 @@ pub(crate) fn fire_abort(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, id: u32) {
         payload: &EventPayload::None,
         trusted: true,
     };
-    if listened(&host.borrow(), walk.name, walk.flags, walk.target, walk.cut) {
+    if listened(
+        &host.document.borrow(),
+        walk.name,
+        walk.flags,
+        walk.target,
+        walk.cut,
+    ) {
         run(ctx, host, &walk, next_event_id(host));
     }
 }

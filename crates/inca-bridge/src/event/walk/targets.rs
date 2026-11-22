@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn dispatch_event_gives_an_unheard_event_its_target_object() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher.engine.eval::<()>(HOOK).unwrap();
         let got = eval_json(
             &dispatcher,
@@ -161,7 +161,7 @@ mod tests {
     #[gpui::test]
     fn a_throwing_hook_runs_no_listener(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher.engine.eval::<()>(THROWS).unwrap();
         listen(&dispatcher, node, "click", "() => out.push('ran')");
 
@@ -173,7 +173,7 @@ mod tests {
     #[gpui::test]
     fn a_throwing_hook_is_reported(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher.engine.eval::<()>(THROWS).unwrap();
         listen(&dispatcher, node, "click", "() => out.push('ran')");
 
@@ -186,7 +186,7 @@ mod tests {
     #[gpui::test]
     fn a_hook_that_returns_no_array_runs_no_listener(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>("globalThis.__inca_targets__ = () => 5;")
@@ -201,7 +201,7 @@ mod tests {
     #[gpui::test]
     fn a_hook_that_returns_no_array_is_reported(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>("globalThis.__inca_targets__ = () => 5;")
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn dispatch_event_throws_what_the_hook_throws() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher.engine.eval::<()>(THROWS).unwrap();
         let got = eval_json(
             &dispatcher,
@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn dispatch_event_throws_when_the_hook_returns_no_array() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>("globalThis.__inca_targets__ = () => 5;")
@@ -372,7 +372,7 @@ mod tests {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
         let (root, document) = {
-            let host = host.borrow();
+            let host = host.document.borrow();
             (host.root(), host.document())
         };
         dispatcher.engine.eval::<()>(HOOK).unwrap();
@@ -399,7 +399,7 @@ mod tests {
     fn the_window_captures_first_and_bubbles_last(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
-        let document = host.borrow().document();
+        let document = host.document.borrow().document();
         dispatcher.engine.eval::<()>(HOOK).unwrap();
         listen_global(
             &dispatcher,
@@ -483,7 +483,7 @@ mod tests {
     fn a_key_event_with_nothing_focused_starts_at_the_host_root(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let (root, document) = {
-            let host = host.borrow();
+            let host = host.document.borrow();
             (host.root(), host.document())
         };
         dispatcher.engine.eval::<()>(HOOK).unwrap();
@@ -520,8 +520,8 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        let document = host.borrow().document();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let document = host.document.borrow().document();
         dispatcher.engine.eval::<()>(HOOK).unwrap();
         listen(&dispatcher, node, "click", &note_walk("node"));
         listen(&dispatcher, document, "click", &note_walk("document"));

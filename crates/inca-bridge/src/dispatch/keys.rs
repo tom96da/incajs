@@ -91,21 +91,18 @@ impl EventDispatcher {
         let click = match (key, up) {
             ("tab", false) if plain => {
                 let moved = {
-                    let host = &mut *self.host.borrow_mut();
-                    let moved = host.focus.tab_move(
+                    let host = &mut *self.host.document.borrow_mut();
+                    host.focus.tab_move(
                         &host.tree,
                         &host.style,
                         host.document(),
                         window,
                         cx,
                         modifiers.shift,
-                    );
-                    if let Some(node) = moved {
-                        host.reveal(node, Align::Reveal, Align::CenterOutside);
-                    }
-                    moved
+                    )
                 };
                 if let Some(node) = moved {
+                    self.host.reveal(node, Align::Reveal, Align::CenterOutside);
                     self.select_input(node);
                 }
                 None
@@ -170,59 +167,46 @@ fn types_character(keystroke: &gpui::Keystroke, macos: bool) -> bool {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::dispatch::input::scene::{InputScene, input_scene, record, types};
-    use crate::tests::keys::{Scene, scene};
+    use crate::tests::keys::{Scene, input_scene, js_input_scene, js_scene, scene};
     use crate::tests::listen;
-    use gpui::{KeyUpEvent, Keystroke, PlatformInput, TestAppContext};
+    use gpui::{Keystroke, TestAppContext};
     use inca_gpui::InputRequest;
     use inca_node::NodeId;
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
 
-    /// Cancels `event` at `node`.
-    fn cancel(s: &InputScene, node: NodeId, event: &str) {
-        listen(&s.dispatcher, node, event, "(e) => e.preventDefault()");
-    }
-
-    /// Sends a key release.
-    fn key_up(s: &InputScene, cx: &mut TestAppContext, key: &str) {
-        let keystroke = Keystroke::parse_with_os(key, cx.read(|cx| cx.platform_info().os))
-            .unwrap()
-            .with_simulated_ime();
-        s.in_window(cx, |_, window, cx| {
-            window.dispatch_event(PlatformInput::KeyUp(KeyUpEvent { keystroke }), cx);
-        });
-        cx.run_until_parked();
+    /// The names of the `events` that reached the field of `s`.
+    fn at_field(s: &Scene, events: &[&str]) -> Vec<String> {
+        s.types(s.field, events)
     }
 
     #[gpui::test]
     fn a_typed_key_fires_keydown_keypress_beforeinput_input_in_order(cx: &mut TestAppContext) {
         let s = input_scene(cx, "");
-        record(
-            &s,
-            s.input,
-            &["keydown", "keypress", "beforeinput", "input", "keyup"],
-        );
-        s.focus(cx, s.input);
-        s.key(cx, "x");
-        key_up(&s, cx, "x");
+        s.focus(cx, s.field);
+        s.press(cx, "x");
+        s.release(cx, "x");
         assert_eq!(
-            types(&s),
+            at_field(
+                &s,
+                &["keydown", "keypress", "beforeinput", "input", "keyup"]
+            ),
             ["keydown", "keypress", "beforeinput", "input", "keyup"]
         );
     }
 
+    /// `charCode`, `keyCode` and `which` are read off the event by the script.
     #[gpui::test]
     fn a_keypress_of_enter_carries_the_character_code(cx: &mut TestAppContext) {
-        let s = input_scene(cx, "");
+        let s = js_input_scene(cx, "");
         listen(
             &s.dispatcher,
-            s.input,
+            s.field,
             "keypress",
             "(e) => out.push([e.key, e.charCode, e.keyCode, e.which, e.cancelable])",
         );
-        s.focus(cx, s.input);
-        s.key(cx, "enter");
+        s.focus(cx, s.field);
+        s.press(cx, "enter");
         assert_eq!(
             s.engine.eval::<String>("JSON.stringify(out)").unwrap(),
             r#"[["Enter",13,13,13,true]]"#
@@ -236,10 +220,13 @@ mod tests {
     #[case::backspace("backspace")]
     fn a_key_that_types_no_character_fires_no_keypress(cx: &mut TestAppContext, pressed: &str) {
         let s = input_scene(cx, "ab");
-        record(&s, s.input, &["keydown", "keypress"]);
-        s.focus(cx, s.input);
-        s.key(cx, pressed);
-        assert_eq!(types(&s), ["keydown"], "{pressed}");
+        s.focus(cx, s.field);
+        s.press(cx, pressed);
+        assert_eq!(
+            at_field(&s, &["keydown", "keypress"]),
+            ["keydown"],
+            "{pressed}"
+        );
     }
 
     #[gpui_cases]
@@ -252,10 +239,13 @@ mod tests {
         pressed: &str,
     ) {
         let s = input_scene(cx, "ab");
-        record(&s, s.input, &["keydown", "keypress"]);
-        s.focus(cx, s.input);
-        s.key(cx, pressed);
-        assert_eq!(types(&s), ["keydown"], "{pressed}");
+        s.focus(cx, s.field);
+        s.press(cx, pressed);
+        assert_eq!(
+            at_field(&s, &["keydown", "keypress"]),
+            ["keydown"],
+            "{pressed}"
+        );
     }
 
     #[rstest]
@@ -304,6 +294,7 @@ mod tests {
         assert!(!crate::dispatch::keys::types_character(&keystroke, true));
     }
 
+    /// `charCode`, `keyCode` and `which` are read off the event by the script.
     #[cfg(target_os = "macos")]
     #[gpui_cases]
     #[gpui::test]
@@ -314,15 +305,15 @@ mod tests {
         key: &str,
         code: u32,
     ) {
-        let s = input_scene(cx, "");
+        let s = js_input_scene(cx, "");
         listen(
             &s.dispatcher,
-            s.input,
+            s.field,
             "keypress",
             "(e) => out.push([e.key, e.charCode, e.keyCode, e.which])",
         );
-        s.focus(cx, s.input);
-        s.key(cx, pressed);
+        s.focus(cx, s.field);
+        s.press(cx, pressed);
         assert_eq!(
             s.engine.eval::<String>("JSON.stringify(out)").unwrap(),
             format!(r#"[["{key}",{code},{code},{code}]]"#),
@@ -336,50 +327,58 @@ mod tests {
     #[case::alt_a("alt-a->a")]
     fn an_alt_key_fires_no_keypress_off_macos(cx: &mut TestAppContext, pressed: &str) {
         let s = input_scene(cx, "");
-        record(&s, s.input, &["keydown", "keypress"]);
-        s.focus(cx, s.input);
-        s.key(cx, pressed);
-        assert_eq!(types(&s), ["keydown"], "{pressed}");
+        s.focus(cx, s.field);
+        s.press(cx, pressed);
+        assert_eq!(
+            at_field(&s, &["keydown", "keypress"]),
+            ["keydown"],
+            "{pressed}"
+        );
     }
 
     #[gpui::test]
     fn a_canceled_keydown_fires_no_keypress(cx: &mut TestAppContext) {
         let s = input_scene(cx, "");
-        record(&s, s.input, &["keydown", "keypress"]);
-        cancel(&s, s.input, "keydown");
-        s.focus(cx, s.input);
-        s.key(cx, "x");
-        assert_eq!(types(&s), ["keydown"]);
+        s.cancel_at(s.field, "keydown");
+        s.focus(cx, s.field);
+        s.press(cx, "x");
+        assert_eq!(at_field(&s, &["keydown", "keypress"]), ["keydown"]);
     }
 
     #[gpui::test]
     fn a_canceled_keypress_types_nothing(cx: &mut TestAppContext) {
         let s = input_scene(cx, "");
-        record(&s, s.input, &["keydown", "keypress", "beforeinput"]);
-        cancel(&s, s.input, "keypress");
-        s.focus(cx, s.input);
-        s.key(cx, "x");
-        assert_eq!(types(&s), ["keydown", "keypress"]);
+        s.cancel_at(s.field, "keypress");
+        s.focus(cx, s.field);
+        s.press(cx, "x");
+        assert_eq!(
+            at_field(&s, &["keydown", "keypress", "beforeinput"]),
+            ["keydown", "keypress"]
+        );
         assert_eq!(s.state().value(), "");
     }
 
     #[gpui::test]
     fn enter_in_an_input_fires_keypress_then_beforeinput(cx: &mut TestAppContext) {
         let s = input_scene(cx, "ab");
-        record(&s, s.input, &["keydown", "keypress", "beforeinput"]);
-        s.focus(cx, s.input);
-        s.key(cx, "enter");
-        assert_eq!(types(&s), ["keydown", "keypress", "beforeinput"]);
+        s.focus(cx, s.field);
+        s.press(cx, "enter");
+        assert_eq!(
+            at_field(&s, &["keydown", "keypress", "beforeinput"]),
+            ["keydown", "keypress", "beforeinput"]
+        );
     }
 
     #[gpui::test]
     fn a_canceled_keypress_of_enter_in_an_input_skips_beforeinput(cx: &mut TestAppContext) {
         let s = input_scene(cx, "ab");
-        record(&s, s.input, &["keydown", "keypress", "beforeinput"]);
-        cancel(&s, s.input, "keypress");
-        s.focus(cx, s.input);
-        s.key(cx, "enter");
-        assert_eq!(types(&s), ["keydown", "keypress"]);
+        s.cancel_at(s.field, "keypress");
+        s.focus(cx, s.field);
+        s.press(cx, "enter");
+        assert_eq!(
+            at_field(&s, &["keydown", "keypress", "beforeinput"]),
+            ["keydown", "keypress"]
+        );
     }
 
     #[gpui::test]
@@ -387,19 +386,20 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let s = input_scene(cx, "");
-        record(&s, s.button, &["keypress", "click"]);
-        cancel(&s, s.button, "keypress");
-        s.focus(cx, s.button);
-        s.key(cx, "space");
-        key_up(&s, cx, "space");
-        assert_eq!(types(&s), ["keypress", "click"]);
+        s.cancel_at(s.first, "keypress");
+        s.focus(cx, s.first);
+        s.press(cx, "space");
+        s.release(cx, "space");
+        assert_eq!(
+            s.types(s.first, &["keypress", "click"]),
+            ["keypress", "click"]
+        );
     }
 
     #[gpui::test]
     fn no_keypress_fires_during_a_composition(cx: &mut TestAppContext) {
         let s = input_scene(cx, "");
-        record(&s, s.input, &["keydown", "keypress"]);
-        s.focus(cx, s.input);
+        s.focus(cx, s.field);
         s.request(
             cx,
             InputRequest::Mark {
@@ -408,8 +408,8 @@ mod tests {
                 selected: None,
             },
         );
-        s.key(cx, "x");
-        assert_eq!(types(&s), ["keydown"]);
+        s.press(cx, "x");
+        assert_eq!(at_field(&s, &["keydown", "keypress"]), ["keydown"]);
     }
 
     /// The focus a `keydown` asks for applies at the next frame, so `keypress` goes to the node
@@ -419,26 +419,20 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let s = input_scene(cx, "");
-        record(&s, s.input, &["keypress"]);
-        listen(
-            &s.dispatcher,
-            s.button,
-            "keypress",
-            "(e) => out.push('button')",
-        );
-        listen(
-            &s.dispatcher,
-            s.input,
-            "keydown",
-            &format!("(e) => __inca_native__.focusNode({})", s.button),
-        );
-        s.focus(cx, s.input);
-        s.key(cx, "x");
-        assert_eq!(types(&s), ["keypress"]);
-        assert_eq!(
-            s.engine.eval::<String>("JSON.stringify(out)").unwrap(),
-            "[]"
-        );
+        let (host, button, field) = (s.host.clone(), s.first, s.field);
+        s.on_walk(move |walked| {
+            if walked.name == "keydown" && walked.target_text() == field.to_string() {
+                host.document
+                    .borrow_mut()
+                    .focus
+                    .request_focus(button, false);
+            }
+            false
+        });
+        s.focus(cx, s.field);
+        s.press(cx, "x");
+        assert_eq!(at_field(&s, &["keypress"]), ["keypress"]);
+        assert!(s.types(s.first, &["keypress"]).is_empty());
     }
 
     /// The `destroyNode` of the listener releases the listeners of the target, so the later
@@ -446,17 +440,25 @@ mod tests {
     /// target that is gone.
     #[gpui::test]
     fn a_keydown_that_destroys_its_node_fires_no_keypress(cx: &mut TestAppContext) {
-        let s = input_scene(cx, "");
-        record(&s, s.input, &["keypress"]);
+        let s = js_input_scene(cx, "");
         listen(
             &s.dispatcher,
-            s.input,
-            "keydown",
-            &format!("(e) => __inca_native__.destroyNode({})", s.input),
+            s.field,
+            "keypress",
+            "(e) => out.push('keypress')",
         );
-        s.focus(cx, s.input);
-        s.key(cx, "x");
-        assert!(types(&s).is_empty());
+        listen(
+            &s.dispatcher,
+            s.field,
+            "keydown",
+            &format!("(e) => __inca_native__.destroyNode({})", s.field),
+        );
+        s.focus(cx, s.field);
+        s.press(cx, "x");
+        assert_eq!(
+            s.engine.eval::<String>("JSON.stringify(out)").unwrap(),
+            "[]"
+        );
     }
 
     #[gpui::test]
@@ -507,31 +509,30 @@ mod tests {
     fn a_tab_move_reports_its_focus_events_on_the_next_frame(cx: &mut TestAppContext) {
         let s = scene(cx);
         s.focus(cx, s.first);
-        s.engine.eval::<()>("globalThis.moves = [];").unwrap();
-        for node in [s.first, s.second] {
-            for event in ["blur", "focus"] {
-                s.engine
-                    .eval::<()>(&format!(
-                        r"
-                        __inca_test_listen__({node}, '{event}', (e) => {{
-                            moves.push(`${{e.type}}:${{e.target}}:${{e.relatedTarget}}`);
-                        }});
-                        "
-                    ))
-                    .unwrap();
-            }
-        }
+        s.forget();
         s.key(cx, "tab", false, false);
         s.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
-        let got = s.engine.eval::<String>("moves.join()").unwrap();
         let (first, second) = (s.first, s.second);
-        assert_eq!(got, format!("blur:{first}:{second},focus:{second}:{first}"));
+        let moves: Vec<_> = s
+            .walks()
+            .iter()
+            .filter(|walked| matches!(walked.name.as_str(), "blur" | "focus"))
+            .map(|walked| (walked.label(), walked.related()))
+            .collect();
+        assert_eq!(
+            moves,
+            [
+                (format!("blur@{first}"), Some(second)),
+                (format!("focus@{second}"), Some(first))
+            ]
+        );
     }
 
     impl Scene {
         /// Moves `plain` between `first` and `second`.
         fn plain_between_the_buttons(&self) {
             self.host
+                .document
                 .borrow_mut()
                 .tree
                 .insert_before(self.parent, self.plain, Some(self.second))
@@ -552,16 +553,7 @@ mod tests {
     fn a_canceled_press_sets_where_tab_starts(cx: &mut TestAppContext) {
         let s = scene(cx);
         s.plain_between_the_buttons();
-        s.engine
-            .eval::<()>(&format!(
-                r"
-                __inca_test_listen__({}, 'mousedown', (e) => {{
-                    e.preventDefault();
-                }});
-                ",
-                s.plain
-            ))
-            .unwrap();
+        s.cancel_at(s.plain, "mousedown");
         s.mouse_down(cx, s.plain);
         s.key(cx, "tab", false, false);
         assert_eq!(s.focused(cx), Some(s.second));
@@ -572,7 +564,7 @@ mod tests {
         let s = scene(cx);
         s.plain_between_the_buttons();
         s.mouse_down(cx, s.plain);
-        let root = s.host.borrow().root();
+        let root = s.host.document.borrow().root();
         s.mouse_down(cx, root);
         s.key(cx, "shift-tab", false, false);
         assert_eq!(s.focused(cx), Some(s.field));
@@ -587,9 +579,10 @@ mod tests {
         assert_eq!(s.focused(cx), Some(s.first));
     }
 
+    /// The tab start follows what the native tree calls do to the pressed node.
     #[gpui::test]
     fn removing_the_pressed_node_moves_the_tab_start_before_it(cx: &mut TestAppContext) {
-        let s = scene(cx);
+        let s = js_scene(cx);
         s.plain_between_the_buttons();
         s.mouse_down(cx, s.plain);
         s.engine
@@ -611,7 +604,7 @@ mod tests {
         #[case] call: &str,
         #[case] focused: fn(&Scene) -> NodeId,
     ) {
-        let s = scene(cx);
+        let s = js_scene(cx);
         s.plain_between_the_buttons();
         s.mouse_down(cx, s.plain);
         let call = call
@@ -628,7 +621,7 @@ mod tests {
 
     #[gpui::test]
     fn moving_the_pressed_node_leaves_the_tab_start_in_its_place(cx: &mut TestAppContext) {
-        let s = scene(cx);
+        let s = js_scene(cx);
         s.plain_between_the_buttons();
         s.mouse_down(cx, s.plain);
         s.engine
@@ -643,7 +636,7 @@ mod tests {
 
     #[gpui::test]
     fn destroying_the_pressed_node_moves_the_tab_start_before_it(cx: &mut TestAppContext) {
-        let s = scene(cx);
+        let s = js_scene(cx);
         s.plain_between_the_buttons();
         s.mouse_down(cx, s.plain);
         s.engine
@@ -671,7 +664,7 @@ mod tests {
         s.focus(cx, s.first);
         s.key(cx, "ctrl-space", false, false);
         s.key(cx, "space", true, false);
-        assert_eq!(s.clicks(), Scene::click_of(s.first));
+        assert_eq!(s.clicks(), [s.first]);
     }
 
     #[gpui_cases]
@@ -687,22 +680,19 @@ mod tests {
         want: &str,
     ) {
         let s = scene(cx);
-        s.engine
-            .eval::<()>(&format!(
-                r"
-                __inca_test_listen__({}, 'click', (e) => {{
-                    globalThis.modifiers = [e.shiftKey, e.ctrlKey, e.altKey, e.metaKey].join();
-                }});
-                ",
-                s.first
-            ))
-            .unwrap();
         s.focus(cx, s.first);
         if up {
             s.key(cx, "space", false, false);
         }
         s.key(cx, key, up, false);
-        let got = s.engine.eval::<String>("globalThis.modifiers").unwrap();
+        let click = s
+            .walks()
+            .into_iter()
+            .find(|walked| walked.name == "click")
+            .unwrap()
+            .mouse();
+        let m = click.modifiers;
+        let got = format!("{},{},{},{}", m.shift(), m.control(), m.alt(), m.platform());
         assert_eq!(got, want);
     }
 
@@ -711,7 +701,7 @@ mod tests {
     fn removing_href_in_the_keydown_of_a_tab_press_moves_focus_past_the_link(
         cx: &mut TestAppContext,
     ) {
-        let s = scene(cx);
+        let s = js_scene(cx);
         let link = s.add_link(crate::test_support::HTML, "a", &[("href", "u")]);
         s.engine
             .eval::<()>(&format!(
@@ -736,7 +726,7 @@ mod tests {
         namespace: &str,
         attribute: &str,
     ) {
-        let s = scene(cx);
+        let s = js_scene(cx);
         let link = s.add_link(namespace, "a", &[(attribute, "u")]);
         s.focus(cx, link);
         s.engine

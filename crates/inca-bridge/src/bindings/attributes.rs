@@ -3,7 +3,6 @@
 
 //! Natives that read and write the attributes and styles of a node.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, IntoJs, Result as JsResult, Value};
@@ -13,16 +12,16 @@ use inca_node::{AttributeValue, NodeId, valid_attribute_name};
 use inca_style::style_warning;
 
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
-use super::host::Host;
+use super::host::{DocumentState, Host};
 use inca_style::{remove_style as remove_style_prop, set_style as set_style_prop};
 
 pub(super) fn set_attribute<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, Value<'js>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), key, raw| {
         let value = attribute_value_from_js(&ctx, &raw)?;
         check_attribute_name(&ctx, &key)?;
-        store_attribute(&ctx, &mut host.borrow_mut(), node_id, &key, value)
+        store_attribute(&ctx, &mut host.document.borrow_mut(), node_id, &key, value)
     }
 }
 
@@ -42,7 +41,7 @@ pub(super) fn check_attribute_name(ctx: &Ctx<'_>, name: &str) -> JsResult<()> {
 /// `style` and prints its warnings, and queues the focus re-check the key needs.
 pub(super) fn store_attribute(
     ctx: &Ctx<'_>,
-    host: &mut Host,
+    host: &mut DocumentState,
     node_id: NodeId,
     name: &str,
     value: AttributeValue,
@@ -56,7 +55,7 @@ pub(super) fn store_attribute(
 /// Removes the attribute `name` of the node `node_id` and queues the focus re-check the key needs.
 pub(super) fn drop_attribute(
     ctx: &Ctx<'_>,
-    host: &mut Host,
+    host: &mut DocumentState,
     node_id: NodeId,
     name: &str,
 ) -> JsResult<()> {
@@ -69,10 +68,10 @@ pub(super) fn drop_attribute(
 }
 
 pub(super) fn get_attribute<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), key| {
-        let host = host.borrow();
+        let host = host.document.borrow();
         let key = folded_key(&ctx, &host, node_id, &key)?;
         let node = existing_node(&ctx, &host.tree, node_id)?;
         attribute_value_to_js(&ctx, node.attributes().get(&key))
@@ -80,15 +79,17 @@ pub(super) fn get_attribute<'js>(
 }
 
 pub(super) fn remove_attribute<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
-    move |ctx, JsNodeId(node_id), key| drop_attribute(&ctx, &mut host.borrow_mut(), node_id, &key)
+    move |ctx, JsNodeId(node_id), key| {
+        drop_attribute(&ctx, &mut host.document.borrow_mut(), node_id, &key)
+    }
 }
 
 /// The key `name` has on the node `node_id`.
 pub(super) fn folded_key(
     ctx: &Ctx<'_>,
-    host: &Host,
+    host: &DocumentState,
     node_id: NodeId,
     name: &str,
 ) -> JsResult<String> {
@@ -98,21 +99,21 @@ pub(super) fn folded_key(
 }
 
 pub(super) fn attribute_names<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<String>> {
     move |ctx, JsNodeId(node_id)| {
-        let host = host.borrow();
+        let host = host.document.borrow();
         let node = existing_node(&ctx, &host.tree, node_id)?;
         Ok(node.attributes().keys().cloned().collect())
     }
 }
 
 pub(super) fn set_style<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, Value<'js>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), key, value| {
         let value = attribute_value_from_js(&ctx, &value)?;
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let warning = style_warning(&key, &value);
         let is_display = key == "display";
         set_style_prop(&mut host.tree, node_id, key, value)
@@ -128,10 +129,10 @@ pub(super) fn set_style<'js>(
 }
 
 pub(super) fn remove_style<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), key| {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         remove_style_prop(&mut host.tree, node_id, &key)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         if key == "display" {
@@ -142,7 +143,7 @@ pub(super) fn remove_style<'js>(
 }
 
 /// Queues the focus re-check an attribute change needs.
-pub(super) fn mark_focus_dirty_for(host: &mut Host, node_id: NodeId, key: &str) {
+pub(super) fn mark_focus_dirty_for(host: &mut DocumentState, node_id: NodeId, key: &str) {
     host.focus.mark_attribute_dirty(&host.tree, node_id, key);
 }
 
@@ -190,8 +191,16 @@ mod tests {
 
         let root_id: NodeId = engine.eval("__inca_native__.rootNodeId();").unwrap();
 
-        assert_eq!(root_id, host.borrow().root());
-        assert_eq!(host.borrow().tree.get(root_id).unwrap().local_name(), "div");
+        assert_eq!(root_id, host.document.borrow().root());
+        assert_eq!(
+            host.document
+                .borrow()
+                .tree
+                .get(root_id)
+                .unwrap()
+                .local_name(),
+            "div"
+        );
     }
 
     #[test]
@@ -657,13 +666,13 @@ mod tests {
             .eval("const n = __inca_native__.createNode('div'); __inca_native__.holdNode(n); n;")
             .unwrap();
 
-        assert!(host.borrow_mut().sweep_orphans().is_none());
-        assert!(host.borrow().tree.get(node).is_some());
+        assert!(host.sweep_orphans().is_none());
+        assert!(host.document.borrow().tree.get(node).is_some());
 
         engine
             .eval::<()>(&format!("__inca_native__.releaseNode({node})"))
             .unwrap();
-        let (nodes, _) = host.borrow_mut().sweep_orphans().unwrap();
+        let (nodes, _) = host.sweep_orphans().unwrap();
         assert_eq!(nodes, [node]);
     }
 
@@ -689,13 +698,13 @@ mod tests {
             .unwrap();
         let (kept, branch, leaf) = (ids[0], ids[1], ids[2]);
 
-        let (mut nodes, mut callbacks) = host.borrow_mut().sweep_orphans().unwrap();
+        let (mut nodes, mut callbacks) = host.sweep_orphans().unwrap();
         nodes.sort_unstable();
         callbacks.sort_unstable();
 
         assert_eq!(nodes, [branch, leaf]);
         assert_eq!(callbacks, [2, 3]);
-        let host = host.borrow();
+        let host = host.document.borrow();
         assert!(
             callback_ids(&host.listeners, crate::EventTargetId::Node(branch), "click").is_empty()
         );
@@ -712,10 +721,10 @@ mod tests {
     fn sweep_orphans_forgets_the_queued_focus_work_of_a_swept_node() {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.borrow_mut().focus.mark_tab_dirty(node);
+        host.document.borrow_mut().focus.mark_tab_dirty(node);
 
-        host.borrow_mut().sweep_orphans().unwrap();
+        host.sweep_orphans().unwrap();
 
-        assert!(host.borrow_mut().focus.take_tab_dirty().is_empty());
+        assert!(host.document.borrow_mut().focus.take_tab_dirty().is_empty());
     }
 }

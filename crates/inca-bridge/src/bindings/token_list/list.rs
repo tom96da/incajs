@@ -6,7 +6,6 @@
 //! A list holds the id of its node and reads the `class` attribute at every call. A list of a
 //! freed node reads empty, and its writes change nothing.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 // `TokenList` derives `JsLifetime`, and the class holds a node id and no JS value.
@@ -58,7 +57,7 @@ pub(in crate::bindings) fn install_token_list(n: &Natives<'_, '_>) -> JsResult<(
 
 /// The list of the node `node_id`, which may be freed.
 fn class_list<'js>(
-    _host: Rc<RefCell<Host>>,
+    _host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Class<'js, TokenList>> {
     move |ctx, JsNodeId(node)| {
         let proto = required_prototype(&ctx, "DOMTokenList")?;
@@ -71,13 +70,21 @@ fn node_of<'js>(ctx: &Ctx<'js>, this: &Value<'js>) -> JsResult<NodeId> {
 }
 
 /// The tokens of the node, empty when the node is freed.
-pub(super) fn tokens_of(host: &RefCell<Host>, node: NodeId) -> Vec<String> {
-    host.borrow().tree.class_tokens(node).unwrap_or_default()
+pub(super) fn tokens_of(host: &Host, node: NodeId) -> Vec<String> {
+    host.document
+        .borrow()
+        .tree
+        .class_tokens(node)
+        .unwrap_or_default()
 }
 
 /// The `class` text of the node, empty when the node is freed.
-fn value_of(host: &RefCell<Host>, node: NodeId) -> String {
-    host.borrow().tree.class_value(node).unwrap_or_default()
+fn value_of(host: &Host, node: NodeId) -> String {
+    host.document
+        .borrow()
+        .tree
+        .class_value(node)
+        .unwrap_or_default()
 }
 
 fn texts<'js>(ctx: &Ctx<'js>, args: &[Value<'js>]) -> JsResult<Vec<String>> {
@@ -102,11 +109,7 @@ fn written<T: Default>(ctx: &Ctx<'_>, result: Result<T, ClassListError>) -> JsRe
     }
 }
 
-fn define_members<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
-) -> JsResult<()> {
+fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> JsResult<()> {
     let h = host.clone();
     define_this_getter(ctx, proto, "length", move |ctx, this| {
         Ok(saturated(tokens_of(&h, node_of(ctx, &this)?).len()))
@@ -119,7 +122,7 @@ fn define_members<'js>(
         move |ctx, this| Ok(value_of(&read, node_of(ctx, &this)?)),
         move |ctx, this, Coerced(value): Coerced<String>| {
             let node = node_of(ctx, &this)?;
-            let result = write.borrow_mut().tree.set_attribute(
+            let result = write.document.borrow_mut().tree.set_attribute(
                 node,
                 "class".to_owned(),
                 AttributeValue::String(value),
@@ -151,7 +154,7 @@ fn define_members<'js>(
         let node = node_of(ctx, &this)?;
         let tokens = texts(ctx, args)?;
         let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
-        let result = h.borrow_mut().tree.add_classes(node, &tokens);
+        let result = h.document.borrow_mut().tree.add_classes(node, &tokens);
         written(ctx, result)
     })?;
     let h = host.clone();
@@ -159,7 +162,7 @@ fn define_members<'js>(
         let node = node_of(ctx, &this)?;
         let tokens = texts(ctx, args)?;
         let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
-        let result = h.borrow_mut().tree.remove_classes(node, &tokens);
+        let result = h.document.borrow_mut().tree.remove_classes(node, &tokens);
         written(ctx, result)
     })?;
     let h = host.clone();
@@ -173,7 +176,11 @@ fn define_members<'js>(
             }
             _ => None,
         };
-        let result = h.borrow_mut().tree.toggle_class(node, &token, force);
+        let result = h
+            .document
+            .borrow_mut()
+            .tree
+            .toggle_class(node, &token, force);
         written(ctx, result)
     })?;
     let h = host.clone();
@@ -181,7 +188,11 @@ fn define_members<'js>(
         let node = node_of(ctx, &this)?;
         require(ctx, "replace", args, 2)?;
         let (token, new_token) = (text(ctx, &args[0])?, text(ctx, &args[1])?);
-        let result = h.borrow_mut().tree.replace_class(node, &token, &new_token);
+        let result = h
+            .document
+            .borrow_mut()
+            .tree
+            .replace_class(node, &token, &new_token);
         written(ctx, result)
     })?;
     define_this_method(ctx, proto, "supports", 1, |ctx, this, _| {
@@ -195,11 +206,7 @@ fn define_members<'js>(
     define_iterators(ctx, proto)
 }
 
-fn define_for_each<'js>(
-    ctx: &Ctx<'js>,
-    proto: &Object<'js>,
-    host: &Rc<RefCell<Host>>,
-) -> JsResult<()> {
+fn define_for_each<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> JsResult<()> {
     let h = host.clone();
     define_this_method(ctx, proto, "forEach", 1, move |ctx, this, args| {
         let node = node_of(ctx, &this)?;

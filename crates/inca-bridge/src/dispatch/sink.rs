@@ -18,11 +18,12 @@ impl EventSink for EventDispatcher {
     }
 
     fn clear_layout(&self) {
-        self.host.borrow().layout.borrow_mut().clear();
+        self.host.window.borrow().layout.borrow_mut().clear();
     }
 
     fn record_layout(&self, node_id: NodeId, layout: inca_gpui::NodeLayout) {
         self.host
+            .window
             .borrow()
             .layout
             .borrow_mut()
@@ -56,7 +57,7 @@ impl EventSink for EventDispatcher {
     }
 
     fn focus_handle(&self, node_id: NodeId) -> Option<gpui::FocusHandle> {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         host.focus.handle(node_id).or_else(|| {
             (Some(node_id) == host.tree.document_element())
                 .then(|| host.focus.parked_handle())
@@ -65,11 +66,11 @@ impl EventSink for EventDispatcher {
     }
 
     fn scroll_handle(&self, node_id: NodeId) -> Option<ScrollHandle> {
-        Some(self.host.borrow().scroll_handle(node_id))
+        Some(self.host.window.borrow().scroll_handle(node_id))
     }
 
     fn wheel_axes(&self, node_id: NodeId) -> Option<inca_style::WheelAxes> {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         inca_style::wheel_axes(&host.tree, &host.style, node_id)
     }
 
@@ -221,7 +222,7 @@ impl EventSink for EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        self.host.borrow_mut().focus.observe(window, cx);
+        self.host.document.borrow_mut().focus.observe(window, cx);
         let target = self.key_target(window, cx);
         let event = if up { "keyup" } else { "keydown" };
         let target = EventTargetId::Node(target);
@@ -253,8 +254,8 @@ impl EventSink for EventDispatcher {
     }
 
     fn record_input(&self, node_id: NodeId, layout: InputLayout) {
-        let host = self.host.borrow();
-        host.input_layouts.borrow_mut().insert(node_id, layout);
+        let window = self.host.window.borrow();
+        window.input_layouts.borrow_mut().insert(node_id, layout);
     }
 
     fn input_request(
@@ -271,7 +272,9 @@ impl EventSink for EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::tests::{RECORDER, dispatcher_with_engine, listen, seen, seen_rows, tree_of_three};
+    use crate::tests::{
+        RECORDER, dispatcher_with_engine, fake_dispatcher, listen, seen, seen_rows, tree_of_three,
+    };
     use gpui::TestAppContext;
     use inca_document::EVENTS;
     use inca_document::{EventPayload, MousePayload, PointerSource, WheelPayload};
@@ -283,20 +286,20 @@ mod tests {
     /// range must not panic, only fail to set any bit.
     #[test]
     fn an_out_of_range_button_does_not_panic() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         assert_eq!(dispatcher.update_held_buttons("mousedown", 200), 0);
-        assert_eq!(dispatcher.host.borrow().held_buttons, 0);
+        assert_eq!(dispatcher.host.window.borrow().held_buttons, 0);
     }
 
     #[test]
     fn a_right_mousedown_sets_the_right_buttons_bit() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         assert_eq!(dispatcher.update_held_buttons("mousedown", 2), 0b0_0010);
     }
 
     #[test]
     fn a_middle_mousedown_sets_the_middle_buttons_bit() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let (dispatcher, _host, _fake) = fake_dispatcher();
         assert_eq!(dispatcher.update_held_buttons("mousedown", 1), 0b0_0100);
     }
 
@@ -305,7 +308,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher.engine.eval::<()>(RECORDER).unwrap();
         let cx = cx.add_empty_window();
         let mut mismatches = Vec::new();
@@ -367,7 +370,7 @@ mod tests {
     #[gpui::test]
     fn an_unlisted_event_name_takes_all_three_flags_false(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher.engine.eval::<()>(RECORDER).unwrap();
         listen(&dispatcher, node, "menu:1", "record");
         let cx = cx.add_empty_window();
@@ -386,9 +389,13 @@ mod tests {
     #[gpui::test]
     fn fire_walks_up_only_bubbling_events_and_reports_prevention(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let parent = host.borrow_mut().tree.create_node("div").unwrap();
-        let child = host.borrow_mut().tree.create_node("div").unwrap();
-        host.borrow_mut().tree.append_child(parent, child).unwrap();
+        let parent = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let child = host.document.borrow_mut().tree.create_node("div").unwrap();
+        host.document
+            .borrow_mut()
+            .tree
+            .append_child(parent, child)
+            .unwrap();
         dispatcher.engine.eval::<()>(RECORDER).unwrap();
         dispatcher
             .engine
@@ -426,7 +433,7 @@ mod tests {
             ("click", 99, "record", &[parent], &[], false),
         ];
         for (event, start, listener, listening, reached, prevented) in rows {
-            host.borrow_mut().listeners = inca_document::EventListeners::default();
+            host.document.borrow_mut().listeners = inca_document::EventListeners::default();
             for node in listening {
                 listen(&dispatcher, *node, event, listener);
             }
@@ -480,7 +487,7 @@ mod tests {
     )]
     fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext, expr: &str, want: &str) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(&format!(
@@ -504,11 +511,24 @@ mod tests {
     #[gpui::test]
     fn a_keyboard_click_starts_at_the_innermost_node_with_a_listener(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let outer = host.borrow_mut().tree.create_node("div").unwrap();
-        let parent = host.borrow_mut().tree.create_node("div").unwrap();
-        let button = host.borrow_mut().tree.create_node("button").unwrap();
-        host.borrow_mut().tree.append_child(outer, parent).unwrap();
-        host.borrow_mut().tree.append_child(parent, button).unwrap();
+        let outer = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let parent = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let button = host
+            .document
+            .borrow_mut()
+            .tree
+            .create_node("button")
+            .unwrap();
+        host.document
+            .borrow_mut()
+            .tree
+            .append_child(outer, parent)
+            .unwrap();
+        host.document
+            .borrow_mut()
+            .tree
+            .append_child(parent, button)
+            .unwrap();
         dispatcher.engine.eval::<()>(RECORDER).unwrap();
         listen(&dispatcher, parent, "click", "record");
         listen(&dispatcher, outer, "click", "record");
@@ -613,10 +633,10 @@ mod tests {
 
     #[test]
     fn a_target_gone_from_the_tree_falls_back_to_the_current_target() {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         let [_, parent, child] = tree_of_three(&host);
         assert_eq!(dispatcher.resolve(Some(child), parent), child);
-        host.borrow_mut().tree.destroy_node(child);
+        host.document.borrow_mut().tree.destroy_node(child);
         assert_eq!(dispatcher.resolve(Some(child), parent), parent);
         assert_eq!(dispatcher.resolve(None, parent), parent);
     }
@@ -679,7 +699,7 @@ mod tests {
         fields: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(
@@ -704,7 +724,7 @@ mod tests {
     fn park(cx: &mut TestAppContext, dispatcher: &crate::EventDispatcher) {
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            let host = &mut *dispatcher.host.borrow_mut();
+            let host = &mut *dispatcher.host.document.borrow_mut();
             let _ = host
                 .focus
                 .apply_pending(&host.tree, &host.style, window, cx);
@@ -713,19 +733,19 @@ mod tests {
 
     #[gpui::test]
     fn the_element_of_the_document_answers_with_the_parked_handle(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         park(cx, &dispatcher);
-        let root = host.borrow().root();
+        let root = host.document.borrow().root();
 
         assert!(inca_gpui::EventSink::focus_handle(&dispatcher, root).is_some());
     }
 
     #[gpui::test]
     fn the_root_outside_the_document_answers_with_no_handle(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         park(cx, &dispatcher);
         let root = {
-            let host = &mut *host.borrow_mut();
+            let host = &mut *host.document.borrow_mut();
             let (document, root) = (host.document(), host.root());
             host.tree.remove_child(document, root).unwrap();
             root

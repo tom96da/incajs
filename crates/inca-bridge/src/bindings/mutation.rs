@@ -4,7 +4,6 @@
 //! The mutation natives, `removeNode` included, and the host steps that follow a node leaving
 //! its place.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Result as JsResult, Value};
@@ -52,65 +51,59 @@ pub(super) fn removed_subtrees<'js>(
     Ok(array)
 }
 
-fn append_child<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<usize> {
+fn append_child<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<usize> {
     move |ctx, JsNodeId(parent_id), JsNodeId(node_id)| {
-        insert_child(&ctx, &mut host.borrow_mut(), parent_id, node_id, None)
+        insert_child(&ctx, &host, parent_id, node_id, None)
     }
 }
 
 fn insert_before<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId, Option<JsNodeId>) -> JsResult<usize> {
     move |ctx, JsNodeId(parent_id), JsNodeId(node_id), reference_id| {
         let reference_id = reference_id.map(|JsNodeId(id)| id);
-        insert_child(
-            &ctx,
-            &mut host.borrow_mut(),
-            parent_id,
-            node_id,
-            reference_id,
-        )
+        insert_child(&ctx, &host, parent_id, node_id, reference_id)
     }
 }
 
 /// Puts `node_id` in the place of `child_id` under `parent_id` and returns the removed subtrees.
 fn replace_child<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId, JsNodeId) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(parent_id), JsNodeId(node_id), JsNodeId(child_id)| {
-        let mut host = host.borrow_mut();
-        let mut leaving = host.tree.nodes_to_move(node_id);
+        let mut document = host.document.borrow_mut();
+        let mut leaving = document.tree.nodes_to_move(node_id);
         leaving.push(child_id);
-        let left = host.tree.removals(&leaving);
-        host.tree
+        let left = document.tree.removals(&leaving);
+        document
+            .tree
             .replace_child(parent_id, node_id, child_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
-        host.settle(&left);
-        removed_subtrees(&ctx, &host.tree, &[child_id])
+        host.settle(&mut document, &left);
+        removed_subtrees(&ctx, &document.tree, &[child_id])
     }
 }
 
 /// Takes `child_id` out of `parent_id` and returns the removed subtrees.
 fn remove_child<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(parent_id), JsNodeId(child_id)| {
-        let mut host = host.borrow_mut();
-        let left = host.tree.removals(&[child_id]);
-        host.tree
+        let mut document = host.document.borrow_mut();
+        let left = document.tree.removals(&[child_id]);
+        document
+            .tree
             .remove_child(parent_id, child_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
-        host.settle(&left);
-        removed_subtrees(&ctx, &host.tree, &[child_id])
+        host.settle(&mut document, &left);
+        removed_subtrees(&ctx, &document.tree, &[child_id])
     }
 }
 
 /// Replaces the children of `node_id` with one text node holding `text`, or with none for an empty
 /// `text`. Returns `[textId | null, removedSubtrees]`.
 fn replace_with_text<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), text| {
         let nodes = if text.is_empty() {
@@ -118,9 +111,7 @@ fn replace_with_text<'js>(
         } else {
             vec![InsertArg::Text(text)]
         };
-        let mut host = host.borrow_mut();
-        let inserted =
-            insert_planned(&ctx, &mut host, node_id, Placement::ReplaceChildren, &nodes)?;
+        let inserted = insert_planned(&ctx, &host, node_id, Placement::ReplaceChildren, &nodes)?;
         let array = Array::new(ctx.clone())?;
         let (text_id, removed) = inserted.map_or((None, Vec::new()), |made| {
             (made.texts.first().copied(), made.removed)
@@ -129,7 +120,10 @@ fn replace_with_text<'js>(
             Some(id) => array.set(0, id)?,
             None => array.set(0, Value::new_null(ctx.clone()))?,
         }
-        array.set(1, removed_subtrees(&ctx, &host.tree, &removed)?)?;
+        array.set(
+            1,
+            removed_subtrees(&ctx, &host.document.borrow().tree, &removed)?,
+        )?;
         Ok(array)
     }
 }
@@ -137,27 +131,31 @@ fn replace_with_text<'js>(
 /// Takes `node_id` out of its parent when it has one, holds it, drops the listeners of its
 /// subtree and returns `[callbackIds, nodeIds]`: the callback ids of those listeners and the ids
 /// of the subtree in pre-order. An unknown id returns two empty lists.
-fn remove_node<'js>(
-    host: Rc<RefCell<Host>>,
-) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Array<'js>> {
+fn remove_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id)| {
-        let mut host = host.borrow_mut();
-        let Some(parent_id) = host.tree.get(node_id).map(inca_node::VirtualNode::parent) else {
+        let mut document = host.document.borrow_mut();
+        let Some(parent_id) = document
+            .tree
+            .get(node_id)
+            .map(inca_node::VirtualNode::parent)
+        else {
             return pair(&ctx, &[], &[]);
         };
         if let Some(parent_id) = parent_id {
-            let left = host.tree.removals(&[node_id]);
-            host.tree
+            let left = document.tree.removals(&[node_id]);
+            document
+                .tree
                 .remove_child(parent_id, node_id)
                 .map_err(|err| throw_tree_error(&ctx, err))?;
-            host.settle(&left);
+            host.settle(&mut document, &left);
         }
-        host.tree
+        document
+            .tree
             .hold(node_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
-        let node_ids = host.tree.subtree(node_id);
-        let callback_ids = host.listeners.release_nodes(&node_ids);
-        crate::abort::settle_freed(&ctx, &mut host)?;
+        let node_ids = document.tree.subtree(node_id);
+        let callback_ids = document.listeners.release_nodes(&node_ids);
+        crate::abort::settle_freed(&ctx, &mut document)?;
         callbacks::release(&ctx, &callback_ids)?;
         pair(&ctx, &callback_ids, &node_ids)
     }
@@ -175,17 +173,20 @@ pub(super) fn pair<'js>(ctx: &Ctx<'js>, first: &[u32], second: &[u32]) -> JsResu
 /// the position of the first inserted node.
 fn insert_child(
     ctx: &Ctx<'_>,
-    host: &mut Host,
+    host: &Host,
     parent_id: NodeId,
     node_id: NodeId,
     reference_id: Option<NodeId>,
 ) -> JsResult<usize> {
-    let left = host.tree.removals(&host.tree.nodes_to_move(node_id));
-    let position = host
+    let mut document = host.document.borrow_mut();
+    let left = document
+        .tree
+        .removals(&document.tree.nodes_to_move(node_id));
+    let position = document
         .tree
         .insert_before(parent_id, node_id, reference_id)
         .map_err(|err| throw_tree_error(ctx, err))?;
-    host.settle(&left);
+    host.settle(&mut document, &left);
     Ok(position)
 }
 
@@ -193,7 +194,6 @@ fn insert_child(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::RefCell;
     use std::rc::Rc;
 
     use gpui::{Point, point, px};
@@ -230,7 +230,7 @@ mod tests {
         n.appendChild(g, g2);
         ";
 
-    pub(super) fn engine_with_family() -> (Engine, Rc<RefCell<Host>>) {
+    pub(super) fn engine_with_family() -> (Engine, Rc<Host>) {
         let (engine, host) = engine_with_bindings();
         engine.eval::<()>(LISTEN_JS).unwrap();
         engine.eval::<()>(SETUP).unwrap();
@@ -254,11 +254,11 @@ mod tests {
     #[test]
     fn remove_child_ignores_an_unknown_child() {
         let (engine, host) = engine_with_family();
-        host.borrow_mut().focus.take_tab_dirty();
+        host.document.borrow_mut().focus.take_tab_dirty();
 
         assert_eq!(error_name(&engine, "n.removeChild(p, 999)"), "none");
 
-        assert!(host.borrow_mut().focus.take_tab_dirty().is_empty());
+        assert!(host.document.borrow_mut().focus.take_tab_dirty().is_empty());
     }
 
     #[rstest]
@@ -287,11 +287,11 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.borrow_mut().focus.take_tab_dirty();
+        host.document.borrow_mut().focus.take_tab_dirty();
         engine.eval::<()>("n.appendChild(p, g);").unwrap();
         let ids: Vec<u32> = engine.eval("[g1, g2]").unwrap();
 
-        let queued = host.borrow_mut().focus.take_tab_dirty();
+        let queued = host.document.borrow_mut().focus.take_tab_dirty();
 
         assert!(ids.iter().all(|id| queued.contains(id)));
     }
@@ -309,7 +309,13 @@ mod tests {
             .unwrap();
         let a: u32 = engine.eval("a").unwrap();
 
-        assert!(host.borrow_mut().focus.take_tab_dirty().contains(&a));
+        assert!(
+            host.document
+                .borrow_mut()
+                .focus
+                .take_tab_dirty()
+                .contains(&a)
+        );
     }
 
     #[test]
@@ -322,13 +328,13 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.borrow_mut().focus.take_tab_dirty();
+        host.document.borrow_mut().focus.take_tab_dirty();
 
         assert_eq!(error_name(&engine, "n.removeChild(p, x)"), "NotFoundError");
 
-        assert!(host.borrow_mut().focus.take_tab_dirty().is_empty());
+        assert!(host.document.borrow_mut().focus.take_tab_dirty().is_empty());
         let x: u32 = engine.eval("x").unwrap();
-        let host = host.borrow();
+        let host = host.document.borrow();
         assert!(host.tree.get(x).unwrap().parent().is_some());
     }
 
@@ -359,9 +365,10 @@ mod tests {
     }
 
     /// Scrolls `div` and `inner` (a child of `div`) to a non-zero offset.
-    fn scrolled(host: &Rc<RefCell<Host>>, ids: &[u32]) {
+    fn scrolled(host: &Rc<Host>, ids: &[u32]) {
         for &id in ids {
-            host.borrow()
+            host.window
+                .borrow()
                 .scroll_handle(id)
                 .set_offset(point(px(-3.), px(-40.)));
         }
@@ -390,7 +397,7 @@ mod tests {
 
         engine.eval::<()>(call).unwrap();
 
-        let host = host.borrow();
+        let host = host.window.borrow();
         assert_eq!(host.scroll_handle(ids[0]).offset(), zero());
         assert_eq!(host.scroll_handle(ids[1]).offset(), zero());
     }
@@ -403,7 +410,7 @@ mod tests {
 
         engine.eval::<()>("n.removeChild(p, a)").unwrap();
 
-        let host = host.borrow();
+        let host = host.window.borrow();
         assert_ne!(host.scroll_handle(ids[1]).offset(), zero());
     }
 
@@ -415,7 +422,7 @@ mod tests {
 
         engine.eval::<()>("n.appendChild(p, g)").unwrap();
 
-        assert_eq!(host.borrow().scroll_handle(ids[0]).offset(), zero());
+        assert_eq!(host.window.borrow().scroll_handle(ids[0]).offset(), zero());
     }
 
     /// `top > (kid > deep, sibling)`, each node a global, with a `click` listener on `top`, `kid`
@@ -467,9 +474,9 @@ mod tests {
             ))
             .unwrap();
 
-        host.borrow_mut().tree.sweep();
+        host.document.borrow_mut().tree.sweep();
 
-        assert!(host.borrow().tree.get(top).is_some());
+        assert!(host.document.borrow().tree.get(top).is_some());
     }
 
     #[test]
@@ -486,7 +493,7 @@ mod tests {
             ))
             .unwrap();
 
-        let host = host.borrow();
+        let host = host.document.borrow();
         for id in ids {
             assert!(callback_ids(&host.listeners, EventTargetId::Node(id), "click").is_empty());
         }
@@ -593,9 +600,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            host.borrow()
+            host.document
+                .borrow()
                 .focus
-                .active_node(&host.borrow().tree, &host.borrow().style),
+                .active_node(&host.document.borrow().tree, &host.document.borrow().style),
             Some(kid)
         );
 
@@ -609,9 +617,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            host.borrow()
+            host.document
+                .borrow()
                 .focus
-                .active_node(&host.borrow().tree, &host.borrow().style),
+                .active_node(&host.document.borrow().tree, &host.document.borrow().style),
             None
         );
     }

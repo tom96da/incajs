@@ -1,19 +1,18 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::px;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
 use inca_document::geometry::Align;
+use inca_document::{ScrollRange, View};
 use inca_node::NodeId;
 use inca_style::is_scroll_container;
 
 use super::Natives;
 use super::convert::{JsAlign, JsNodeId, existing_node, or_null};
-use super::host::{Host, clamped_offset};
+use super::host::Host;
 
 pub(super) fn install_scroll(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("scrollOf", scroll_of)?;
@@ -21,33 +20,30 @@ pub(super) fn install_scroll(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("scrollIntoViewNode", scroll_into_view_node)
 }
 
-fn scroll_of<'js>(host: Rc<RefCell<Host>>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
+fn scroll_of<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
-        let host = host.borrow();
-        existing_node(&ctx, &host.tree, node_id)?;
+        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
         let rect = node_scroll(&host, node_id);
         or_null(&ctx, rect.as_ref().map(<[f64; 4]>::as_slice))
     }
 }
 
 fn scroll_node<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Option<f64>, Option<f64>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), left, top| {
-        let host = host.borrow();
-        existing_node(&ctx, &host.tree, node_id)?;
+        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
         scroll_to(&host, node_id, left, top);
         Ok(())
     }
 }
 
 fn scroll_into_view_node<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsAlign, JsAlign) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), JsAlign(block), JsAlign(inline)| {
-        let mut host = host.borrow_mut();
-        existing_node(&ctx, &host.tree, node_id)?;
-        scroll_into_view(&mut host, node_id, block, inline);
+        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+        scroll_into_view(&host, node_id, block, inline);
         Ok(())
     }
 }
@@ -55,52 +51,27 @@ fn scroll_into_view_node<'js>(
 /// The scroll offset of the node `id` and its maximum as of the last drawn frame: `left`, `top`,
 /// `max left` and `max top`. A node that scrolls nothing has none.
 pub(super) fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
-    is_scroll_container(&host.tree, &host.style, id).then(|| {
-        let handle = host.scroll_handle(id);
-        let (offset, max) = (handle.offset(), handle.max_offset());
-        // gpui clamps on the next draw; report the same value.
-        [
-            -clamped_offset(offset.x, max.x),
-            -clamped_offset(offset.y, max.y),
-            max.x,
-            max.y,
-        ]
-        .map(|px: gpui::Pixels| f64::from(f32::from(px)))
+    let document = host.document.borrow();
+    is_scroll_container(&document.tree, &document.style, id).then(|| {
+        let ScrollRange { offset, max } = host.window.borrow().scroll_range(id);
+        [offset.0, offset.1, max.0, max.1].map(f64::from)
     })
 }
 
 /// Moves the scroll offset of the node `id` on the given axes. A negative value counts as `0`.
 pub(super) fn scroll_to(host: &Host, id: NodeId, left: Option<f64>, top: Option<f64>) {
-    if !is_scroll_container(&host.tree, &host.style, id) {
-        return;
+    let document = host.document.borrow();
+    if is_scroll_container(&document.tree, &document.style, id) {
+        host.window
+            .borrow()
+            .scroll_to(&document.tree, id, left, top);
     }
-    let handle = host.scroll_handle(id);
-    let mut offset = handle.offset();
-    // Narrowing is fine for pixel offsets; the upper clamp is gpui's.
-    #[allow(clippy::cast_possible_truncation)]
-    let negated = |v: f64| px(-(v.max(0.0) as f32));
-    if let Some(left) = left {
-        offset.x = negated(left);
-    }
-    if let Some(top) = top {
-        offset.y = negated(top);
-    }
-    let (before, max) = (handle.offset(), handle.max_offset());
-    let clamped = |v, max| -f32::from(clamped_offset(v, max));
-    handle.set_offset(offset);
-    // Recorded boxes follow the new offset, so a reveal in the same tick
-    // starts from where the content now is.
-    host.shift_descendants(
-        id,
-        clamped(offset.x, max.x) - clamped(before.x, max.x),
-        clamped(offset.y, max.y) - clamped(before.y, max.y),
-    );
 }
 
 /// Reveals the node `id` now, or at the next frame when it has no box yet.
-pub(super) fn scroll_into_view(host: &mut Host, id: NodeId, block: Align, inline: Align) {
+pub(super) fn scroll_into_view(host: &Host, id: NodeId, block: Align, inline: Align) {
     if !host.reveal(id, block, inline) {
-        host.scroll_fresh.push((id, block, inline));
+        host.window.borrow_mut().queue_reveal(id, block, inline);
     }
 }
 
@@ -108,12 +79,12 @@ pub(super) fn scroll_into_view(host: &mut Host, id: NodeId, block: Align, inline
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use gpui::{Bounds, point};
+    use gpui::{Bounds, point, px};
 
     use crate::test_support::engine_with_bindings;
 
     /// A node with `overflow: scroll`, the global `n`, and its id.
-    fn scroller() -> (inca_jsenv::Engine, Rc<RefCell<Host>>, u32) {
+    fn scroller() -> (inca_jsenv::Engine, Rc<Host>, u32) {
         let (engine, host) = engine_with_bindings();
         let node: u32 = engine
             .eval("globalThis.n = __inca_native__.createNode('div')")
@@ -124,8 +95,8 @@ mod tests {
         (engine, host, node)
     }
 
-    fn offset(host: &Rc<RefCell<Host>>, node: u32) -> (f32, f32) {
-        let offset = host.borrow().scroll_handle(node).offset();
+    fn offset(host: &Rc<Host>, node: u32) -> (f32, f32) {
+        let offset = host.window.borrow().scroll_handle(node).offset();
         (f32::from(offset.x), f32::from(offset.y))
     }
 
@@ -180,7 +151,6 @@ mod tests {
         engine
             .eval::<()>("globalThis.n = __inca_native__.createNode('div'); __inca_native__.scrollIntoViewNode(n, 'start', 'start')")
             .unwrap();
-        let mut host = host.borrow_mut();
 
         assert!(host.reveal_scrolls());
         assert!(!host.reveal_scrolls());
@@ -199,7 +169,7 @@ mod tests {
             )
             .unwrap();
 
-        assert!(!host.borrow_mut().reveal_scrolls());
+        assert!(!host.reveal_scrolls());
     }
 
     #[test]
@@ -227,12 +197,14 @@ mod tests {
 
     #[test]
     fn a_scroll_moves_the_recorded_boxes_below_the_container() {
-        let mut host = Host::default();
-        let container = host.root();
-        let child = host.tree.create_node("div").unwrap();
-        let grandchild = host.tree.create_node("div").unwrap();
-        host.tree.append_child(container, child).unwrap();
-        host.tree.append_child(child, grandchild).unwrap();
+        let host = Host::default();
+        let mut document = host.document.borrow_mut();
+        let container = document.root();
+        let child = document.tree.create_node("div").unwrap();
+        let grandchild = document.tree.create_node("div").unwrap();
+        document.tree.append_child(container, child).unwrap();
+        document.tree.append_child(child, grandchild).unwrap();
+        let window = host.window.borrow();
         let record = |id| {
             let layout = inca_gpui::NodeLayout {
                 bounds: Bounds::new(point(px(10.0), px(50.0)), gpui::size(px(5.0), px(5.0))),
@@ -240,15 +212,15 @@ mod tests {
                 scroll: point(px(1.0), px(2.0)),
                 gutter: gpui::Size::default(),
             };
-            host.layout.borrow_mut().insert(id, layout);
+            window.layout.borrow_mut().insert(id, layout);
         };
         for id in [container, child, grandchild] {
             record(id);
         }
 
-        host.shift_descendants(container, 3.0, 20.0);
+        window.shift_descendants(&document.tree, container, 3.0, 20.0);
 
-        let layout = host.layout.borrow();
+        let layout = window.layout.borrow();
         let read = |id| {
             let l = layout[&id];
             (

@@ -59,7 +59,7 @@ fn settle(window: WindowHandle<HostedApp>, cx: &mut App) -> Result<(), Failure> 
     window
         .update(cx, |app, window, cx| {
             app.session.dispatcher.drain_jobs_and_refresh(window, cx);
-            if app.session.host.borrow().frames.is_pending() {
+            if app.session.host.js.borrow().frames.is_pending() {
                 app.session.dispatcher.run_frame_callbacks(window, cx);
             }
         })
@@ -73,10 +73,18 @@ fn settle(window: WindowHandle<HostedApp>, cx: &mut App) -> Result<(), Failure> 
 fn snapshot_of(window: WindowHandle<HostedApp>, cx: &mut App) -> Result<Node, Failure> {
     window
         .update(cx, |app, _, _| {
-            let host = app.session.host.borrow();
-            snapshot(&host.tree, &host.style, host.root(), &mut |id| {
-                host.layout_of(id).map(|layout| Bounds::from(layout.bounds))
-            })
+            let document = app.session.host.document.borrow();
+            let window = app.session.host.window.borrow();
+            snapshot(
+                &document.tree,
+                &document.style,
+                document.root(),
+                &mut |id| {
+                    window
+                        .layout_of(id)
+                        .map(|layout| Bounds::from(layout.bounds))
+                },
+            )
             .expect("the host declares a root")
         })
         .map_err(closed)

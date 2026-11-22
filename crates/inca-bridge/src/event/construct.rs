@@ -397,7 +397,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -595,7 +595,7 @@ mod tests {
         class: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -701,7 +701,7 @@ mod tests {
     #[test]
     fn init_custom_event_during_its_dispatch_keeps_the_detail() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,

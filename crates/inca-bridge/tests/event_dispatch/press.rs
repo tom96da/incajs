@@ -357,7 +357,7 @@ fn a_right_press_fires_the_pointer_mouse_and_contextmenu_fields(cx: &mut TestApp
 
 /// Renders `node` with the scrollbars of a classic platform.
 struct BarRoot {
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     node: NodeId,
     dispatcher: EventDispatcher,
 }
@@ -365,7 +365,7 @@ struct BarRoot {
 impl Render for BarRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.dispatcher.begin_frame(window, cx);
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         render_tree_with_events(
             &host.tree,
             &host.style,
@@ -382,7 +382,7 @@ impl Render for BarRoot {
 /// `pointerdown`, `mousedown`, `pointerup`, `mouseup` and `click`. A press at (92, 50) lies on its
 /// vertical track.
 fn mount_bar_container(cx: &mut TestAppContext) -> (VisualTestContext, Rc<Engine>, NodeId, NodeId) {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let engine = test_support::engine_for(&host);
     let ids = engine
         .eval::<Vec<NodeId>>(

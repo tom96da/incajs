@@ -10,16 +10,16 @@ use inca_test_macros::gpui_cases;
 struct Disabled {
     cx: VisualTestContext,
     engine: Rc<Engine>,
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     root: NodeId,
     button: NodeId,
     kid: NodeId,
 }
 
 fn mount_disabled(cx: &mut TestAppContext, listening: &[(&str, &[&str])]) -> Disabled {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let (root, button, kid) = {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let root = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, root, "width", 200.0).unwrap();
         set_style(&mut host.tree, root, "height", 200.0).unwrap();
@@ -115,6 +115,7 @@ fn a_disabled_button_and_its_ancestors_get_no_pointer_event(
     d.press_and_release((10.0, 10.0), click_count);
     let disabled = d.seen();
     d.host
+        .document
         .borrow_mut()
         .tree
         .remove_attribute(d.button, "disabled")

@@ -4,7 +4,6 @@
 //! The members of `Node`, `CharacterData` and `Text` that need only the node id. A freed node
 //! reads `""` where the member gives data or text, and keeps the kind it was built with.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
@@ -17,7 +16,7 @@ use inca_node::{NodeId, NodeKind};
 use super::{Shared, accessor, getter, method};
 use crate::bindings::convert::{or_null, saturated, throw_tree_error, unsigned};
 use crate::bindings::handle::{CHARACTER_DATA, NODE, TEXT};
-use crate::bindings::host::Host;
+use crate::bindings::host::{DocumentState, Host};
 
 /// The `nodeType` of a kind.
 fn node_type(kind: NodeKind) -> u32 {
@@ -32,7 +31,11 @@ fn node_type(kind: NodeKind) -> u32 {
 
 /// The data of the node `id`, `""` for a freed node.
 fn data_of(host: &Shared, id: NodeId) -> String {
-    host.borrow().tree.text_content(id).unwrap_or_default()
+    host.document
+        .borrow()
+        .tree
+        .text_content(id)
+        .unwrap_or_default()
 }
 
 /// The length of the data of the node `id` in UTF-16 code units.
@@ -41,13 +44,13 @@ fn data_len(host: &Shared, id: NodeId) -> u32 {
 }
 
 /// Whether the host has the node `id`.
-fn has(host: &Host, id: NodeId) -> bool {
+fn has(host: &DocumentState, id: NodeId) -> bool {
     host.tree.get(id).is_some()
 }
 
 /// Writes the data of the node `id`; a freed node ignores it.
 fn write_data(ctx: &Ctx<'_>, host: &Shared, id: NodeId, data: String) -> JsResult<()> {
-    let mut host = host.borrow_mut();
+    let mut host = host.document.borrow_mut();
     if !has(&host, id) {
         return Ok(());
     }
@@ -64,7 +67,7 @@ fn replace(
     (offset, count): (u32, u32),
     data: &str,
 ) -> JsResult<()> {
-    let mut host = host.borrow_mut();
+    let mut host = host.document.borrow_mut();
     if !has(&host, id) {
         return Ok(());
     }
@@ -96,7 +99,7 @@ fn nullable_text<'js>(ctx: &Ctx<'js>, value: &Value<'js>) -> JsResult<String> {
 }
 
 /// Defines the members of `Node`.
-fn install_node(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+fn install_node(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let proto = required_prototype(ctx, "Node")?;
     getter(ctx, &proto, host, "nodeType", &NODE, |_, _, _, kind| {
         Ok(node_type(kind))
@@ -104,6 +107,7 @@ fn install_node(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
     getter(ctx, &proto, host, "nodeName", &NODE, |_, host, id, kind| {
         Ok(match kind {
             NodeKind::Element => host
+                .document
                 .borrow()
                 .tree
                 .get(id)
@@ -142,7 +146,7 @@ fn install_node(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
         |ctx, host, id, kind| or_null(ctx, (kind != NodeKind::Document).then(|| data_of(host, id))),
     )?;
     getter(ctx, &proto, host, "isConnected", &NODE, |_, host, id, _| {
-        let host = host.borrow();
+        let host = host.document.borrow();
         Ok(has(&host, id) && host.tree.in_document(id))
     })?;
     method(
@@ -154,6 +158,7 @@ fn install_node(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
         &NODE,
         |_, host, id, _, _| {
             Ok(host
+                .document
                 .borrow()
                 .tree
                 .get(id)
@@ -163,7 +168,7 @@ fn install_node(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
 }
 
 /// Defines the members of `CharacterData` and `Text`.
-fn install_character_data(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+fn install_character_data(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let proto = required_prototype(ctx, "CharacterData")?;
     accessor(
         ctx,
@@ -199,7 +204,7 @@ fn install_character_data(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<(
         |ctx, host, id, _, args| {
             require(ctx, "substringData", args, 2)?;
             let (offset, count) = (unsigned_at(ctx, args, 0)?, unsigned_at(ctx, args, 1)?);
-            let host = host.borrow();
+            let host = host.document.borrow();
             if !has(&host, id) {
                 return Ok(String::new());
             }
@@ -215,7 +220,7 @@ fn install_character_data(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<(
 fn install_edits<'js>(
     ctx: &Ctx<'js>,
     proto: &rquickjs::Object<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
 ) -> JsResult<()> {
     method(
         ctx,
@@ -275,15 +280,20 @@ fn install_edits<'js>(
 }
 
 /// Defines `wholeText` of `Text`.
-fn install_text(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+fn install_text(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let proto = required_prototype(ctx, "Text")?;
     getter(ctx, &proto, host, "wholeText", &TEXT, |_, host, id, _| {
-        Ok(host.borrow().tree.whole_text(id).unwrap_or_default())
+        Ok(host
+            .document
+            .borrow()
+            .tree
+            .whole_text(id)
+            .unwrap_or_default())
     })
 }
 
 /// Defines the node members on the prototypes of `Node`, `CharacterData` and `Text`.
-pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     install_node(ctx, host)?;
     install_character_data(ctx, host)?;
     install_text(ctx, host)

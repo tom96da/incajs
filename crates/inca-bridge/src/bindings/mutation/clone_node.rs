@@ -3,7 +3,6 @@
 
 //! The `cloneNode` native.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
@@ -18,10 +17,10 @@ use super::super::host::Host;
 /// copy. The copies include the content of a template. An HTML `input` copy gets the typed text of
 /// its original.
 pub(super) fn clone_node<'js>(
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<bool>) -> JsResult<NodeId> {
     move |ctx, JsNodeId(node_id), Coerced(deep)| {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let made = host
             .tree
             .clone_subtree(node_id, deep)

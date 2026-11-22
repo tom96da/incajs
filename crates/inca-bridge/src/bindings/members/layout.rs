@@ -10,7 +10,6 @@ mod boxes;
 mod fixture;
 mod scroll;
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Ctx, Result as JsResult};
@@ -21,7 +20,7 @@ use crate::bindings::host::Host;
 
 /// Defines the layout members on the prototypes of `Element`, `HTMLElement` and the foreign
 /// element.
-pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let element = required_prototype(ctx, "Element")?;
     boxes::install_client(ctx, &element, host)?;
     scroll::install(ctx, &element, host)?;

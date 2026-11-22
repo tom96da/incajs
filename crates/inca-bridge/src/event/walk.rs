@@ -1,7 +1,6 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use inca_document::{EventPayload, deliver, path_from};
@@ -12,7 +11,7 @@ use rquickjs::{Ctx, Result as JsResult};
 use super::construct::create;
 use super::{Flags, IncaEvent};
 use crate::EventTargetId;
-use crate::bindings::Host;
+use crate::bindings::{DocumentState, Host};
 use listeners::JsInvoke;
 
 mod abort;
@@ -39,7 +38,7 @@ pub(crate) struct Outcome {
 /// Whether a listener of `name` exists that an event with `flags` fired at
 /// `target` reaches. Nodes in `cut` stay silent.
 pub(crate) fn listened(
-    host: &Host,
+    host: &DocumentState,
     name: &str,
     flags: Flags,
     target: EventTargetId,
@@ -48,8 +47,8 @@ pub(crate) fn listened(
     inca_document::listened(&host.tree, &host.listeners, name, flags, target, cut)
 }
 
-pub(super) fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
-    inca_document::next_event_id(&mut host.borrow_mut().last_event_id)
+pub(super) fn next_event_id(host: &Rc<Host>) -> u64 {
+    inca_document::next_event_id(&mut host.document.borrow_mut().last_event_id)
 }
 
 /// Runs the listeners of `walk.name` along the path of `walk.target` with one
@@ -59,8 +58,14 @@ pub(super) fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
 /// node's listeners are those registered when the walk reaches it, minus any
 /// removed while an earlier listener ran. The engine is entered only when the
 /// event reaches a listener.
-pub(crate) fn walk(engine: &Engine, host: &Rc<RefCell<Host>>, walk: &Walk<'_>) -> Outcome {
-    if !listened(&host.borrow(), walk.name, walk.flags, walk.target, walk.cut) {
+pub(crate) fn walk(engine: &Engine, host: &Rc<Host>, walk: &Walk<'_>) -> Outcome {
+    if !listened(
+        &host.document.borrow(),
+        walk.name,
+        walk.flags,
+        walk.target,
+        walk.cut,
+    ) {
         return Outcome::default();
     }
     let id = next_event_id(host);
@@ -87,8 +92,8 @@ pub(super) fn script_walk<'a>(
     }
 }
 
-pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Outcome {
-    let path = path_from(&host.borrow().tree, walk.target);
+pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<Host>, walk: &Walk<'_>, id: u64) -> Outcome {
+    let path = path_from(&host.document.borrow().tree, walk.target);
     let created = targets_of(ctx, &path).and_then(|targets| create(ctx, walk, id, targets));
     let event = match created {
         Ok(event) => event,
@@ -112,11 +117,12 @@ pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: 
     }
 }
 
-/// Files a thrown error of `result` in `Host::failures`, where the dispatcher
+/// Files a thrown error of `result` in `JsState::failures`, where the dispatcher
 /// reports listener errors in the order they happened.
-fn note(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, result: JsResult<()>) {
+fn note(ctx: &Ctx<'_>, host: &Rc<Host>, result: JsResult<()>) {
     if let Err(err) = result {
-        host.borrow_mut()
+        host.js
+            .borrow_mut()
             .failures
             .push(EngineError::capture(ctx, &err));
     }
@@ -287,9 +293,13 @@ mod tests {
     fn a_cut_silences_the_document_and_window(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let outer = node_under_root(&host);
-        let child = host.borrow_mut().tree.create_node("div").unwrap();
-        host.borrow_mut().tree.append_child(outer, child).unwrap();
-        let document = host.borrow().document();
+        let child = host.document.borrow_mut().tree.create_node("div").unwrap();
+        host.document
+            .borrow_mut()
+            .tree
+            .append_child(outer, child)
+            .unwrap();
+        let document = host.document.borrow().document();
         listen(&dispatcher, child, "click", "() => out.push('child')");
         listen_with(
             &dispatcher,
@@ -332,7 +342,7 @@ mod tests {
     #[case::cancel_bubble("e.cancelBubble = true;")]
     fn a_stop_requested_before_dispatch_runs_no_listener(#[case] stop: &str) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(&dispatcher, node, "ping", "() => out.push('ran')");
 
         let got = eval_json(
@@ -355,7 +365,7 @@ mod tests {
     #[test]
     fn a_dispatch_no_listener_hears_clears_the_stop_flags() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
 
         let got = eval_json(
             &dispatcher,

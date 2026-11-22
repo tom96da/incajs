@@ -3,7 +3,7 @@
 
 //! One loaded bundle: the engine, the tree its JS built and the dispatcher.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
@@ -50,7 +50,7 @@ impl Failure {
 /// An engine ready for an entry: its host, the engine, and what
 /// `setLoadFailed` reports.
 struct StartedEngine {
-    host: Rc<RefCell<Host>>,
+    host: Rc<Host>,
     engine: Engine,
     signal: Rc<LoadSignal>,
 }
@@ -63,7 +63,7 @@ struct StartedEngine {
 /// listener or callback survives a reload.
 pub(crate) struct Session {
     pub(crate) engine: Rc<Engine>,
-    pub(crate) host: Rc<RefCell<Host>>,
+    pub(crate) host: Rc<Host>,
     pub(crate) dispatcher: EventDispatcher,
 }
 
@@ -76,7 +76,7 @@ pub(crate) fn clock_of(executor: &BackgroundExecutor) -> Clock {
 impl Session {
     /// The root node of the host's tree.
     pub(super) fn root(&self) -> NodeId {
-        self.host.borrow().root()
+        self.host.document.borrow().root()
     }
 
     /// Starts an engine rooted at `entry_path`'s directory and gives it
@@ -100,7 +100,7 @@ impl Session {
         writer: Option<&SharedWriter>,
         clock: Clock,
     ) -> Result<StartedEngine, EngineError> {
-        let host = Rc::new(RefCell::new(Host::with_clock(clock.clone())));
+        let host = Rc::new(Host::with_clock(clock.clone()));
         let signal = Rc::new(LoadSignal::default());
 
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
@@ -129,7 +129,7 @@ impl Session {
     }
 
     /// Wires event dispatch onto an engine whose entry has been started.
-    fn from_parts(host: Rc<RefCell<Host>>, engine: Engine, reporter: ErrorReporter) -> Self {
+    fn from_parts(host: Rc<Host>, engine: Engine, reporter: ErrorReporter) -> Self {
         let engine = Rc::new(engine);
         let dispatcher =
             EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host)).with_reporter(reporter);
@@ -431,6 +431,7 @@ mod tests {
             .unwrap();
         let first_child = first
             .host
+            .document
             .borrow()
             .tree
             .get(first.root())
@@ -440,7 +441,7 @@ mod tests {
         let second = load(MOUNTING_BUNDLE).unwrap();
         drop(first);
 
-        let host = second.host.borrow();
+        let host = second.host.document.borrow();
         let children = host.tree.get(second.root()).unwrap().children();
         assert_eq!(children.len(), 1, "the reloaded tree must not accumulate");
         assert_eq!(
@@ -499,6 +500,7 @@ mod tests {
                     let node = app
                         .session
                         .host
+                        .document
                         .borrow()
                         .tree
                         .get(app.session.root())

@@ -28,10 +28,11 @@ use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use gpui::{App, Window};
-use inca_jsenv::{Engine, ErrorReporter, report_jobs, stderr_reporter};
+use inca_jsenv::{ErrorReporter, stderr_reporter};
 use inca_node::NodeId;
 
 use crate::bindings::Host;
+use crate::script::{JsScript, Script};
 
 mod activation;
 mod fire;
@@ -46,14 +47,16 @@ mod timers;
 
 pub(crate) use inca_document::spec_of;
 
-/// Everything needed to dispatch a native event into JS: the engine to call
+/// Everything needed to dispatch a native event into JS: the script to call
 /// into, and the registry of which JS callback ids are listening for which
 /// `(event target, event name)`.
 #[derive(Clone)]
 pub struct EventDispatcher {
-    pub(crate) engine: Rc<Engine>,
-    pub(crate) host: Rc<RefCell<Host>>,
-    reporter: ErrorReporter,
+    /// The engine `script` runs in. Only tests reach it; the dispatch goes through `script`.
+    #[cfg(test)]
+    pub(crate) engine: Rc<inca_jsenv::Engine>,
+    pub(crate) script: Rc<dyn Script>,
+    pub(crate) host: Rc<Host>,
     pub(crate) state: Rc<State>,
 }
 
@@ -107,63 +110,32 @@ pub(crate) struct State {
     frame_requested: Cell<bool>,
 }
 
-/// Calls the global `__inca_released__(nodeIds, callbackIds)` and files a throw in
-/// `Host::failures`. The global is looked up per call and skipped when it is not a function.
-/// Returns whether it was a function.
-pub(crate) fn notify_released(
-    ctx: &rquickjs::Ctx<'_>,
-    host: &RefCell<Host>,
-    nodes: &[NodeId],
-    callback_ids: &[u32],
-) -> bool {
-    let Ok(hook) = ctx
-        .globals()
-        .get::<_, rquickjs::Function>("__inca_released__")
-    else {
-        return false;
-    };
-    let called = crate::event::array_of(ctx, nodes.iter().copied()).and_then(|nodes| {
-        let callback_ids = crate::event::array_of(ctx, callback_ids.iter().copied())?;
-        hook.call::<_, ()>((nodes, callback_ids))
-    });
-    if let Err(err) = called {
-        host.borrow_mut()
-            .failures
-            .push(inca_jsenv::EngineError::capture(ctx, &err));
-    }
-    true
-}
-
 /// Records the node the window focuses in `host`.
-pub(crate) fn observe_focus(host: &RefCell<Host>, window: &Window, cx: &App) {
-    host.borrow_mut().focus.observe(window, cx);
-}
-
-/// Sends the listener errors `host` collected to `reporter`, in order. Call it
-/// outside any [`Engine::with`].
-pub(crate) fn report_failures(host: &RefCell<Host>, reporter: &ErrorReporter) {
-    let pending = std::mem::take(&mut host.borrow_mut().failures);
-    for failure in &pending {
-        reporter(failure);
-    }
+pub(crate) fn observe_focus(host: &Host, window: &Window, cx: &App) {
+    host.document.borrow_mut().focus.observe(window, cx);
 }
 
 impl EventDispatcher {
     /// Reports failures through [`stderr_reporter`].
-    pub fn new(engine: Rc<Engine>, host: Rc<RefCell<Host>>) -> Self {
+    pub fn new(engine: Rc<inca_jsenv::Engine>, host: Rc<Host>) -> Self {
+        #[cfg(test)]
+        let kept = Rc::clone(&engine);
+        let script = JsScript::new(engine, Rc::clone(&host), stderr_reporter());
         Self {
-            engine,
+            #[cfg(test)]
+            engine: kept,
+            script: Rc::new(script),
             host,
-            reporter: stderr_reporter(),
             state: Rc::default(),
         }
     }
 
     /// Sends failures to `reporter` instead. A host with a channel to its
-    /// parent reports there; nothing else about dispatch changes.
+    /// parent reports there; nothing else about dispatch changes. Every clone of a
+    /// dispatcher shares one reporter.
     #[must_use]
-    pub fn with_reporter(mut self, reporter: ErrorReporter) -> Self {
-        self.reporter = reporter;
+    pub fn with_reporter(self, reporter: ErrorReporter) -> Self {
+        self.script.set_reporter(reporter);
         self
     }
 
@@ -171,7 +143,7 @@ impl EventDispatcher {
     /// focus or a style rule names `:hover` or `:active`. The render path asks once per frame.
     #[must_use]
     pub fn tracks_pointer(&self) -> bool {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         !host.listeners.is_empty()
             || host.focus.has_handles()
             || host.style.uses_pointer_state(&host.tree)
@@ -186,9 +158,9 @@ impl EventDispatcher {
     }
 
     /// Reports listener errors, in the order they happened. Call it outside any
-    /// [`Engine::with`].
+    /// `Engine::with`.
     pub fn report_pending(&self) {
-        report_failures(&self.host, &self.reporter);
+        self.script.report_pending();
     }
 
     /// Records the node the window focuses, so `focusedNode()` in JS that runs
@@ -198,27 +170,25 @@ impl EventDispatcher {
         observe_focus(&self.host, window, cx);
     }
 
-    /// [`Self::observe_focus`], then [`drain_jobs_and_refresh`] with this
-    /// dispatcher's engine and reporter, then [`Self::report_pending`].
+    /// [`Self::observe_focus`], then runs the queued jobs and requests a redraw, then
+    /// [`Self::report_pending`].
     pub fn drain_jobs_and_refresh(&self, window: &mut Window, cx: &App) {
         self.observe_focus(window, cx);
         self.drain_observed(window);
     }
 
     fn drain_observed(&self, window: &mut Window) {
-        drain_jobs_and_refresh(&self.engine, &self.reporter, window);
+        drain_jobs_and_refresh(&*self.script, window);
         self.report_pending();
     }
 }
 
-/// [`report_jobs`], then requests a redraw. Code that only schedules work (a
+/// Drains the job queue of `script`, then requests a redraw. Code that only schedules work (a
 /// reactivity effect, batched via a microtask) hasn't
 /// mutated the tree once the scheduling call returns, so the queue has to run
 /// before the frame is drawn.
-///
-/// Call it outside any [`Engine::with`].
-pub fn drain_jobs_and_refresh(engine: &Engine, reporter: &ErrorReporter, window: &mut Window) {
-    report_jobs(engine, reporter);
+fn drain_jobs_and_refresh(script: &dyn Script, window: &mut Window) {
+    script.drain_jobs();
     window.refresh();
 }
 
@@ -232,7 +202,7 @@ mod tests {
     #[gpui::test]
     fn a_stale_callback_id_is_skipped_rather_than_reported(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        let node_id = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(&format!(
@@ -279,7 +249,7 @@ mod tests {
     #[gpui::test]
     fn a_pending_job_waits_when_no_listener_ran(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        let node_id = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(
@@ -301,7 +271,7 @@ mod tests {
     #[gpui::test]
     fn a_throwing_callback_is_reported(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        let node_id = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node_id,
@@ -323,7 +293,7 @@ mod tests {
     #[gpui::test]
     fn one_throwing_callback_does_not_stop_the_others(cx: &mut TestAppContext) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node_id = host.borrow_mut().tree.create_node("div").unwrap();
+        let node_id = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>("globalThis.ran = false;")
@@ -355,7 +325,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -383,16 +353,21 @@ mod tests {
     #[gpui::test]
     fn drain_jobs_and_refresh_shows_js_the_focus_the_window_applied(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        let root = host.borrow().root();
-        host.borrow_mut().tree.append_child(root, node).unwrap();
-        host.borrow_mut()
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let root = host.document.borrow().root();
+        host.document
+            .borrow_mut()
+            .tree
+            .append_child(root, node)
+            .unwrap();
+        host.document
+            .borrow_mut()
             .tree
             .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
             .unwrap();
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             let host = &mut *host;
             host.focus.mark_tab_dirty(node);
             let _ = host

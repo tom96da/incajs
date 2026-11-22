@@ -8,7 +8,6 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{TestAppContext, prelude::*};
@@ -21,16 +20,23 @@ use inca_bridge::test_support;
 
 /// Two focusable sibling nodes wrapped in a common parent, the root
 /// `TestRoot` renders.
-fn build_focusable_pair() -> (Rc<RefCell<Host>>, NodeId, NodeId) {
+fn build_focusable_pair() -> (Rc<Host>, NodeId, NodeId) {
     let (host, parent, children) = test_support::focusable_tree(2, false);
     (host, parent, children[0])
 }
 
 /// Records `type:target` of `"focus"` and `"blur"` on the children of
 /// `parent`.
-fn install_focus_recorder(engine: &Engine, host: &Rc<RefCell<Host>>, parent: NodeId) {
+fn install_focus_recorder(engine: &Engine, host: &Rc<Host>, parent: NodeId) {
     engine.eval::<()>("globalThis.seen = [];").unwrap();
-    let children = host.borrow().tree.get(parent).unwrap().children().to_vec();
+    let children = host
+        .document
+        .borrow()
+        .tree
+        .get(parent)
+        .unwrap()
+        .children()
+        .to_vec();
     test_support::listen_each(
         engine,
         &children,
@@ -55,7 +61,7 @@ fn focus_node_dispatches_focus_next_frame(cx: &mut TestAppContext) {
     );
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(a, true);
+        host.document.borrow_mut().focus.request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -78,7 +84,7 @@ fn blur_node_with_nothing_focused_reports_nothing(cx: &mut TestAppContext) {
     let window = test_support::mount_active(cx, &host, &engine, parent);
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_blur(a);
+        host.document.borrow_mut().focus.request_blur(a);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -103,7 +109,7 @@ fn destroying_a_focused_node_reports_no_blur(cx: &mut TestAppContext) {
     let window = test_support::mount_active(cx, &host, &engine, parent);
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(a, true);
+        host.document.borrow_mut().focus.request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -111,7 +117,7 @@ fn destroying_a_focused_node_reports_no_blur(cx: &mut TestAppContext) {
     engine.eval::<()>("globalThis.seen = [];").unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().tree.destroy_node(a);
+        host.document.borrow_mut().tree.destroy_node(a);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -131,7 +137,7 @@ fn destroying_a_focused_node_reports_no_blur(cx: &mut TestAppContext) {
 fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
     let b = {
-        let host = host.borrow();
+        let host = host.document.borrow();
         host.tree.get(parent).unwrap().children()[1]
     };
     let engine = test_support::engine_for(&host);
@@ -139,8 +145,8 @@ fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppC
     let window = test_support::mount_active(cx, &host, &engine, parent);
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(a, true);
-        host.borrow_mut().focus.request_focus(b, true);
+        host.document.borrow_mut().focus.request_focus(a, true);
+        host.document.borrow_mut().focus.request_focus(b, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -159,7 +165,7 @@ fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppC
 fn run_then_draw(
     cx: &mut TestAppContext,
     engine: &Engine,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     parent: NodeId,
     script: &str,
 ) {
@@ -178,7 +184,7 @@ fn focus_then_destroy_in_one_tick_leaves_no_handle(cx: &mut TestAppContext) {
     let script = format!("__inca_native__.focusNode({a}); __inca_native__.destroyNode({a});");
     run_then_draw(cx, &engine, &host, parent, &script);
 
-    assert!(host.borrow().focus.handle(a).is_none());
+    assert!(host.document.borrow().focus.handle(a).is_none());
 }
 
 /// `blurNode(id)` blurs only when `id` is the focused node: another node's
@@ -193,13 +199,13 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(
 ) {
     let (host, parent, a) = build_focusable_pair();
     let other_id = other.map_or(999, |i| {
-        host.borrow().tree.get(parent).unwrap().children()[i]
+        host.document.borrow().tree.get(parent).unwrap().children()[i]
     });
     let engine = test_support::engine_for(&host);
     install_focus_recorder(&engine, &host, parent);
     let window = test_support::mount_active(cx, &host, &engine, parent);
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_focus(a, true);
+        host.document.borrow_mut().focus.request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -207,7 +213,7 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(
     engine.eval::<()>("globalThis.seen = [];").unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.borrow_mut().focus.request_blur(other_id);
+        host.document.borrow_mut().focus.request_blur(other_id);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -217,7 +223,12 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(
     assert_eq!(seen, "[]", "blur of {other_id} must not blur {a}");
     let still_focused = cx
         .update_window(window.into(), |_, window, cx| {
-            host.borrow().focus.handle(a).unwrap().is_focused(window)
+            host.document
+                .borrow()
+                .focus
+                .handle(a)
+                .unwrap()
+                .is_focused(window)
                 && window.focused(cx).is_some()
         })
         .unwrap();
@@ -227,7 +238,7 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(
 #[gpui::test]
 fn each_focus_transition_gets_its_own_event_id(cx: &mut TestAppContext) {
     let (host, parent, a) = build_focusable_pair();
-    let b = host.borrow().tree.get(parent).unwrap().children()[1];
+    let b = host.document.borrow().tree.get(parent).unwrap().children()[1];
     let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
     for node in [a, b] {
@@ -248,7 +259,7 @@ fn each_focus_transition_gets_its_own_event_id(cx: &mut TestAppContext) {
     for targets in [vec![a, b], vec![a]] {
         cx.update_window(window.into(), |_root, window, cx| {
             for target in targets {
-                host.borrow_mut().focus.request_focus(target, true);
+                host.document.borrow_mut().focus.request_focus(target, true);
             }
             window.draw(cx).clear(cx);
         })
@@ -283,7 +294,7 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
         RemoveTabindex(usize),
     }
     let (host, parent, a) = build_focusable_pair();
-    let b = host.borrow().tree.get(parent).unwrap().children()[1];
+    let b = host.document.borrow().tree.get(parent).unwrap().children()[1];
     let engine = test_support::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
     for (node, events) in [
@@ -343,7 +354,7 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
     for (step, want) in steps {
         engine.eval::<()>("globalThis.seen = [];").unwrap();
         cx.update_window(window.into(), |_root, window, cx| {
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             match step {
                 Step::Focus(i) => host.focus.request_focus(nodes[i], true),
                 Step::Blur(i) => host.focus.request_blur(nodes[i]),
@@ -384,7 +395,7 @@ fn an_ancestor_becoming_display_none_blurs_the_focused_node(cx: &mut TestAppCont
     }
     let window = test_support::mount_active(cx, &host, &engine, parent);
     cx.update_window(window.into(), |_, window, cx| {
-        host.borrow_mut().focus.request_focus(a, true);
+        host.document.borrow_mut().focus.request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -402,5 +413,5 @@ fn an_ancestor_becoming_display_none_blurs_the_focused_node(cx: &mut TestAppCont
         engine.eval::<String>("seen.join(' ')").unwrap(),
         "blur:null focusout:null"
     );
-    assert!(host.borrow().focus.handle(a).is_none());
+    assert!(host.document.borrow().focus.handle(a).is_none());
 }

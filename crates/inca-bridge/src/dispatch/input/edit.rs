@@ -27,7 +27,7 @@ impl EventDispatcher {
         if edit.range.is_empty() && edit.text.is_empty() {
             return;
         }
-        let connected = self.host.borrow().tree.is_connected(node);
+        let connected = self.host.document.borrow().tree.is_connected(node);
         if !connected || self.input_state(node).value() != before {
             return;
         }
@@ -128,7 +128,8 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::dispatch::input::scene::{InputScene, input_scene, log, record, types};
     use crate::dispatch::input::scene::{
-        cancel_beforeinput, keydown, line_break_rows, mark, replace, row, set_attributes,
+        act_at, cancel, cancel_beforeinput, js_input_scene, keydown, line_break_rows, mark,
+        replace, row, set_attributes, write_value,
     };
     use crate::tests::listen;
     use gpui::{ClipboardItem, TestAppContext};
@@ -274,12 +275,7 @@ mod tests {
     #[gpui::test]
     fn a_canceled_keydown_leaves_the_input(cx: &mut TestAppContext) {
         let s = input_scene(cx, "abcd");
-        s.engine
-            .eval::<()>(&format!(
-                "__inca_test_listen__({}, 'keydown', (e) => e.preventDefault());",
-                s.input
-            ))
-            .unwrap();
+        cancel(&s, s.input, "keydown");
         s.focus(cx, s.input);
         s.key(cx, "backspace");
         assert_eq!(s.state().value(), "abcd");
@@ -355,7 +351,7 @@ mod tests {
 
     #[gpui::test]
     fn typing_fires_beforeinput_then_input(cx: &mut TestAppContext) {
-        let s = input_scene(cx, "");
+        let s = js_input_scene(cx, "");
         record(&s, s.input, &["keydown", "beforeinput", "input"]);
         s.focus(cx, s.input);
         s.key(cx, "x");
@@ -467,12 +463,10 @@ mod tests {
     fn a_beforeinput_listener_that_changes_the_value_drops_the_edit(cx: &mut TestAppContext) {
         let s = input_scene(cx, "");
         record(&s, s.input, &["input"]);
-        listen(
-            &s.dispatcher,
-            s.input,
-            "beforeinput",
-            &format!("() => __inca_native__.setInputValue({}, 'z')", s.input),
-        );
+        let input = s.input;
+        act_at(&s, input, "beforeinput", move |host| {
+            write_value(host, input, "z");
+        });
         s.focus(cx, s.input);
         s.key(cx, "x");
         assert_eq!(s.state().value(), "z");
@@ -483,22 +477,21 @@ mod tests {
     fn a_beforeinput_listener_that_removes_the_input_drops_the_edit(cx: &mut TestAppContext) {
         let s = input_scene(cx, "ab");
         record(&s, s.input, &["input"]);
-        listen(
-            &s.dispatcher,
-            s.input,
-            "beforeinput",
-            &format!(
-                "() => __inca_native__.removeChild({}, {})",
-                s.parent, s.input
-            ),
-        );
+        let (parent, input) = (s.parent, s.input);
+        act_at(&s, input, "beforeinput", move |host| {
+            host.document
+                .borrow_mut()
+                .tree
+                .remove_child(parent, input)
+                .unwrap();
+        });
         s.request(cx, replace("x"));
         assert_eq!(types(&s), Vec::<String>::new());
     }
 
     #[gpui::test]
     fn enter_after_a_beforeinput_that_destroys_the_input_leaves_no_state(cx: &mut TestAppContext) {
-        let s = input_scene(cx, "ab");
+        let s = js_input_scene(cx, "ab");
         record(&s, s.input, &["change"]);
         s.focus(cx, s.input);
         s.key(cx, "x");
@@ -510,7 +503,15 @@ mod tests {
         );
         s.key(cx, "enter");
         assert_eq!(types(&s), Vec::<String>::new());
-        assert!(s.host.borrow().inputs.borrow().get(&s.input).is_none());
+        assert!(
+            s.host
+                .document
+                .borrow()
+                .inputs
+                .borrow()
+                .get(&s.input)
+                .is_none()
+        );
     }
 
     #[gpui::test]

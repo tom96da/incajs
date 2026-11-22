@@ -16,7 +16,7 @@ impl EventDispatcher {
     /// the document drop out of the set.
     pub(super) fn deepest_hovered(&self) -> Option<NodeId> {
         let mut set = self.state.hovered.borrow_mut();
-        set.retain(|id| self.host.borrow().tree.is_connected(*id));
+        set.retain(|id| self.host.document.borrow().tree.is_connected(*id));
         set.iter()
             .copied()
             .max_by_key(|id| (self.path_from(*id).len(), *id))
@@ -58,7 +58,7 @@ impl EventDispatcher {
     ) {
         let physical = self.state.bar_drag.get().or(physical);
         let path = physical.map(|id| self.path_from(id)).unwrap_or_default();
-        let changed = self.host.borrow_mut().tree.set_hover_path(&path);
+        let changed = self.host.document.borrow_mut().tree.set_hover_path(&path);
         self.restyle(changed, true, window);
         let mouse = mouse_at(window.mouse_position(), window.modifiers());
         self.process_capture(&EventPayload::Mouse(mouse), button, window, cx);
@@ -73,7 +73,7 @@ impl EventDispatcher {
         let old_path: Vec<_> = old_path.into_iter().skip_while(|id| !live(id)).collect();
         // A pointer over a removed root leaves the document alone in the old path. It sends no
         // event.
-        if next.is_none() && old_path == [self.host.borrow().document()] {
+        if next.is_none() && old_path == [self.host.document.borrow().document()] {
             self.state.hover_prev.replace(old_path);
             return;
         }
@@ -121,71 +121,82 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    use std::rc::Rc;
+
     use crate::EventDispatcher;
-    use crate::tests::state;
     use crate::tests::{
-        RECORDER, dispatcher_with_engine, listen, node_under_root, seen, seen_rows, tree_of_three,
+        FakeScript, Walked, fake_dispatcher, node_under_root, state, tree_of_three,
     };
     use gpui::TestAppContext;
     use inca_document::{EventPayload, MousePayload};
     use inca_gpui::EventSink as _;
     use inca_node::NodeId;
 
-    /// `a` holds `b`, which holds `c` and `d`. Every hover event is recorded as
-    /// `type@currentTarget/target/relatedTarget` in `globalThis.seen`, with `x` for a missing
-    /// related target.
-    fn hover_tree() -> (EventDispatcher, [NodeId; 4]) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+    /// A dispatcher on a fake script.
+    struct Rig {
+        dispatcher: EventDispatcher,
+        fake: Rc<FakeScript>,
+    }
+
+    fn rig() -> Rig {
+        let (dispatcher, _host, fake) = fake_dispatcher();
+        Rig { dispatcher, fake }
+    }
+
+    /// `type@target/relatedTarget`, with `x` for a missing related target.
+    fn label(walked: &Walked) -> String {
+        let related = walked
+            .related()
+            .map_or_else(|| "x".to_owned(), |node| node.to_string());
+        format!("{}@{}/{related}", walked.name, walked.target_text())
+    }
+
+    impl Rig {
+        /// The walks of the mouse events since the last call.
+        fn mouse_walks(&self) -> Vec<Walked> {
+            let mut walks = self.fake.take();
+            walks.retain(|walked| walked.name.starts_with("mouse"));
+            walks
+        }
+
+        fn labels(&self) -> Vec<String> {
+            self.mouse_walks().iter().map(label).collect()
+        }
+
+        fn hover(&self, cx: &mut TestAppContext, next: Option<NodeId>) -> Vec<String> {
+            let cx = cx.add_empty_window();
+            cx.update(|window, cx| self.dispatcher.report_hover(next, window, cx));
+            self.labels()
+        }
+    }
+
+    /// `a` holds `b`, which holds `c` and `d`.
+    fn hover_tree() -> (Rig, [NodeId; 4]) {
+        let rig = rig();
         let [a, b, c, d] = {
-            let mut h = host.borrow_mut();
+            let mut h = rig.dispatcher.host.document.borrow_mut();
             let ids = [(); 4].map(|()| h.tree.create_node("div").unwrap());
             h.tree.append_child(ids[0], ids[1]).unwrap();
             h.tree.append_child(ids[1], ids[2]).unwrap();
             h.tree.append_child(ids[1], ids[3]).unwrap();
             ids
         };
-        dispatcher
-            .engine
-            .eval::<()>("globalThis.seen = [];")
-            .unwrap();
-        for node in [a, b, c, d] {
-            for event in ["mouseover", "mouseout", "mouseenter", "mouseleave"] {
-                listen(
-                    &dispatcher,
-                    node,
-                    event,
-                    "(e) => seen.push(`${e.type}@${e.currentTarget}/${e.target}/${e.relatedTarget ?? 'x'}`)",
-                );
-            }
-        }
-        (dispatcher, [a, b, c, d])
-    }
-
-    fn hover(
-        cx: &mut TestAppContext,
-        dispatcher: &EventDispatcher,
-        next: Option<NodeId>,
-    ) -> Vec<String> {
-        let cx = cx.add_empty_window();
-        cx.update(|window, cx| dispatcher.report_hover(next, window, cx));
-        serde_json::from_value(seen(dispatcher)).unwrap()
+        (rig, [a, b, c, d])
     }
 
     #[gpui::test]
     fn entering_a_nested_node_fires_over_then_enter_on_each_ancestor(cx: &mut TestAppContext) {
-        let (dispatcher, [a, b, c, _]) = hover_tree();
+        let (rig, [a, b, c, _]) = hover_tree();
 
-        let got = hover(cx, &dispatcher, Some(c));
+        let got = rig.hover(cx, Some(c));
 
         assert_eq!(
             got,
             [
-                format!("mouseover@{c}/{c}/x"),
-                format!("mouseover@{b}/{c}/x"),
-                format!("mouseover@{a}/{c}/x"),
-                format!("mouseenter@{a}/{a}/x"),
-                format!("mouseenter@{b}/{b}/x"),
-                format!("mouseenter@{c}/{c}/x"),
+                format!("mouseover@{c}/x"),
+                format!("mouseenter@{a}/x"),
+                format!("mouseenter@{b}/x"),
+                format!("mouseenter@{c}/x"),
             ]
         );
     }
@@ -194,79 +205,68 @@ mod tests {
     fn moving_to_a_sibling_fires_out_leave_over_enter_with_related_targets(
         cx: &mut TestAppContext,
     ) {
-        let (dispatcher, [a, b, c, d]) = hover_tree();
-        hover(cx, &dispatcher, Some(c));
+        let (rig, [_, _, c, d]) = hover_tree();
+        rig.hover(cx, Some(c));
 
-        let got = hover(cx, &dispatcher, Some(d));
+        let got = rig.hover(cx, Some(d));
 
         assert_eq!(
             got,
             [
-                format!("mouseout@{c}/{c}/{d}"),
-                format!("mouseout@{b}/{c}/{d}"),
-                format!("mouseout@{a}/{c}/{d}"),
-                format!("mouseleave@{c}/{c}/{d}"),
-                format!("mouseover@{d}/{d}/{c}"),
-                format!("mouseover@{b}/{d}/{c}"),
-                format!("mouseover@{a}/{d}/{c}"),
-                format!("mouseenter@{d}/{d}/{c}"),
+                format!("mouseout@{c}/{d}"),
+                format!("mouseleave@{c}/{d}"),
+                format!("mouseover@{d}/{c}"),
+                format!("mouseenter@{d}/{c}"),
             ]
         );
     }
 
     #[gpui::test]
     fn leaving_everything_fires_out_then_leave_from_the_inside_out(cx: &mut TestAppContext) {
-        let (dispatcher, [a, b, _, d]) = hover_tree();
-        hover(cx, &dispatcher, Some(d));
+        let (rig, [a, b, _, d]) = hover_tree();
+        rig.hover(cx, Some(d));
 
-        let got = hover(cx, &dispatcher, None);
+        let got = rig.hover(cx, None);
 
         assert_eq!(
             got,
             [
-                format!("mouseout@{d}/{d}/x"),
-                format!("mouseout@{b}/{d}/x"),
-                format!("mouseout@{a}/{d}/x"),
-                format!("mouseleave@{d}/{d}/x"),
-                format!("mouseleave@{b}/{b}/x"),
-                format!("mouseleave@{a}/{a}/x"),
+                format!("mouseout@{d}/x"),
+                format!("mouseleave@{d}/x"),
+                format!("mouseleave@{b}/x"),
+                format!("mouseleave@{a}/x"),
             ]
         );
     }
 
     #[gpui::test]
     fn reporting_the_same_hover_again_fires_nothing(cx: &mut TestAppContext) {
-        let (dispatcher, [_, _, c, _]) = hover_tree();
-        hover(cx, &dispatcher, Some(c));
+        let (rig, [_, _, c, _]) = hover_tree();
+        rig.hover(cx, Some(c));
 
-        let got = hover(cx, &dispatcher, Some(c));
+        let got = rig.hover(cx, Some(c));
 
         assert_eq!(got, Vec::<String>::new());
     }
 
     #[gpui::test]
     fn entering_the_root_fires_mouseenter_at_the_document_then_the_root(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = node_under_root(&host);
+        let rig = rig();
+        let node = node_under_root(&rig.dispatcher.host);
         let (root, document) = {
-            let host = host.borrow();
+            let host = rig.dispatcher.host.document.borrow();
             (host.root(), host.document())
         };
-        dispatcher
-            .engine
-            .eval::<()>("globalThis.seen = [];")
-            .unwrap();
-        let record = "(e) => seen.push(`${e.type}@${e.currentTarget}/${e.target}`)";
-        listen(&dispatcher, root, "mouseenter", record);
-        listen(&dispatcher, document, "mouseenter", record);
 
-        let got = hover(cx, &dispatcher, Some(node));
+        let got = rig.hover(cx, Some(node));
 
         assert_eq!(
             got,
             [
-                format!("mouseenter@{document}/{document}"),
-                format!("mouseenter@{root}/{root}"),
+                format!("mouseover@{node}/x"),
+                format!("mouseenter@{document}/x"),
+                format!("mouseenter@{root}/x"),
+                format!("mouseenter@{node}/x"),
             ]
         );
     }
@@ -275,44 +275,30 @@ mod tests {
     fn leaving_a_node_under_the_host_root_gives_the_root_as_the_related_target(
         cx: &mut TestAppContext,
     ) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = node_under_root(&host);
-        let root = host.borrow().root();
-        dispatcher
-            .engine
-            .eval::<()>("globalThis.seen = [];")
-            .unwrap();
-        let record =
-            "(e) => seen.push(`${e.type}@${e.currentTarget}/${e.target}/${e.relatedTarget}`)";
-        for target in [node, root] {
-            for event in ["mouseout", "mouseleave"] {
-                listen(&dispatcher, target, event, record);
-            }
-        }
-        hover(cx, &dispatcher, Some(node));
-        dispatcher
-            .engine
-            .eval::<()>("globalThis.seen = [];")
-            .unwrap();
+        let rig = rig();
+        let node = node_under_root(&rig.dispatcher.host);
+        let root = rig.dispatcher.host.document.borrow().root();
+        rig.hover(cx, Some(node));
 
-        let got = hover(cx, &dispatcher, Some(root));
+        let got = rig.hover(cx, Some(root));
 
         assert_eq!(
-            got,
+            got.iter()
+                .filter(|row| row.starts_with("mouseout") || row.starts_with("mouseleave"))
+                .collect::<Vec<_>>(),
             [
-                format!("mouseout@{node}/{node}/{root}"),
-                format!("mouseout@{root}/{node}/{root}"),
-                format!("mouseleave@{node}/{node}/{root}"),
+                &format!("mouseout@{node}/{root}"),
+                &format!("mouseleave@{node}/{root}"),
             ]
         );
     }
 
     #[test]
     fn a_click_targets_the_nearest_common_ancestor_of_press_and_release() {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         let [outer, parent, child] = tree_of_three(&host);
         let other = {
-            let mut h = host.borrow_mut();
+            let mut h = host.document.borrow_mut();
             let other = h.tree.create_node("div").unwrap();
             h.tree.append_child(parent, other).unwrap();
             other
@@ -325,18 +311,14 @@ mod tests {
 
     #[gpui::test]
     fn a_release_clicks_only_when_both_containers_share_an_ancestor(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, fake) = fake_dispatcher();
         let [_, parent, a] = tree_of_three(&host);
         let (b, apart) = {
-            let mut h = host.borrow_mut();
+            let mut h = host.document.borrow_mut();
             let b = h.tree.create_node("div").unwrap();
             h.tree.append_child(parent, b).unwrap();
             (b, h.tree.create_node("div").unwrap())
         };
-        dispatcher.engine.eval::<()>(RECORDER).unwrap();
-        for node in [parent, a, b, apart] {
-            listen(&dispatcher, node, "click", "record");
-        }
         let release = gpui::MouseUpEvent {
             button: gpui::MouseButton::Left,
             click_count: 1,
@@ -347,40 +329,35 @@ mod tests {
             cx.update(|window, cx| {
                 dispatcher.pointer_released(&release, pressed, released, window, cx);
             });
-            seen_rows(&dispatcher).len()
+            let walks = fake.take();
+            walks
+                .iter()
+                .filter(|walked| walked.name == "click")
+                .map(Walked::target_text)
+                .collect::<Vec<_>>()
         };
 
-        assert_eq!(clicked(Some(a), b), 1, "siblings share the parent");
-        assert_eq!(clicked(Some(a), apart), 0, "no common ancestor");
-        assert_eq!(clicked(None, a), 0, "no press container");
+        assert_eq!(
+            clicked(Some(a), b),
+            [parent.to_string()],
+            "siblings share the parent"
+        );
+        assert!(clicked(Some(a), apart).is_empty(), "no common ancestor");
+        assert!(clicked(None, a).is_empty(), "no press container");
 
-        host.borrow_mut().tree.destroy_node(b);
-        assert_eq!(clicked(Some(a), b), 0, "the release node is gone");
-        assert_eq!(clicked(Some(b), a), 0, "the press node is gone");
+        host.document.borrow_mut().tree.destroy_node(b);
+        assert!(clicked(Some(a), b).is_empty(), "the release node is gone");
+        assert!(clicked(Some(b), a).is_empty(), "the press node is gone");
     }
 
     #[gpui::test]
     fn a_removed_node_is_no_related_target(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [outer, parent, _] = tree_of_three(&host);
+        let rig = rig();
+        let [outer, parent, _] = tree_of_three(&rig.dispatcher.host);
         {
-            let mut host = host.borrow_mut();
+            let mut host = rig.dispatcher.host.document.borrow_mut();
             let root = host.root();
             host.tree.append_child(root, outer).unwrap();
-        }
-        dispatcher
-            .engine
-            .eval::<()>(
-                r"
-                globalThis.seen = [];
-                globalThis.related = (e) => {
-                    globalThis.seen.push([e.type, e.relatedTarget]);
-                };
-                ",
-            )
-            .unwrap();
-        for event in ["mouseover", "focus"] {
-            listen(&dispatcher, outer, event, "related");
         }
         let cx = cx.add_empty_window();
         let at = |related_target| {
@@ -389,6 +366,7 @@ mod tests {
                 ..MousePayload::at(0.0, 0.0, inca_document::Modifiers::none())
             })
         };
+        let dispatcher = &rig.dispatcher;
 
         cx.update(|window, cx| {
             dispatcher.fire(outer, "mouseover", &at(Some(parent)), window, cx);
@@ -398,247 +376,226 @@ mod tests {
                 dispatcher.fire(outer, "focus", &payload, window, cx);
             }
         });
+
+        let got: Vec<_> = rig
+            .fake
+            .take()
+            .iter()
+            .map(|walked| (walked.name.clone(), walked.related()))
+            .collect();
         assert_eq!(
-            seen(&dispatcher),
-            serde_json::json!([
-                ["mouseover", parent],
-                ["mouseover", null],
-                ["focus", parent],
-                ["focus", null],
-                ["focus", null]
-            ])
+            got,
+            [
+                ("mouseover".to_owned(), Some(parent)),
+                ("mouseover".to_owned(), None),
+                ("focus".to_owned(), Some(parent)),
+                ("focus".to_owned(), None),
+                ("focus".to_owned(), None),
+            ]
         );
     }
 
     #[gpui::test]
     fn a_removed_node_is_no_previous_hover_container(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let rig = rig();
+        let host = Rc::clone(&rig.dispatcher.host);
         let [outer, parent, child] = tree_of_three(&host);
         {
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             let root = host.root();
             host.tree.append_child(root, outer).unwrap();
         }
-        dispatcher
-            .engine
-            .eval::<()>(
-                r"
-                globalThis.seen = [];
-                globalThis.related = (e) => {
-                    globalThis.seen.push([e.type, e.relatedTarget]);
-                };
-                ",
-            )
-            .unwrap();
-        for event in ["mouseover", "mouseout"] {
-            listen(&dispatcher, outer, event, "related");
-        }
         let cx = cx.add_empty_window();
-        cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
-        seen(&dispatcher);
-        host.borrow_mut().tree.destroy_node(child);
-        cx.update(|window, cx| dispatcher.report_hover(Some(parent), window, cx));
-        assert_eq!(seen(&dispatcher), serde_json::json!([]));
-        cx.update(|window, cx| dispatcher.report_hover(Some(outer), window, cx));
+        let boundary = |rig: &Rig| -> Vec<String> {
+            let mut walks = rig.fake.take();
+            walks.retain(|walked| walked.name == "mouseover" || walked.name == "mouseout");
+            walks.iter().map(label).collect()
+        };
+        cx.update(|window, cx| rig.dispatcher.report_hover(Some(child), window, cx));
+        boundary(&rig);
+        host.document.borrow_mut().tree.destroy_node(child);
+        cx.update(|window, cx| rig.dispatcher.report_hover(Some(parent), window, cx));
+        assert_eq!(boundary(&rig), Vec::<String>::new());
+        cx.update(|window, cx| rig.dispatcher.report_hover(Some(outer), window, cx));
         assert_eq!(
-            seen(&dispatcher),
-            serde_json::json!([["mouseout", outer], ["mouseover", parent]])
+            boundary(&rig),
+            [
+                format!("mouseout@{parent}/{outer}"),
+                format!("mouseover@{outer}/{parent}")
+            ]
         );
 
         // A detached deepest container gets no mouseout.
-        cx.update(|window, cx| dispatcher.report_hover(Some(parent), window, cx));
-        seen(&dispatcher);
-        host.borrow_mut().tree.remove_child(outer, parent).unwrap();
-        cx.update(|window, cx| dispatcher.report_hover(None, window, cx));
-        assert_eq!(seen(&dispatcher), serde_json::json!([]));
+        cx.update(|window, cx| rig.dispatcher.report_hover(Some(parent), window, cx));
+        boundary(&rig);
+        host.document
+            .borrow_mut()
+            .tree
+            .remove_child(outer, parent)
+            .unwrap();
+        cx.update(|window, cx| rig.dispatcher.report_hover(None, window, cx));
+        assert_eq!(boundary(&rig), Vec::<String>::new());
     }
 
     /// [`hover_tree`] with `a` attached under the host root.
-    fn connected_hover_tree() -> (EventDispatcher, [NodeId; 4]) {
-        let (dispatcher, ids) = hover_tree();
+    fn connected_hover_tree() -> (Rig, [NodeId; 4]) {
+        let (rig, ids) = hover_tree();
         {
-            let mut host = dispatcher.host.borrow_mut();
+            let mut host = rig.dispatcher.host.document.borrow_mut();
             let root = host.root();
             host.tree.append_child(root, ids[0]).unwrap();
         }
-        (dispatcher, ids)
+        (rig, ids)
     }
 
-    fn hovered(dispatcher: &EventDispatcher, ids: [NodeId; 4]) -> [bool; 4] {
-        let host = dispatcher.host.borrow();
+    fn hovered(rig: &Rig, ids: [NodeId; 4]) -> [bool; 4] {
+        let host = rig.dispatcher.host.document.borrow();
         ids.map(|id| state(&host, id, ":hover"))
     }
 
     #[gpui::test]
     fn a_hover_report_marks_the_node_and_its_ancestors(cx: &mut TestAppContext) {
-        let (dispatcher, ids) = connected_hover_tree();
-        hover(cx, &dispatcher, Some(ids[2]));
+        let (rig, ids) = connected_hover_tree();
+        rig.hover(cx, Some(ids[2]));
 
-        assert_eq!(hovered(&dispatcher, ids)[..3], [true, true, true]);
+        assert_eq!(hovered(&rig, ids)[..3], [true, true, true]);
     }
 
     #[gpui::test]
     fn a_hover_report_leaves_a_sibling_unmarked(cx: &mut TestAppContext) {
-        let (dispatcher, ids) = connected_hover_tree();
-        hover(cx, &dispatcher, Some(ids[2]));
+        let (rig, ids) = connected_hover_tree();
+        rig.hover(cx, Some(ids[2]));
 
-        assert!(!hovered(&dispatcher, ids)[3]);
+        assert!(!hovered(&rig, ids)[3]);
     }
 
     #[gpui::test]
     fn a_hover_report_of_none_clears_the_hover_state(cx: &mut TestAppContext) {
-        let (dispatcher, ids) = connected_hover_tree();
-        hover(cx, &dispatcher, Some(ids[2]));
-        hover(cx, &dispatcher, None);
+        let (rig, ids) = connected_hover_tree();
+        rig.hover(cx, Some(ids[2]));
+        rig.hover(cx, None);
 
-        assert_eq!(hovered(&dispatcher, ids), [false; 4]);
+        assert_eq!(hovered(&rig, ids), [false; 4]);
     }
 
     #[gpui::test]
     fn a_hover_report_that_fires_nothing_still_rewrites_the_path(cx: &mut TestAppContext) {
-        let (dispatcher, [a, b, c, d]) = connected_hover_tree();
-        hover(cx, &dispatcher, Some(c));
-        dispatcher
+        let (rig, [a, b, c, d]) = connected_hover_tree();
+        rig.hover(cx, Some(c));
+        rig.dispatcher
             .host
+            .document
             .borrow_mut()
             .tree
             .remove_child(b, c)
             .unwrap();
-        hover(cx, &dispatcher, Some(b));
-        dispatcher
+        rig.hover(cx, Some(b));
+        rig.dispatcher
             .host
+            .document
             .borrow_mut()
             .tree
             .insert_before(b, c, None)
             .unwrap();
 
-        assert_eq!(
-            hovered(&dispatcher, [a, b, c, d]),
-            [true, true, false, false]
-        );
+        assert_eq!(hovered(&rig, [a, b, c, d]), [true, true, false, false]);
     }
 
     #[gpui::test]
-    fn the_mouseover_listener_reads_the_hover_state_as_true(cx: &mut TestAppContext) {
-        let (dispatcher, [_, _, c, _]) = connected_hover_tree();
-        listen(
-            &dispatcher,
-            c,
-            "mouseover",
-            &format!("() => seen.push('' + __inca_native__.nodeHandle({c})[0].matches(':hover'))"),
-        );
+    fn the_mouseover_walk_sees_the_hover_state_as_true(cx: &mut TestAppContext) {
+        let (rig, [_, _, c, _]) = connected_hover_tree();
+        let seen = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let (host, log) = (Rc::clone(&rig.dispatcher.host), Rc::clone(&seen));
+        rig.fake.on_walk(move |walked| {
+            if walked.name == "mouseover" {
+                log.borrow_mut()
+                    .push(state(&host.document.borrow(), c, ":hover"));
+            }
+            false
+        });
 
-        let got = hover(cx, &dispatcher, Some(c));
+        rig.hover(cx, Some(c));
 
-        assert!(got.contains(&"true".to_owned()));
+        assert_eq!(*seen.borrow(), [true]);
     }
 
     #[gpui::test]
     fn a_hovered_node_moved_inside_its_parent_keeps_the_hover_state(cx: &mut TestAppContext) {
-        let (dispatcher, [a, b, c, d]) = connected_hover_tree();
-        hover(cx, &dispatcher, Some(c));
+        let (rig, [a, b, c, d]) = connected_hover_tree();
+        rig.hover(cx, Some(c));
         {
-            let tree = &mut dispatcher.host.borrow_mut().tree;
+            let tree = &mut rig.dispatcher.host.document.borrow_mut().tree;
             tree.remove_child(b, c).unwrap();
             tree.insert_before(b, c, Some(d)).unwrap();
         }
 
-        assert_eq!(
-            hovered(&dispatcher, [a, b, c, d]),
-            [true, true, true, false]
-        );
+        assert_eq!(hovered(&rig, [a, b, c, d]), [true, true, true, false]);
     }
 
     #[gpui::test]
     fn a_hovered_node_moved_under_another_parent_keeps_the_hover_state(cx: &mut TestAppContext) {
-        let (dispatcher, [a, b, c, d]) = connected_hover_tree();
-        hover(cx, &dispatcher, Some(c));
+        let (rig, [a, b, c, d]) = connected_hover_tree();
+        rig.hover(cx, Some(c));
         {
-            let tree = &mut dispatcher.host.borrow_mut().tree;
+            let tree = &mut rig.dispatcher.host.document.borrow_mut().tree;
             tree.remove_child(b, c).unwrap();
             tree.append_child(d, c).unwrap();
         }
 
-        assert_eq!(
-            hovered(&dispatcher, [a, b, c, d]),
-            [true, true, true, false]
-        );
+        assert_eq!(hovered(&rig, [a, b, c, d]), [true, true, true, false]);
     }
-
-    const RECORD: &str =
-        "(e) => seen.push(`${e.type}@${e.currentTarget}/${e.target}/${e.relatedTarget ?? 'x'}`)";
 
     #[gpui::test]
     fn leaving_the_window_fires_mouseleave_at_the_root_then_the_document(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = node_under_root(&host);
+        let rig = rig();
+        let node = node_under_root(&rig.dispatcher.host);
         let (root, document) = {
-            let host = host.borrow();
+            let host = rig.dispatcher.host.document.borrow();
             (host.root(), host.document())
         };
-        dispatcher
-            .engine
-            .eval::<()>("globalThis.seen = [];")
-            .unwrap();
-        listen(&dispatcher, root, "mouseleave", RECORD);
-        listen(&dispatcher, document, "mouseleave", RECORD);
-        hover(cx, &dispatcher, Some(node));
+        rig.hover(cx, Some(node));
 
-        let got = hover(cx, &dispatcher, None);
+        let got = rig.hover(cx, None);
 
         assert_eq!(
             got,
             [
-                format!("mouseleave@{root}/{root}/x"),
-                format!("mouseleave@{document}/{document}/x"),
+                format!("mouseout@{node}/x"),
+                format!("mouseleave@{node}/x"),
+                format!("mouseleave@{root}/x"),
+                format!("mouseleave@{document}/x"),
             ]
         );
     }
 
-    /// The pointer rests over `c` of the connected tree. Every container and the document listens
-    /// for the hover events.
-    fn resting_pointer() -> (EventDispatcher, [NodeId; 4]) {
-        let (dispatcher, ids) = connected_hover_tree();
-        let (root, document) = {
-            let host = dispatcher.host.borrow();
-            (host.root(), host.document())
-        };
-        for node in [root, document] {
-            for event in [
-                "pointerenter",
-                "pointerleave",
-                "pointerout",
-                "mouseover",
-                "mouseout",
-                "mouseenter",
-                "mouseleave",
-            ] {
-                listen(&dispatcher, node, event, RECORD);
-            }
-        }
-        dispatcher.state.hovered.borrow_mut().insert(ids[2]);
-        (dispatcher, ids)
+    /// The pointer rests over `c` of the connected tree.
+    fn resting_pointer() -> (Rig, [NodeId; 4]) {
+        let (rig, ids) = connected_hover_tree();
+        rig.dispatcher.state.hovered.borrow_mut().insert(ids[2]);
+        (rig, ids)
     }
 
-    fn report_deepest(cx: &mut TestAppContext, dispatcher: &EventDispatcher) -> Vec<String> {
+    /// The events of every kind that one hover report fires.
+    fn report_deepest(cx: &mut TestAppContext, rig: &Rig) -> Vec<String> {
         let cx = cx.add_empty_window();
+        let dispatcher = &rig.dispatcher;
         cx.update(|window, cx| dispatcher.report_hover(dispatcher.deepest_hovered(), window, cx));
-        serde_json::from_value(seen(dispatcher)).unwrap()
+        rig.fake.take().iter().map(label).collect()
     }
 
     fn remove_the_root(dispatcher: &EventDispatcher) {
-        let host = &mut *dispatcher.host.borrow_mut();
+        let host = &mut *dispatcher.host.document.borrow_mut();
         let (document, root) = (host.document(), host.root());
         host.tree.remove_child(document, root).unwrap();
     }
 
     #[gpui::test]
     fn removing_the_root_under_the_pointer_fires_no_event(cx: &mut TestAppContext) {
-        let (dispatcher, _ids) = resting_pointer();
-        report_deepest(cx, &dispatcher);
-        remove_the_root(&dispatcher);
+        let (rig, _ids) = resting_pointer();
+        report_deepest(cx, &rig);
+        remove_the_root(&rig.dispatcher);
 
-        let got = report_deepest(cx, &dispatcher);
+        let got = report_deepest(cx, &rig);
 
         assert_eq!(got, Vec::<String>::new());
     }
@@ -647,19 +604,19 @@ mod tests {
     fn appending_the_root_back_under_the_pointer_fires_no_enter_at_the_document(
         cx: &mut TestAppContext,
     ) {
-        let (dispatcher, [_, _, c, _]) = resting_pointer();
-        report_deepest(cx, &dispatcher);
-        remove_the_root(&dispatcher);
-        report_deepest(cx, &dispatcher);
-        dispatcher.state.hovered.borrow_mut().insert(c);
+        let (rig, [_, _, c, _]) = resting_pointer();
+        report_deepest(cx, &rig);
+        remove_the_root(&rig.dispatcher);
+        report_deepest(cx, &rig);
+        rig.dispatcher.state.hovered.borrow_mut().insert(c);
         {
-            let host = &mut *dispatcher.host.borrow_mut();
+            let host = &mut *rig.dispatcher.host.document.borrow_mut();
             let (document, root) = (host.document(), host.root());
             host.tree.append_child(document, root).unwrap();
         }
-        let document = dispatcher.host.borrow().document();
+        let document = rig.dispatcher.host.document.borrow().document();
 
-        let got = report_deepest(cx, &dispatcher);
+        let got = report_deepest(cx, &rig);
 
         let at_document = format!("enter@{document}/");
         assert_eq!(
@@ -672,23 +629,24 @@ mod tests {
 
     #[gpui::test]
     fn an_inner_node_removed_under_the_pointer_leaves_its_live_ancestors(cx: &mut TestAppContext) {
-        let (dispatcher, [a, b, c, _]) = resting_pointer();
+        let (rig, [a, b, c, _]) = resting_pointer();
         let (root, document) = {
-            let host = dispatcher.host.borrow();
+            let host = rig.dispatcher.host.document.borrow();
             (host.root(), host.document())
         };
-        report_deepest(cx, &dispatcher);
-        dispatcher
+        report_deepest(cx, &rig);
+        rig.dispatcher
             .host
+            .document
             .borrow_mut()
             .tree
             .remove_child(b, c)
             .unwrap();
-        dispatcher.state.hovered.borrow_mut().clear();
+        rig.dispatcher.state.hovered.borrow_mut().clear();
 
-        let got = report_deepest(cx, &dispatcher);
+        let got = report_deepest(cx, &rig);
 
-        let leave = |node| format!("mouseleave@{node}/{node}/x");
+        let leave = |node| format!("mouseleave@{node}/x");
         assert_eq!(
             got.iter()
                 .filter(|row| row.starts_with("mouseleave"))

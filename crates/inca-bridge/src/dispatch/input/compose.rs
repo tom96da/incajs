@@ -29,8 +29,8 @@ impl EventDispatcher {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::dispatch::input::scene::{InputScene, input_scene, log, record, types};
-    use crate::dispatch::input::scene::{cancel_beforeinput, eval_input, mark, replace, row};
-    use crate::tests::listen;
+    use crate::dispatch::input::scene::{cancel, cancel_beforeinput, eval_input, js_input_scene};
+    use crate::dispatch::input::scene::{mark, replace, row};
     use gpui::TestAppContext;
     use inca_gpui::{EventSink as _, InputRequest};
     use inca_test_macros::gpui_cases;
@@ -96,7 +96,7 @@ mod tests {
 
     #[gpui::test]
     fn a_composition_fires_start_update_and_input_pairs(cx: &mut TestAppContext) {
-        let s = input_scene(cx, "ab");
+        let s = js_input_scene(cx, "ab");
         record(
             &s,
             s.input,
@@ -252,7 +252,7 @@ mod tests {
 
     #[gpui::test]
     fn a_composition_beforeinput_cannot_be_canceled(cx: &mut TestAppContext) {
-        let s = input_scene(cx, "ab");
+        let s = js_input_scene(cx, "ab");
         cancel_beforeinput(&s);
         s.request(cx, mark("k"));
         assert_eq!(s.state().value(), "abk");
@@ -267,7 +267,7 @@ mod tests {
         event: &str,
     ) {
         let s = input_scene(cx, "ab");
-        listen(&s.dispatcher, s.input, event, "(e) => e.preventDefault()");
+        cancel(&s, s.input, event);
         s.request(cx, mark("k"));
         assert_eq!(edited_text(&s), ("abk".to_owned(), Some(2..3)));
     }
@@ -275,12 +275,7 @@ mod tests {
     #[gpui::test]
     fn canceling_compositionend_keeps_the_commit(cx: &mut TestAppContext) {
         let s = input_scene(cx, "ab");
-        listen(
-            &s.dispatcher,
-            s.input,
-            "compositionend",
-            "(e) => e.preventDefault()",
-        );
+        cancel(&s, s.input, "compositionend");
         s.request(cx, mark("k"));
         s.request(cx, replace("か"));
         assert_eq!(edited_text(&s), ("abか".to_owned(), None));
@@ -317,7 +312,7 @@ mod tests {
 
     #[gpui::test]
     fn a_script_that_disables_a_composing_input_ends_the_composition(cx: &mut TestAppContext) {
-        let s = input_scene(cx, "ab");
+        let s = js_input_scene(cx, "ab");
         record(&s, s.input, &["compositionend", "blur"]);
         s.focus(cx, s.input);
         s.request(cx, mark("k"));

@@ -332,7 +332,11 @@ fn an_unprevented_root_write_stays_when_an_inner_container_takes_the_step(cx: &m
 #[gpui::test]
 fn a_script_write_to_an_inert_root_stays(cx: &mut TestAppContext) {
     let mut host = scrolling_root();
-    host.tree.set_attribute(0, "inert", true).unwrap();
+    host.document
+        .get_mut()
+        .tree
+        .set_attribute(0, "inert", true)
+        .unwrap();
     let js = on_wheel(
         0,
         r"

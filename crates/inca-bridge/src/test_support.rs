@@ -56,9 +56,9 @@ pub fn callback_ids(listeners: &EventListeners, target: EventTargetId, event: &s
 ///
 /// Panics when the engine or the bindings fail to initialise.
 #[must_use]
-pub fn engine_with_bindings() -> (Engine, Rc<RefCell<Host>>) {
+pub fn engine_with_bindings() -> (Engine, Rc<Host>) {
     let engine = Engine::new().unwrap();
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     engine.with(|ctx| install(&ctx, &host)).unwrap();
     (engine, host)
 }
@@ -122,7 +122,7 @@ const MEMBER_PRELUDE: &str = r"
 ///
 /// Panics when the body throws or its value has no JSON form.
 #[must_use]
-pub fn member_json(code: &str) -> (serde_json::Value, Rc<RefCell<Host>>) {
+pub fn member_json(code: &str) -> (serde_json::Value, Rc<Host>) {
     let (engine, host) = engine_with_bindings();
     let text: String = engine
         .eval(&format!(
@@ -171,7 +171,7 @@ pub struct Clocked {
     /// The engine, with the bindings and an empty global `log` array.
     pub engine: Rc<Engine>,
     /// The host the engine is bound to.
-    pub host: Rc<RefCell<Host>>,
+    pub host: Rc<Host>,
     now: Rc<Cell<Instant>>,
 }
 
@@ -188,7 +188,7 @@ impl Clocked {
             let now = Rc::clone(&now);
             Rc::new(move || now.get())
         };
-        let host = Rc::new(RefCell::new(Host::with_clock(clock)));
+        let host = Rc::new(Host::with_clock(clock));
         let engine = engine_for(&host);
         engine.eval::<()>("globalThis.log = [];").unwrap();
         Self { engine, host, now }
@@ -197,7 +197,7 @@ impl Clocked {
     /// Moves the clock by `ms` and runs the timers that are due.
     pub fn advance(&self, ms: u64) {
         self.now.set(self.now.get() + Duration::from_millis(ms));
-        let timers = Rc::clone(&self.host.borrow().timers);
+        let timers = Rc::clone(&self.host.js.borrow().timers);
         run_timers(&self.engine, &timers, &stderr_reporter());
     }
 
@@ -220,14 +220,14 @@ impl Default for Clocked {
 /// # Panics
 ///
 /// Panics when the engine fails to evaluate `js` or store it.
-pub fn listen_ahead(engine: &Engine, host: &Rc<RefCell<Host>>, signal: u32, js: &str) {
+pub fn listen_ahead(engine: &Engine, host: &Rc<Host>, signal: u32, js: &str) {
     let callback = engine.with(|ctx| {
         let function: rquickjs::Value = ctx.eval(js).unwrap();
         inca_jsenv::callbacks::store(&ctx, function)
             .unwrap()
             .unwrap()
     });
-    host.borrow_mut().listeners.insert(
+    host.document.borrow_mut().listeners.insert(
         EventTargetId::Signal(signal),
         "abort",
         callback,
@@ -241,7 +241,7 @@ pub fn listen_ahead(engine: &Engine, host: &Rc<RefCell<Host>>, signal: u32, js: 
 /// # Panics
 ///
 /// Panics when the engine or the bindings fail to initialise.
-pub fn engine_for(host: &Rc<RefCell<Host>>) -> Rc<Engine> {
+pub fn engine_for(host: &Rc<Host>) -> Rc<Engine> {
     engine_on_clock(host, system_clock())
 }
 
@@ -250,7 +250,7 @@ pub fn engine_for(host: &Rc<RefCell<Host>>) -> Rc<Engine> {
 /// # Panics
 ///
 /// Panics when the engine or the bindings fail to initialise.
-pub(crate) fn engine_on_clock(host: &Rc<RefCell<Host>>, clock: Clock) -> Rc<Engine> {
+pub(crate) fn engine_on_clock(host: &Rc<Host>, clock: Clock) -> Rc<Engine> {
     let engine = Rc::new(Engine::builder().clock(clock).build().unwrap());
     engine.with(|ctx| install(&ctx, host)).unwrap();
     engine.eval::<()>(LISTEN_JS).unwrap();
@@ -261,7 +261,7 @@ pub(crate) fn engine_on_clock(host: &Rc<RefCell<Host>>, clock: Clock) -> Rc<Engi
 /// `dispatcher`, calling [`EventDispatcher::begin_frame`] on every frame.
 pub struct TestRoot {
     /// The host whose tree is rendered.
-    pub host: Rc<RefCell<Host>>,
+    pub host: Rc<Host>,
     /// The node the rendering starts at.
     pub node: NodeId,
     /// The dispatcher the rendered elements report to.
@@ -271,7 +271,7 @@ pub struct TestRoot {
 impl Render for TestRoot {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.dispatcher.begin_frame(window, cx);
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         render_tree_with_events(
             &host.tree,
             &host.style,
@@ -291,7 +291,7 @@ impl Render for TestRoot {
 /// Panics when the window cannot be updated.
 pub fn mount_root(
     cx: &mut TestAppContext,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     engine: &Rc<Engine>,
     node: NodeId,
 ) -> WindowHandle<TestRoot> {
@@ -313,7 +313,7 @@ pub fn mount_root(
 /// Panics when the window cannot be updated.
 pub fn mount_active(
     cx: &mut TestAppContext,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     engine: &Rc<Engine>,
     node: NodeId,
 ) -> WindowHandle<TestRoot> {
@@ -326,11 +326,9 @@ pub fn mount_active(
 /// A host whose timers read the executor clock of `cx`, so
 /// `cx.executor().advance_clock(..)` moves them.
 #[must_use]
-pub fn host_on_executor_clock(cx: &TestAppContext) -> Rc<RefCell<Host>> {
+pub fn host_on_executor_clock(cx: &TestAppContext) -> Rc<Host> {
     let executor = cx.executor();
-    Rc::new(RefCell::new(Host::with_clock(Rc::new(move || {
-        executor.now()
-    }))))
+    Rc::new(Host::with_clock(Rc::new(move || executor.now())))
 }
 
 /// [`mount_root`] over the root of `host`, with `reporter` and a running timer pump.
@@ -340,11 +338,11 @@ pub fn host_on_executor_clock(cx: &TestAppContext) -> Rc<RefCell<Host>> {
 /// Panics when the window cannot be updated.
 pub fn mount_with_timers(
     cx: &mut TestAppContext,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     engine: &Rc<Engine>,
     reporter: ErrorReporter,
 ) -> WindowHandle<TestRoot> {
-    let node = host.borrow().root();
+    let node = host.document.borrow().root();
     let dispatcher =
         EventDispatcher::new(Rc::clone(engine), Rc::clone(host)).with_reporter(reporter);
     let window = cx.add_window(|_, _| TestRoot {
@@ -370,12 +368,9 @@ pub fn mount_with_timers(
 ///
 /// Panics when the tree rejects a node.
 #[must_use]
-pub fn focusable_tree(
-    children: usize,
-    parent_focusable: bool,
-) -> (Rc<RefCell<Host>>, NodeId, Vec<NodeId>) {
-    let host = Rc::new(RefCell::new(Host::default()));
-    let mut host_mut = host.borrow_mut();
+pub fn focusable_tree(children: usize, parent_focusable: bool) -> (Rc<Host>, NodeId, Vec<NodeId>) {
+    let host = Rc::new(Host::default());
+    let mut host_mut = host.document.borrow_mut();
     let parent = host_mut.tree.create_node("div").unwrap();
     let root = host_mut.root();
     host_mut.tree.append_child(root, parent).unwrap();

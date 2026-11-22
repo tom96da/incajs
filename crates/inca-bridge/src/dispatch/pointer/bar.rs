@@ -21,7 +21,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let first = self.host.borrow().held_buttons == 0;
+        let first = self.host.window.borrow().held_buttons == 0;
         self.update_held_buttons("mousedown", button);
         self.begin_pointer(payload, button, window, cx);
         let target = self.captured_or(target);
@@ -75,8 +75,8 @@ impl EventDispatcher {
         }
         if last {
             self.state.pointerdown_canceled.set(false);
-            if self.host.borrow().capture_active.is_some() {
-                self.host.borrow_mut().capture_pending = None;
+            if self.host.window.borrow().capture_active.is_some() {
+                self.host.document.borrow_mut().capture_pending = None;
                 self.process_capture(payload, button, window, cx);
                 self.report_hover_with(self.deepest_hovered(), button, window, cx);
             }
@@ -113,7 +113,7 @@ mod tests {
     #[gpui::test]
     fn a_canceled_pointerdown_on_a_bar_suppresses_the_mouse_events(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.listen(s.a, "pointerdown", "(e) => e.preventDefault()");
+        s.cancel("pointerdown", std::rc::Rc::new(std::cell::Cell::new(true)));
         s.bar_down(s.a, 0);
         s.bar_up(s.a, 0);
         let a = s.a;
@@ -150,17 +150,14 @@ mod tests {
     #[gpui::test]
     fn the_last_release_on_a_bar_ends_a_pointer_capture(cx: &mut TestAppContext) {
         let mut s = scene(cx);
-        s.listen(
-            s.a,
-            "pointerdown",
-            &format!("(e) => __inca_native__.setPointerCapture({}, 1)", s.a),
-        );
+        s.capture_on_pointerdown(s.a);
         s.bar_down(s.a, 0);
         s.bar_up(s.a, 0);
         let a = s.a;
         assert!(s.take().contains(&format!("lostpointercapture@{a}")));
-        let host = s.host.borrow();
-        assert_eq!((host.capture_pending, host.capture_active), (None, None));
+        let pending = s.host.document.borrow().capture_pending;
+        let active = s.host.window.borrow().capture_active;
+        assert_eq!((pending, active), (None, None));
     }
 
     /// The events of a move over `b` with the left button held during a drag of `a`.
@@ -235,11 +232,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let mut s = scene(cx);
-        s.listen(
-            s.a,
-            "pointerdown",
-            &format!("(e) => __inca_native__.setPointerCapture({}, 1)", s.a),
-        );
+        s.capture_on_pointerdown(s.a);
         s.hover(s.a);
         s.bar_down(s.a, 0);
         *s.dispatcher.state.hovered.borrow_mut() = [s.b].into();

@@ -5,7 +5,6 @@
 //! `namespaceURI` and `prefix`, `matches`, the pointer capture and `childElementCount`. An element
 //! the host has freed reads `""` for the first two names and `null` for the others.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
@@ -23,7 +22,7 @@ use crate::bindings::handle::{ELEMENT, PARENT_NODE, receiver_of};
 use crate::bindings::host::Host;
 
 /// Defines the name getters on `Element.prototype`.
-pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let proto = required_prototype(ctx, "Element")?;
     define_name(ctx, &proto, host, "tagName", |ctx, node| {
         node.map_or_else(String::new, |node| node.tag_name().into_owned())
@@ -49,7 +48,7 @@ pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
         |ctx, host, id, _, args| {
             require(ctx, "matches", args, 1)?;
             let selector = text(ctx, &args[0])?;
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             host.sync_focus_style();
             let syntax = |err: inca_style::SelectorError| {
                 Exception::throw_dom(ctx, "SyntaxError", &err.to_string())
@@ -71,7 +70,10 @@ pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
             "childElementCount",
             &PARENT_NODE,
             |_, host, id, _| {
-                Ok(u32::try_from(host.borrow().tree.child_count(id, true)).unwrap_or(u32::MAX))
+                Ok(
+                    u32::try_from(host.document.borrow().tree.child_count(id, true))
+                        .unwrap_or(u32::MAX),
+                )
             },
         )?;
     }
@@ -88,7 +90,7 @@ fn pointer_id<'js>(ctx: &Ctx<'js>, name: &str, args: &[Value<'js>]) -> JsResult<
 fn pointer_capture<'js>(
     ctx: &Ctx<'js>,
     proto: &rquickjs::Object<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
 ) -> JsResult<()> {
     method(
         ctx,
@@ -126,7 +128,7 @@ fn pointer_capture<'js>(
         &ELEMENT,
         |ctx, host, id, _, args| {
             let pointer = pointer_id(ctx, "hasPointerCapture", args)?;
-            Ok(has_capture(&host.borrow(), id, pointer))
+            Ok(has_capture(&host.document.borrow(), id, pointer))
         },
     )
 }
@@ -136,14 +138,14 @@ fn pointer_capture<'js>(
 fn define_name<'js>(
     ctx: &Ctx<'js>,
     proto: &rquickjs::Object<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     key: &str,
     read: impl Fn(&Ctx<'js>, Option<&VirtualNode>) -> JsResult<Value<'js>> + 'js,
 ) -> JsResult<()> {
     let host = Rc::clone(host);
     define_this_getter(ctx, proto, key, move |ctx, this: Value<'js>| {
         let (node, _, _) = receiver_of(ctx, &this, &ELEMENT)?;
-        read(ctx, host.borrow().tree.get(node))
+        read(ctx, host.document.borrow().tree.get(node))
     })
 }
 

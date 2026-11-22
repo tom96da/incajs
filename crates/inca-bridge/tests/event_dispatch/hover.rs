@@ -16,9 +16,9 @@ fn last_event_id(engine: &Engine) -> u64 {
 /// exactly once, in order.
 #[gpui::test]
 fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let node = {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let node = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, node, "width", 100.0).unwrap();
         set_style(&mut host.tree, node, "height", 100.0).unwrap();
@@ -81,9 +81,9 @@ fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
 /// back only a `bool`.
 #[gpui::test]
 fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let node = {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let node = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, node, "width", 100.0).unwrap();
         set_style(&mut host.tree, node, "height", 100.0).unwrap();
@@ -249,7 +249,7 @@ fn movement_tracks_the_delta_from_the_last_pointer_move(cx: &mut TestAppContext)
 fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppContext) {
     let (host, parent) = build_clickable_tree();
     let child = {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let child = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, child, "width", 100.0).unwrap();
         set_style(&mut host.tree, child, "height", 100.0).unwrap();
@@ -340,9 +340,9 @@ fn the_hover_events_of_a_move_precede_its_mousemove(cx: &mut TestAppContext) {
 fn a_node_replacing_the_hovered_one_gets_enter_events_under_a_resting_pointer(
     cx: &mut TestAppContext,
 ) {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let (parent, old) = {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         let parent = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, parent, "width", 100.0).unwrap();
         set_style(&mut host.tree, parent, "height", 100.0).unwrap();
@@ -378,7 +378,7 @@ fn a_node_replacing_the_hovered_one_gets_enter_events_under_a_resting_pointer(
         Modifiers::none(),
     );
     let new = {
-        let mut host = host.borrow_mut();
+        let mut host = host.document.borrow_mut();
         host.tree.remove_child(parent, old).unwrap();
         let new = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, new, "width", 100.0).unwrap();

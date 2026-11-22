@@ -602,7 +602,7 @@ mod tests {
         held: gpui::Modifiers,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -652,7 +652,7 @@ mod tests {
         want: [bool; 4],
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -678,7 +678,7 @@ mod tests {
     #[gpui::test]
     fn a_detached_get_modifier_state_throws_type_error(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -714,7 +714,7 @@ mod tests {
         want: bool,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -742,7 +742,7 @@ mod tests {
         arg: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,

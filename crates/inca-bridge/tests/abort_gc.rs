@@ -7,7 +7,6 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
 
@@ -41,7 +40,7 @@ fn run_in_child(name: &str) {
 
 /// Builds the signals of `setup`, then drops the engine.
 fn drop_after(setup: &str) {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let engine = engine_for(&host);
     engine.eval::<()>(setup).unwrap();
     drop(engine);

@@ -3,7 +3,6 @@
 
 //! The `click` native that runs an untrusted click from a script.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use inca_document::{EventPayload, MousePayload};
@@ -16,13 +15,13 @@ use crate::bindings::Host;
 
 /// Runs an untrusted `click` at `target`. A disabled button or input, a node that left the tree
 /// and a node whose own click is still running ignore the call.
-pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
+pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<Host>, target: NodeId) {
     {
-        let mut host = host.borrow_mut();
-        let Some(node) = host.tree.get(target) else {
+        let document = host.document.borrow();
+        let Some(node) = document.tree.get(target) else {
             return;
         };
-        if inca_node::is_disabled_control(node) || !host.clicking.insert(target) {
+        if inca_node::is_disabled_control(node) || !host.js.borrow_mut().clicking.insert(target) {
             return;
         }
     }
@@ -35,10 +34,16 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
         EventTargetId::Node(target),
         &payload,
     );
-    if listened(&host.borrow(), walk.name, walk.flags, walk.target, walk.cut) {
+    if listened(
+        &host.document.borrow(),
+        walk.name,
+        walk.flags,
+        walk.target,
+        walk.cut,
+    ) {
         run(ctx, host, &walk, next_event_id(host));
     }
-    host.borrow_mut().clicking.remove(&target);
+    host.js.borrow_mut().clicking.remove(&target);
 }
 
 #[cfg(test)]
@@ -86,9 +91,15 @@ mod tests {
     #[test]
     fn click_on_a_disabled_button_does_nothing_and_on_an_enabled_one_runs() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let button = host.borrow_mut().tree.create_node("button").unwrap();
+        let button = host
+            .document
+            .borrow_mut()
+            .tree
+            .create_node("button")
+            .unwrap();
         listen(&dispatcher, button, "click", "() => out.push('click')");
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .tree
             .set_attribute(button, "disabled", true)
             .unwrap();
@@ -96,7 +107,8 @@ mod tests {
             &dispatcher,
             &format!("(__inca_native__.click({button}), out.length)"),
         );
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .tree
             .remove_attribute(button, "disabled")
             .unwrap();
@@ -113,7 +125,7 @@ mod tests {
     #[test]
     fn click_inside_the_nodes_own_click_does_nothing_and_a_later_click_runs() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -125,7 +137,7 @@ mod tests {
             &format!("(__inca_native__.click({node}), __inca_native__.click({node}), out)"),
         );
         assert_eq!(got, serde_json::json!(["click", "click"]));
-        assert!(host.borrow().clicking.is_empty());
+        assert!(host.js.borrow().clicking.is_empty());
     }
 
     #[test]
@@ -156,12 +168,12 @@ mod tests {
     #[test]
     fn click_on_an_unheard_node_takes_no_event_id() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(&format!("__inca_native__.click({node});"))
             .unwrap();
-        assert_eq!(host.borrow().last_event_id, 0);
+        assert_eq!(host.document.borrow().last_event_id, 0);
     }
 
     #[test]
@@ -187,7 +199,7 @@ mod tests {
     #[test]
     fn click_reports_a_throwing_listener_through_the_pending_failures() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,

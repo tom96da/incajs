@@ -4,12 +4,12 @@
 use inca_node::{AttributeValue, ParsedHtml};
 use inca_style::set_style_text;
 
-use super::super::host::Host;
+use super::super::host::DocumentState;
 
 /// The steps that follow a parse once its nodes are in place: applies each `style` attribute as
 /// style props and prints its warnings, gives an `input` the typed text of its `value` attribute
 /// and frees the result fragment, which is empty.
-pub(super) fn finish(host: &mut Host, parsed: &ParsedHtml) {
+pub(super) fn finish(host: &mut DocumentState, parsed: &ParsedHtml) {
     for node in &parsed.nodes {
         let style = host
             .tree
@@ -62,7 +62,7 @@ mod tests {
         n.appendChild(n.rootNodeId(), host);
         ";
 
-    fn engine() -> (Engine, Rc<RefCell<Host>>) {
+    fn engine() -> (Engine, Rc<Host>) {
         let (engine, host) = engine_with_bindings();
         engine.eval::<()>(SETUP).unwrap();
         (engine, host)
@@ -81,10 +81,11 @@ mod tests {
     }
 
     /// Collects the warnings the host prints.
-    fn collect_warnings(host: &Rc<RefCell<Host>>) -> Rc<RefCell<Vec<String>>> {
+    fn collect_warnings(host: &Rc<Host>) -> Rc<RefCell<Vec<String>>> {
         let lines = Rc::new(RefCell::new(Vec::new()));
         let sink = Rc::clone(&lines);
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .warnings
             .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
         lines
@@ -113,7 +114,10 @@ mod tests {
             ))
             .unwrap();
 
-        assert_eq!(host.borrow().inputs.borrow().contains_key(&id), typed);
+        assert_eq!(
+            host.document.borrow().inputs.borrow().contains_key(&id),
+            typed
+        );
     }
 
     #[test]
@@ -141,7 +145,7 @@ mod tests {
 
         let id = parse(&engine, r#"<div style="COLOR: #f00">"#);
 
-        let host = host.borrow();
+        let host = host.document.borrow();
         assert_eq!(
             host.tree.get(id).unwrap().style_props().get("text_color"),
             Some(&"#f00".into())
@@ -154,7 +158,7 @@ mod tests {
 
         let id = parse(&engine, r#"<div style="width: 1px" id="a">"#);
 
-        let host = host.borrow();
+        let host = host.document.borrow();
         let keys: Vec<&String> = host.tree.get(id).unwrap().attributes().keys().collect();
         assert_eq!(keys, ["style", "id"]);
     }
@@ -165,7 +169,7 @@ mod tests {
 
         let id = parse(&engine, r#"<div style="WIDTH:1px; bogus: 1; height:2PX">"#);
 
-        let host = host.borrow();
+        let host = host.document.borrow();
         assert_eq!(
             host.tree.get(id).unwrap().attributes().get("style"),
             Some(&"width: 1px; height: 2px;".into())
@@ -181,7 +185,15 @@ mod tests {
 
         let id = parse(&engine, markup);
 
-        assert!(host.borrow().tree.get(id).unwrap().style_props().is_empty());
+        assert!(
+            host.document
+                .borrow()
+                .tree
+                .get(id)
+                .unwrap()
+                .style_props()
+                .is_empty()
+        );
     }
 
     #[rstest]

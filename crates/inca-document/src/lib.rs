@@ -11,6 +11,7 @@ pub mod markup;
 pub mod removal;
 pub mod semantics;
 pub mod text;
+pub mod view;
 pub mod warnings;
 
 pub use attributes::store_attribute;
@@ -34,6 +35,7 @@ pub use semantics::{
     element_aria_attribute,
 };
 pub use text::{Edit, InputPayload, InputState, InputType, Motion};
+pub use view::{NodeBox, ScrollRange, View};
 pub use warnings::StyleWarnings;
 
 #[cfg(test)]

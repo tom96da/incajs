@@ -5,7 +5,6 @@
 //! `outerHTML`. An attribute reads as text, and a write stores text. A freed element reads `""`,
 //! `null`, `false` or `[]` and ignores a write.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use rquickjs::{Ctx, Result as JsResult, Value};
@@ -30,7 +29,7 @@ fn read_attribute(
     id: NodeId,
     name: &str,
 ) -> JsResult<Option<String>> {
-    let host = host.borrow();
+    let host = host.document.borrow();
     let Some(node) = host.tree.get(id) else {
         return Ok(None);
     };
@@ -50,7 +49,7 @@ fn write_attribute(
     value: String,
 ) -> JsResult<()> {
     check_attribute_name(ctx, name)?;
-    let mut host = host.borrow_mut();
+    let mut host = host.document.borrow_mut();
     if host.tree.get(id).is_none() {
         return Ok(());
     }
@@ -61,7 +60,7 @@ fn write_attribute(
 fn define_reflected<'js>(
     ctx: &Ctx<'js>,
     proto: &rquickjs::Object<'js>,
-    host: &Rc<RefCell<Host>>,
+    host: &Rc<Host>,
     key: &str,
     attribute: &'static str,
 ) -> JsResult<()> {
@@ -80,7 +79,7 @@ fn define_reflected<'js>(
 
 /// The markup of the node `id`, `""` for a freed node.
 fn markup(ctx: &Ctx<'_>, host: &Shared, id: NodeId, scope: HtmlScope) -> JsResult<String> {
-    let host = host.borrow();
+    let host = host.document.borrow();
     if host.tree.get(id).is_none() {
         return Ok(String::new());
     }
@@ -90,7 +89,7 @@ fn markup(ctx: &Ctx<'_>, host: &Shared, id: NodeId, scope: HtmlScope) -> JsResul
 }
 
 /// Defines the attribute members on `Element.prototype`.
-pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
+pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     let proto = required_prototype(ctx, "Element")?;
     define_reflected(ctx, &proto, host, "id", "id")?;
     define_reflected(ctx, &proto, host, "className", "class")?;
@@ -144,7 +143,7 @@ pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
         |ctx, host, id, _, args| {
             require(ctx, "removeAttribute", args, 1)?;
             let name = text(ctx, &args[0])?;
-            let mut host = host.borrow_mut();
+            let mut host = host.document.borrow_mut();
             if host.tree.get(id).is_none() {
                 return Ok(());
             }
@@ -159,9 +158,14 @@ pub(super) fn install(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>) -> JsResult<()> {
         0,
         &ELEMENT,
         |_, host, id, _, _| {
-            Ok(host.borrow().tree.get(id).map_or_else(Vec::new, |node| {
-                node.attributes().keys().cloned().collect::<Vec<_>>()
-            }))
+            Ok(host
+                .document
+                .borrow()
+                .tree
+                .get(id)
+                .map_or_else(Vec::new, |node| {
+                    node.attributes().keys().cloned().collect::<Vec<_>>()
+                }))
         },
     )?;
     getter(
@@ -393,7 +397,7 @@ mod tests {
         );
 
         let id = u32::try_from(got.as_u64().unwrap()).unwrap();
-        let tab_dirty = host.borrow_mut().focus.take_tab_dirty();
+        let tab_dirty = host.document.borrow_mut().focus.take_tab_dirty();
         assert!(tab_dirty.contains(&id));
     }
 
@@ -409,7 +413,13 @@ mod tests {
         );
 
         let id = u32::try_from(got.as_u64().unwrap()).unwrap();
-        assert!(host.borrow_mut().focus.take_tab_dirty().contains(&id));
+        assert!(
+            host.document
+                .borrow_mut()
+                .focus
+                .take_tab_dirty()
+                .contains(&id)
+        );
     }
 
     #[test]

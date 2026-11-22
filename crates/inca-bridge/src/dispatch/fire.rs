@@ -11,7 +11,7 @@ use inca_node::{NodeId, is_disabled_control};
 
 use super::EventDispatcher;
 use crate::EventTargetId;
-use crate::event::{self, Walk};
+use crate::event::Walk;
 
 impl EventDispatcher {
     /// Dispatches `event` along the path of `target`, with `target` as its
@@ -25,24 +25,20 @@ impl EventDispatcher {
         payload: &EventPayload,
         cut: &[NodeId],
     ) -> (bool, bool) {
-        let outcome = event::walk(
-            &self.engine,
-            &self.host,
-            &Walk {
-                name: event,
-                flags: flags_of(
-                    event,
-                    match payload {
-                        EventPayload::Input(input) => Some(input.input_type),
-                        _ => None,
-                    },
-                ),
-                target,
-                cut,
-                payload,
-                trusted: true,
-            },
-        );
+        let outcome = self.script.walk(&Walk {
+            name: event,
+            flags: flags_of(
+                event,
+                match payload {
+                    EventPayload::Input(input) => Some(input.input_type),
+                    _ => None,
+                },
+            ),
+            target,
+            cut,
+            payload,
+            trusted: true,
+        });
         // Reported after the walk: a reporter is free to do anything, and
         // re-entering the engine from inside `Engine::with` panics.
         self.report_pending();
@@ -96,7 +92,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        if self.host.borrow().tree.get(start).is_none() {
+        if self.host.document.borrow().tree.get(start).is_none() {
             return false;
         }
         self.fire_inner(start, event, payload, window, cx)
@@ -110,7 +106,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        self.host.borrow_mut().focus.observe(window, cx);
+        self.host.document.borrow_mut().focus.observe(window, cx);
         let payload = &self.prepare(event, start, payload, window);
         let cut = self.cut_by_disabled_control(event, payload, cx);
         let (canceled, entered) = self.walk(EventTargetId::Node(start), event, payload, &cut);
@@ -124,8 +120,7 @@ impl EventDispatcher {
     /// `target` in the last drawn frame, or equal to the client position when
     /// `target` has no recorded box.
     fn with_offset(&self, target: NodeId, mut payload: EventPayload) -> EventPayload {
-        let host = self.host.borrow();
-        let layout = host.layout_of(target);
+        let layout = self.host.window.borrow().layout_of(target);
         if let Some(mouse) = payload.mouse_mut() {
             let (left, top) = layout.map_or((0.0, 0.0), |l| {
                 let border = f32::from(l.border);
@@ -142,7 +137,7 @@ impl EventDispatcher {
 
     /// `payload` with a `related_target` that left the tree set to `None`.
     fn live_related(&self, mut payload: EventPayload) -> EventPayload {
-        let gone = |id: &NodeId| self.host.borrow().tree.get(*id).is_none();
+        let gone = |id: &NodeId| self.host.document.borrow().tree.get(*id).is_none();
         match &mut payload {
             EventPayload::Focus { related_target } => {
                 if related_target.as_ref().is_some_and(gone) {
@@ -162,7 +157,7 @@ impl EventDispatcher {
 
     /// `found` when that node is still in the tree, else `node_id`.
     pub(super) fn resolve(&self, found: Option<NodeId>, node_id: NodeId) -> NodeId {
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         found
             .filter(|id| host.tree.get(*id).is_some())
             .unwrap_or(node_id)
@@ -170,7 +165,7 @@ impl EventDispatcher {
 
     /// `target` and its ancestors up to the document, nearest first.
     pub(super) fn path_from(&self, target: NodeId) -> Vec<NodeId> {
-        self.host.borrow().tree.ancestors(target).collect()
+        self.host.document.borrow().tree.ancestors(target).collect()
     }
 
     /// The nearest node that is `a`, `b` or an ancestor of both.
@@ -199,7 +194,7 @@ impl EventDispatcher {
         if keyboard || !matches!(event, "mousedown" | "mouseup" | "click" | "dblclick") {
             return Vec::new();
         }
-        let host = self.host.borrow();
+        let host = self.host.document.borrow();
         let disabled = |id: &NodeId| host.tree.get(*id).is_some_and(is_disabled_control);
         let button = match payload {
             EventPayload::Mouse(mouse) => Some(mouse.button),
@@ -229,7 +224,7 @@ impl EventDispatcher {
     ) {
         let path = self.path_from(target);
         let handle = {
-            let mut host = self.host.borrow_mut();
+            let mut host = self.host.document.borrow_mut();
             let focusing = if prevented {
                 None
             } else {
@@ -254,7 +249,7 @@ impl EventDispatcher {
 
     pub(super) fn key_target(&self, window: &mut Window, cx: &mut App) -> NodeId {
         let (top, focused) = {
-            let host = self.host.borrow();
+            let host = self.host.document.borrow();
             (host.top(), host.focus.focused_node(window, cx))
         };
         self.resolve(focused, top)
@@ -267,14 +262,14 @@ mod tests {
     use crate::EventDispatcher;
     use crate::Host;
     use crate::tests::{
-        dispatcher_with_engine, fire_and_read, listen, listen_with, mouse_at, read_out,
-        tree_of_three, wheel_at,
+        FakeScript, Walked, dispatcher_with_engine, fake_dispatcher, fire_and_read, listen,
+        listen_with, mouse_at, tree_of_three, wheel_at,
     };
     use gpui::{TestAppContext, point, px};
     use inca_document::{EventPayload, MousePayload};
     use inca_gpui::EventSink;
     use inca_node::NodeId;
-    use std::cell::RefCell;
+
     use std::rc::Rc;
 
     #[gpui::test]
@@ -305,27 +300,39 @@ mod tests {
 
     #[gpui::test]
     fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        let root = host.borrow().root();
-        host.borrow_mut().tree.append_child(root, node).unwrap();
+        let (dispatcher, host, _fake) = fake_dispatcher();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let root = host.document.borrow().root();
+        host.document
+            .borrow_mut()
+            .tree
+            .append_child(root, node)
+            .unwrap();
         assert!(!dispatcher.tracks_pointer());
 
-        listen(&dispatcher, node, "keydown", "() => {}");
+        host.document.borrow_mut().listeners.insert(
+            crate::EventTargetId::Node(node),
+            "keydown",
+            1,
+            false,
+            false,
+        );
         assert!(dispatcher.tracks_pointer());
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .listeners
             .remove(crate::EventTargetId::Node(node), "keydown", 1);
         assert!(!dispatcher.tracks_pointer());
 
-        host.borrow_mut()
+        host.document
+            .borrow_mut()
             .tree
             .set_attribute(node, "tabindex", "0")
             .unwrap();
-        host.borrow_mut().focus.mark_tab_dirty(node);
+        host.document.borrow_mut().focus.mark_tab_dirty(node);
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
-            let host = &mut *host.borrow_mut();
+            let host = &mut *host.document.borrow_mut();
             let _ = host
                 .focus
                 .apply_pending(&host.tree, &host.style, window, cx);
@@ -336,7 +343,7 @@ mod tests {
     #[gpui::test]
     fn an_event_nobody_keeps_is_collected_with_its_state(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -357,7 +364,7 @@ mod tests {
     #[gpui::test]
     fn an_unlistened_pointer_or_key_input_leaves_the_engine_untouched(cx: &mut TestAppContext) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(&dispatcher, node, "click", "() => {}");
         dispatcher
             .engine
@@ -382,7 +389,7 @@ mod tests {
         for event in ["mousemove", "wheel", "keydown"] {
             // A key goes to the root when nothing is focused.
             let listener = if event == "keydown" {
-                host.borrow().root()
+                host.document.borrow().root()
             } else {
                 node
             };
@@ -431,7 +438,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(
@@ -480,14 +487,14 @@ mod tests {
         #[case] css: &str,
         #[case] expected: bool,
     ) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, _fake) = fake_dispatcher();
         crate::tests::add_sheet(&host, css);
 
         assert_eq!(dispatcher.tracks_pointer(), expected);
     }
 
-    fn record_box(host: &Rc<RefCell<Host>>, node: NodeId, left: f32, top: f32, border: f32) {
-        host.borrow().layout.borrow_mut().insert(
+    fn record_box(host: &Rc<Host>, node: NodeId, left: f32, top: f32, border: f32) {
+        host.window.borrow().layout.borrow_mut().insert(
             node,
             inca_gpui::NodeLayout {
                 bounds: gpui::Bounds::new(
@@ -501,93 +508,113 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn offset_falls_back_to_the_client_position_when_unrecorded(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, parent, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            parent,
-            "click",
-            "(e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-        );
-        let click = EventPayload::Mouse(MousePayload::at(
+    /// Fires `event` at `start` on a fake script and returns the walks it recorded.
+    fn fire_walked(
+        cx: &mut TestAppContext,
+        dispatcher: &EventDispatcher,
+        fake: &FakeScript,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
+    ) -> Vec<Walked> {
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            dispatcher.fire(start, event, payload, window, cx);
+        });
+        fake.take()
+    }
+
+    fn offsets(walked: &Walked) -> (f32, f32, f32, f32) {
+        let mouse = walked.mouse();
+        (
+            mouse.offset_x,
+            mouse.offset_y,
+            mouse.client_x,
+            mouse.client_y,
+        )
+    }
+
+    fn click_at_60_40() -> EventPayload {
+        EventPayload::Mouse(MousePayload::at(
             60.0,
             40.0,
             inca_document::Modifiers::none(),
-        ));
-
-        let out = fire_and_read(cx, &dispatcher, child, "click", &click);
-        assert_eq!(out, serde_json::json!([[child, 60, 40, 60, 40]]));
+        ))
     }
 
     #[gpui::test]
-    fn a_parent_listener_reads_the_targets_offset(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+    fn offset_falls_back_to_the_client_position_when_unrecorded(cx: &mut TestAppContext) {
+        let (dispatcher, host, fake) = fake_dispatcher();
+        let [_, _, child] = tree_of_three(&host);
+
+        let walks = fire_walked(cx, &dispatcher, &fake, child, "click", &click_at_60_40());
+
+        assert_eq!(walks.len(), 1);
+        assert_eq!(offsets(&walks[0]), (60.0, 40.0, 60.0, 40.0));
+    }
+
+    #[gpui::test]
+    fn the_offset_is_measured_from_the_target_not_from_an_ancestor(cx: &mut TestAppContext) {
+        let (dispatcher, host, fake) = fake_dispatcher();
         let [_, parent, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            parent,
-            "click",
-            "(e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-        );
-        let click = EventPayload::Mouse(MousePayload::at(
-            60.0,
-            40.0,
-            inca_document::Modifiers::none(),
-        ));
         record_box(&host, parent, 500.0, 500.0, 9.0);
         record_box(&host, child, 10.0, 20.0, 2.0);
-        let out = fire_and_read(cx, &dispatcher, child, "click", &click);
-        assert_eq!(out, serde_json::json!([[child, 48, 18, 60, 40]]));
+
+        let walks = fire_walked(cx, &dispatcher, &fake, child, "click", &click_at_60_40());
+
+        assert_eq!(walks.len(), 1);
+        assert_eq!(walks[0].target_text(), child.to_string());
+        assert_eq!(offsets(&walks[0]), (48.0, 18.0, 60.0, 40.0));
     }
 
     #[gpui::test]
     fn hover_events_measure_the_offset_from_the_node_they_fire_at(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, parent, child] = tree_of_three(&host);
-        for event in ["mouseover", "mouseenter"] {
-            listen(
-                &dispatcher,
-                parent,
-                event,
-                "(e) => out.push([e.type, e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-            );
-        }
+        let (dispatcher, host, fake) = fake_dispatcher();
+        let [outer, parent, child] = tree_of_three(&host);
         record_box(&host, parent, 10.0, 20.0, 2.0);
         record_box(&host, child, 30.0, 40.0, 0.0);
 
-        // The pointer is over `child`: `mouseover` fires there and bubbles to
-        // `parent`, then `mouseenter` fires at `parent`.
+        // The pointer is over `child`: `mouseover` fires there and then `mouseenter` fires at
+        // each node of the path. The pointer is at (0,0) in the test window.
         let cx = cx.add_empty_window();
         cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
 
-        let out = read_out(&dispatcher);
-        // The pointer is at (0,0) in the test window. Each event reads the box
-        // of its own target.
+        let rows: Vec<_> = fake
+            .take()
+            .iter()
+            .filter(|walked| walked.name.starts_with("mouse"))
+            .map(|walked| (walked.label(), offsets(walked)))
+            .collect();
         assert_eq!(
-            out,
-            serde_json::json!([
-                ["mouseover", child, -30, -40, 0, 0],
-                ["mouseenter", parent, -12, -22, 0, 0]
-            ])
+            rows,
+            [
+                (format!("mouseover@{child}"), (-30.0, -40.0, 0.0, 0.0)),
+                (format!("mouseenter@{outer}"), (0.0, 0.0, 0.0, 0.0)),
+                (format!("mouseenter@{parent}"), (-12.0, -22.0, 0.0, 0.0)),
+                (format!("mouseenter@{child}"), (-30.0, -40.0, 0.0, 0.0)),
+            ]
         );
     }
 
     #[gpui::test]
     fn a_wheel_event_carries_the_offset(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let (dispatcher, host, fake) = fake_dispatcher();
         let [_, _, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            child,
-            "wheel",
-            "(e) => out.push([e.offsetX, e.offsetY])",
-        );
         record_box(&host, child, 10.0, 20.0, 0.0);
 
-        let out = fire_and_read(cx, &dispatcher, child, "wheel", &wheel_at(60.0, 40.0));
+        let walks = fire_walked(
+            cx,
+            &dispatcher,
+            &fake,
+            child,
+            "wheel",
+            &wheel_at(60.0, 40.0),
+        );
 
-        assert_eq!(out, serde_json::json!([[50, 20]]));
+        assert_eq!(walks.len(), 1);
+        let EventPayload::Wheel(wheel) = &walks[0].payload else {
+            panic!("expected a wheel payload");
+        };
+        assert_eq!((wheel.mouse.offset_x, wheel.mouse.offset_y), (50.0, 20.0));
     }
 }

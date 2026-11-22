@@ -7,7 +7,6 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
 
@@ -48,9 +47,9 @@ fn run_in_child(name: &str) {
 /// nodes, outermost first. `__inca_targets__` gives a new `{ node }` object
 /// per id, so only the event keeps it.
 fn three_nodes() -> (EventDispatcher, Rc<Engine>, [NodeId; 3]) {
-    let host = Rc::new(RefCell::new(Host::default()));
+    let host = Rc::new(Host::default());
     let nodes = {
-        let mut h = host.borrow_mut();
+        let mut h = host.document.borrow_mut();
         let outer = h.tree.create_node("div").unwrap();
         let parent = h.tree.create_node("div").unwrap();
         let child = h.tree.create_node("div").unwrap();
