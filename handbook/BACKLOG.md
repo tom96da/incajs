@@ -264,9 +264,9 @@ A fixed entry is deleted and its ID is never reused.
   which one it is.
 
 - **B-026 More `MouseEvent`/`KeyboardEvent` fields could reach JS**
-  `Units: gpui,bridge · Size: M–L · Impact: Low`
+  `Units: document,gpui,bridge · Size: M–L · Impact: Low`
 
-  `crates/inca-gpui/src/event_sink.rs`'s `MousePayload`/`KeyPayload`
+  `MousePayload`/`KeyPayload` in `crates/inca-document/src/event/payload.rs`
   carry a deliberate subset of each DOM type's own fields. What's between
   each missing one and landing differs:
   - `screenX`/`screenY` are `Window::bounds`' origin plus the client
@@ -2021,11 +2021,11 @@ A fixed entry is deleted and its ID is never reused.
   and let the next pointer move report the change.
 
 - **B-375 `compositionupdate` and `compositionend` are cancelable**
-  `Units: gpui,bridge · Size: S · Impact: Low`
+  `Units: document · Size: S · Impact: Low`
 
   The host fires both events as cancelable, so `preventDefault()` sets `defaultPrevented` on them.
   UI Events defines both as not cancelable. Fix: give the `compositionupdate` and `compositionend`
-  rows of `EVENTS` in `event_sink/spec.rs` the flags of the standard.
+  rows of `EVENTS` in `crates/inca-document/src/event/flags.rs` the flags of the standard.
 
 - **B-376 A window deactivation ends the pointer capture**
   `Units: bridge · Size: S · Impact: Low`

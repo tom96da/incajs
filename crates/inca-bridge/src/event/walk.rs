@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use inca_gpui::EventPayload;
+use inca_document::{EventPayload, deliver, path_from};
 use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 use rquickjs::{Ctx, Result as JsResult};
@@ -13,28 +13,19 @@ use super::construct::create;
 use super::{Flags, IncaEvent};
 use crate::EventTargetId;
 use crate::bindings::Host;
-use listeners::deliver;
+use listeners::JsInvoke;
 
 mod abort;
+mod click;
 mod listeners;
 mod script;
 mod targets;
 
 pub(crate) use abort::fire_abort;
-pub(crate) use script::{click, dispatch_event, lose_focus};
+pub(crate) use click::click;
+pub(crate) use inca_document::Walk;
+pub(crate) use script::{dispatch_event, lose_focus};
 pub(super) use targets::targets_of;
-
-/// What one walk needs to know.
-pub(crate) struct Walk<'a> {
-    pub(crate) name: &'a str,
-    pub(crate) flags: Flags,
-    pub(crate) target: EventTargetId,
-    /// The nodes whose listeners do not run. A cut silences window too.
-    pub(crate) cut: &'a [NodeId],
-    pub(crate) payload: &'a EventPayload,
-    /// The value of `isTrusted` on the event the walk creates.
-    pub(crate) trusted: bool,
-}
 
 /// What a walk asked of its caller.
 #[derive(Default)]
@@ -43,44 +34,6 @@ pub(crate) struct Outcome {
     pub(crate) canceled: bool,
     /// The walk entered the engine, so jobs may be queued.
     pub(crate) entered: bool,
-}
-
-/// The targets an event fired at `target` travels through, nearest first: the
-/// nodes from `target` up to the document, then window. A node outside the
-/// document never reaches window. A signal is a path of its own.
-pub(crate) fn path_from(host: &Host, target: EventTargetId) -> Vec<EventTargetId> {
-    if let EventTargetId::Signal(_) = target {
-        return vec![target];
-    }
-    let mut path = Vec::new();
-    if let EventTargetId::Node(node) = target {
-        let ancestors: Vec<_> = host.tree.ancestors(node).collect();
-        let connected = ancestors.last().copied() == host.tree.document();
-        path.extend(ancestors.into_iter().map(EventTargetId::Node));
-        if !connected {
-            return path;
-        }
-    }
-    path.push(EventTargetId::Window);
-    path
-}
-
-/// The targets whose bubble listeners the event reaches.
-fn bubble_targets(flags: Flags, path: &[EventTargetId]) -> &[EventTargetId] {
-    if flags.bubbles {
-        path
-    } else {
-        &path[..path.len().min(1)]
-    }
-}
-
-/// Whether `target` stays silent: a cut node, or window while any node is cut.
-fn is_cut(target: EventTargetId, cut: &[NodeId]) -> bool {
-    match target {
-        EventTargetId::Node(node) => cut.contains(&node),
-        EventTargetId::Window => !cut.is_empty(),
-        EventTargetId::Signal(_) => false,
-    }
 }
 
 /// Whether a listener of `name` exists that an event with `flags` fired at
@@ -92,23 +45,11 @@ pub(crate) fn listened(
     target: EventTargetId,
     cut: &[NodeId],
 ) -> bool {
-    path_from(host, target)
-        .into_iter()
-        .enumerate()
-        .any(|(depth, on_path)| {
-            !is_cut(on_path, cut)
-                && host
-                    .listeners
-                    .listeners_for(on_path, name)
-                    .iter()
-                    .any(|l| l.capture || flags.bubbles || depth == 0)
-        })
+    inca_document::listened(&host.tree, &host.listeners, name, flags, target, cut)
 }
 
 pub(super) fn next_event_id(host: &Rc<RefCell<Host>>) -> u64 {
-    let mut host = host.borrow_mut();
-    host.last_event_id += 1;
-    host.last_event_id
+    inca_document::next_event_id(&mut host.borrow_mut().last_event_id)
 }
 
 /// Runs the listeners of `walk.name` along the path of `walk.target` with one
@@ -147,7 +88,7 @@ pub(super) fn script_walk<'a>(
 }
 
 pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: u64) -> Outcome {
-    let path = path_from(&host.borrow(), walk.target);
+    let path = path_from(&host.borrow().tree, walk.target);
     let created = targets_of(ctx, &path).and_then(|targets| create(ctx, walk, id, targets));
     let event = match created {
         Ok(event) => event,
@@ -156,7 +97,15 @@ pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, walk: &Walk<'_>, id: 
             return Outcome::default();
         }
     };
-    let canceled = deliver(ctx, host, walk, &path, &event);
+    let canceled = deliver(
+        walk,
+        &path,
+        &JsInvoke {
+            ctx,
+            host,
+            event: &event,
+        },
+    );
     Outcome {
         canceled,
         entered: false,
@@ -184,7 +133,7 @@ mod tests {
     };
     use crate::{EventTargetId, event};
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
     use rstest::rstest;
 
     #[gpui::test]
@@ -291,86 +240,6 @@ mod tests {
             .eval::<String>("JSON.stringify(out)")
             .unwrap();
         assert_eq!(out, r#"[["click",1],["click",2],["focusin",3]]"#);
-    }
-
-    #[gpui::test]
-    fn capture_listeners_run_root_down_before_the_bubble_listeners_run_target_up(
-        cx: &mut TestAppContext,
-    ) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [outer, parent, child] = tree_of_three(&host);
-        // Bubble listeners register first, so the walk order differs from the registration order.
-        for (name, node, capture) in [
-            ("child", child, false),
-            ("parent", parent, false),
-            ("outer", outer, false),
-            ("child-capture", child, true),
-            ("parent-capture", parent, true),
-            ("outer-capture", outer, true),
-        ] {
-            listen_with(&dispatcher, node, "click", (capture, false), &tagged(name));
-        }
-
-        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
-
-        assert_eq!(
-            out,
-            serde_json::json!([
-                ["outer-capture", outer, 1],
-                ["parent-capture", parent, 1],
-                ["child-capture", child, 2],
-                ["child", child, 2],
-                ["parent", parent, 3],
-                ["outer", outer, 3],
-            ])
-        );
-    }
-
-    #[gpui::test]
-    fn capture_listeners_of_one_node_run_apart_from_its_bubble_listeners(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, _, child] = tree_of_three(&host);
-        for (name, capture) in [("b0", false), ("c1", true), ("b2", false), ("c3", true)] {
-            listen_with(&dispatcher, child, "click", (capture, false), &tagged(name));
-        }
-
-        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
-
-        let names: Vec<_> = out
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|r| r[0].as_str().unwrap())
-            .collect();
-        assert_eq!(names, ["c1", "c3", "b0", "b2"]);
-    }
-
-    #[gpui::test]
-    fn an_event_that_does_not_bubble_still_captures_through_its_ancestors(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [outer, parent, child] = tree_of_three(&host);
-        for (name, node, capture) in [
-            ("outer", outer, true),
-            ("outer-bubble", outer, false),
-            ("parent", parent, true),
-            ("parent-bubble", parent, false),
-            ("child", child, true),
-            ("child-bubble", child, false),
-        ] {
-            listen_with(&dispatcher, node, "focus", (capture, false), &tagged(name));
-        }
-
-        let out = fire_and_read(cx, &dispatcher, child, "focus", &EventPayload::None);
-
-        assert_eq!(
-            out,
-            serde_json::json!([
-                ["outer", outer, 1],
-                ["parent", parent, 1],
-                ["child", child, 2],
-                ["child-bubble", child, 2],
-            ])
-        );
     }
 
     #[gpui::test]
@@ -503,27 +372,5 @@ mod tests {
         );
 
         assert_eq!(got, serde_json::json!(false));
-    }
-
-    #[rstest::rstest]
-    #[case::bubbling(true)]
-    #[case::not_bubbling(false)]
-    fn the_path_of_a_signal_is_the_signal_alone(#[case] bubbles: bool) {
-        let host = Host::default();
-        let flags = Flags {
-            bubbles,
-            cancelable: false,
-            composed: false,
-        };
-
-        let path = path_from(&host, EventTargetId::Signal(5));
-
-        assert_eq!(path, [EventTargetId::Signal(5)]);
-        assert_eq!(bubble_targets(flags, &path), [EventTargetId::Signal(5)]);
-    }
-
-    #[test]
-    fn a_signal_is_never_cut() {
-        assert!(!is_cut(EventTargetId::Signal(5), &[1, 2]));
     }
 }

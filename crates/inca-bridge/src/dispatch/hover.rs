@@ -4,8 +4,9 @@
 //! Reports the hovered container and fires the hover events.
 
 use gpui::{App, Window};
+use inca_document::{EventPayload, MousePayload, NO_BUTTON};
 use inca_gpui::event_sink::hover_path_difference;
-use inca_gpui::{EventPayload, MousePayload, NO_BUTTON};
+use inca_gpui::mouse_at;
 use inca_node::NodeId;
 
 use super::{EventDispatcher, pointer};
@@ -59,7 +60,7 @@ impl EventDispatcher {
         let path = physical.map(|id| self.path_from(id)).unwrap_or_default();
         let changed = self.host.borrow_mut().tree.set_hover_path(&path);
         self.restyle(changed, true, window);
-        let mouse = MousePayload::at(window.mouse_position(), window.modifiers());
+        let mouse = mouse_at(window.mouse_position(), window.modifiers());
         self.process_capture(&EventPayload::Mouse(mouse), button, window, cx);
         let next = self.hover_target(physical);
         let next_path = next.map(|id| self.path_from(id)).unwrap_or_default();
@@ -120,17 +121,15 @@ impl EventDispatcher {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    use crate::EventDispatcher;
     use crate::tests::state;
     use crate::tests::{
-        RECORDER, at, dispatcher_with_engine, fire_and_read, listen, node_under_root, read_out,
-        seen, seen_rows, tree_of_three, wheel_at,
+        RECORDER, dispatcher_with_engine, listen, node_under_root, seen, seen_rows, tree_of_three,
     };
-    use crate::{EventDispatcher, Host};
-    use gpui::{TestAppContext, point, px};
-    use inca_gpui::{EventPayload, EventSink as _, MousePayload};
+    use gpui::TestAppContext;
+    use inca_document::{EventPayload, MousePayload};
+    use inca_gpui::EventSink as _;
     use inca_node::NodeId;
-    use std::cell::RefCell;
-    use std::rc::Rc;
 
     /// `a` holds `b`, which holds `c` and `d`. Every hover event is recorded as
     /// `type@currentTarget/target/relatedTarget` in `globalThis.seen`, with `x` for a missing
@@ -387,7 +386,7 @@ mod tests {
         let at = |related_target| {
             EventPayload::Mouse(MousePayload {
                 related_target,
-                ..MousePayload::at(gpui::Point::default(), gpui::Modifiers::none())
+                ..MousePayload::at(0.0, 0.0, inca_document::Modifiers::none())
             })
         };
 
@@ -452,103 +451,6 @@ mod tests {
         host.borrow_mut().tree.remove_child(outer, parent).unwrap();
         cx.update(|window, cx| dispatcher.report_hover(None, window, cx));
         assert_eq!(seen(&dispatcher), serde_json::json!([]));
-    }
-
-    fn record_box(host: &Rc<RefCell<Host>>, node: NodeId, left: f32, top: f32, border: f32) {
-        host.borrow().layout.borrow_mut().insert(
-            node,
-            inca_gpui::NodeLayout {
-                bounds: gpui::Bounds::new(
-                    point(px(left), px(top)),
-                    gpui::size(px(100.0), px(50.0)),
-                ),
-                border: px(border),
-                scroll: gpui::Point::default(),
-                gutter: gpui::Size::default(),
-            },
-        );
-    }
-
-    #[gpui::test]
-    fn offset_falls_back_to_the_client_position_when_unrecorded(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, parent, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            parent,
-            "click",
-            "(e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-        );
-        let click = EventPayload::Mouse(MousePayload::at(at(60.0, 40.0), gpui::Modifiers::none()));
-
-        let out = fire_and_read(cx, &dispatcher, child, "click", &click);
-        assert_eq!(out, serde_json::json!([[child, 60, 40, 60, 40]]));
-    }
-
-    #[gpui::test]
-    fn a_parent_listener_reads_the_targets_offset(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, parent, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            parent,
-            "click",
-            "(e) => out.push([e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-        );
-        let click = EventPayload::Mouse(MousePayload::at(at(60.0, 40.0), gpui::Modifiers::none()));
-        record_box(&host, parent, 500.0, 500.0, 9.0);
-        record_box(&host, child, 10.0, 20.0, 2.0);
-        let out = fire_and_read(cx, &dispatcher, child, "click", &click);
-        assert_eq!(out, serde_json::json!([[child, 48, 18, 60, 40]]));
-    }
-
-    #[gpui::test]
-    fn hover_events_measure_the_offset_from_the_node_they_fire_at(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, parent, child] = tree_of_three(&host);
-        for event in ["mouseover", "mouseenter"] {
-            listen(
-                &dispatcher,
-                parent,
-                event,
-                "(e) => out.push([e.type, e.target, e.offsetX, e.offsetY, e.clientX, e.clientY])",
-            );
-        }
-        record_box(&host, parent, 10.0, 20.0, 2.0);
-        record_box(&host, child, 30.0, 40.0, 0.0);
-
-        // The pointer is over `child`: `mouseover` fires there and bubbles to
-        // `parent`, then `mouseenter` fires at `parent`.
-        let cx = cx.add_empty_window();
-        cx.update(|window, cx| dispatcher.report_hover(Some(child), window, cx));
-
-        let out = read_out(&dispatcher);
-        // The pointer is at (0,0) in the test window. Each event reads the box
-        // of its own target.
-        assert_eq!(
-            out,
-            serde_json::json!([
-                ["mouseover", child, -30, -40, 0, 0],
-                ["mouseenter", parent, -12, -22, 0, 0]
-            ])
-        );
-    }
-
-    #[gpui::test]
-    fn a_wheel_event_carries_the_offset(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, _, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            child,
-            "wheel",
-            "(e) => out.push([e.offsetX, e.offsetY])",
-        );
-        record_box(&host, child, 10.0, 20.0, 0.0);
-
-        let out = fire_and_read(cx, &dispatcher, child, "wheel", &wheel_at(60.0, 40.0));
-
-        assert_eq!(out, serde_json::json!([[50, 20]]));
     }
 
     /// [`hover_tree`] with `a` attached under the host root.

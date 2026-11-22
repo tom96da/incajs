@@ -1,19 +1,20 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use gpui::Modifiers;
-use inca_gpui::{EventPayload, MousePayload, NO_BUTTON, PointerSource, buttons_mask};
+use inca_document::{
+    EventPayload, Modifiers, MousePayload, NO_BUTTON, PointerSource, buttons_mask,
+};
 use inca_jsenv::class::{define_method, define_this_getter, define_this_method};
 use rquickjs::convert::Coerced;
 use rquickjs::function::This;
 use rquickjs::{Array, Ctx, Function, IntoJs, Object, Result as JsResult, Value};
 
-use super::key_code::{key_code, keypress_code};
 use super::{
     COMPOSITION, EVENT, FOCUS, INPUT, KEYBOARD, MOUSE, POINTER, WHEEL, child_of, constants,
     other_kind, with_event,
 };
 use crate::bindings::convert::or_null;
+use inca_document::{key_code, keypress_code};
 
 /// The payload fields of an event, as its getters read them.
 pub(super) enum Payload {
@@ -311,10 +312,10 @@ const MOUSE_FIELDS: &[(&str, Read<Mouse>)] = &[
     ("screenY", |mouse| Field::Number(mouse.screen_y)),
     ("clientX", |mouse| Field::Number(mouse.client_x)),
     ("clientY", |mouse| Field::Number(mouse.client_y)),
-    ("ctrlKey", |mouse| Field::Bool(mouse.modifiers.control)),
-    ("shiftKey", |mouse| Field::Bool(mouse.modifiers.shift)),
-    ("altKey", |mouse| Field::Bool(mouse.modifiers.alt)),
-    ("metaKey", |mouse| Field::Bool(mouse.modifiers.platform)),
+    ("ctrlKey", |mouse| Field::Bool(mouse.modifiers.control())),
+    ("shiftKey", |mouse| Field::Bool(mouse.modifiers.shift())),
+    ("altKey", |mouse| Field::Bool(mouse.modifiers.alt())),
+    ("metaKey", |mouse| Field::Bool(mouse.modifiers.platform())),
     ("button", |mouse| Field::Number(mouse.button.into())),
     ("buttons", |mouse| Field::Number(mouse.buttons.into())),
     // Equal to clientX/clientY: no host scrolling moves the page itself.
@@ -351,10 +352,10 @@ const KEY_FIELDS: &[(&str, Read<Keyboard>)] = &[
     ("key", |key| Field::Text(&key.key)),
     ("code", |key| Field::Text(&key.code)),
     ("location", |key| Field::Number(key.location.into())),
-    ("ctrlKey", |key| Field::Bool(key.modifiers.control)),
-    ("shiftKey", |key| Field::Bool(key.modifiers.shift)),
-    ("altKey", |key| Field::Bool(key.modifiers.alt)),
-    ("metaKey", |key| Field::Bool(key.modifiers.platform)),
+    ("ctrlKey", |key| Field::Bool(key.modifiers.control())),
+    ("shiftKey", |key| Field::Bool(key.modifiers.shift())),
+    ("altKey", |key| Field::Bool(key.modifiers.alt())),
+    ("metaKey", |key| Field::Bool(key.modifiers.platform())),
     ("repeat", |key| Field::Bool(key.repeat)),
     ("isComposing", |key| Field::Bool(key.is_composing)),
     ("charCode", |key| Field::Number(key.char_code.into())),
@@ -565,11 +566,11 @@ fn modifier_state<'js>(
                 let modifiers =
                     of(&event.state.payload).ok_or_else(|| other_kind(&ctx, "getModifierState"))?;
                 Ok(match name.0.as_str() {
-                    "Accel" if cfg!(target_os = "macos") => modifiers.platform,
-                    "Accel" | "Control" => modifiers.control,
-                    "Shift" => modifiers.shift,
-                    "Alt" => modifiers.alt,
-                    "Meta" => modifiers.platform,
+                    "Accel" if cfg!(target_os = "macos") => modifiers.platform(),
+                    "Accel" | "Control" => modifiers.control(),
+                    "Shift" => modifiers.shift(),
+                    "Alt" => modifiers.alt(),
+                    "Meta" => modifiers.platform(),
                     _ => false,
                 })
             })
@@ -585,7 +586,8 @@ mod tests {
         dispatcher_with_engine, fire_and_read, key_payload, listen, mouse_at, wheel_at,
     };
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
+    use inca_gpui::modifiers_of;
     use inca_test_macros::gpui_cases;
 
     #[gpui_cases]
@@ -617,7 +619,13 @@ mod tests {
             }
         };
         let flags = [held.control, held.shift, held.alt, held.platform];
-        let out = fire_and_read(cx, &dispatcher, node, "keydown", &key_payload(held));
+        let out = fire_and_read(
+            cx,
+            &dispatcher,
+            node,
+            "keydown",
+            &key_payload(modifiers_of(held)),
+        );
         let want = serde_json::json!([[
             flags[0],
             flags[1],
@@ -634,7 +642,7 @@ mod tests {
     #[gpui::test]
     #[case::mouse("click", mouse_at(1.0, 1.0), [false, true, false, true])]
     #[case::wheel("wheel", wheel_at(1.0, 1.0), [false, false, false, true])]
-    #[case::key("keydown", key_payload(gpui::Modifiers::default()), [false, true, false, true])]
+    #[case::key("keydown", key_payload(inca_document::Modifiers::none()), [false, true, false, true])]
     #[case::focus("focus", EventPayload::Focus { related_target: None }, [false, false, false, true])]
     #[case::none("scroll", EventPayload::None, [false, false, true, true])]
     fn get_modifier_state_lives_on_the_prototype_of_its_kind(
@@ -689,7 +697,7 @@ mod tests {
             &dispatcher,
             node,
             "keydown",
-            &key_payload(gpui::Modifiers::control()),
+            &key_payload(inca_document::Modifiers::CONTROL),
         );
 
         assert_eq!(out, serde_json::json!([true, true, true, true]));
@@ -719,7 +727,7 @@ mod tests {
             &dispatcher,
             node,
             "keydown",
-            &key_payload(gpui::Modifiers::control()),
+            &key_payload(inca_document::Modifiers::CONTROL),
         );
 
         assert_eq!(out, serde_json::json!([want]));
@@ -757,7 +765,7 @@ mod tests {
             &dispatcher,
             node,
             "keydown",
-            &key_payload(gpui::Modifiers::control()),
+            &key_payload(inca_document::Modifiers::CONTROL),
         );
 
         assert_eq!(out, serde_json::json!([true]));

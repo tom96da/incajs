@@ -3,7 +3,8 @@
 
 /// The `keyCode` of the key named `key`, as a US keyboard layout gives it. A key outside that
 /// layout is 0.
-pub(super) fn key_code(key: &str) -> u32 {
+#[must_use]
+pub fn key_code(key: &str) -> u32 {
     let mut chars = key.chars();
     if let (Some(c), None) = (chars.next(), chars.next()) {
         return key_code_of_char(c);
@@ -71,7 +72,8 @@ fn key_code_of_char(c: char) -> u32 {
 }
 
 /// The `charCode` of a `keypress` of `key`: 13 for `Enter`, else its first UTF-16 code unit.
-pub(super) fn keypress_code(key: &str) -> u32 {
+#[must_use]
+pub fn keypress_code(key: &str) -> u32 {
     if key == "Enter" {
         return 13;
     }

@@ -6,14 +6,14 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use inca_gpui::{EventPayload, MousePayload};
+use inca_document::EventPayload;
 use inca_node::NodeId;
 use rquickjs::{Class, Ctx, Exception, Result as JsResult, Value};
 
-use super::listeners::{deliver, end_dispatch};
-use super::{IncaEvent, Walk, listened, next_event_id, path_from, run, script_walk, targets_of};
-use crate::EventTargetId;
+use super::listeners::{JsInvoke, end_dispatch};
+use super::{IncaEvent, Walk, listened, next_event_id, run, script_walk, targets_of};
 use crate::bindings::Host;
+use inca_document::{EventTargetId, deliver, path_from};
 
 /// Dispatches a script-built `event` at `target` and returns `false` when a
 /// listener canceled it. Listener errors go to `Host::failures`.
@@ -50,7 +50,7 @@ pub(crate) fn dispatch_event<'js>(
             ),
         ));
     }
-    let path = path_from(&host.borrow(), target);
+    let path = path_from(&host.borrow().tree, target);
     let name = state.name.borrow().clone();
     let walk = script_walk(&name, state.flags.get(), target, &EventPayload::None);
     let targets = targets_of(ctx, &path)?;
@@ -61,36 +61,19 @@ pub(crate) fn dispatch_event<'js>(
         drop(record.held.path.replace(targets));
         // Last, so a failure above leaves the event free to dispatch again.
         state.dispatching.set(true);
-        deliver(ctx, host, &walk, &path, &event);
+        deliver(
+            &walk,
+            &path,
+            &JsInvoke {
+                ctx,
+                host,
+                event: &event,
+            },
+        );
     } else {
         end_dispatch(&record);
     }
     Ok(!state.canceled.get())
-}
-
-/// Runs an untrusted `click` at `target`. A disabled button or input, a node that left the tree
-/// and a node whose own click is still running ignore the call.
-pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<RefCell<Host>>, target: NodeId) {
-    {
-        let mut host = host.borrow_mut();
-        let Some(node) = host.tree.get(target) else {
-            return;
-        };
-        if inca_node::is_disabled_control(node) || !host.clicking.insert(target) {
-            return;
-        }
-    }
-    let payload = EventPayload::Mouse(MousePayload::keyboard_click(gpui::Modifiers::none()));
-    let walk = script_walk(
-        "click",
-        crate::dispatch::spec_of("click").flags,
-        EventTargetId::Node(target),
-        &payload,
-    );
-    if listened(&host.borrow(), walk.name, walk.flags, walk.target, walk.cut) {
-        run(ctx, host, &walk, next_event_id(host));
-    }
-    host.borrow_mut().clicking.remove(&target);
 }
 
 /// Fires `blur` and then `focusout` at `target`, the focused node that is about to leave the
@@ -123,7 +106,7 @@ mod tests {
         node_under_root, read_out, tree_of_three,
     };
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
     use inca_node::NodeId;
 
     #[test]
@@ -657,43 +640,6 @@ mod tests {
     }
 
     #[test]
-    fn click_runs_an_untrusted_bubbling_click_with_the_pointer_fields_of_a_key_click() {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, parent, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            child,
-            "click",
-            r"
-            (e) => out.push([
-                e.type, e.isTrusted, e.bubbles, e.cancelable, e.target,
-                e.currentTarget, e.pointerId, e.pointerType, e.button, e.buttons, e.detail,
-                e.ctrlKey, e.eventId
-            ])
-            ",
-        );
-        listen(
-            &dispatcher,
-            parent,
-            "click",
-            "(e) => out.push(['parent', e.currentTarget, e.eventPhase])",
-        );
-        let got = eval_json(
-            &dispatcher,
-            &format!("(__inca_native__.click({child}), out)"),
-        );
-        assert_eq!(
-            got,
-            serde_json::json!([
-                [
-                    "click", false, true, true, child, child, -1, "", 0, 0, 0, false, 1
-                ],
-                ["parent", parent, 3]
-            ])
-        );
-    }
-
-    #[test]
     fn lose_focus_fires_trusted_blur_then_focusout_at_the_target() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, _, child] = tree_of_three(&host);
@@ -750,124 +696,5 @@ mod tests {
             .with(|ctx| super::lose_focus(&ctx, &host, node));
 
         assert_eq!(read_out(&dispatcher), serde_json::json!(["focusout"]));
-    }
-
-    #[test]
-    fn click_on_a_disabled_button_does_nothing_and_on_an_enabled_one_runs() {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let button = host.borrow_mut().tree.create_node("button").unwrap();
-        listen(&dispatcher, button, "click", "() => out.push('click')");
-        host.borrow_mut()
-            .tree
-            .set_attribute(button, "disabled", true)
-            .unwrap();
-        let disabled = eval_json(
-            &dispatcher,
-            &format!("(__inca_native__.click({button}), out.length)"),
-        );
-        host.borrow_mut()
-            .tree
-            .remove_attribute(button, "disabled")
-            .unwrap();
-        let enabled = eval_json(
-            &dispatcher,
-            &format!("(__inca_native__.click({button}), out.length)"),
-        );
-        assert_eq!(
-            (disabled, enabled),
-            (serde_json::json!(0), serde_json::json!(1))
-        );
-    }
-
-    #[test]
-    fn click_inside_the_nodes_own_click_does_nothing_and_a_later_click_runs() {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        listen(
-            &dispatcher,
-            node,
-            "click",
-            &format!("() => {{ out.push('click'); __inca_native__.click({node}); }}"),
-        );
-        let got = eval_json(
-            &dispatcher,
-            &format!("(__inca_native__.click({node}), __inca_native__.click({node}), out)"),
-        );
-        assert_eq!(got, serde_json::json!(["click", "click"]));
-        assert!(host.borrow().clicking.is_empty());
-    }
-
-    #[test]
-    fn click_on_one_node_inside_the_click_of_another_runs() {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let [_, parent, child] = tree_of_three(&host);
-        listen(
-            &dispatcher,
-            parent,
-            "click",
-            &format!(
-                r"
-                (e) => {{
-                    out.push(e.target);
-                    if (e.target === {parent}) __inca_native__.click({child});
-                }}
-                "
-            ),
-        );
-        listen(&dispatcher, child, "click", "() => {}");
-        let got = eval_json(
-            &dispatcher,
-            &format!("(__inca_native__.click({parent}), out)"),
-        );
-        assert_eq!(got, serde_json::json!([parent, child]));
-    }
-
-    #[test]
-    fn click_on_an_unheard_node_takes_no_event_id() {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        dispatcher
-            .engine
-            .eval::<()>(&format!("__inca_native__.click({node});"))
-            .unwrap();
-        assert_eq!(host.borrow().last_event_id, 0);
-    }
-
-    #[test]
-    fn click_on_an_unknown_node_throws_a_type_error() {
-        let (dispatcher, _host, _reported) = dispatcher_with_engine();
-        let caught: bool = dispatcher
-            .engine
-            .eval(
-                r"
-                let caught = false;
-                try {
-                    __inca_native__.click(99);
-                } catch (e) {
-                    caught = e instanceof TypeError;
-                }
-                caught;
-                ",
-            )
-            .unwrap();
-        assert!(caught);
-    }
-
-    #[test]
-    fn click_reports_a_throwing_listener_through_the_pending_failures() {
-        let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.borrow_mut().tree.create_node("div").unwrap();
-        listen(
-            &dispatcher,
-            node,
-            "click",
-            "() => { throw new Error('boom'); }",
-        );
-        dispatcher
-            .engine
-            .eval::<()>(&format!("__inca_native__.click({node});"))
-            .unwrap();
-        dispatcher.report_pending();
-        assert_eq!(reported.borrow()[0].message(), "Error: boom");
     }
 }

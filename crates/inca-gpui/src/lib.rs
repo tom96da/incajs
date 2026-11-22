@@ -11,8 +11,9 @@ pub use element::{
     rect_of, render_tree, render_tree_with_events,
 };
 pub use event_sink::{
-    EventPayload, EventSink, KeyPayload, MousePayload, NO_BUTTON, PointerSource, WheelPayload,
-    buttons_mask, is_menu_key,
+    EventSink, click_payload, context_menu_payload, is_menu_key, key_down_payload, key_up_payload,
+    modifiers_of, mouse_at, mouse_down_payload, mouse_move_payload, mouse_up_payload,
+    wheel_payload,
 };
 pub use input::{InputLayout, InputRequest};
 

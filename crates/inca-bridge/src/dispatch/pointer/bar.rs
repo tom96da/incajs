@@ -5,7 +5,7 @@
 //! nothing else: no focus, no pressed state and no `click`.
 
 use gpui::{App, Window};
-use inca_gpui::{EventPayload, NO_BUTTON};
+use inca_document::{EventPayload, NO_BUTTON};
 use inca_node::NodeId;
 
 use super::{EventDispatcher, pointer_payload};

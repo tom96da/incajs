@@ -6,7 +6,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use inca_gpui::EventPayload;
+use inca_document::EventPayload;
 use rquickjs::Ctx;
 
 use super::{Flags, Walk, listened, next_event_id, run};

@@ -143,11 +143,11 @@ mod tests {
     use super::*;
     use crate::test_support::engine_with_bindings;
     use crate::tests::{
-        at, dispatcher_with_engine, eval_json, fire_and_read, key_payload, listen, mouse_at,
+        dispatcher_with_engine, eval_json, fire_and_read, key_payload, listen, mouse_at,
         pointer_click, read_out, tree_of_three, wheel_at,
     };
     use gpui::TestAppContext;
-    use inca_gpui::{EventPayload, MousePayload};
+    use inca_document::{EventPayload, MousePayload};
     use inca_test_macros::gpui_cases;
     use rquickjs::Class;
     use rquickjs::Value;
@@ -181,15 +181,15 @@ mod tests {
     fn mouse_with_button(button: u8) -> EventPayload {
         EventPayload::Mouse(MousePayload {
             button,
-            ..MousePayload::at(at(1.0, 1.0), gpui::Modifiers::none())
+            ..MousePayload::at(1.0, 1.0, inca_document::Modifiers::none())
         })
     }
 
     fn mouse_button(button: u8) -> EventPayload {
         EventPayload::Mouse(MousePayload {
             button,
-            buttons: inca_gpui::buttons_mask(button),
-            ..MousePayload::at(at(1.0, 1.0), gpui::Modifiers::none())
+            buttons: inca_document::buttons_mask(button),
+            ..MousePayload::at(1.0, 1.0, inca_document::Modifiers::none())
         })
     }
 
@@ -267,7 +267,7 @@ mod tests {
     #[case::mouse_related_target("mouseover", mouse_at(1.0, 1.0), "relatedTarget")]
     #[case::pointer("click", pointer_click(), "pointerId")]
     #[case::wheel("wheel", wheel_at(1.0, 1.0), "deltaX")]
-    #[case::keyboard("keydown", key_payload(gpui::Modifiers::none()), "key")]
+    #[case::keyboard("keydown", key_payload(inca_document::Modifiers::none()), "key")]
     #[case::focus("focus", EventPayload::Focus { related_target: None }, "relatedTarget")]
     fn a_field_is_a_getter_on_the_prototype_of_its_kind(
         cx: &mut TestAppContext,
@@ -309,7 +309,7 @@ mod tests {
     #[case::wheel("wheel", wheel_at(1.0, 1.0), "Object.hasOwn(parent, 'clientX')")]
     #[case::keyboard(
         "keydown",
-        key_payload(gpui::Modifiers::none()),
+        key_payload(inca_document::Modifiers::none()),
         "Object.hasOwn(parent, 'which') && Object.getPrototypeOf(parent) === Event.prototype"
     )]
     #[case::focus(
@@ -364,7 +364,7 @@ mod tests {
             &dispatcher,
             node,
             "keydown",
-            &key_payload(gpui::Modifiers::none()),
+            &key_payload(inca_document::Modifiers::none()),
         );
         let focus = EventPayload::Focus {
             related_target: None,
@@ -575,7 +575,7 @@ mod tests {
             &dispatcher,
             node,
             "keydown",
-            &key_payload(gpui::Modifiers::none()),
+            &key_payload(inca_document::Modifiers::none()),
         );
 
         assert_eq!(out, serde_json::json!([want]));
@@ -598,10 +598,10 @@ mod tests {
             "keypress",
             "(e) => out.push([e.charCode, e.keyCode, e.which])",
         );
-        let payload = EventPayload::Key(inca_gpui::KeyPayload {
+        let payload = EventPayload::Key(inca_document::KeyPayload {
             key: key.into(),
             repeat: false,
-            modifiers: gpui::Modifiers::none(),
+            modifiers: inca_document::Modifiers::none(),
             is_composing: false,
         });
 
@@ -675,7 +675,7 @@ mod tests {
 
     #[gpui_cases]
     #[gpui::test]
-    #[case::keyboard("keydown", key_payload(gpui::Modifiers::none()))]
+    #[case::keyboard("keydown", key_payload(inca_document::Modifiers::none()))]
     #[case::focus("focus", EventPayload::Focus { related_target: None })]
     fn the_detail_of_a_host_key_or_focus_event_reads_zero(
         cx: &mut TestAppContext,

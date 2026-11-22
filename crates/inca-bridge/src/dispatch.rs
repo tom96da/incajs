@@ -13,7 +13,7 @@
 //!
 //! ## Where the real JS function lives
 //!
-//! [`crate::bindings::EventListeners`] stores a [`crate::bindings::Listener`]
+//! [`inca_document::EventListeners`] stores a [`inca_document::Listener`]
 //! per registration: a plain `u32` callback id with its capture and passive
 //! flags, never an `rquickjs::Value`/`Function`/`Persistent<T>`, because a JS
 //! handle kept past the call that produced it outlives the context it
@@ -44,7 +44,7 @@ mod restyle;
 mod sink;
 mod timers;
 
-pub(crate) use inca_gpui::event_sink::spec_of;
+pub(crate) use inca_document::spec_of;
 
 /// Everything needed to dispatch a native event into JS: the engine to call
 /// into, and the registry of which JS callback ids are listening for which
@@ -227,7 +227,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::tests::{dispatcher_with_engine, listen};
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
 
     #[gpui::test]
     fn a_stale_callback_id_is_skipped_rather_than_reported(cx: &mut TestAppContext) {

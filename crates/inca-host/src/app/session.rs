@@ -252,7 +252,7 @@ mod tests {
 
     use super::*;
     use gpui::TestAppContext;
-    use inca_gpui::EventPayload;
+    use inca_document::EventPayload;
     use inca_jsenv::stderr_reporter;
     use rstest::rstest;
 
@@ -449,7 +449,7 @@ mod tests {
         );
         let ids: Vec<u32> = host
             .listeners
-            .listeners_for(inca_bridge::EventTargetId::Node(children[0]), "click")
+            .listeners_for(inca_document::EventTargetId::Node(children[0]), "click")
             .iter()
             .map(|l| l.callback)
             .collect();

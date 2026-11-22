@@ -6,7 +6,7 @@
 #![allow(clippy::unwrap_used)]
 
 use crate::element::*;
-use crate::event_sink::{EventPayload, EventSink, noop_sink_methods};
+use crate::event_sink::{EventSink, noop_sink_methods};
 use crate::focus::FocusRegistry;
 use crate::input::{InputLayout, InputRequest};
 use gpui::Pixels;
@@ -15,6 +15,7 @@ use gpui::prelude::*;
 use gpui::size;
 use gpui::{App, MouseUpEvent, ScrollHandle, Window, px};
 use gpui::{Context, Render, TestAppContext, VisualTestContext};
+use inca_document::EventPayload;
 use inca_document::InputState;
 use inca_node::tree::AttributeValue;
 use inca_node::tree::{NodeId, VirtualTree};

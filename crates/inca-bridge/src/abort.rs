@@ -14,7 +14,6 @@ mod statics;
 mod table;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use inca_jsenv::callbacks;
@@ -26,137 +25,6 @@ pub(crate) use table::Table;
 
 use crate::EventTargetId;
 use crate::bindings::Host;
-
-/// The state of one signal.
-#[derive(Debug)]
-struct State {
-    aborted: bool,
-    dependent: bool,
-    sources: Vec<u32>,
-    dependents: Vec<u32>,
-}
-
-/// The state records of the signals of a host, by id.
-#[derive(Debug)]
-pub(crate) struct Signals {
-    next: Option<u32>,
-    by_id: HashMap<u32, State>,
-}
-
-impl Default for Signals {
-    fn default() -> Self {
-        Self::starting_at(1)
-    }
-}
-
-impl Signals {
-    /// An empty set whose first id is `next`.
-    pub(crate) fn starting_at(next: u32) -> Self {
-        Self {
-            next: Some(next),
-            by_id: HashMap::new(),
-        }
-    }
-
-    /// A new record under the next id, `None` after the last id.
-    pub(crate) fn create(&mut self, dependent: bool) -> Option<u32> {
-        let id = self.next?;
-        self.next = id.checked_add(1);
-        self.by_id.insert(
-            id,
-            State {
-                aborted: false,
-                dependent,
-                sources: Vec::new(),
-                dependents: Vec::new(),
-            },
-        );
-        Some(id)
-    }
-
-    /// Marks `id` aborted, and every dependent that is not aborted yet. Returns those dependents,
-    /// `None` when `id` is aborted already or unknown.
-    pub(crate) fn mark_aborted(&mut self, id: u32) -> Option<Vec<u32>> {
-        let state = self.by_id.get_mut(&id).filter(|state| !state.aborted)?;
-        state.aborted = true;
-        let dependents = state.dependents.clone();
-        let mut pending = Vec::new();
-        for dependent in dependents {
-            if let Some(state) = self.by_id.get_mut(&dependent).filter(|s| !s.aborted) {
-                state.aborted = true;
-                pending.push(dependent);
-            }
-        }
-        Some(pending)
-    }
-
-    /// Makes `result` depend on `sources`. A source that is dependent contributes its own
-    /// sources, and each source counts once.
-    pub(crate) fn link_dependent(&mut self, result: u32, sources: &[u32]) {
-        let mut flat: Vec<u32> = Vec::new();
-        for source in sources {
-            let own = self
-                .by_id
-                .get(source)
-                .map(|s| (s.dependent, s.sources.clone()));
-            let (dependent, inherited) = own.unwrap_or_default();
-            let given = if dependent { inherited } else { vec![*source] };
-            for id in given {
-                if !flat.contains(&id) {
-                    flat.push(id);
-                }
-            }
-        }
-        for source in &flat {
-            if let Some(state) = self.by_id.get_mut(source) {
-                state.dependents.push(result);
-            }
-        }
-        if let Some(state) = self.by_id.get_mut(&result) {
-            state.sources = flat;
-        }
-    }
-
-    /// Drops the record of `id` and its links. Returns the dependents that have no source left.
-    pub(crate) fn release(&mut self, id: u32) -> Vec<u32> {
-        let Some(state) = self.by_id.remove(&id) else {
-            return Vec::new();
-        };
-        for source in state.sources {
-            if let Some(source) = self.by_id.get_mut(&source) {
-                source.dependents.retain(|d| *d != id);
-            }
-        }
-        let mut orphaned = Vec::new();
-        for dependent in state.dependents {
-            if let Some(dependent_state) = self.by_id.get_mut(&dependent) {
-                dependent_state.sources.retain(|s| *s != id);
-                if dependent_state.sources.is_empty() {
-                    orphaned.push(dependent);
-                }
-            }
-        }
-        orphaned
-    }
-
-    pub(crate) fn is_aborted(&self, id: u32) -> bool {
-        self.by_id.get(&id).is_some_and(|s| s.aborted)
-    }
-
-    pub(crate) fn is_dependent(&self, id: u32) -> bool {
-        self.by_id.get(&id).is_some_and(|s| s.dependent)
-    }
-
-    fn has_source(&self, id: u32) -> bool {
-        self.by_id.get(&id).is_some_and(|s| !s.sources.is_empty())
-    }
-
-    /// Whether an `abort` listener on `id` keeps the signal alive. That holds for a dependent that
-    /// is not aborted and has a source left.
-    pub(crate) fn pins(&self, id: u32) -> bool {
-        self.is_dependent(id) && !self.is_aborted(id) && self.has_source(id)
-    }
-}
 
 /// Defines `AbortController` and `AbortSignal` and the signal table.
 ///
@@ -334,8 +202,8 @@ mod tests {
     use rstest::rstest;
     use serde_json::json;
 
-    use super::Signals;
     use crate::test_support::{engine_with_bindings, error_name, json_of};
+    use inca_document::Signals;
 
     /// A controller `c`, its signal `s`, a log and `listen(fn, capture)` on the signal.
     const SETUP: &str = r"
@@ -578,7 +446,7 @@ mod tests {
         engine.with(|ctx| ctx.run_gc());
         drop(engine.run_jobs());
 
-        assert!(!host.borrow().signals.by_id.contains_key(&1));
+        assert!(!host.borrow().signals.contains(1));
     }
 
     #[test]
@@ -592,7 +460,7 @@ mod tests {
             .eval::<()>("globalThis.second = new AbortController().signal;")
             .unwrap();
 
-        assert!(host.borrow().signals.by_id.contains_key(&2));
+        assert!(host.borrow().signals.contains(2));
     }
 
     #[test]
@@ -639,34 +507,11 @@ mod tests {
     }
 
     #[test]
-    fn signals_run_out_of_ids_after_the_last_one() {
-        let mut signals = Signals::starting_at(u32::MAX);
-
-        assert_eq!(signals.create(false), Some(u32::MAX));
-        assert_eq!(signals.create(false), None);
-    }
-
-    #[test]
     fn the_class_throws_a_range_error_after_the_last_signal_id() {
         let (engine, host) = engine_with_bindings();
         host.borrow_mut().signals = Signals::starting_at(u32::MAX);
         engine.eval::<()>("new AbortController();").unwrap();
 
         assert_eq!(error_name(&engine, "new AbortController()"), "RangeError");
-    }
-
-    #[test]
-    fn a_source_that_appears_twice_is_linked_once() {
-        let mut signals = Signals::default();
-        let (a, b) = (
-            signals.create(false).unwrap(),
-            signals.create(true).unwrap(),
-        );
-
-        signals.link_dependent(b, &[a, a]);
-
-        assert_eq!(signals.by_id[&a].dependents, [b]);
-        assert_eq!(signals.by_id[&b].sources, [a]);
-        assert_eq!(signals.mark_aborted(a), Some(vec![b]));
     }
 }

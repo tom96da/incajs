@@ -14,7 +14,8 @@ use gpui::{
     AnyWindowHandle, DispatchEventResult, KeyBinding, KeyDownEvent, KeyUpEvent, Keystroke,
     PlatformInput, TestAppContext, VisualTestContext, prelude::*,
 };
-use inca_bridge::{EventListeners, Host};
+use inca_bridge::Host;
+use inca_document::EventListeners;
 use inca_jsenv::Engine;
 use inca_node::NodeId;
 use inca_test_macros::gpui_cases;

@@ -8,6 +8,7 @@ use rquickjs::{Array, Ctx, Function, Object, Result as JsResult, Value};
 use crate::EventTargetId;
 use crate::abort::Table;
 use crate::event::array_of;
+use crate::event_target::HookTarget;
 
 /// What stands for each of `targets`: the entries of the array that the
 /// global `__inca_targets__` returns for them, or the targets themselves when
@@ -27,7 +28,7 @@ pub(in crate::event) fn targets_of<'js>(
             found.map_or_else(|| Value::new_null(ctx.clone()), Object::into_value),
         ]);
     }
-    let given = array_of(ctx, targets.iter().filter_map(|t| t.hook_target()))?;
+    let given = array_of(ctx, targets.iter().filter_map(|&t| HookTarget::of(t)))?;
     let Ok(hook) = ctx.globals().get::<_, Function>("__inca_targets__") else {
         return (0..targets.len()).map(|index| given.get(index)).collect();
     };
@@ -39,11 +40,12 @@ pub(in crate::event) fn targets_of<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::tests::{
-        at, dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
+        dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
         node_under_root, read_out, tree_of_three,
     };
     use gpui::TestAppContext;
-    use inca_gpui::{EventPayload, EventSink, MousePayload, WheelPayload};
+    use inca_document::{EventPayload, MousePayload, WheelPayload};
+    use inca_gpui::EventSink;
     use rstest::rstest;
 
     /// Gives every node one object `{ node }` and counts the calls.
@@ -120,7 +122,7 @@ mod tests {
         }
         let over = EventPayload::Mouse(MousePayload {
             related_target: Some(parent),
-            ..MousePayload::at(at(0.0, 0.0), gpui::Modifiers::none())
+            ..MousePayload::at(0.0, 0.0, inca_document::Modifiers::none())
         });
         let cx = cx.add_empty_window();
 
@@ -337,7 +339,7 @@ mod tests {
         let wheel = EventPayload::Wheel(WheelPayload {
             mouse: MousePayload {
                 related_target: Some(parent),
-                ..MousePayload::at(at(0.0, 0.0), gpui::Modifiers::none())
+                ..MousePayload::at(0.0, 0.0, inca_document::Modifiers::none())
             },
             delta_x: 0.0,
             delta_y: 0.0,

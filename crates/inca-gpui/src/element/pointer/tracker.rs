@@ -4,13 +4,16 @@
 //! Reports each pointer input once, with the deepest container as its target.
 
 use super::{
-    App, ControlClick, DispatchPhase, EventPayload, EventSink, IntoElement, MouseDownEvent,
-    MouseExitEvent, MouseMoveEvent, MouseTarget, MouseUpEvent, NodeId, RootStep, ScrollEvent,
-    ScrollHandle, Styled, WheelChain, Window, canvas, completes_click, control_click, mouse_target,
-    next_offset, opens_context_menu, restored_down, restored_up, slot,
+    App, ControlClick, DispatchPhase, EventSink, IntoElement, MouseDownEvent, MouseExitEvent,
+    MouseMoveEvent, MouseTarget, MouseUpEvent, NodeId, RootStep, ScrollEvent, ScrollHandle, Styled,
+    WheelChain, Window, canvas, completes_click, control_click, mouse_target, next_offset,
+    opens_context_menu, restored_down, restored_up, slot,
 };
 use crate::element::scrollbar::OverBar;
 use crate::element::wheel::WheelScrolled;
+use crate::event_sink::{
+    context_menu_payload, mouse_down_payload, mouse_move_payload, mouse_up_payload, wheel_payload,
+};
 
 /// `event` with the click count of its button's recorded press, if any.
 fn with_press_count(event: &MouseUpEvent, cx: &App) -> MouseUpEvent {
@@ -44,7 +47,7 @@ fn report_release(
     let completes = completes_click(event.button, event.modifiers, control_click(cx).macos);
     let pressed = pressed.filter(|_| completes);
     let event = with_press_count(event, cx);
-    sink.pointer_input("mouseup", released, &(&event).into(), window, cx);
+    sink.pointer_input("mouseup", released, &mouse_up_payload(&event), window, cx);
     sink.pointer_released(&event, pressed, released, window, cx);
     cx.default_global::<MouseTarget>().pressed[slot] = None;
 }
@@ -66,7 +69,7 @@ fn report_wheel(
     };
     let below_could_move = chain.iter().any(|link| could_move(link).is_some());
     let target = target_or(cx, root);
-    sink.pointer_input("wheel", target, &event.into(), window, cx);
+    sink.pointer_input("wheel", target, &wheel_payload(event), window, cx);
     let mut step_taken = window.default_prevented();
     // The container that took the step, else the innermost one the step
     // reached.
@@ -113,7 +116,13 @@ pub(in crate::element) fn pointer_tracker<E: EventSink + Clone + 'static>(
                     }
                     DispatchPhase::Bubble => {
                         let target = target_or(cx, root);
-                        moved.pointer_input("mousemove", target, &event.into(), window, cx);
+                        moved.pointer_input(
+                            "mousemove",
+                            target,
+                            &mouse_move_payload(event),
+                            window,
+                            cx,
+                        );
                     }
                 },
             );
@@ -131,13 +140,19 @@ pub(in crate::element) fn pointer_tracker<E: EventSink + Clone + 'static>(
                     }
                     DispatchPhase::Bubble => {
                         let target = target_or(cx, root);
-                        pressed.pointer_input("mousedown", target, &event.into(), window, cx);
+                        pressed.pointer_input(
+                            "mousedown",
+                            target,
+                            &mouse_down_payload(event),
+                            window,
+                            cx,
+                        );
                         if opens_context_menu(
                             event.button,
                             event.modifiers,
                             control_click(cx).macos,
                         ) {
-                            let payload = EventPayload::context_menu(event);
+                            let payload = context_menu_payload(event);
                             pressed.fire(target, "contextmenu", &payload, window, cx);
                         }
                     }

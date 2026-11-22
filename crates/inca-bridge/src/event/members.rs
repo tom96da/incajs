@@ -192,11 +192,10 @@ fn define_fields<'js>(ctx: &Ctx<'js>, proto: &Object<'js>) -> JsResult<()> {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::tests::{
-        at, dispatcher_with_engine, eval_json, fire_and_read, key_payload, listen, mouse_at,
-        wheel_at,
+        dispatcher_with_engine, eval_json, fire_and_read, key_payload, listen, mouse_at, wheel_at,
     };
     use gpui::TestAppContext;
-    use inca_gpui::{EventPayload, MousePayload};
+    use inca_document::{EventPayload, MousePayload};
     use inca_test_macros::gpui_cases;
 
     #[gpui::test]
@@ -244,7 +243,7 @@ mod tests {
     #[case::wheel("wheel", wheel_at(1.0, 1.0), "[object WheelEvent]")]
     #[case::key(
         "keydown",
-        key_payload(gpui::Modifiers::default()),
+        key_payload(inca_document::Modifiers::none()),
         "[object KeyboardEvent]"
     )]
     #[case::focus("focus", EventPayload::Focus { related_target: None }, "[object FocusEvent]")]
@@ -298,7 +297,7 @@ mod tests {
             &dispatcher,
             node,
             "keydown",
-            &key_payload(gpui::Modifiers::default()),
+            &key_payload(inca_document::Modifiers::none()),
         );
 
         assert_eq!(out, serde_json::json!(["true,true,true"]));
@@ -335,7 +334,7 @@ mod tests {
             &dispatcher,
             node,
             "keydown",
-            &key_payload(gpui::Modifiers::default()),
+            &key_payload(inca_document::Modifiers::none()),
         );
 
         assert_eq!(out, serde_json::json!([want]));
@@ -355,8 +354,8 @@ mod tests {
                 "(e) => (globalThis.kept ??= []).push(e)",
             );
         }
-        let shift = gpui::Modifiers::shift();
-        let mouse = EventPayload::Mouse(MousePayload::at(at(1.0, 1.0), shift));
+        let shift = inca_document::Modifiers::SHIFT;
+        let mouse = EventPayload::Mouse(MousePayload::at(1.0, 1.0, shift));
         fire_and_read(cx, &dispatcher, node, "click", &mouse);
         fire_and_read(cx, &dispatcher, node, "keydown", &key_payload(shift));
 

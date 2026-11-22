@@ -9,7 +9,7 @@ use gpui::{
 
 use super::scrollbar::OverBar;
 use super::wheel::{RootStep, WheelChain, next_offset};
-use crate::event_sink::{EventPayload, EventSink, button_index};
+use crate::event_sink::{EventSink, button_index, key_down_payload, key_up_payload};
 use inca_node::tree::NodeId;
 
 mod tracker;
@@ -245,10 +245,16 @@ where
     let up = dispatch.clone();
     element
         .capture_key_down(move |event, window, cx| {
-            dispatch.key_input(&event.keystroke, false, &event.into(), window, cx);
+            dispatch.key_input(
+                &event.keystroke,
+                false,
+                &key_down_payload(event),
+                window,
+                cx,
+            );
         })
         .capture_key_up(move |event, window, cx| {
-            up.key_input(&event.keystroke, true, &event.into(), window, cx);
+            up.key_input(&event.keystroke, true, &key_up_payload(event), window, cx);
         })
 }
 
@@ -259,6 +265,7 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use gpui::{MouseButton, Pixels, Point, TestAppContext, point, px};
+    use inca_document::EventPayload;
     use inca_test_macros::gpui_cases;
     use rstest::rstest;
 
@@ -290,7 +297,7 @@ mod tests {
     fn last_payload(scene: &Scene, event: &str) -> (u8, bool) {
         let payloads = scene.payloads.borrow();
         match payloads.iter().rfind(|p| p.0 == event).map(|p| &p.1) {
-            Some(EventPayload::Mouse(mouse)) => (mouse.button, mouse.modifiers.control),
+            Some(EventPayload::Mouse(mouse)) => (mouse.button, mouse.modifiers.control()),
             other => panic!("no mouse payload for {event}: {other:?}"),
         }
     }

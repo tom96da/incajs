@@ -156,10 +156,7 @@ fn remove_node<'js>(
             .hold(node_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         let node_ids = host.tree.subtree(node_id);
-        let callback_ids: Vec<u32> = node_ids
-            .iter()
-            .flat_map(|&id| host.listeners.release(id))
-            .collect();
+        let callback_ids = host.listeners.release_nodes(&node_ids);
         crate::abort::settle_freed(&ctx, &mut host)?;
         callbacks::release(&ctx, &callback_ids)?;
         pair(&ctx, &callback_ids, &node_ids)

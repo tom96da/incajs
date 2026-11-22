@@ -8,149 +8,27 @@ use gpui::{
 
 use crate::element::NodeLayout;
 use crate::input::{InputLayout, InputRequest};
-use inca_document::InputPayload;
+use inca_document::{
+    EventPayload, KeyPayload, Modifiers, MousePayload, PointerSource, WheelPayload, buttons_mask,
+};
 use inca_node::tree::NodeId;
 
 mod key;
 mod sink;
-mod spec;
 
 pub use key::is_menu_key;
 use key::key_name;
 pub use sink::EventSink;
 pub(crate) use sink::noop_sink_methods;
-pub use spec::{EVENTS, EventSpec, Flags, flags_of, spec_of};
 
-/// What a dispatch carries beyond the node it fired on.
-#[derive(Debug, Clone, PartialEq)]
-pub enum EventPayload {
-    /// No data beyond the node and the event's name.
-    None,
-    /// A mouse position, button, and modifier state, as in a mouse event.
-    Mouse(MousePayload),
-    /// A scroll delta plus the same fields as [`EventPayload::Mouse`],
-    /// as in a wheel event.
-    Wheel(WheelPayload),
-    /// A key and modifier state, as in a keyboard event.
-    Key(KeyPayload),
-    /// The other node of a focus change.
-    /// `related_target` is the node gaining focus for `blur` and `focusout`,
-    /// the node losing it for `focus` and `focusin`, and `None` when there
-    /// is no such node.
-    Focus { related_target: Option<NodeId> },
-    /// The data, `inputType` and composition flag of `beforeinput` and
-    /// `input`.
-    Input(InputPayload),
-    /// The text of a composition event.
-    Composition { data: String },
-}
-
-/// [`EventPayload::Mouse`]'s fields.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MousePayload {
-    pub client_x: f32,
-    pub client_y: f32,
-    /// The pointer's travel in pixels since the previous pointer move
-    /// (`movementX`/`movementY`). 0 when built by this crate; the
-    /// [`EventSink`] implementor supplies the real value.
-    pub movement_x: f32,
-    pub movement_y: f32,
-    /// The window's position on the screen plus the client position
-    /// (`screenX`/`screenY`). 0 when built by this crate; the [`EventSink`]
-    /// implementor supplies the real value.
-    pub screen_x: f32,
-    pub screen_y: f32,
-    /// The position relative to the padding edge of the event's `target`
-    /// (`offsetX`/`offsetY`). 0 when built by this crate; the [`EventSink`]
-    /// implementor supplies the real value.
-    pub offset_x: f32,
-    pub offset_y: f32,
-    /// The button this event is about. 0 for a mouse move, which isn't about any
-    /// one button. [`NO_BUTTON`] for a pointer event about no button.
-    pub button: u8,
-    /// Every button held during this event, as a bitmask.
-    pub buttons: u8,
-    /// How many clicks this is part of. 0 for a move.
-    pub detail: u32,
-    pub modifiers: gpui::Modifiers,
-    /// Set for the pointer events, `click`, `auxclick` and `contextmenu`, which carry the pointer
-    /// fields.
-    pub pointer: Option<PointerSource>,
-    /// `relatedTarget`: the node the pointer came from for `mouseover`
-    /// and `mouseenter`, the node it went to for `mouseout` and `mouseleave`.
-    pub related_target: Option<NodeId>,
-}
-
-/// The `button` of a pointer event that is about no button: it reads -1.
-pub const NO_BUTTON: u8 = u8::MAX;
-
-/// What produced a `PointerEvent`-typed event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PointerSource {
-    /// The mouse: `pointerId` 1 and `pointerType` `"mouse"`. `isPrimary` is true on the pointer
-    /// events and false on `click`, `auxclick` and `contextmenu`.
-    Mouse,
-    /// The keyboard: `pointerId` -1, `pointerType` `""`, `isPrimary` false.
-    Keyboard,
-}
-
-impl MousePayload {
-    /// A payload at `position` with the given `modifiers`, as the hover events
-    /// carry. The movement fields are 0 and `related_target` is `None`.
-    #[must_use]
-    pub fn at(position: gpui::Point<gpui::Pixels>, modifiers: gpui::Modifiers) -> Self {
-        Self {
-            client_x: f32::from(position.x),
-            client_y: f32::from(position.y),
-            movement_x: 0.0,
-            movement_y: 0.0,
-            screen_x: 0.0,
-            screen_y: 0.0,
-            offset_x: 0.0,
-            offset_y: 0.0,
-            button: 0,
-            buttons: 0,
-            detail: 0,
-            modifiers,
-            pointer: None,
-            related_target: None,
-        }
-    }
-
-    /// The `click` a key press produces: position, `button`, `buttons` and
-    /// `detail` at 0, with the key event's `modifiers`.
-    #[must_use]
-    pub fn keyboard_click(modifiers: gpui::Modifiers) -> Self {
-        Self {
-            pointer: Some(PointerSource::Keyboard),
-            ..Self::at(gpui::Point::default(), modifiers)
-        }
-    }
-}
-
-/// [`EventPayload::Wheel`]'s fields beyond [`MousePayload`]'s.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct WheelPayload {
-    /// `clientX`/`clientY`/`button`/`buttons`/the modifier keys.
-    pub mouse: MousePayload,
-    pub delta_x: f32,
-    pub delta_y: f32,
-    /// GPUI carries no Z-axis scroll; always 0.
-    pub delta_z: f32,
-    /// Delta mode: 0 for pixels or 1 for lines. GPUI has no page mode.
-    pub delta_mode: u8,
-}
-
-/// [`EventPayload::Key`]'s fields.
-#[derive(Debug, Clone, PartialEq)]
-pub struct KeyPayload {
-    /// The key's name, such as `Enter`, `F5` or the typed character.
-    pub key: String,
-    /// Whether the key press is an auto-repeat.
-    pub repeat: bool,
-    pub modifiers: gpui::Modifiers,
-    /// An input method composes in the focused `input`.
-    pub is_composing: bool,
+/// The plain modifier set of `modifiers`. The Fn key sets no flag.
+#[must_use]
+pub const fn modifiers_of(modifiers: gpui::Modifiers) -> Modifiers {
+    Modifiers::none()
+        .set(Modifiers::CONTROL, modifiers.control)
+        .set(Modifiers::ALT, modifiers.alt)
+        .set(Modifiers::SHIFT, modifiers.shift)
+        .set(Modifiers::PLATFORM, modifiers.platform)
 }
 
 /// The `button` index of a [`MouseButton`]: the position of that button's bit
@@ -165,131 +43,114 @@ pub(crate) const fn button_index(button: MouseButton) -> u8 {
     }
 }
 
-/// Maps a button index (the value of `MousePayload::button`) to its
-/// `buttons` bitmask value, ordered left/right/middle/back/forward.
-/// An index outside `0..=4` maps to 0.
+/// A mouse payload at `position` with the given `modifiers`, as the hover events carry.
 #[must_use]
-pub const fn buttons_mask(index: u8) -> u8 {
-    match index {
-        0 => 0b0_0001, // left
-        1 => 0b0_0100, // middle
-        2 => 0b0_0010, // right
-        3 => 0b0_1000, // back
-        4 => 0b1_0000, // forward
-        _ => 0,
-    }
+pub fn mouse_at(position: gpui::Point<gpui::Pixels>, modifiers: gpui::Modifiers) -> MousePayload {
+    MousePayload::at(
+        f32::from(position.x),
+        f32::from(position.y),
+        modifiers_of(modifiers),
+    )
 }
 
-impl From<&MouseDownEvent> for EventPayload {
-    fn from(event: &MouseDownEvent) -> Self {
-        let bit = button_index(event.button);
-        Self::Mouse(MousePayload {
-            button: bit,
-            buttons: buttons_mask(bit),
-            detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
-            ..MousePayload::at(event.position, event.modifiers)
-        })
-    }
+/// The payload of a `mousedown`.
+#[must_use]
+pub fn mouse_down_payload(event: &MouseDownEvent) -> EventPayload {
+    let bit = button_index(event.button);
+    EventPayload::Mouse(MousePayload {
+        button: bit,
+        buttons: buttons_mask(bit),
+        detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
+        ..mouse_at(event.position, event.modifiers)
+    })
 }
 
-impl From<&MouseUpEvent> for EventPayload {
-    fn from(event: &MouseUpEvent) -> Self {
-        let bit = button_index(event.button);
-        Self::Mouse(MousePayload {
-            button: bit,
-            detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
-            ..MousePayload::at(event.position, event.modifiers)
-        })
-    }
+/// The payload of a `mouseup`.
+#[must_use]
+pub fn mouse_up_payload(event: &MouseUpEvent) -> EventPayload {
+    EventPayload::Mouse(MousePayload {
+        button: button_index(event.button),
+        detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
+        ..mouse_at(event.position, event.modifiers)
+    })
 }
 
-impl EventPayload {
-    /// The mouse fields of a `Mouse` or `Wheel` payload.
-    pub fn mouse_mut(&mut self) -> Option<&mut MousePayload> {
-        match self {
-            Self::Mouse(mouse) => Some(mouse),
-            Self::Wheel(wheel) => Some(&mut wheel.mouse),
-            _ => None,
-        }
-    }
-
-    /// The `click` or `auxclick` a release of `event`'s button produces:
-    /// `button` is the released button, `detail` the click count and `buttons`
-    /// 0, at the release point.
-    #[must_use]
-    pub fn click(event: &MouseUpEvent) -> Self {
-        Self::Mouse(MousePayload {
-            button: button_index(event.button),
-            detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
-            pointer: Some(PointerSource::Mouse),
-            ..MousePayload::at(event.position, event.modifiers)
-        })
-    }
-
-    /// The `contextmenu` a press of `event`'s button produces: `detail` 0 and
-    /// `buttons` the pressed button.
-    #[must_use]
-    pub fn context_menu(event: &MouseDownEvent) -> Self {
-        let bit = button_index(event.button);
-        Self::Mouse(MousePayload {
-            button: bit,
-            buttons: buttons_mask(bit),
-            pointer: Some(PointerSource::Mouse),
-            ..MousePayload::at(event.position, event.modifiers)
-        })
-    }
+/// The `click` or `auxclick` a release of `event`'s button produces:
+/// `button` is the released button, `detail` the click count and `buttons`
+/// 0, at the release point.
+#[must_use]
+pub fn click_payload(event: &MouseUpEvent) -> EventPayload {
+    EventPayload::Mouse(MousePayload {
+        button: button_index(event.button),
+        detail: u32::try_from(event.click_count).unwrap_or(u32::MAX),
+        pointer: Some(PointerSource::Mouse),
+        ..mouse_at(event.position, event.modifiers)
+    })
 }
 
-impl From<&MouseMoveEvent> for EventPayload {
-    fn from(event: &MouseMoveEvent) -> Self {
-        Self::Mouse(MousePayload {
-            buttons: event
-                .pressed_button
-                .map_or(0, |button| buttons_mask(button_index(button))),
-            ..MousePayload::at(event.position, event.modifiers)
-        })
-    }
+/// The `contextmenu` a press of `event`'s button produces: `detail` 0 and
+/// `buttons` the pressed button.
+#[must_use]
+pub fn context_menu_payload(event: &MouseDownEvent) -> EventPayload {
+    let bit = button_index(event.button);
+    EventPayload::Mouse(MousePayload {
+        button: bit,
+        buttons: buttons_mask(bit),
+        pointer: Some(PointerSource::Mouse),
+        ..mouse_at(event.position, event.modifiers)
+    })
 }
 
-impl From<&ScrollEvent> for EventPayload {
-    fn from(event: &ScrollEvent) -> Self {
-        // GPUI reports a downward/rightward scroll as negative; the
-        // payload reports it as positive. `0.0 - x` keeps a zero delta at +0.
-        let (delta_x, delta_y, delta_mode) = match event.delta {
-            ScrollDelta::Pixels(delta) => (0.0 - f32::from(delta.x), 0.0 - f32::from(delta.y), 0),
-            ScrollDelta::Lines(delta) => (0.0 - delta.x, 0.0 - delta.y, 1),
-        };
-        Self::Wheel(WheelPayload {
-            mouse: MousePayload::at(event.position, event.modifiers),
-            delta_x,
-            delta_y,
-            delta_z: 0.0,
-            delta_mode,
-        })
-    }
+/// The payload of a `mousemove`.
+#[must_use]
+pub fn mouse_move_payload(event: &MouseMoveEvent) -> EventPayload {
+    EventPayload::Mouse(MousePayload {
+        buttons: event
+            .pressed_button
+            .map_or(0, |button| buttons_mask(button_index(button))),
+        ..mouse_at(event.position, event.modifiers)
+    })
 }
 
-impl From<&KeyDownEvent> for EventPayload {
-    fn from(event: &KeyDownEvent) -> Self {
-        Self::Key(KeyPayload {
-            key: key_name(&event.keystroke),
-            repeat: event.is_held,
-            modifiers: event.keystroke.modifiers,
-            is_composing: false,
-        })
-    }
+/// The payload of a `wheel`.
+#[must_use]
+pub fn wheel_payload(event: &ScrollEvent) -> EventPayload {
+    // GPUI reports a downward/rightward scroll as negative; the
+    // payload reports it as positive. `0.0 - x` keeps a zero delta at +0.
+    let (delta_x, delta_y, delta_mode) = match event.delta {
+        ScrollDelta::Pixels(delta) => (0.0 - f32::from(delta.x), 0.0 - f32::from(delta.y), 0),
+        ScrollDelta::Lines(delta) => (0.0 - delta.x, 0.0 - delta.y, 1),
+    };
+    EventPayload::Wheel(WheelPayload {
+        mouse: mouse_at(event.position, event.modifiers),
+        delta_x,
+        delta_y,
+        delta_z: 0.0,
+        delta_mode,
+    })
 }
 
-impl From<&KeyUpEvent> for EventPayload {
-    fn from(event: &KeyUpEvent) -> Self {
-        Self::Key(KeyPayload {
-            key: key_name(&event.keystroke),
-            // A key release is never a repeat.
-            repeat: false,
-            modifiers: event.keystroke.modifiers,
-            is_composing: false,
-        })
-    }
+/// The payload of a `keydown`.
+#[must_use]
+pub fn key_down_payload(event: &KeyDownEvent) -> EventPayload {
+    EventPayload::Key(KeyPayload {
+        key: key_name(&event.keystroke),
+        repeat: event.is_held,
+        modifiers: modifiers_of(event.keystroke.modifiers),
+        is_composing: false,
+    })
+}
+
+/// The payload of a `keyup`.
+#[must_use]
+pub fn key_up_payload(event: &KeyUpEvent) -> EventPayload {
+    EventPayload::Key(KeyPayload {
+        key: key_name(&event.keystroke),
+        // A key release is never a repeat.
+        repeat: false,
+        modifiers: modifiers_of(event.keystroke.modifiers),
+        is_composing: false,
+    })
 }
 
 /// The containers a pointer leaves and enters when its deepest container
@@ -336,14 +197,14 @@ mod tests {
     use gpui::AppContext as _;
     use rstest::rstest;
 
-    fn mouse_payload(payload: EventPayload) -> MousePayload {
+    fn mouse_of(payload: EventPayload) -> MousePayload {
         match payload {
             EventPayload::Mouse(mouse) => mouse,
             other => panic!("expected a mouse payload, got {other:?}"),
         }
     }
 
-    fn wheel_payload(payload: EventPayload) -> WheelPayload {
+    fn wheel_of(payload: EventPayload) -> WheelPayload {
         match payload {
             EventPayload::Wheel(wheel) => wheel,
             other => panic!("expected a wheel payload, got {other:?}"),
@@ -357,7 +218,7 @@ mod tests {
             click_count: 1,
             ..Default::default()
         };
-        let mouse = mouse_payload(EventPayload::from(&event));
+        let mouse = mouse_of(mouse_down_payload(&event));
         assert_eq!(mouse.button, 0);
         assert_eq!(mouse.buttons, 0b0_0001);
         assert_eq!(mouse.detail, 1);
@@ -370,7 +231,7 @@ mod tests {
             click_count: 2,
             ..Default::default()
         };
-        let mouse = mouse_payload(EventPayload::from(&event));
+        let mouse = mouse_of(mouse_up_payload(&event));
         assert_eq!(mouse.button, 2);
         assert_eq!(mouse.buttons, 0);
         assert_eq!(mouse.detail, 2);
@@ -382,7 +243,7 @@ mod tests {
             pressed_button: None,
             ..Default::default()
         };
-        let mouse = mouse_payload(EventPayload::from(&event));
+        let mouse = mouse_of(mouse_move_payload(&event));
         assert_eq!(mouse.button, 0);
         assert_eq!(mouse.buttons, 0);
         assert_eq!(mouse.detail, 0);
@@ -394,7 +255,7 @@ mod tests {
             pressed_button: Some(MouseButton::Middle),
             ..Default::default()
         };
-        let mouse = mouse_payload(EventPayload::from(&event));
+        let mouse = mouse_of(mouse_move_payload(&event));
         assert_eq!(mouse.buttons, 0b0_0100);
     }
 
@@ -405,7 +266,7 @@ mod tests {
             click_count: 1,
             ..Default::default()
         };
-        let mouse = mouse_payload(EventPayload::from(&event));
+        let mouse = mouse_of(mouse_down_payload(&event));
         assert_eq!(mouse.button, 2);
         assert_eq!(mouse.buttons, 0b0_0010);
     }
@@ -417,7 +278,7 @@ mod tests {
             click_count: 1,
             ..Default::default()
         };
-        let mouse = mouse_payload(EventPayload::from(&event));
+        let mouse = mouse_of(mouse_down_payload(&event));
         assert_eq!(mouse.button, 1);
         assert_eq!(mouse.buttons, 0b0_0100);
     }
@@ -433,8 +294,8 @@ mod tests {
             modifiers,
             ..Default::default()
         };
-        let mouse = mouse_payload(EventPayload::from(&event));
-        assert_eq!(mouse.modifiers, modifiers);
+        let mouse = mouse_of(mouse_down_payload(&event));
+        assert_eq!(mouse.modifiers, modifiers_of(modifiers));
     }
 
     /// (name, got, want) for each field of `mouse` that differs from `want`.
@@ -485,9 +346,9 @@ mod tests {
             u32::try_from(count).unwrap(),
             Some(PointerSource::Mouse),
         );
-        let payload = mouse_payload(EventPayload::click(&event));
+        let payload = mouse_of(click_payload(&event));
         assert_eq!(field_mismatches(&payload, want), Vec::<String>::new());
-        assert_eq!(payload.modifiers, shift);
+        assert_eq!(payload.modifiers, modifiers_of(shift));
     }
 
     #[test]
@@ -498,7 +359,7 @@ mod tests {
             click_count: 1,
             ..Default::default()
         };
-        let payload = mouse_payload(EventPayload::context_menu(&event));
+        let payload = mouse_of(context_menu_payload(&event));
         let want = (8.0, 9.0, 2, 0b0_0010, 0, Some(PointerSource::Mouse));
         assert_eq!(field_mismatches(&payload, want), Vec::<String>::new());
     }
@@ -509,7 +370,7 @@ mod tests {
             delta: ScrollDelta::Pixels(gpui::point(gpui::px(3.0), gpui::px(-4.0))),
             ..Default::default()
         };
-        let wheel = wheel_payload(EventPayload::from(&event));
+        let wheel = wheel_of(wheel_payload(&event));
         assert_eq!(wheel.delta_x, -3.0);
         assert_eq!(wheel.delta_y, 4.0);
         assert_eq!(wheel.delta_z, 0.0);
@@ -522,7 +383,7 @@ mod tests {
             delta: ScrollDelta::Lines(gpui::point(0.0, 2.0)),
             ..Default::default()
         };
-        let wheel = wheel_payload(EventPayload::from(&event));
+        let wheel = wheel_of(wheel_payload(&event));
         assert_eq!(wheel.delta_x, 0.0);
         assert_eq!(wheel.delta_y, -2.0);
         assert_eq!(wheel.delta_mode, 1);
@@ -536,23 +397,36 @@ mod tests {
             delta,
             ..Default::default()
         };
-        let wheel = wheel_payload(EventPayload::from(&event));
+        let wheel = wheel_of(wheel_payload(&event));
         assert!(wheel.delta_x.is_sign_positive() && wheel.delta_y.is_sign_positive());
     }
 
+    #[rstest]
+    #[case::control(gpui::Modifiers::control(), Modifiers::CONTROL)]
+    #[case::alt(gpui::Modifiers::alt(), Modifiers::ALT)]
+    #[case::shift(gpui::Modifiers::shift(), Modifiers::SHIFT)]
+    #[case::command(gpui::Modifiers::command(), Modifiers::PLATFORM)]
+    #[case::function_sets_no_flag(gpui::Modifiers::function(), Modifiers::none())]
+    fn a_gpui_modifier_converts_to_its_plain_flag(
+        #[case] held: gpui::Modifiers,
+        #[case] want: Modifiers,
+    ) {
+        assert_eq!(modifiers_of(held), want);
+    }
+
     #[test]
-    fn mouse_payload_at_carries_position_and_modifiers() {
+    fn mouse_at_carries_position_and_modifiers() {
         let modifiers = gpui::Modifiers {
             shift: true,
             ..Default::default()
         };
-        let mouse = MousePayload::at(gpui::point(gpui::px(12.0), gpui::px(34.0)), modifiers);
+        let mouse = mouse_at(gpui::point(gpui::px(12.0), gpui::px(34.0)), modifiers);
         assert_eq!(mouse.client_x, 12.0);
         assert_eq!(mouse.client_y, 34.0);
         assert_eq!(mouse.button, 0);
         assert_eq!(mouse.buttons, 0);
         assert_eq!(mouse.detail, 0);
-        assert_eq!(mouse.modifiers, modifiers);
+        assert_eq!(mouse.modifiers, modifiers_of(modifiers));
     }
 
     #[test]
@@ -599,11 +473,11 @@ mod tests {
             .unwrap()
         });
         let position = gpui::point(gpui::px(12.0), gpui::px(34.0));
-        let payload = EventPayload::Mouse(MousePayload::at(position, gpui::Modifiers::default()));
+        let payload = EventPayload::Mouse(mouse_at(position, gpui::Modifiers::default()));
 
         let screen = cx
             .update_window(window.into(), |_, window, _| {
-                mouse_payload(with_screen(payload, window))
+                mouse_of(with_screen(payload, window))
             })
             .unwrap();
 

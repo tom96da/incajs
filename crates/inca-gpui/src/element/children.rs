@@ -305,7 +305,7 @@ mod tests {
             &self,
             start: NodeId,
             event: &str,
-            payload: &crate::EventPayload,
+            payload: &inca_document::EventPayload,
             window: &mut gpui::Window,
             cx: &mut gpui::App,
         ) -> bool {

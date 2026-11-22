@@ -11,10 +11,10 @@ use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
 
-use gpui::{TestAppContext, point, px};
+use gpui::TestAppContext;
 use inca_bridge::test_support::engine_for;
 use inca_bridge::{EventDispatcher, Host};
-use inca_gpui::{EventPayload, MousePayload};
+use inca_document::{EventPayload, MousePayload};
 use inca_jsenv::Engine;
 use inca_node::NodeId;
 
@@ -73,7 +73,7 @@ fn three_nodes() -> (EventDispatcher, Rc<Engine>, [NodeId; 3]) {
 fn mouse_related_to(related: NodeId) -> EventPayload {
     EventPayload::Mouse(MousePayload {
         related_target: Some(related),
-        ..MousePayload::at(point(px(1.0), px(1.0)), gpui::Modifiers::none())
+        ..MousePayload::at(1.0, 1.0, inca_document::Modifiers::none())
     })
 }
 
