@@ -2045,3 +2045,28 @@ A fixed entry is deleted and its ID is never reused.
 
   The `blur` of the deactivation clears the Space press, so the `keyup` fires no `click`. Chromium
   fires one `click` at the `keyup`. Fix: keep the Space press across the `blur` of a deactivation.
+
+- **B-379 A `class` write that shows a focusable control does not put it in the Tab order**
+  `Units: document,bridge · Size: S · Impact: Medium`
+
+  A `class` change that removes `display: none` from a focusable control queues no focus re-check.
+  The control stays untracked, so Tab skips it and `focus()` is dropped until another write queues
+  the check. `hidden`, `inert` and `style` queue it, and so do `style.display` and tree changes.
+  Chromium makes the control focusable at once. Fix: queue the subtree re-check for a `class`
+  write, for `classList` writes and for a style sheet change.
+
+- **B-380 A Tab that reselects the node whose blur a tree change owes loses the focus**
+  `Units: document · Size: S · Impact: Low`
+
+  A `keydown` listener moves the focused node, which is the only Tab stop, past a sibling. The move
+  owes a blur for that node. When Tab runs before the next focus frame, it selects the node again,
+  and the frame applies the old blur and clears the focus without a `focus` event. Chromium
+  focuses the node. Fix: drop the owed blur when Tab selects its node.
+
+- **B-381 A removed node can get a `focus` event without a `blur`, depending on the dirty order**
+  `Units: document · Size: S · Impact: Low`
+
+  The dirty pass handles its nodes in hash order. When a connected node that lost its `tabindex` is
+  handled before a removed node that still holds the window focus, the pass reports a focus
+  transition for the removed node and then blurs it silently. Fix: release the window focus of every
+  removed node before the pass reports a transition.
