@@ -265,7 +265,6 @@ mod tests {
         RECORDER, dispatcher_on_clock, dispatcher_with_engine, eval_json, fire_and_read, listen,
         seen_rows, tree_of_three,
     };
-    use gpui::TestAppContext;
     use inca_document::EventPayload;
     use inca_jsenv::Clock;
 
@@ -279,10 +278,8 @@ mod tests {
         (clock, at)
     }
 
-    #[gpui::test]
-    fn the_time_stamp_of_a_host_event_is_the_clock_reading_at_its_creation(
-        cx: &mut TestAppContext,
-    ) {
+    #[test]
+    fn the_time_stamp_of_a_host_event_is_the_clock_reading_at_its_creation() {
         let (clock, at) = test_clock();
         let (dispatcher, host) = dispatcher_on_clock(clock);
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -290,10 +287,7 @@ mod tests {
         listen(&dispatcher, node, "click", "record");
         at.set(at.get() + Duration::from_millis(40));
 
-        let cx = cx.add_empty_window();
-        cx.update(|window, cx| {
-            dispatcher.fire(node, "click", &EventPayload::None, window, cx);
-        });
+        dispatcher.fire(node, "click", &EventPayload::None);
 
         let stamp = seen_rows(&dispatcher)[0][9].as_f64().unwrap();
         // Float rounding of seconds to milliseconds.
@@ -479,12 +473,12 @@ mod tests {
         assert_eq!(got, serde_json::json!(["ran"]));
     }
 
-    #[gpui::test]
-    fn init_event_makes_a_kept_host_event_untrusted(cx: &mut TestAppContext) {
+    #[test]
+    fn init_event_makes_a_kept_host_event_untrusted() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(&dispatcher, node, "click", "(e) => (globalThis.kept = e)");
-        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         let got = eval_json(
             &dispatcher,

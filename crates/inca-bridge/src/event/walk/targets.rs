@@ -43,7 +43,6 @@ mod tests {
         dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
         node_under_root, read_out, tree_of_three,
     };
-    use gpui::TestAppContext;
     use inca_document::{EventPayload, MousePayload, WheelPayload};
     use rstest::rstest;
 
@@ -60,8 +59,8 @@ mod tests {
 
     const THROWS: &str = "globalThis.__inca_targets__ = () => { throw new Error('no targets'); };";
 
-    #[gpui::test]
-    fn event_fields_hold_the_objects_the_hook_returns(cx: &mut TestAppContext) {
+    #[test]
+    fn event_fields_hold_the_objects_the_hook_returns() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         dispatcher.engine.eval::<()>(HOOK).unwrap();
@@ -73,7 +72,7 @@ mod tests {
         listen_with(&dispatcher, outer, "click", (true, false), note);
         listen(&dispatcher, parent, "click", note);
 
-        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, child, "click", &EventPayload::None);
 
         let path = serde_json::json!([child, parent, outer]);
         assert_eq!(
@@ -89,25 +88,21 @@ mod tests {
         assert_eq!(after, serde_json::json!([true, null, 0, 1]));
     }
 
-    #[gpui::test]
-    fn the_hook_runs_once_per_heard_walk_and_never_for_an_unheard_one(cx: &mut TestAppContext) {
+    #[test]
+    fn the_hook_runs_once_per_heard_walk_and_never_for_an_unheard_one() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         dispatcher.engine.eval::<()>(HOOK).unwrap();
         listen(&dispatcher, outer, "click", "() => {}");
         listen(&dispatcher, parent, "click", "() => {}");
-        let cx = cx.add_empty_window();
-
-        cx.update(|window, cx| {
-            dispatcher.fire(child, "click", &EventPayload::None, window, cx);
-            dispatcher.fire(child, "keydown", &EventPayload::None, window, cx);
-        });
+        dispatcher.fire(child, "click", &EventPayload::None);
+        dispatcher.fire(child, "keydown", &EventPayload::None);
 
         assert_eq!(eval_json(&dispatcher, "calls"), serde_json::json!(1));
     }
 
-    #[gpui::test]
-    fn related_target_is_the_object_of_the_related_node(cx: &mut TestAppContext) {
+    #[test]
+    fn related_target_is_the_object_of_the_related_node() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         dispatcher.engine.eval::<()>(HOOK).unwrap();
@@ -123,15 +118,11 @@ mod tests {
             related_target: Some(parent),
             ..MousePayload::at(0.0, 0.0, inca_document::Modifiers::none())
         });
-        let cx = cx.add_empty_window();
-
-        cx.update(|window, cx| {
-            dispatcher.fire(outer, "mouseover", &over, window, cx);
-            for related_target in [Some(child), None] {
-                let payload = EventPayload::Focus { related_target };
-                dispatcher.fire(outer, "focus", &payload, window, cx);
-            }
-        });
+        dispatcher.fire(outer, "mouseover", &over);
+        for related_target in [Some(child), None] {
+            let payload = EventPayload::Focus { related_target };
+            dispatcher.fire(outer, "focus", &payload);
+        }
 
         assert_eq!(
             read_out(&dispatcher),
@@ -157,33 +148,33 @@ mod tests {
         assert_eq!(got, serde_json::json!([true, true, 1]));
     }
 
-    #[gpui::test]
-    fn a_throwing_hook_runs_no_listener(cx: &mut TestAppContext) {
+    #[test]
+    fn a_throwing_hook_runs_no_listener() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher.engine.eval::<()>(THROWS).unwrap();
         listen(&dispatcher, node, "click", "() => out.push('ran')");
 
-        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([]));
     }
 
-    #[gpui::test]
-    fn a_throwing_hook_is_reported(cx: &mut TestAppContext) {
+    #[test]
+    fn a_throwing_hook_is_reported() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher.engine.eval::<()>(THROWS).unwrap();
         listen(&dispatcher, node, "click", "() => out.push('ran')");
 
-        let _ = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let _ = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         assert_eq!(reported.borrow().len(), 1);
         assert_eq!(reported.borrow()[0].message(), "Error: no targets");
     }
 
-    #[gpui::test]
-    fn a_hook_that_returns_no_array_runs_no_listener(cx: &mut TestAppContext) {
+    #[test]
+    fn a_hook_that_returns_no_array_runs_no_listener() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
@@ -192,13 +183,13 @@ mod tests {
             .unwrap();
         listen(&dispatcher, node, "click", "() => out.push('ran')");
 
-        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([]));
     }
 
-    #[gpui::test]
-    fn a_hook_that_returns_no_array_is_reported(cx: &mut TestAppContext) {
+    #[test]
+    fn a_hook_that_returns_no_array_is_reported() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         dispatcher
@@ -207,7 +198,7 @@ mod tests {
             .unwrap();
         listen(&dispatcher, node, "click", "() => out.push('ran')");
 
-        let _ = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let _ = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         assert_eq!(reported.borrow().len(), 1);
     }
@@ -249,8 +240,8 @@ mod tests {
         assert_eq!(got, serde_json::json!("threw"));
     }
 
-    #[gpui::test]
-    fn a_target_a_listener_destroys_stays_in_the_path(cx: &mut TestAppContext) {
+    #[test]
+    fn a_target_a_listener_destroys_stays_in_the_path() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         dispatcher.engine.eval::<()>(HOOK).unwrap();
@@ -268,13 +259,13 @@ mod tests {
             "(e) => out.push([nodeOf(e.target), e.composedPath().map(nodeOf), calls])",
         );
 
-        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([[child, [child, parent, outer], 1]]));
     }
 
-    #[gpui::test]
-    fn a_kept_event_lets_its_path_objects_go_after_the_walk(cx: &mut TestAppContext) {
+    #[test]
+    fn a_kept_event_lets_its_path_objects_go_after_the_walk() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, _, child] = tree_of_three(&host);
         dispatcher
@@ -287,7 +278,7 @@ mod tests {
             "click",
             "(e) => { globalThis.kept = e; globalThis.weak = new WeakRef(e.composedPath()[1]); }",
         );
-        fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+        fire_and_read(&dispatcher, child, "click", &EventPayload::None);
 
         dispatcher.engine.with(|ctx| ctx.run_gc());
 
@@ -324,8 +315,8 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn a_wheel_payload_gives_its_related_node_to_the_hook(cx: &mut TestAppContext) {
+    #[test]
+    fn a_wheel_payload_gives_its_related_node_to_the_hook() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, _] = tree_of_three(&host);
         dispatcher.engine.eval::<()>(HOOK).unwrap();
@@ -346,7 +337,7 @@ mod tests {
             delta_mode: 0,
         });
 
-        let out = fire_and_read(cx, &dispatcher, outer, "wheel", &wheel);
+        let out = fire_and_read(&dispatcher, outer, "wheel", &wheel);
 
         assert_eq!(out, serde_json::json!([parent]));
     }
@@ -366,8 +357,8 @@ mod tests {
         )
     }
 
-    #[gpui::test]
-    fn native_event_path_runs_through_the_root_then_document_then_window(cx: &mut TestAppContext) {
+    #[test]
+    fn native_event_path_runs_through_the_root_then_document_then_window() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
         let (root, document) = {
@@ -380,7 +371,7 @@ mod tests {
         listen(&dispatcher, document, "click", &note_walk("document"));
         listen_global(&dispatcher, "$window", "click", false, &note_walk("window"));
 
-        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         let path = serde_json::json!([node, root, document, "$window"]);
         assert_eq!(
@@ -394,8 +385,8 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn the_window_captures_first_and_bubbles_last(cx: &mut TestAppContext) {
+    #[test]
+    fn the_window_captures_first_and_bubbles_last() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = node_under_root(&host);
         let document = host.document.borrow().document();
@@ -436,7 +427,7 @@ mod tests {
         );
         listen(&dispatcher, node, "click", &note_walk("node bubble"));
 
-        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         let order: Vec<_> = out
             .as_array()
@@ -478,10 +469,8 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn an_event_at_a_node_outside_the_document_never_reaches_document_or_window(
-        cx: &mut TestAppContext,
-    ) {
+    #[test]
+    fn an_event_at_a_node_outside_the_document_never_reaches_document_or_window() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         let document = host.document.borrow().document();
@@ -490,7 +479,7 @@ mod tests {
         listen(&dispatcher, document, "click", &note_walk("document"));
         listen_global(&dispatcher, "$window", "click", true, &note_walk("window"));
 
-        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([["node", node, node, 2, [node]]]));
     }

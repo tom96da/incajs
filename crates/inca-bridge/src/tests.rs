@@ -7,7 +7,6 @@
 
 use std::rc::Rc;
 
-use gpui::TestAppContext;
 use inca_document::{
     EventPayload, EventTargetId, MousePayload, PointerSource, Walk, WheelPayload, flags_of,
 };
@@ -52,14 +51,7 @@ impl EventDispatcher {
     /// Fires `event` at `start`: the listeners run, then the job queue drains when one ran.
     /// Returns whether a listener prevented the default action. A `start` that left the tree
     /// fires nothing.
-    pub(crate) fn fire(
-        &self,
-        start: NodeId,
-        event: &str,
-        payload: &EventPayload,
-        _window: &mut gpui::Window,
-        _cx: &mut gpui::App,
-    ) -> bool {
+    pub(crate) fn fire(&self, start: NodeId, event: &str, payload: &EventPayload) -> bool {
         if self.host.document.borrow().tree.get(start).is_none() {
             return false;
         }
@@ -167,16 +159,12 @@ pub(crate) fn read_out(dispatcher: &EventDispatcher) -> serde_json::Value {
 
 /// Fires `event` with `payload` at `start` once and returns `globalThis.out`.
 pub(crate) fn fire_and_read(
-    cx: &mut TestAppContext,
     dispatcher: &EventDispatcher,
     start: NodeId,
     event: &str,
     payload: &EventPayload,
 ) -> serde_json::Value {
-    let cx = cx.add_empty_window();
-    cx.update(|window, cx| {
-        dispatcher.fire(start, event, payload, window, cx);
-    });
+    dispatcher.fire(start, event, payload);
     read_out(dispatcher)
 }
 

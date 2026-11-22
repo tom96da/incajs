@@ -177,7 +177,7 @@ impl Payload {
                     Keyboard {
                         key: key.key.clone(),
                         code: String::new(),
-                        // gpui reports no key location.
+                        // The key payload carries no key location.
                         location: 0,
                         repeat: key.repeat,
                         is_composing: key.is_composing,
@@ -585,22 +585,16 @@ mod tests {
     use crate::tests::{
         dispatcher_with_engine, fire_and_read, key_payload, listen, mouse_at, wheel_at,
     };
-    use gpui::TestAppContext;
-    use inca_document::EventPayload;
-    use inca_gpui::modifiers_of;
-    use inca_test_macros::gpui_cases;
+    use inca_document::{EventPayload, Modifiers};
+    use rstest::rstest;
 
-    #[gpui_cases]
-    #[gpui::test]
-    #[case::control_held(gpui::Modifiers::control())]
-    #[case::shift_held(gpui::Modifiers::shift())]
-    #[case::alt_held(gpui::Modifiers::alt())]
-    #[case::command_held(gpui::Modifiers::command())]
-    #[case::none_held(gpui::Modifiers::default())]
-    fn modifier_state_reports_each_held_modifier_and_no_lock(
-        cx: &mut TestAppContext,
-        held: gpui::Modifiers,
-    ) {
+    #[rstest]
+    #[case::control_held(Modifiers::none().set(Modifiers::CONTROL, true))]
+    #[case::shift_held(Modifiers::none().set(Modifiers::SHIFT, true))]
+    #[case::alt_held(Modifiers::none().set(Modifiers::ALT, true))]
+    #[case::command_held(Modifiers::none().set(Modifiers::PLATFORM, true))]
+    #[case::none_held(Modifiers::none())]
+    fn modifier_state_reports_each_held_modifier_and_no_lock(#[case] held: Modifiers) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -618,14 +612,8 @@ mod tests {
                 control
             }
         };
-        let flags = [held.control, held.shift, held.alt, held.platform];
-        let out = fire_and_read(
-            cx,
-            &dispatcher,
-            node,
-            "keydown",
-            &key_payload(modifiers_of(held)),
-        );
+        let flags = [held.control(), held.shift(), held.alt(), held.platform()];
+        let out = fire_and_read(&dispatcher, node, "keydown", &key_payload(held));
         let want = serde_json::json!([[
             flags[0],
             flags[1],
@@ -638,18 +626,16 @@ mod tests {
         assert_eq!(out, want);
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::mouse("click", mouse_at(1.0, 1.0), [false, true, false, true])]
     #[case::wheel("wheel", wheel_at(1.0, 1.0), [false, false, false, true])]
     #[case::key("keydown", key_payload(inca_document::Modifiers::none()), [false, true, false, true])]
     #[case::focus("focus", EventPayload::Focus { related_target: None }, [false, false, false, true])]
     #[case::none("scroll", EventPayload::None, [false, false, true, true])]
     fn get_modifier_state_lives_on_the_prototype_of_its_kind(
-        cx: &mut TestAppContext,
-        event: &str,
-        payload: EventPayload,
-        want: [bool; 4],
+        #[case] event: &str,
+        #[case] payload: EventPayload,
+        #[case] want: [bool; 4],
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -670,13 +656,13 @@ mod tests {
             ",
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+        let out = fire_and_read(&dispatcher, node, event, &payload);
 
         assert_eq!(out, serde_json::json!(want));
     }
 
-    #[gpui::test]
-    fn a_detached_get_modifier_state_throws_type_error(cx: &mut TestAppContext) {
+    #[test]
+    fn a_detached_get_modifier_state_throws_type_error() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -693,7 +679,6 @@ mod tests {
         );
 
         let out = fire_and_read(
-            cx,
             &dispatcher,
             node,
             "keydown",
@@ -703,16 +688,11 @@ mod tests {
         assert_eq!(out, serde_json::json!([true, true, true, true]));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::undefined("undefined", false)]
     #[case::number("1", false)]
     #[case::object_with_to_string("{ toString: () => 'Control' }", true)]
-    fn get_modifier_state_converts_its_argument_to_a_string(
-        cx: &mut TestAppContext,
-        arg: &str,
-        want: bool,
-    ) {
+    fn get_modifier_state_converts_its_argument_to_a_string(#[case] arg: &str, #[case] want: bool) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -723,7 +703,6 @@ mod tests {
         );
 
         let out = fire_and_read(
-            cx,
             &dispatcher,
             node,
             "keydown",
@@ -733,14 +712,10 @@ mod tests {
         assert_eq!(out, serde_json::json!([want]));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::missing("")]
     #[case::symbol("Symbol()")]
-    fn get_modifier_state_throws_type_error_for_a_missing_or_symbol_argument(
-        cx: &mut TestAppContext,
-        arg: &str,
-    ) {
+    fn get_modifier_state_throws_type_error_for_a_missing_or_symbol_argument(#[case] arg: &str) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -761,7 +736,6 @@ mod tests {
         );
 
         let out = fire_and_read(
-            cx,
             &dispatcher,
             node,
             "keydown",

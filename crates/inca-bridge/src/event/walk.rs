@@ -130,12 +130,11 @@ mod tests {
         node_under_root, read_out, tagged, tree_of_three,
     };
     use crate::{EventTargetId, event};
-    use gpui::TestAppContext;
     use inca_document::EventPayload;
     use rstest::rstest;
 
-    #[gpui::test]
-    fn one_event_object_reaches_every_node(cx: &mut TestAppContext) {
+    #[test]
+    fn one_event_object_reaches_every_node() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         for node in [child, parent, outer] {
@@ -150,13 +149,13 @@ mod tests {
             );
         }
 
-        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, child, "click", &EventPayload::None);
 
         assert_eq!(out, serde_json::json!([[true, 1], [true, 2], [true, 3]]));
     }
 
-    #[gpui::test]
-    fn after_dispatch_current_target_is_null_phase_0_and_stop_flags_clear(cx: &mut TestAppContext) {
+    #[test]
+    fn after_dispatch_current_target_is_null_phase_0_and_stop_flags_clear() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, _, child] = tree_of_three(&host);
         listen(
@@ -170,7 +169,7 @@ mod tests {
             }
             ",
         );
-        let during = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+        let during = fire_and_read(&dispatcher, child, "click", &EventPayload::None);
         assert_eq!(during, serde_json::json!([[child, 2, true]]));
 
         let after = dispatcher
@@ -185,8 +184,8 @@ mod tests {
         assert_eq!(after, "[null,0,false,true,0]");
     }
 
-    #[gpui::test]
-    fn the_path_is_fixed_when_dispatch_starts(cx: &mut TestAppContext) {
+    #[test]
+    fn the_path_is_fixed_when_dispatch_starts() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         for node in [child, parent, outer] {
@@ -205,7 +204,7 @@ mod tests {
             );
         }
 
-        let out = fire_and_read(cx, &dispatcher, child, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, child, "click", &EventPayload::None);
 
         let path = serde_json::json!([child, parent, outer]);
         assert_eq!(
@@ -214,24 +213,18 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn each_dispatch_takes_the_next_event_id_and_an_unheard_one_takes_none(
-        cx: &mut TestAppContext,
-    ) {
+    #[test]
+    fn each_dispatch_takes_the_next_event_id_and_an_unheard_one_takes_none() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, parent, child] = tree_of_three(&host);
         let record = "(e) => out.push([e.type, e.eventId])";
         listen(&dispatcher, parent, "click", record);
         listen(&dispatcher, parent, "focusin", record);
-        let cx = cx.add_empty_window();
-
-        cx.update(|window, cx| {
-            let none = EventPayload::None;
-            dispatcher.fire(child, "click", &none, window, cx);
-            dispatcher.fire(child, "keydown", &none, window, cx);
-            dispatcher.fire(child, "click", &none, window, cx);
-            dispatcher.fire(child, "focusin", &none, window, cx);
-        });
+        let none = EventPayload::None;
+        dispatcher.fire(child, "click", &none);
+        dispatcher.fire(child, "keydown", &none);
+        dispatcher.fire(child, "click", &none);
+        dispatcher.fire(child, "focusin", &none);
 
         let out = dispatcher
             .engine
@@ -240,8 +233,8 @@ mod tests {
         assert_eq!(out, r#"[["click",1],["click",2],["focusin",3]]"#);
     }
 
-    #[gpui::test]
-    fn the_cut_nodes_are_skipped_in_both_passes(cx: &mut TestAppContext) {
+    #[test]
+    fn the_cut_nodes_are_skipped_in_both_passes() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         for (name, node, capture) in [
@@ -254,22 +247,18 @@ mod tests {
         ] {
             listen_with(&dispatcher, node, "click", (capture, false), &tagged(name));
         }
-        let cx = cx.add_empty_window();
-
-        cx.update(|_, _| {
-            event::walk(
-                &dispatcher.engine,
-                &dispatcher.host,
-                &Walk {
-                    name: "click",
-                    flags: Flags::ALL,
-                    target: EventTargetId::Node(child),
-                    cut: &[parent, outer],
-                    payload: &EventPayload::None,
-                    trusted: true,
-                },
-            );
-        });
+        event::walk(
+            &dispatcher.engine,
+            &dispatcher.host,
+            &Walk {
+                name: "click",
+                flags: Flags::ALL,
+                target: EventTargetId::Node(child),
+                cut: &[parent, outer],
+                payload: &EventPayload::None,
+                trusted: true,
+            },
+        );
 
         let out = dispatcher
             .engine
@@ -281,8 +270,8 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn a_cut_silences_the_document_and_window(cx: &mut TestAppContext) {
+    #[test]
+    fn a_cut_silences_the_document_and_window() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let outer = node_under_root(&host);
         let child = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -308,22 +297,18 @@ mod tests {
             false,
             "() => out.push('global')",
         );
-        let cx = cx.add_empty_window();
-
-        cx.update(|_, _| {
-            event::walk(
-                &dispatcher.engine,
-                &dispatcher.host,
-                &Walk {
-                    name: "click",
-                    flags: Flags::ALL,
-                    target: EventTargetId::Node(child),
-                    cut: &[outer, document],
-                    payload: &EventPayload::None,
-                    trusted: true,
-                },
-            );
-        });
+        event::walk(
+            &dispatcher.engine,
+            &dispatcher.host,
+            &Walk {
+                name: "click",
+                flags: Flags::ALL,
+                target: EventTargetId::Node(child),
+                cut: &[outer, document],
+                payload: &EventPayload::None,
+                trusted: true,
+            },
+        );
 
         assert_eq!(read_out(&dispatcher), serde_json::json!(["child"]));
     }

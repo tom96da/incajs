@@ -194,14 +194,11 @@ mod tests {
     use crate::tests::{
         dispatcher_with_engine, eval_json, fire_and_read, key_payload, listen, mouse_at, wheel_at,
     };
-    use gpui::TestAppContext;
     use inca_document::{EventPayload, MousePayload};
-    use inca_test_macros::gpui_cases;
+    use rstest::rstest;
 
-    #[gpui::test]
-    fn an_event_method_throws_a_type_error_for_any_receiver_that_is_not_an_event(
-        cx: &mut TestAppContext,
-    ) {
+    #[test]
+    fn an_event_method_throws_a_type_error_for_any_receiver_that_is_not_an_event() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -230,15 +227,14 @@ mod tests {
             ",
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         let mut want = vec![serde_json::json!(true); 6 * 9];
         want.push(serde_json::json!(true));
         assert_eq!(out, serde_json::Value::Array(want));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::mouse("click", mouse_at(1.0, 1.0), "[object MouseEvent]")]
     #[case::wheel("wheel", wheel_at(1.0, 1.0), "[object WheelEvent]")]
     #[case::key(
@@ -248,10 +244,9 @@ mod tests {
     )]
     #[case::focus("focus", EventPayload::Focus { related_target: None }, "[object FocusEvent]")]
     fn a_host_event_reads_its_class_as_its_string_tag(
-        cx: &mut TestAppContext,
-        event: &str,
-        payload: EventPayload,
-        want: &str,
+        #[case] event: &str,
+        #[case] payload: EventPayload,
+        #[case] want: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -262,19 +257,17 @@ mod tests {
             "(e) => out.push(Object.prototype.toString.call(e))",
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+        let out = fire_and_read(&dispatcher, node, event, &payload);
 
         assert_eq!(out, serde_json::json!([want]));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::shared_method("Event.prototype", "preventDefault")]
     #[case::modifier_lookup("Object.getPrototypeOf(e)", "getModifierState")]
     fn an_event_method_descriptor_reads_writable_enumerable_configurable(
-        cx: &mut TestAppContext,
-        owner: &str,
-        key: &str,
+        #[case] owner: &str,
+        #[case] key: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -293,7 +286,6 @@ mod tests {
         );
 
         let out = fire_and_read(
-            cx,
             &dispatcher,
             node,
             "keydown",
@@ -303,8 +295,7 @@ mod tests {
         assert_eq!(out, serde_json::json!(["true,true,true"]));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::method("Event.prototype.preventDefault", "preventDefault")]
     #[case::modifier_lookup("Object.getPrototypeOf(e).getModifierState", "getModifierState")]
     #[case::getter(
@@ -316,9 +307,8 @@ mod tests {
         "set returnValue"
     )]
     fn an_event_function_carries_the_name_of_its_member(
-        cx: &mut TestAppContext,
-        function: &str,
-        want: &str,
+        #[case] function: &str,
+        #[case] want: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -330,7 +320,6 @@ mod tests {
         );
 
         let out = fire_and_read(
-            cx,
             &dispatcher,
             node,
             "keydown",
@@ -340,10 +329,8 @@ mod tests {
         assert_eq!(out, serde_json::json!([want]));
     }
 
-    #[gpui::test]
-    fn a_get_modifier_state_throws_type_error_for_an_event_of_another_kind(
-        cx: &mut TestAppContext,
-    ) {
+    #[test]
+    fn a_get_modifier_state_throws_type_error_for_an_event_of_another_kind() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         for event in ["click", "keydown"] {
@@ -356,8 +343,8 @@ mod tests {
         }
         let shift = inca_document::Modifiers::SHIFT;
         let mouse = EventPayload::Mouse(MousePayload::at(1.0, 1.0, shift));
-        fire_and_read(cx, &dispatcher, node, "click", &mouse);
-        fire_and_read(cx, &dispatcher, node, "keydown", &key_payload(shift));
+        fire_and_read(&dispatcher, node, "click", &mouse);
+        fire_and_read(&dispatcher, node, "keydown", &key_payload(shift));
 
         let got = eval_json(
             &dispatcher,

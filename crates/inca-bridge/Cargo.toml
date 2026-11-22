@@ -34,16 +34,9 @@ test-support = ["inca-document/test-support", "dep:serde_json"]
 inca-jsenv = { path = "../inca-jsenv", features = ["test-support"] }
 rstest.workspace = true
 serde_json.workspace = true
-# `modifiers_of` turns a gpui modifier set into the payload the tests fire.
-inca-gpui = { path = "../inca-gpui" }
-inca-test-macros = { path = "../inca-test-macros" }
 env_logger.workspace = true
 # Enables this crate's own `test-support` feature for its tests and clippy.
 inca-bridge = { path = ".", features = ["test-support"] }
-# test-support gates gpui's TestPlatform/TestAppContext/#[gpui::test]; see
-# third_party/zed/crates/gpui/src/gpui.rs's `cfg(any(test, feature =
-# "test-support"))` gate.
-gpui = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true

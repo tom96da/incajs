@@ -2819,14 +2819,11 @@ name = "inca-bridge"
 version = "0.0.35"
 dependencies = [
  "env_logger",
- "gpui",
  "inca-bridge",
  "inca-document",
- "inca-gpui",
  "inca-jsenv",
  "inca-node",
  "inca-style",
- "inca-test-macros",
  "rquickjs",
  "rstest",
  "serde_json",

@@ -146,9 +146,7 @@ mod tests {
         dispatcher_with_engine, eval_json, fire_and_read, key_payload, listen, mouse_at,
         pointer_click, tree_of_three, wheel_at,
     };
-    use gpui::TestAppContext;
     use inca_document::{EventPayload, MousePayload};
-    use inca_test_macros::gpui_cases;
     use rquickjs::Class;
     use rquickjs::Value;
     use rstest::rstest;
@@ -193,8 +191,8 @@ mod tests {
         })
     }
 
-    #[gpui::test]
-    fn a_host_event_owns_only_is_trusted(cx: &mut TestAppContext) {
+    #[test]
+    fn a_host_event_owns_only_is_trusted() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -204,7 +202,7 @@ mod tests {
             "(e) => out.push(Reflect.ownKeys(e))",
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, "click", &pointer_click());
+        let out = fire_and_read(&dispatcher, node, "click", &pointer_click());
 
         assert_eq!(out, serde_json::json!([["isTrusted"]]));
     }
@@ -241,12 +239,12 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn every_event_shares_one_is_trusted_getter(cx: &mut TestAppContext) {
+    #[test]
+    fn every_event_shares_one_is_trusted_getter() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(&dispatcher, node, "click", "(e) => (globalThis.kept = e)");
-        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
         let shared = dispatcher
             .engine
@@ -261,8 +259,7 @@ mod tests {
         assert!(shared);
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::mouse("mousedown", mouse_at(1.0, 1.0), "clientX")]
     #[case::mouse_related_target("mouseover", mouse_at(1.0, 1.0), "relatedTarget")]
     #[case::pointer("click", pointer_click(), "pointerId")]
@@ -270,10 +267,9 @@ mod tests {
     #[case::keyboard("keydown", key_payload(inca_document::Modifiers::none()), "key")]
     #[case::focus("focus", EventPayload::Focus { related_target: None }, "relatedTarget")]
     fn a_field_is_a_getter_on_the_prototype_of_its_kind(
-        cx: &mut TestAppContext,
-        event: &str,
-        payload: EventPayload,
-        key: &str,
+        #[case] event: &str,
+        #[case] payload: EventPayload,
+        #[case] key: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -290,7 +286,7 @@ mod tests {
             .replace("KEY", key),
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+        let out = fire_and_read(&dispatcher, node, event, &payload);
 
         assert_eq!(
             out,
@@ -298,8 +294,7 @@ mod tests {
         );
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::mouse(
         "mousedown",
         mouse_at(1.0, 1.0),
@@ -318,10 +313,9 @@ mod tests {
         "Object.hasOwn(parent, 'which') && Object.getPrototypeOf(parent) === Event.prototype"
     )]
     fn the_prototype_of_a_kind_inherits_from_its_parent(
-        cx: &mut TestAppContext,
-        event: &str,
-        payload: EventPayload,
-        check: &str,
+        #[case] event: &str,
+        #[case] payload: EventPayload,
+        #[case] check: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -338,14 +332,14 @@ mod tests {
             .replace("CHECK", check),
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+        let out = fire_and_read(&dispatcher, node, event, &payload);
 
         assert_eq!(out, serde_json::json!([true]));
     }
 
     /// One body: the events of five kinds are fired once and read across.
-    #[gpui::test]
-    fn a_field_getter_throws_type_error_for_an_event_of_another_kind(cx: &mut TestAppContext) {
+    #[test]
+    fn a_field_getter_throws_type_error_for_an_event_of_another_kind() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         for event in ["mousedown", "click", "wheel", "keydown", "focus"] {
@@ -356,11 +350,10 @@ mod tests {
                 "(e) => ((globalThis.kept ??= {})[e.type] = e)",
             );
         }
-        fire_and_read(cx, &dispatcher, node, "mousedown", &mouse_at(1.0, 1.0));
-        fire_and_read(cx, &dispatcher, node, "click", &pointer_click());
-        fire_and_read(cx, &dispatcher, node, "wheel", &wheel_at(1.0, 1.0));
+        fire_and_read(&dispatcher, node, "mousedown", &mouse_at(1.0, 1.0));
+        fire_and_read(&dispatcher, node, "click", &pointer_click());
+        fire_and_read(&dispatcher, node, "wheel", &wheel_at(1.0, 1.0));
         fire_and_read(
-            cx,
             &dispatcher,
             node,
             "keydown",
@@ -369,7 +362,7 @@ mod tests {
         let focus = EventPayload::Focus {
             related_target: None,
         };
-        fire_and_read(cx, &dispatcher, node, "focus", &focus);
+        fire_and_read(&dispatcher, node, "focus", &focus);
 
         let got = eval_json(
             &dispatcher,
@@ -410,8 +403,8 @@ mod tests {
         );
     }
 
-    #[gpui::test]
-    fn a_mouse_field_getter_reads_a_wheel_event(cx: &mut TestAppContext) {
+    #[test]
+    fn a_mouse_field_getter_reads_a_wheel_event() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         for event in ["mousedown", "wheel"] {
@@ -422,8 +415,8 @@ mod tests {
                 "(e) => ((globalThis.kept ??= {})[e.type] = e)",
             );
         }
-        fire_and_read(cx, &dispatcher, node, "mousedown", &mouse_at(1.0, 1.0));
-        fire_and_read(cx, &dispatcher, node, "wheel", &wheel_at(2.0, 1.0));
+        fire_and_read(&dispatcher, node, "mousedown", &mouse_at(1.0, 1.0));
+        fire_and_read(&dispatcher, node, "wheel", &wheel_at(2.0, 1.0));
 
         let got = eval_json(
             &dispatcher,
@@ -463,8 +456,8 @@ mod tests {
         assert_eq!(got, serde_json::json!(true));
     }
 
-    #[gpui::test]
-    fn the_targets_hook_receives_its_ids_past_an_inherited_index_setter(cx: &mut TestAppContext) {
+    #[test]
+    fn the_targets_hook_receives_its_ids_past_an_inherited_index_setter() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         listen(&dispatcher, child, "click", "() => {}");
@@ -486,18 +479,15 @@ mod tests {
             )
             .unwrap();
         // Not `fire_and_read`: its `JSON.stringify` would meet the setter.
-        let cx = cx.add_empty_window();
-        cx.update(|window, cx| {
-            dispatcher.fire(child, "click", &EventPayload::None, window, cx);
-        });
+        dispatcher.fire(child, "click", &EventPayload::None);
 
         let got = eval_json(&dispatcher, "[ids, globalThis.caught === undefined]");
 
         assert_eq!(got, serde_json::json!([[child, parent, outer], true]));
     }
 
-    #[gpui::test]
-    fn composed_path_entries_ignore_an_inherited_index_setter(cx: &mut TestAppContext) {
+    #[test]
+    fn composed_path_entries_ignore_an_inherited_index_setter() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [outer, parent, child] = tree_of_three(&host);
         listen(
@@ -520,10 +510,7 @@ mod tests {
             )
             .unwrap();
         // Not `fire_and_read`: its `JSON.stringify` would meet the setter.
-        let cx = cx.add_empty_window();
-        cx.update(|window, cx| {
-            dispatcher.fire(child, "click", &EventPayload::None, window, cx);
-        });
+        dispatcher.fire(child, "click", &EventPayload::None);
 
         let got = eval_json(&dispatcher, "[path, globalThis.caught === undefined]");
 
@@ -550,16 +537,14 @@ mod tests {
         );
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::key_code("keyCode", serde_json::json!(65))]
     #[case::which("which", serde_json::json!(65))]
     #[case::char_code("charCode", serde_json::json!(0))]
     #[case::code("code", serde_json::json!(""))]
     fn a_host_key_event_reads_each_legacy_field(
-        cx: &mut TestAppContext,
-        key: &str,
-        want: serde_json::Value,
+        #[case] key: &str,
+        #[case] want: serde_json::Value,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -571,7 +556,6 @@ mod tests {
         );
 
         let out = fire_and_read(
-            cx,
             &dispatcher,
             node,
             "keydown",
@@ -581,14 +565,12 @@ mod tests {
         assert_eq!(out, serde_json::json!([want]));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::letter("a", 97)]
     #[case::above_the_bmp("😀", 55_357)]
     fn a_host_keypress_reads_the_character_in_each_legacy_field(
-        cx: &mut TestAppContext,
-        key: &str,
-        want: u32,
+        #[case] key: &str,
+        #[case] want: u32,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -605,13 +587,13 @@ mod tests {
             is_composing: false,
         });
 
-        let out = fire_and_read(cx, &dispatcher, node, "keypress", &payload);
+        let out = fire_and_read(&dispatcher, node, "keypress", &payload);
 
         assert_eq!(out, serde_json::json!([[want, want, want]]), "{key}");
     }
 
-    #[gpui::test]
-    fn the_view_of_a_host_event_reads_null(cx: &mut TestAppContext) {
+    #[test]
+    fn the_view_of_a_host_event_reads_null() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -621,13 +603,12 @@ mod tests {
             "(e) => out.push(e.view === null)",
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, "mousedown", &mouse_at(1.0, 1.0));
+        let out = fire_and_read(&dispatcher, node, "mousedown", &mouse_at(1.0, 1.0));
 
         assert_eq!(out, serde_json::json!([true]));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::button_event("mouseup", mouse_button(2), 3)]
     #[case::pointer_click("click", pointer_click(), 1)]
     #[case::dblclick("dblclick", mouse_with_button(2), 3)]
@@ -635,34 +616,31 @@ mod tests {
     #[case::contextmenu("contextmenu", mouse_with_button(2), 3)]
     #[case::focus("focus", EventPayload::Focus { related_target: None }, 0)]
     fn the_which_of_a_host_event_reads_its_button_or_zero(
-        cx: &mut TestAppContext,
-        event: &str,
-        payload: EventPayload,
-        want: u32,
+        #[case] event: &str,
+        #[case] payload: EventPayload,
+        #[case] want: u32,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(&dispatcher, node, event, "(e) => out.push(e.which)");
 
-        let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+        let out = fire_and_read(&dispatcher, node, event, &payload);
 
         assert_eq!(out, serde_json::json!([want]));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::keyboard("keydown", key_payload(inca_document::Modifiers::none()))]
     #[case::focus("focus", EventPayload::Focus { related_target: None })]
     fn the_detail_of_a_host_key_or_focus_event_reads_zero(
-        cx: &mut TestAppContext,
-        event: &str,
-        payload: EventPayload,
+        #[case] event: &str,
+        #[case] payload: EventPayload,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(&dispatcher, node, event, "(e) => out.push(e.detail)");
 
-        let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+        let out = fire_and_read(&dispatcher, node, event, &payload);
 
         assert_eq!(out, serde_json::json!([0]));
     }

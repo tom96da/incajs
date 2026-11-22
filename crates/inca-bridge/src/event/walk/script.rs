@@ -116,7 +116,6 @@ mod tests {
         dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
         node_under_root, read_out, tree_of_three,
     };
-    use gpui::TestAppContext;
     use inca_document::EventPayload;
     use inca_node::NodeId;
 
@@ -417,10 +416,8 @@ mod tests {
         assert_eq!(reported.borrow().len(), 1);
     }
 
-    #[gpui::test]
-    fn errors_are_reported_in_the_order_they_happened_across_nested_dispatches(
-        cx: &mut TestAppContext,
-    ) {
+    #[test]
+    fn errors_are_reported_in_the_order_they_happened_across_nested_dispatches() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -442,7 +439,7 @@ mod tests {
             "ping",
             "() => { throw new Error('inner'); }",
         );
-        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        fire_and_read(&dispatcher, node, "click", &EventPayload::None);
         let messages: Vec<_> = reported
             .borrow()
             .iter()
@@ -484,10 +481,8 @@ mod tests {
         assert_eq!(got, serde_json::json!([2, 2]));
     }
 
-    #[gpui::test]
-    fn a_trusted_host_event_kept_by_a_listener_is_untrusted_when_dispatched_again(
-        cx: &mut TestAppContext,
-    ) {
+    #[test]
+    fn a_trusted_host_event_kept_by_a_listener_is_untrusted_when_dispatched_again() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -496,7 +491,7 @@ mod tests {
             "click",
             "(e) => { out.push(e.isTrusted); globalThis.kept ??= e; }",
         );
-        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        fire_and_read(&dispatcher, node, "click", &EventPayload::None);
         let got = eval_json(
             &dispatcher,
             &format!("(__inca_native__.dispatchEvent({node}, kept), out)"),

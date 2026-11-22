@@ -93,11 +93,10 @@ pub(super) fn end_dispatch(event: &IncaEvent<'_>) {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use crate::tests::{dispatcher_with_engine, listen, listen_with, tree_of_three};
-    use gpui::TestAppContext;
     use inca_document::EventPayload;
 
-    #[gpui::test]
-    fn a_passive_listener_cannot_cancel_and_an_active_one_after_it_can(cx: &mut TestAppContext) {
+    #[test]
+    fn a_passive_listener_cannot_cancel_and_an_active_one_after_it_can() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, parent, child] = tree_of_three(&host);
         let passive = (false, true);
@@ -135,10 +134,7 @@ mod tests {
             }
             ",
         );
-        let cx = cx.add_empty_window();
-
-        let canceled = cx
-            .update(|window, cx| dispatcher.fire(child, "click", &EventPayload::None, window, cx));
+        let canceled = dispatcher.fire(child, "click", &EventPayload::None);
 
         let out = dispatcher
             .engine
@@ -148,8 +144,8 @@ mod tests {
         assert!(canceled);
     }
 
-    #[gpui::test]
-    fn an_event_only_passive_listeners_heard_stays_uncanceled(cx: &mut TestAppContext) {
+    #[test]
+    fn an_event_only_passive_listeners_heard_stays_uncanceled() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, _, child] = tree_of_three(&host);
         listen_with(
@@ -159,10 +155,7 @@ mod tests {
             (false, true),
             "(e) => { e.preventDefault(); }",
         );
-        let cx = cx.add_empty_window();
-
-        let canceled = cx
-            .update(|window, cx| dispatcher.fire(child, "click", &EventPayload::None, window, cx));
+        let canceled = dispatcher.fire(child, "click", &EventPayload::None);
 
         assert!(!canceled);
     }

@@ -262,9 +262,7 @@ mod tests {
         dispatcher_with_engine, eval_json, fire_and_read, key_payload, listen, mouse_at,
         pointer_click, wheel_at,
     };
-    use gpui::TestAppContext;
     use inca_document::EventPayload;
-    use inca_test_macros::gpui_cases;
     use rstest::rstest;
 
     #[test]
@@ -392,10 +390,8 @@ mod tests {
         assert_eq!(got, serde_json::json!(["m", true, true, false]));
     }
 
-    #[gpui::test]
-    fn host_events_of_one_kind_are_trusted_instances_of_event_sharing_a_prototype(
-        cx: &mut TestAppContext,
-    ) {
+    #[test]
+    fn host_events_of_one_kind_are_trusted_instances_of_event_sharing_a_prototype() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
         listen(
@@ -407,8 +403,8 @@ mod tests {
             out.push([e instanceof Event, e.constructor === Event, e.isTrusted]); }
             ",
         );
-        fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
-        let out = fire_and_read(cx, &dispatcher, node, "click", &EventPayload::None);
+        fire_and_read(&dispatcher, node, "click", &EventPayload::None);
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
         assert_eq!(
             out,
             serde_json::json!([[true, true, true], [true, true, true]])
@@ -575,8 +571,7 @@ mod tests {
         }
     }
 
-    #[gpui_cases]
-    #[gpui::test]
+    #[rstest]
     #[case::mouse("mousedown", mouse_at(1.0, 1.0), "MouseEvent")]
     #[case::pointer("click", pointer_click(), "PointerEvent")]
     #[case::wheel("wheel", wheel_at(1.0, 1.0), "WheelEvent")]
@@ -589,10 +584,9 @@ mod tests {
     #[case::input("input", input_payload(), "InputEvent")]
     #[case::composition("compositionend", composition_payload(), "CompositionEvent")]
     fn a_host_event_reports_its_class_as_constructor(
-        cx: &mut TestAppContext,
-        event: &str,
-        payload: EventPayload,
-        class: &str,
+        #[case] event: &str,
+        #[case] payload: EventPayload,
+        #[case] class: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let node = host.document.borrow_mut().tree.create_node("div").unwrap();
@@ -603,7 +597,7 @@ mod tests {
             &format!("(e) => out.push(e.constructor === {class})"),
         );
 
-        let out = fire_and_read(cx, &dispatcher, node, event, &payload);
+        let out = fire_and_read(&dispatcher, node, event, &payload);
 
         assert_eq!(out, serde_json::json!([true]));
     }
