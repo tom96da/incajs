@@ -1,9 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integration tests for `"keydown"`/`"keyup"`: routing from GPUI's own key
-//! dispatch, through a real `FocusRegistry`, to the JS callbacks registered
-//! for it; see `test_support::TestRoot`.
+//! Wiring tests of keys: a key the window receives reaches the JS listeners as `keydown`, `keyup`
+//! and `keypress`, and what the listeners cancel or stop decides the result reported to the
+//! platform.
 
 #![allow(clippy::unwrap_used)]
 
@@ -20,8 +20,6 @@ use inca_jsenv::Engine;
 use inca_node::NodeId;
 use inca_test_macros::gpui_cases;
 
-use inca_bridge::test_support;
-
 /// A focusable parent wrapping a focusable child.
 fn build_key_pair() -> (Rig, NodeId, NodeId) {
     let (host, parent, children) = wiring::focusable_tree(1, true);
@@ -32,7 +30,7 @@ fn build_key_pair() -> (Rig, NodeId, NodeId) {
 /// `"keyup"` on each of `nodes`.
 fn listen_for_keys(engine: &Engine, nodes: [NodeId; 2], js: &str, passive: bool) {
     let callback = format!("(e) => {{ {js} }}");
-    test_support::listen_each(engine, &nodes, &["keydown", "keyup"], &callback, passive);
+    wiring::listen_each(engine, &nodes, &["keydown", "keyup"], &callback, passive);
 }
 
 fn a_keystroke() -> Keystroke {
@@ -172,7 +170,7 @@ fn a_canceled_key_event_is_reported_to_the_platform_as_handled(
 #[gpui::test]
 fn a_canceled_keypress_is_reported_to_the_platform_as_handled(cx: &mut TestAppContext) {
     let (window, engine, _host, [_, child]) = focused_pair(cx, "");
-    test_support::listen_each(
+    wiring::listen_each(
         &engine,
         &[child],
         &["keypress"],
@@ -189,7 +187,7 @@ fn a_canceled_keypress_is_reported_to_the_platform_as_handled(cx: &mut TestAppCo
 #[gpui::test]
 fn a_keypress_of_a_held_key_reports_repeat(cx: &mut TestAppContext) {
     let (window, engine, _host, [_, child]) = focused_pair(cx, "");
-    test_support::listen_each(
+    wiring::listen_each(
         &engine,
         &[child],
         &["keypress"],
