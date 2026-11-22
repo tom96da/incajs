@@ -19,7 +19,6 @@ use inca_host::wiring::{self, Rig, Wired};
 use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 
-use inca_bridge::test_support;
 use inca_style::set_style;
 
 struct Root {
@@ -85,7 +84,7 @@ impl Scene {
         engine.eval::<()>("globalThis.ran = [];").unwrap();
         engine.eval::<()>(js).unwrap();
         engine.eval::<()>(before_draw).unwrap();
-        let (report, reported) = test_support::capture_reporter();
+        let (report, reported) = wiring::capture_reporter();
         let dispatcher = host.dispatcher(&engine, report);
         let window = cx.add_window(|_, _| Root {
             host: host.clone(),

@@ -7,7 +7,6 @@
 #![allow(clippy::unwrap_used)]
 
 use gpui::{TestAppContext, prelude::*};
-use inca_bridge::test_support;
 use inca_host::wiring::{self};
 use inca_node::NodeId;
 use inca_test_macros::gpui_cases;
@@ -50,7 +49,7 @@ fn focus_then_run(
     }
     let engine = wiring::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
-    test_support::listen_each(
+    wiring::listen_each(
         &engine,
         &[leaf],
         &["blur", "focusout", "focus", "focusin"],

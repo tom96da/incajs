@@ -11,7 +11,8 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use gpui::TestAppContext;
-use inca_bridge::test_support::{Reported, capture_reporter, json_of};
+use inca_bridge::test_support::{Reported, json_of};
+pub use inca_bridge::test_support::{capture_reporter, listen_each};
 use inca_bridge::{Host, JsScript};
 use inca_document::EventPayload;
 use inca_jsenv::{Clock, Engine, ErrorReporter};

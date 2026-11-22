@@ -214,7 +214,7 @@ fn failures_from_click(cx: &mut TestAppContext, body: &str) -> Vec<EngineError> 
     engine
         .eval::<()>(&format!("__inca_test_listen__({node}, 'click', {body});"))
         .unwrap();
-    let (report, reported) = test_support::capture_reporter();
+    let (report, reported) = wiring::capture_reporter();
     let dispatcher = host.dispatcher(&engine, report);
 
     let window = cx.add_window(|_, _| ClickableRoot {
