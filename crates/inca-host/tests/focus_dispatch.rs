@@ -1,10 +1,9 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integration tests for `inca_window::focus` through the bridge: `focusNode`/`blurNode`
-//! through to the `"focus"`/`"blur"` dispatched into
-//! JS, via a real `FocusRegistry::apply_pending` running once per frame;
-//! see `test_support::TestRoot`.
+//! Wiring tests of focus: a focus request the window applies on a frame reaches the JS listeners
+//! as `focus`, `blur`, `focusin` and `focusout`, a blur that no request starts (an ancestor turning
+//! `display: none`) reaches them too, and a node the script destroys drops its focus handle.
 
 #![allow(clippy::unwrap_used)]
 
@@ -13,8 +12,6 @@ use inca_host::wiring::{self, Rig};
 use inca_jsenv::Engine;
 use inca_node::NodeId;
 use inca_test_macros::gpui_cases;
-
-use inca_bridge::test_support;
 
 /// Two focusable sibling nodes wrapped in a common parent, the root
 /// `TestRoot` renders.
@@ -35,7 +32,7 @@ fn install_focus_recorder(engine: &Engine, host: &Rig, parent: NodeId) {
         .unwrap()
         .children()
         .to_vec();
-    test_support::listen_each(
+    wiring::listen_each(
         engine,
         &children,
         &["focus", "blur"],
