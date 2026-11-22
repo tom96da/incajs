@@ -6,7 +6,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/*", "tests"]
-default-members = ["crates/inca-gpui"]
+default-members = ["crates/inca-host"]
 
 [workspace.package]
 version = "0.0.35"

@@ -15,7 +15,7 @@ should move to GitHub Issues instead; for now, a single Markdown file is
 enough overhead for a single maintainer plus AI pairing.
 
 Each entry has a stable ID and a metadata line: the units it touches
-(bridge, gpui, host, jsenv, core, cli, docs, ci), a size (S, M, L, or a range
+(bridge, window, gpui, host, jsenv, core, cli, docs, ci), a size (S, M, L, or a range
 such as S–M) and an impact (High, Medium, Low). `Status: needs repro` marks an
 entry whose fix needs a manual reproduction first. Entries are grouped by
 priority:
@@ -1941,10 +1941,10 @@ A fixed entry is deleted and its ID is never reused.
   Standard keeps tree order, follow the standard if it changes.
 
 - **B-365 A modifier key held at an activation becomes the baseline with no key event**
-  `Units: bridge · Size: S · Impact: Low`
+  `Units: window · Size: S · Impact: Low`
 
   The modifier keys an activation finds held become the baseline with no key event
-  (`window_activated` in `dispatch/activation.rs`). The `gpui` test platform reports no held
+  (`window_activated` in `inca-window/src/activation.rs`). The `gpui` test platform reports no held
   modifier at an activation, so only a real platform reaches this path. Fix: decide the key event
   of a held modifier at an activation once the test platform can report one.
 
@@ -1984,28 +1984,28 @@ A fixed entry is deleted and its ID is never reused.
   release use the hit test of the pointer position whatever the last input was.
 
 - **B-370 `:hover` follows the node under the pointer during a capture**
-  `Units: bridge · Size: S · Impact: Low`
+  `Units: window · Size: S · Impact: Low`
 
   While a node holds the pointer capture, the `:hover` rule stays on the node under the pointer.
   Chromium matches `:hover` on the capture target. Fix: build the hover path from the capturing
   node in `report_hover_with`.
 
 - **B-371 A capture outlives the release of one of two buttons**
-  `Units: bridge · Size: S · Impact: Low`
+  `Units: window · Size: S · Impact: Low`
 
   The host keeps the capture until the last button is released.
   Chromium ends it at the first move after the release of the other button. Fix: none while the
   standard decides, follow it if it changes.
 
 - **B-372 `contextmenu` of a right press that sets a capture goes to the pressed node**
-  `Units: bridge · Size: S · Impact: Low`
+  `Units: window · Size: S · Impact: Low`
 
   The `pointerdown` listener of a node sets the capture after the host stored that node as the
   press target, so `contextmenu` fires at the pressed node. Chromium fires it at the node the
   capture names. Fix: process the pending capture before the `contextmenu` target is chosen.
 
 - **B-373 `dblclick` of a captured release fires at the capture target**
-  `Units: bridge · Size: S · Impact: Low`
+  `Units: window · Size: S · Impact: Low`
 
   The release ends the capture and `dblclick` fires at the node that held it. Pointer Events 3
   sends every event after the release of a capture, except `click`, `auxclick` and `contextmenu`,
@@ -2013,7 +2013,7 @@ A fixed entry is deleted and its ID is never reused.
   `dblclick` at the common ancestor of the pressed and the released node.
 
 - **B-374 A thumb drag release fires boundary events at the node under the pointer**
-  `Units: bridge · Size: S · Impact: Low`
+  `Units: window · Size: S · Impact: Low`
 
   The release at the end of a thumb drag fires `pointerout`, `pointerleave`, `pointerover`,
   `pointerenter` and the mouse counterparts at the node under the pointer, after `pointerup` and
@@ -2028,20 +2028,20 @@ A fixed entry is deleted and its ID is never reused.
   rows of `EVENTS` in `crates/inca-document/src/event/flags.rs` the flags of the standard.
 
 - **B-376 A window deactivation ends the pointer capture**
-  `Units: bridge · Size: S · Impact: Low`
+  `Units: window · Size: S · Impact: Low`
 
   The host ends the capture with `lostpointercapture` when the window loses focus. Chromium keeps
   the capture and fires `lostpointercapture` after `mouseup` at the release. Fix: keep the capture
   across the deactivation and end it at the release.
 
 - **B-377 A press held across a window deactivation clicks nothing at its release**
-  `Units: bridge · Size: S · Impact: Low`
+  `Units: window · Size: S · Impact: Low`
 
   The host forgets the press at the deactivation, so the release fires no `click`. Chromium fires
   one `click` at the release. Fix: keep the press record across the deactivation.
 
 - **B-378 A Space held across a window deactivation clicks nothing at its release**
-  `Units: bridge · Size: S · Impact: Low`
+  `Units: window · Size: S · Impact: Low`
 
   The `blur` of the deactivation clears the Space press, so the `keyup` fires no `click`. Chromium
   fires one `click` at the `keyup`. Fix: keep the Space press across the `blur` of a deactivation.

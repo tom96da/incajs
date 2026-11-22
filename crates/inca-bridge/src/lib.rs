@@ -3,12 +3,11 @@
 
 //! Binds a `QuickJS` realm ([`inca_jsenv::Engine`]) to `inca`'s retained
 //! virtual tree ([`inca_node::VirtualTree`]): the native bridge JS-side
-//! renderers drive to build and mutate it, and the event dispatch that carries
-//! native input back into JS.
+//! renderers drive to build and mutate it, and the turns of the engine that carry
+//! events, timers and frame callbacks into JS.
 
 mod abort;
 mod bindings;
-mod dispatch;
 mod event;
 mod event_target;
 mod interfaces;
@@ -18,8 +17,6 @@ pub mod test_support;
 #[cfg(test)]
 mod tests;
 
-pub use bindings::{DocumentState, Host, JsState, WindowState, install};
-pub use dispatch::EventDispatcher;
-pub use focus::FocusRegistry;
+pub use bindings::{Host, JsState, install};
 pub(crate) use inca_document::EventTargetId;
-pub use inca_gpui::focus;
+pub use script::JsScript;

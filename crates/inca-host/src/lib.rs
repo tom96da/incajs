@@ -15,6 +15,7 @@ mod dev;
 mod display;
 mod menu;
 mod run_log;
+pub mod script;
 #[cfg(test)]
 mod tests;
 
@@ -22,5 +23,7 @@ mod tests;
 pub mod harness;
 #[cfg(any(test, feature = "test-support", feature = "automation"))]
 pub mod snapshot;
+#[cfg(any(test, feature = "test-support"))]
+pub mod wiring;
 
 pub use app::{BundleError, launcher_bundle, print_config, run_bundle};

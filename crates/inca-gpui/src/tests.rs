@@ -7,7 +7,6 @@
 
 use crate::element::*;
 use crate::event_sink::{EventSink, noop_sink_methods};
-use crate::focus::FocusRegistry;
 use crate::input::{InputLayout, InputRequest};
 use gpui::Pixels;
 use gpui::point;
@@ -25,54 +24,6 @@ use inca_style::spec::{StyleSpec, build_spec, wheel_axes};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
-
-/// The root of a tree `rooted_tree` builds: the first node created. The document is node 1.
-pub(crate) const ROOT: NodeId = 0;
-
-/// A tree whose document holds the root, with `count` nodes attached under the root, each
-/// `tabindex="0"`.
-pub(crate) fn rooted_tree(count: usize) -> (VirtualTree, Vec<NodeId>) {
-    let mut tree = VirtualTree::new();
-    let root = tree.create_node("div").unwrap();
-    let document = tree.create_node("#document").unwrap();
-    tree.set_root(root);
-    tree.set_document(document);
-    tree.append_child(document, root).unwrap();
-    let ids = (0..count)
-        .map(|_| {
-            let id = tree.create_node("div").unwrap();
-            tree.set_attribute(id, "tabindex", "0").unwrap();
-            tree.append_child(root, id).unwrap();
-            id
-        })
-        .collect();
-    (tree, ids)
-}
-
-pub(crate) fn focus_all(
-    cx: &mut gpui::VisualTestContext,
-    registry: &mut FocusRegistry,
-    tree: &VirtualTree,
-    ids: &[NodeId],
-    focus: NodeId,
-) {
-    for &id in ids {
-        registry.mark_tab_dirty(id);
-    }
-    registry.request_focus(focus, false);
-    cx.update(|window, cx| {
-        let _ = registry.apply_pending(tree, &StyleCache::new(), window, cx);
-    });
-}
-
-pub(crate) fn tree_with(tag: &str, tabindex: Option<AttributeValue>) -> (VirtualTree, NodeId) {
-    let mut tree = VirtualTree::new();
-    let id = tree.create_node(tag).unwrap();
-    if let Some(value) = tabindex {
-        tree.set_attribute(id, "tabindex", value).unwrap();
-    }
-    (tree, id)
-}
 
 pub(crate) fn num(n: f64) -> AttributeValue {
     AttributeValue::Number(n)

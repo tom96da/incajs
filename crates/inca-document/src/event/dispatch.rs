@@ -20,6 +20,15 @@ pub struct Walk<'a> {
     pub trusted: bool,
 }
 
+/// What a walk asked of its caller.
+#[derive(Default)]
+pub struct Outcome {
+    /// A listener called `preventDefault()` on a cancelable event.
+    pub canceled: bool,
+    /// The walk entered the script engine, so jobs may be queued.
+    pub entered: bool,
+}
+
 /// How the walk reaches one event and its listeners. The walk sets the position, reads the
 /// registrations, calls each listener through this seam and reads the stop flags the listeners
 /// left.

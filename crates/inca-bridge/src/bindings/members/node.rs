@@ -16,7 +16,8 @@ use inca_node::{NodeId, NodeKind};
 use super::{Shared, accessor, getter, method};
 use crate::bindings::convert::{or_null, saturated, throw_tree_error, unsigned};
 use crate::bindings::handle::{CHARACTER_DATA, NODE, TEXT};
-use crate::bindings::host::{DocumentState, Host};
+use crate::bindings::host::Host;
+use inca_document::DocumentState;
 
 /// The `nodeType` of a kind.
 fn node_type(kind: NodeKind) -> u32 {

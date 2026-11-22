@@ -1,58 +1,44 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The seam between the window-side dispatch and the JS engine. The dispatch asks a [`Script`] to
-//! run a walk, the due timers, the frame callbacks, the released-node hook and the job queue, and
-//! never touches the engine itself. [`JsScript`] runs them in a `QuickJS` [`Engine`].
+//! The turns of the engine a window asks for: a walk, the due timers, the frame callbacks, the
+//! released-node hook and the job queue. [`JsScript`] runs them in a `QuickJS` [`Engine`].
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 
+use inca_document::{Outcome, Walk};
 use inca_jsenv::{
     Engine, EngineError, ErrorReporter, callbacks, report_jobs, run_frames, run_timers,
 };
 use inca_node::NodeId;
 
 use crate::bindings::Host;
-use crate::event::{self, Outcome, Walk};
+use crate::event;
 
-/// What the dispatch needs of the JS side. A method that runs JS files what the script threw in
-/// `JsState::failures`, and [`report_pending`](Self::report_pending) sends it on. Call every method
-/// outside any [`Engine::with`] and with no borrow of the host held.
-pub(crate) trait Script {
-    /// Runs the listeners of `walk` and reports whether one canceled the event and whether the
-    /// walk entered the engine.
-    fn walk(&self, walk: &Walk<'_>) -> Outcome;
-
-    /// Runs the timers that are due now and returns how many ran.
-    fn run_timers(&self) -> usize;
-
-    /// Runs the frame callbacks pending now and returns how many ran.
-    fn run_frames(&self) -> usize;
-
-    /// Tells the script that `nodes` and the listener `callback_ids` were freed, and returns
-    /// whether it entered the engine.
-    fn release(&self, nodes: &[NodeId], callback_ids: &[u32]) -> bool;
-
-    /// Runs the queued jobs, and reports what they threw.
-    fn drain_jobs(&self);
-
-    /// Sends the listener errors collected so far to the reporter, in order.
-    fn report_pending(&self);
-
-    /// Sends errors to `reporter` from now on.
-    fn set_reporter(&self, reporter: ErrorReporter);
-}
-
-/// The [`Script`] of a `QuickJS` engine and the host its bindings write to.
-pub(crate) struct JsScript {
+/// The turns of a `QuickJS` engine and the host its bindings write to. A method that runs JS files
+/// what the script threw in `JsState::failures`, and [`report_pending`](Self::report_pending)
+/// sends it on. Call every method outside any [`Engine::with`] and with no borrow of the host
+/// held.
+///
+/// # Where the real JS function lives
+///
+/// The listener store keeps a plain `u32` callback id with its capture and passive flags per
+/// registration, never an `rquickjs::Value`, `Function` or `Persistent<T>`, because a JS handle
+/// kept past the call that produced it outlives the context it belongs to. `addEventListener`
+/// stores the function in the callback table of the engine and returns the id it got there. The
+/// walk of an event looks the function up inside one `Engine::with` call and drops it before that
+/// call returns.
+pub struct JsScript {
     engine: Rc<Engine>,
     host: Rc<Host>,
     reporter: RefCell<ErrorReporter>,
 }
 
 impl JsScript {
-    pub(crate) fn new(engine: Rc<Engine>, host: Rc<Host>, reporter: ErrorReporter) -> Self {
+    #[must_use]
+    pub fn new(engine: Rc<Engine>, host: Rc<Host>, reporter: ErrorReporter) -> Self {
         Self {
             engine,
             host,
@@ -63,24 +49,29 @@ impl JsScript {
     fn reporter(&self) -> ErrorReporter {
         Rc::clone(&self.reporter.borrow())
     }
-}
 
-impl Script for JsScript {
-    fn walk(&self, walk: &Walk<'_>) -> Outcome {
+    /// Runs the listeners of `walk` and reports whether one canceled the event and whether the
+    /// walk entered the engine.
+    #[must_use]
+    pub fn walk(&self, walk: &Walk<'_>) -> Outcome {
         event::walk(&self.engine, &self.host, walk)
     }
 
-    fn run_timers(&self) -> usize {
+    /// Runs the timers that are due now and returns how many ran.
+    pub fn run_timers(&self) -> usize {
         let timers = Rc::clone(&self.host.js.borrow().timers);
         run_timers(&self.engine, &timers, &self.reporter())
     }
 
-    fn run_frames(&self) -> usize {
+    /// Runs the frame callbacks pending now and returns how many ran.
+    pub fn run_frames(&self) -> usize {
         let frames = Rc::clone(&self.host.js.borrow().frames);
         run_frames(&self.engine, &frames, &self.reporter())
     }
 
-    fn release(&self, nodes: &[NodeId], callback_ids: &[u32]) -> bool {
+    /// Tells the script that `nodes` and the listener `callback_ids` were freed, and returns
+    /// whether it entered the engine.
+    pub fn release(&self, nodes: &[NodeId], callback_ids: &[u32]) -> bool {
         let host = &self.host;
         self.engine.with(|ctx| {
             let settled = crate::abort::settle_freed(&ctx, &mut host.document.borrow_mut());
@@ -100,11 +91,13 @@ impl Script for JsScript {
         })
     }
 
-    fn drain_jobs(&self) {
+    /// Runs the queued jobs, and reports what they threw.
+    pub fn drain_jobs(&self) {
         report_jobs(&self.engine, &self.reporter());
     }
 
-    fn report_pending(&self) {
+    /// Sends the listener errors collected so far to the reporter, in order.
+    pub fn report_pending(&self) {
         let pending = std::mem::take(&mut self.host.js.borrow_mut().failures);
         let reporter = self.reporter();
         for failure in &pending {
@@ -112,8 +105,21 @@ impl Script for JsScript {
         }
     }
 
-    fn set_reporter(&self, reporter: ErrorReporter) {
+    /// Sends errors to `reporter` from now on.
+    pub fn set_reporter(&self, reporter: ErrorReporter) {
         *self.reporter.borrow_mut() = reporter;
+    }
+
+    /// The time left until the earliest timer is due, or `None` with no timer.
+    #[must_use]
+    pub fn next_timer_wait(&self) -> Option<Duration> {
+        self.host.js.borrow().timers.wait()
+    }
+
+    /// Whether a frame callback waits for the next frame.
+    #[must_use]
+    pub fn frames_pending(&self) -> bool {
+        self.host.js.borrow().frames.is_pending()
     }
 }
 

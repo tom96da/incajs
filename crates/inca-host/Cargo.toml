@@ -22,10 +22,12 @@ async-channel.workspace = true
 env_logger.workspace = true
 gpui.workspace = true
 inca-bridge = { path = "../inca-bridge" }
+inca-document = { path = "../inca-document" }
 inca-gpui = { path = "../inca-gpui" }
 inca-jsenv = { path = "../inca-jsenv" }
 inca-node = { path = "../inca-node" }
 inca-style = { path = "../inca-style" }
+inca-window = { path = "../inca-window" }
 log.workspace = true
 rquickjs.workspace = true
 serde.workspace = true
@@ -34,19 +36,19 @@ serde_path_to_error.workspace = true
 
 [features]
 # Exposes `harness` and `snapshot` for tests, and turns on gpui's test platform.
-test-support = ["gpui/test-support", "inca-gpui/test-support"]
+test-support = [
+  "gpui/test-support",
+  "inca-bridge/test-support",
+  "inca-gpui/test-support",
+  "inca-window/test-support",
+]
 # Answers the automation requests of the dev protocol in a debug build and exposes `snapshot`.
 automation = []
 
 [dev-dependencies]
 rstest.workspace = true
-# test-support gates gpui's TestAppContext, which is how the startup drain
-# is checked without a real display.
-gpui = { workspace = true, features = ["test-support"] }
-inca-document = { path = "../inca-document" }
-# Exposes the timer stand-in of its test support.
-inca-bridge = { path = "../inca-bridge", features = ["test-support"] }
-inca-gpui = { path = "../inca-gpui", features = ["test-support"] }
+# Enables this crate's own `test-support` feature for its tests and clippy.
+inca-host = { path = ".", features = ["test-support"] }
 inca-test-macros = { path = "../inca-test-macros" }
 
 [target.'cfg(target_os = "macos")'.dependencies]

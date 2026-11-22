@@ -45,7 +45,6 @@ mod tests {
     };
     use gpui::TestAppContext;
     use inca_document::{EventPayload, MousePayload, WheelPayload};
-    use inca_gpui::EventSink;
     use rstest::rstest;
 
     /// Gives every node one object `{ node }` and counts the calls.
@@ -476,42 +475,6 @@ mod tests {
                     serde_json::json!(3)
                 ),
             ]
-        );
-    }
-
-    #[gpui::test]
-    fn a_key_event_with_nothing_focused_starts_at_the_host_root(cx: &mut TestAppContext) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let (root, document) = {
-            let host = host.document.borrow();
-            (host.root(), host.document())
-        };
-        dispatcher.engine.eval::<()>(HOOK).unwrap();
-        listen(&dispatcher, root, "keydown", &note_walk("root"));
-        listen(&dispatcher, document, "keydown", &note_walk("document"));
-        listen_global(
-            &dispatcher,
-            "$window",
-            "keydown",
-            false,
-            &note_walk("window"),
-        );
-        let key = gpui::Keystroke::parse("a").unwrap();
-        let cx = cx.add_empty_window();
-
-        cx.update(|window, cx| {
-            let sink: &dyn EventSink = &dispatcher;
-            sink.key_input(&key, false, &EventPayload::None, window, cx);
-        });
-
-        let path = serde_json::json!([root, document, "$window"]);
-        assert_eq!(
-            read_out(&dispatcher),
-            serde_json::json!([
-                ["root", root, root, 2, path],
-                ["document", root, document, 3, path],
-                ["window", root, "$window", 3, path],
-            ])
         );
     }
 

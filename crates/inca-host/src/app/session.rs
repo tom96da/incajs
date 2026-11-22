@@ -10,15 +10,16 @@ use std::time::Duration;
 
 use gpui::BackgroundExecutor;
 
-use inca_bridge::install;
-use inca_bridge::{EventDispatcher, Host};
+use inca_bridge::{Host, JsScript, install};
 use inca_jsenv::{Clock, Engine, EngineError, ErrorReporter, Limits, console};
 use inca_node::NodeId;
+use inca_window::{Cells, EventDispatcher};
 
 use crate::app::Loading;
 use crate::config;
 use crate::console_output::{color_from_env, to_stderr};
 use crate::dev::{ErrorCode, LoadSignal, SharedWriter, install_dev, install_load_signal};
+use crate::script::{BridgeScript, compose};
 
 /// One mebibyte, in bytes.
 const MIB: usize = 1024 * 1024;
@@ -51,6 +52,7 @@ impl Failure {
 /// `setLoadFailed` reports.
 struct StartedEngine {
     host: Rc<Host>,
+    cells: Rc<Cells>,
     engine: Engine,
     signal: Rc<LoadSignal>,
 }
@@ -64,6 +66,8 @@ struct StartedEngine {
 pub(crate) struct Session {
     pub(crate) engine: Rc<Engine>,
     pub(crate) host: Rc<Host>,
+    /// The document and window cells the dispatcher and `host` share.
+    pub(crate) cells: Rc<Cells>,
     pub(crate) dispatcher: EventDispatcher,
 }
 
@@ -100,7 +104,7 @@ impl Session {
         writer: Option<&SharedWriter>,
         clock: Clock,
     ) -> Result<StartedEngine, EngineError> {
-        let host = Rc::new(Host::with_clock(clock.clone()));
+        let (host, cells) = compose(clock.clone());
         let signal = Rc::new(LoadSignal::default());
 
         let module_root = Path::new(entry_path).parent().unwrap_or(Path::new("."));
@@ -123,19 +127,26 @@ impl Session {
         })?;
         Ok(StartedEngine {
             host,
+            cells,
             engine,
             signal,
         })
     }
 
     /// Wires event dispatch onto an engine whose entry has been started.
-    fn from_parts(host: Rc<Host>, engine: Engine, reporter: ErrorReporter) -> Self {
+    fn from_parts(
+        host: Rc<Host>,
+        cells: Rc<Cells>,
+        engine: Engine,
+        reporter: ErrorReporter,
+    ) -> Self {
         let engine = Rc::new(engine);
-        let dispatcher =
-            EventDispatcher::new(Rc::clone(&engine), Rc::clone(&host)).with_reporter(reporter);
+        let script = JsScript::new(Rc::clone(&engine), Rc::clone(&host), reporter);
+        let dispatcher = EventDispatcher::new(Rc::new(BridgeScript(script)), Rc::clone(&cells));
         Self {
             engine,
             host,
+            cells,
             dispatcher,
         }
     }
@@ -166,9 +177,14 @@ impl Session {
         reporter: ErrorReporter,
         clock: Clock,
     ) -> Result<Self, EngineError> {
-        let StartedEngine { host, engine, .. } = Self::start_engine(entry_path, None, clock)?;
+        let StartedEngine {
+            host,
+            cells,
+            engine,
+            ..
+        } = Self::start_engine(entry_path, None, clock)?;
         let failed = Rc::clone(&reporter);
-        let session = Self::from_parts(host, engine, reporter);
+        let session = Self::from_parts(host, cells, engine, reporter);
         session
             .engine
             .eval_module(entry_path, source)
@@ -224,11 +240,12 @@ impl Session {
     ) -> Result<Loading, EngineError> {
         let StartedEngine {
             host,
+            cells,
             engine,
             signal,
         } = Self::start_engine(entry_path, writer, clock)?;
         let failed = Rc::clone(&reporter);
-        let session = Self::from_parts(host, engine, reporter);
+        let session = Self::from_parts(host, cells, engine, reporter);
         let module = session.engine.start_module(entry_path, source)?;
         let loading = Loading {
             module,

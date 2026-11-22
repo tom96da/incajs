@@ -194,15 +194,15 @@ fn insert_child(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use std::cell::RefCell;
     use std::rc::Rc;
 
-    use gpui::{Point, point, px};
     use inca_jsenv::Engine;
     use rstest::rstest;
 
     use crate::EventTargetId;
     use crate::Host;
-    use crate::test_support::{LISTEN_JS, callback_ids, engine_with_bindings, error_name};
+    use crate::test_support::{LISTEN_JS, TestView, callback_ids, engine_with_view, error_name};
     use crate::tests::callback_stored;
 
     /// Builds `p > (a, b)`, `q > x`, `g > (g1, g2)` and the parentless `loose`, `loose2`, `t`
@@ -231,10 +231,15 @@ mod tests {
         ";
 
     pub(super) fn engine_with_family() -> (Engine, Rc<Host>) {
-        let (engine, host) = engine_with_bindings();
+        let (engine, host, _view) = engine_with_family_view();
+        (engine, host)
+    }
+
+    fn engine_with_family_view() -> (Engine, Rc<Host>, Rc<RefCell<TestView>>) {
+        let (engine, host, view) = engine_with_view();
         engine.eval::<()>(LISTEN_JS).unwrap();
         engine.eval::<()>(SETUP).unwrap();
-        (engine, host)
+        (engine, host, view)
     }
 
     #[rstest]
@@ -360,17 +365,24 @@ mod tests {
         assert_eq!(fired, 1);
     }
 
-    fn zero() -> Point<gpui::Pixels> {
-        point(px(0.), px(0.))
+    fn zero() -> (f32, f32) {
+        (0., 0.)
+    }
+
+    /// The offset the view holds for the node `id`.
+    fn offset_of(view: &Rc<RefCell<TestView>>, id: u32) -> (f32, f32) {
+        view.borrow()
+            .offsets
+            .borrow()
+            .get(&id)
+            .copied()
+            .unwrap_or_default()
     }
 
     /// Scrolls `div` and `inner` (a child of `div`) to a non-zero offset.
-    fn scrolled(host: &Rc<Host>, ids: &[u32]) {
+    fn scrolled(view: &Rc<RefCell<TestView>>, ids: &[u32]) {
         for &id in ids {
-            host.window
-                .borrow()
-                .scroll_handle(id)
-                .set_offset(point(px(-3.), px(-40.)));
+            view.borrow().offsets.borrow_mut().insert(id, (3., 40.));
         }
     }
 
@@ -383,7 +395,7 @@ mod tests {
     #[case::replaced_children("n.insertNodes(p, 'replaceChildren', [])")]
     #[case::replaced_with_nothing("n.insertNodes(a, 'replaceWith', [])")]
     fn a_scrolled_node_and_its_scrolled_descendant_read_zero(#[case] call: &str) {
-        let (engine, host) = engine_with_family();
+        let (engine, _host, view) = engine_with_family_view();
         engine
             .eval::<()>(
                 r"
@@ -393,36 +405,34 @@ mod tests {
             )
             .unwrap();
         let ids: Vec<u32> = engine.eval("[a, inner]").unwrap();
-        scrolled(&host, &ids);
+        scrolled(&view, &ids);
 
         engine.eval::<()>(call).unwrap();
 
-        let host = host.window.borrow();
-        assert_eq!(host.scroll_handle(ids[0]).offset(), zero());
-        assert_eq!(host.scroll_handle(ids[1]).offset(), zero());
+        assert_eq!(offset_of(&view, ids[0]), zero());
+        assert_eq!(offset_of(&view, ids[1]), zero());
     }
 
     #[test]
     fn a_scrolled_node_that_stays_keeps_its_offset() {
-        let (engine, host) = engine_with_family();
+        let (engine, _host, view) = engine_with_family_view();
         let ids: Vec<u32> = engine.eval("[a, b]").unwrap();
-        scrolled(&host, &ids);
+        scrolled(&view, &ids);
 
         engine.eval::<()>("n.removeChild(p, a)").unwrap();
 
-        let host = host.window.borrow();
-        assert_ne!(host.scroll_handle(ids[1]).offset(), zero());
+        assert_ne!(offset_of(&view, ids[1]), zero());
     }
 
     #[test]
     fn a_fragment_move_resets_the_scroll_offset_of_its_children() {
-        let (engine, host) = engine_with_family();
+        let (engine, _host, view) = engine_with_family_view();
         let ids: Vec<u32> = engine.eval("[g1]").unwrap();
-        scrolled(&host, &ids);
+        scrolled(&view, &ids);
 
         engine.eval::<()>("n.appendChild(p, g)").unwrap();
 
-        assert_eq!(host.window.borrow().scroll_handle(ids[0]).offset(), zero());
+        assert_eq!(offset_of(&view, ids[0]), zero());
     }
 
     /// `top > (kid > deep, sibling)`, each node a global, with a `click` listener on `top`, `kid`

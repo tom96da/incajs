@@ -6,7 +6,6 @@ use std::rc::Rc;
 use rquickjs::{Ctx, Result as JsResult, Value};
 
 use super::Natives;
-use inca_document::View;
 use inca_node::NodeId;
 
 use super::convert::{Flag, JsNodeId, existing_node, or_null};
@@ -75,9 +74,9 @@ fn layout_of<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Val
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use crate::test_support::engine_with_bindings;
-    use gpui::Bounds;
-    use inca_gpui::NodeLayout;
+    use crate::test_support::{engine_with_bindings, engine_with_view};
+    use inca_document::NodeBox;
+    use inca_document::geometry::Rect;
     use inca_node::AttributeValue;
 
     #[test]
@@ -161,21 +160,23 @@ mod tests {
         assert_eq!(flags, [true; 5]);
     }
 
-    fn layout(x: f32) -> NodeLayout {
-        NodeLayout {
-            bounds: Bounds::new(
-                gpui::point(gpui::px(x), gpui::px(2.0)),
-                gpui::size(gpui::px(3.0), gpui::px(4.5)),
-            ),
-            border: gpui::px(1.0),
-            scroll: gpui::point(gpui::px(6.0), gpui::px(7.5)),
-            gutter: gpui::size(gpui::px(8.0), gpui::px(9.5)),
+    fn layout(x: f32) -> NodeBox {
+        NodeBox {
+            rect: Rect {
+                x,
+                y: 2.0,
+                width: 3.0,
+                height: 4.5,
+            },
+            border: 1.0,
+            scroll: (6.0, 7.5),
+            gutter: (8.0, 9.5),
         }
     }
 
     #[test]
     fn layout_of_reads_the_recorded_box() {
-        let (engine, host) = engine_with_bindings();
+        let (engine, _host, view) = engine_with_view();
         let node: u32 = engine
             .eval(
                 r"
@@ -185,11 +186,7 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.window
-            .borrow()
-            .layout
-            .borrow_mut()
-            .insert(node, layout(1.5));
+        view.borrow_mut().boxes.insert(node, layout(1.5));
 
         let read: Vec<f64> = engine
             .eval(&format!("__inca_native__.layoutOf({node})"))
@@ -212,7 +209,7 @@ mod tests {
 
     #[test]
     fn layout_of_a_node_that_is_not_connected_is_null_whatever_the_record_holds() {
-        let (engine, host) = engine_with_bindings();
+        let (engine, _host, view) = engine_with_view();
         let node: u32 = engine
             .eval(
                 r"
@@ -224,11 +221,7 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.window
-            .borrow()
-            .layout
-            .borrow_mut()
-            .insert(node, layout(1.5));
+        view.borrow_mut().boxes.insert(node, layout(1.5));
 
         let got: Vec<bool> = engine
             .eval("[__inca_native__.layoutOf(id) === null, __inca_native__.layoutOf(999) === null]")

@@ -63,4 +63,10 @@ pub trait View {
 
     /// Records the mouse buttons held now.
     fn set_held_buttons(&mut self, held: u8);
+
+    /// Sets the scroll offset of `id` and of every node below it to zero.
+    fn reset_scroll(&self, tree: &VirtualTree, id: NodeId);
+
+    /// Drops what the window holds for the freed nodes `ids`.
+    fn forget(&mut self, ids: &[NodeId]);
 }

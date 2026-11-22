@@ -10,10 +10,9 @@
 use std::process::Command;
 use std::rc::Rc;
 
-use gpui::TestAppContext;
 use inca_bridge::test_support::engine_for;
-use inca_bridge::{EventDispatcher, Host};
-use inca_document::{EventPayload, MousePayload};
+use inca_bridge::{Host, JsScript};
+use inca_document::{EventPayload, EventTargetId, MousePayload, Walk, flags_of};
 use inca_jsenv::Engine;
 use inca_node::NodeId;
 
@@ -43,10 +42,9 @@ fn run_in_child(name: &str) {
     );
 }
 
-/// A dispatcher over a host with three nested nodes, its engine, and the
-/// nodes, outermost first. `__inca_targets__` gives a new `{ node }` object
-/// per id, so only the event keeps it.
-fn three_nodes() -> (EventDispatcher, Rc<Engine>, [NodeId; 3]) {
+/// A script over a host with three nested nodes, its engine, and the nodes, outermost first.
+/// `__inca_targets__` gives a new `{ node }` object per id, so only the event keeps it.
+fn three_nodes() -> (JsScript, Rc<Engine>, [NodeId; 3]) {
     let host = Rc::new(Host::default());
     let nodes = {
         let mut h = host.document.borrow_mut();
@@ -61,11 +59,8 @@ fn three_nodes() -> (EventDispatcher, Rc<Engine>, [NodeId; 3]) {
     engine
         .eval::<()>("globalThis.__inca_targets__ = (ids) => ids.map((id) => ({ node: id }));")
         .unwrap();
-    (
-        EventDispatcher::new(Rc::clone(&engine), host),
-        engine,
-        nodes,
-    )
+    let script = JsScript::new(Rc::clone(&engine), host, inca_jsenv::stderr_reporter());
+    (script, engine, nodes)
 }
 
 /// A mouse payload whose related node is `related`.
@@ -76,34 +71,44 @@ fn mouse_related_to(related: NodeId) -> EventPayload {
     })
 }
 
+/// Fires `name` at `child` with `parent` as its related node, then runs the jobs and reports
+/// what the script threw.
+fn fire(script: &JsScript, name: &str, child: NodeId, parent: NodeId) {
+    let _ = script.walk(&Walk {
+        name,
+        flags: flags_of(name, None),
+        target: EventTargetId::Node(child),
+        cut: &[],
+        payload: &mouse_related_to(parent),
+        trusted: true,
+    });
+    script.drain_jobs();
+    script.report_pending();
+}
+
 /// Registers `listener` for `event` on the innermost node, fires `event`
 /// there with the middle node as its related node, runs the GC and returns
 /// whether `globalThis.weak` lost its event.
-fn collected_after(cx: &mut TestAppContext, event: &str, listener: &str) -> bool {
-    let (dispatcher, engine, [_, parent, child]) = three_nodes();
-    let payload = mouse_related_to(parent);
+fn collected_after(event: &str, listener: &str) -> bool {
+    let (script, engine, [_, parent, child]) = three_nodes();
     engine
         .eval::<()>(&format!(
             "__inca_test_listen__({child}, '{event}', {listener});"
         ))
         .unwrap();
-    let cx = cx.add_empty_window();
-    cx.update(|window, cx| {
-        dispatcher.fire(child, event, &payload, window, cx);
-    });
+    fire(&script, event, child, parent);
     engine.with(|ctx| ctx.run_gc());
     engine
         .eval::<bool>("globalThis.weak.deref() === undefined")
         .unwrap()
 }
 
-#[gpui::test]
-fn a_cycle_through_an_event_target_is_collected(cx: &mut TestAppContext) {
+#[test]
+fn a_cycle_through_an_event_target_is_collected() {
     if !in_child() {
         return run_in_child("a_cycle_through_an_event_target_is_collected");
     }
     assert!(collected_after(
-        cx,
         "click",
         r"
         (e) => {
@@ -114,13 +119,12 @@ fn a_cycle_through_an_event_target_is_collected(cx: &mut TestAppContext) {
     ));
 }
 
-#[gpui::test]
-fn a_cycle_through_an_event_related_target_is_collected(cx: &mut TestAppContext) {
+#[test]
+fn a_cycle_through_an_event_related_target_is_collected() {
     if !in_child() {
         return run_in_child("a_cycle_through_an_event_related_target_is_collected");
     }
     assert!(collected_after(
-        cx,
         "mouseover",
         r"
         (e) => {
@@ -136,7 +140,7 @@ fn a_cycle_through_a_custom_event_detail_is_collected() {
     if !in_child() {
         return run_in_child("a_cycle_through_a_custom_event_detail_is_collected");
     }
-    let (_dispatcher, engine, _) = three_nodes();
+    let (_script, engine, _) = three_nodes();
     engine
         .eval::<()>(
             r"
@@ -159,12 +163,12 @@ fn a_cycle_through_a_custom_event_detail_is_collected() {
 
 /// The events stay reachable from globals until the engine drops. A field
 /// whose value is not traced, a primitive one included, aborts the drop.
-#[gpui::test]
-fn events_alive_at_engine_drop_are_freed_with_it(cx: &mut TestAppContext) {
+#[test]
+fn events_alive_at_engine_drop_are_freed_with_it() {
     if !in_child() {
         return run_in_child("events_alive_at_engine_drop_are_freed_with_it");
     }
-    let (dispatcher, engine, [_, parent, child]) = three_nodes();
+    let (script, engine, [_, parent, child]) = three_nodes();
     engine
         .eval::<()>(&format!(
             r"
@@ -177,12 +181,9 @@ fn events_alive_at_engine_drop_are_freed_with_it(cx: &mut TestAppContext) {
             "
         ))
         .unwrap();
-    let cx = cx.add_empty_window();
-    cx.update(|window, cx| {
-        dispatcher.fire(child, "mouseover", &mouse_related_to(parent), window, cx);
-    });
+    fire(&script, "mouseover", child, parent);
 
     assert!(engine.eval::<bool>("globalThis.keep.isTrusted").unwrap());
-    drop(dispatcher);
+    drop(script);
     drop(engine);
 }

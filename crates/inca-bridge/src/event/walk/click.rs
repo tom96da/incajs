@@ -30,7 +30,7 @@ pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<Host>, target: NodeId) {
     ));
     let walk = script_walk(
         "click",
-        crate::dispatch::spec_of("click").flags,
+        inca_document::spec_of("click").flags,
         EventTargetId::Node(target),
         &payload,
     );

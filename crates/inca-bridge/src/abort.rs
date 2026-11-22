@@ -23,7 +23,8 @@ use classes::install as install_classes;
 pub(crate) use table::Table;
 
 use crate::EventTargetId;
-use crate::bindings::{DocumentState, Host};
+use crate::bindings::Host;
+use inca_document::DocumentState;
 
 /// Defines `AbortController` and `AbortSignal` and the signal table.
 ///

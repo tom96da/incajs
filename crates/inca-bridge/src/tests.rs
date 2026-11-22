@@ -7,19 +7,84 @@
 
 use std::rc::Rc;
 
-use std::cell::Cell;
-
-use gpui::{AppContext as _, Context, TestAppContext, Window, point, px};
-use inca_document::{EventPayload, EventTargetId, MousePayload, PointerSource, WheelPayload};
-use inca_gpui::EventSink;
+use gpui::TestAppContext;
+use inca_document::{
+    EventPayload, EventTargetId, MousePayload, PointerSource, Walk, WheelPayload, flags_of,
+};
 use inca_jsenv::Clock;
 use inca_node::NodeId;
 
+pub(crate) use crate::test_support::RECORDER;
 use crate::test_support::{Reported, capture_reporter, engine_for, engine_on_clock};
-use crate::{DocumentState, EventDispatcher, Host};
-mod fake_script;
+use crate::{Host, JsScript};
 
-pub(crate) use fake_script::*;
+/// What a window does to deliver an event to the engine, without a window: the walk, then the
+/// jobs and the failures it left. A test that fires an event through it reads what JS sees.
+pub(crate) struct EventDispatcher {
+    pub(crate) engine: Rc<inca_jsenv::Engine>,
+    pub(crate) host: Rc<Host>,
+    script: JsScript,
+}
+
+impl EventDispatcher {
+    pub(crate) fn new(engine: Rc<inca_jsenv::Engine>, host: Rc<Host>) -> Self {
+        let script = JsScript::new(
+            Rc::clone(&engine),
+            Rc::clone(&host),
+            inca_jsenv::stderr_reporter(),
+        );
+        Self {
+            engine,
+            host,
+            script,
+        }
+    }
+
+    pub(crate) fn with_reporter(self, reporter: inca_jsenv::ErrorReporter) -> Self {
+        self.script.set_reporter(reporter);
+        self
+    }
+
+    pub(crate) fn report_pending(&self) {
+        self.script.report_pending();
+    }
+
+    /// Fires `event` at `start`: the listeners run, then the job queue drains when one ran.
+    /// Returns whether a listener prevented the default action. A `start` that left the tree
+    /// fires nothing.
+    pub(crate) fn fire(
+        &self,
+        start: NodeId,
+        event: &str,
+        payload: &EventPayload,
+        _window: &mut gpui::Window,
+        _cx: &mut gpui::App,
+    ) -> bool {
+        if self.host.document.borrow().tree.get(start).is_none() {
+            return false;
+        }
+        let outcome = self.script.walk(&Walk {
+            name: event,
+            flags: flags_of(
+                event,
+                match payload {
+                    EventPayload::Input(input) => Some(input.input_type),
+                    _ => None,
+                },
+            ),
+            target: EventTargetId::Node(start),
+            cut: &[],
+            payload,
+            trusted: true,
+        });
+        self.script.report_pending();
+        if outcome.entered {
+            self.script.drain_jobs();
+            self.script.report_pending();
+        }
+        outcome.canceled
+    }
+}
 
 pub(crate) fn dispatcher_with_engine() -> (EventDispatcher, Rc<Host>, Reported) {
     let host = Rc::new(Host::default());
@@ -34,24 +99,12 @@ pub(crate) fn dispatcher_with_engine() -> (EventDispatcher, Rc<Host>, Reported) 
 
 /// [`dispatcher_with_engine`] on an engine whose clock is `clock`.
 pub(crate) fn dispatcher_on_clock(clock: Clock) -> (EventDispatcher, Rc<Host>) {
-    let host = Rc::new(Host::default());
+    let host = Rc::new(Host::with_clock(clock.clone()));
     let engine = engine_on_clock(&host, clock);
     engine.eval::<()>("globalThis.out = [];").unwrap();
     let dispatcher = EventDispatcher::new(engine, Rc::clone(&host));
     (dispatcher, host)
 }
-
-// Snapshot per call: [type, bubbles, cancelable, composed, defaultPrevented
-// before, defaultPrevented after preventDefault(), eventPhase,
-// currentTarget, isTrusted, timeStamp].
-pub(crate) const RECORDER: &str = r"
-    globalThis.seen = [];
-    globalThis.record = (e) => {
-        const before = e.defaultPrevented; e.preventDefault();
-        globalThis.seen.push([e.type, e.bubbles, e.cancelable, e.composed,
-            before, e.defaultPrevented, e.eventPhase, e.currentTarget,
-            e.isTrusted, e.timeStamp]); };
-    ";
 
 pub(crate) fn seen(dispatcher: &EventDispatcher) -> serde_json::Value {
     let json = dispatcher
@@ -136,275 +189,9 @@ pub(crate) fn eval_json(dispatcher: &EventDispatcher, js: &str) -> serde_json::V
     crate::test_support::json_of(&dispatcher.engine, js)
 }
 
-pub(crate) mod keys;
-
-pub(crate) mod pointer {
-    use gpui::{MouseButton, MouseUpEvent, VisualTestContext};
-
-    use super::*;
-
-    const POINTER_AND_MOUSE: [&str; 17] = [
-        "pointerdown",
-        "pointerup",
-        "pointermove",
-        "pointerover",
-        "pointerout",
-        "pointerenter",
-        "pointerleave",
-        "gotpointercapture",
-        "lostpointercapture",
-        "mousedown",
-        "mouseup",
-        "mousemove",
-        "mouseover",
-        "mouseout",
-        "mouseenter",
-        "mouseleave",
-        "click",
-    ];
-
-    /// Two nodes `a` and `b` under the host root. [`scene`] runs the dispatch on a [`FakeScript`]
-    /// and [`js_scene`] on an engine whose listeners on `a` and `b` record `type@target` into
-    /// `globalThis.out`, for the tests of what JS reads.
-    pub(crate) struct Scene {
-        pub(crate) dispatcher: EventDispatcher,
-        pub(crate) host: Rc<Host>,
-        pub(crate) fake: Option<Rc<FakeScript>>,
-        pub(crate) cx: VisualTestContext,
-        pub(crate) a: NodeId,
-        pub(crate) b: NodeId,
-        watched: Vec<NodeId>,
-    }
-
-    pub(crate) fn scene(cx: &mut TestAppContext) -> Scene {
-        let (dispatcher, host, fake) = fake_dispatcher();
-        let (a, b) = (node_under_root(&host), node_under_root(&host));
-        Scene {
-            dispatcher,
-            host,
-            fake: Some(fake),
-            cx: cx.add_empty_window().clone(),
-            a,
-            b,
-            watched: vec![a, b],
-        }
-    }
-
-    pub(crate) fn js_scene(cx: &mut TestAppContext) -> Scene {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let (a, b) = (node_under_root(&host), node_under_root(&host));
-        let record = r"
-            (e) => {
-                if (e.eventPhase === 2) {
-                    out.push(`${e.type}@${e.target}`);
-                }
-            }
-            ";
-        for node in [a, b] {
-            for event in POINTER_AND_MOUSE.into_iter().chain(["auxclick"]) {
-                listen(&dispatcher, node, event, record);
-            }
-        }
-        Scene {
-            dispatcher,
-            host,
-            fake: None,
-            cx: cx.add_empty_window().clone(),
-            a,
-            b,
-            watched: vec![a, b],
-        }
-    }
-
-    impl Scene {
-        /// The events at `a` and `b` and at the nodes of [`Self::watch`] since the last call.
-        pub(crate) fn take(&self) -> Vec<String> {
-            let Some(fake) = &self.fake else {
-                let out = eval_json(&self.dispatcher, "out.splice(0)");
-                return serde_json::from_value(out).unwrap();
-            };
-            fake.take()
-                .iter()
-                .filter(|walked| {
-                    matches!(walked.target, EventTargetId::Node(node) if self.watched.contains(&node))
-                })
-                .map(Walked::label)
-                .collect()
-        }
-
-        /// The walks since the last call, at every node.
-        pub(crate) fn take_walks(&self) -> Vec<Walked> {
-            self.fake.as_ref().unwrap().take()
-        }
-
-        /// Makes [`Self::take`] report the events at `node` too.
-        pub(crate) fn watch(&mut self, node: NodeId) {
-            self.watched.push(node);
-        }
-
-        /// Cancels each event of type `name` while `cancel` is set.
-        pub(crate) fn cancel(&self, name: &'static str, cancel: Rc<Cell<bool>>) {
-            self.fake
-                .as_ref()
-                .unwrap()
-                .on_walk(move |walked| walked.name == name && cancel.get());
-        }
-
-        /// Makes the `pointerdown` walk capture the pointer for `node`.
-        pub(crate) fn capture_on_pointerdown(&self, node: NodeId) {
-            let host = Rc::clone(&self.host);
-            self.fake.as_ref().unwrap().on_walk(move |walked| {
-                if walked.name == "pointerdown" {
-                    request_capture(&host, node);
-                }
-                false
-            });
-        }
-
-        /// Runs `f` on each walk, and cancels the event when it returns true.
-        pub(crate) fn on_walk(&self, f: impl Fn(&Walked) -> bool + 'static) {
-            self.fake.as_ref().unwrap().on_walk(f);
-        }
-
-        pub(crate) fn listen(&self, node: NodeId, event: &str, f: &str) {
-            listen(&self.dispatcher, node, event, f);
-        }
-
-        /// Reports the pointer over `node` as the hover events do.
-        pub(crate) fn hover(&mut self, node: NodeId) {
-            let sink = self.dispatcher.clone();
-            self.cx
-                .update(|window, cx| sink.report_hover(Some(node), window, cx));
-            *self.dispatcher.state.hovered.borrow_mut() = [node].into();
-        }
-
-        /// A raw move over `node` by `(x, y)` from the previous position.
-        pub(crate) fn moved(&mut self, node: NodeId, (x, y): (f32, f32)) {
-            let sink = self.dispatcher.clone();
-            self.cx.update(|window, cx| {
-                sink.pointer_moved(at(x, y), cx);
-                sink.pointer_over(node, window, cx);
-                sink.pointer_input("mousemove", node, &mouse_at(x, y), window, cx);
-            });
-            *self.dispatcher.state.hovered.borrow_mut() = [node].into();
-        }
-
-        /// A raw move over `node` to `(x, y)` with the left button held.
-        pub(crate) fn moved_held(&mut self, node: NodeId, (x, y): (f32, f32)) {
-            let sink = self.dispatcher.clone();
-            let payload = EventPayload::Mouse(MousePayload {
-                buttons: 1,
-                ..MousePayload::at(x, y, inca_document::Modifiers::none())
-            });
-            self.cx.update(|window, cx| {
-                sink.pointer_moved(at(x, y), cx);
-                sink.pointer_over(node, window, cx);
-                sink.pointer_input("mousemove", node, &payload, window, cx);
-            });
-        }
-
-        /// Starts (`active`) or ends the drag of a thumb of the container `node`.
-        pub(crate) fn bar_drag(&mut self, node: NodeId, active: bool) {
-            let sink = self.dispatcher.clone();
-            self.cx
-                .update(|window, cx| sink.bar_drag(node, active, window, cx));
-        }
-
-        pub(crate) fn down(&mut self, node: NodeId, button: u8) {
-            let sink = self.dispatcher.clone();
-            self.cx.update(|window, cx| {
-                sink.pointer_input("mousedown", node, &button_payload(button), window, cx);
-            });
-        }
-
-        /// A press of `button` on a scrollbar of the container `node`.
-        pub(crate) fn bar_down(&mut self, node: NodeId, button: u8) {
-            let sink = self.dispatcher.clone();
-            self.cx.update(|window, cx| {
-                sink.bar_pressed(node, &button_payload(button), window, cx);
-            });
-        }
-
-        /// A release of `button` after a press on a scrollbar of the container `node`.
-        pub(crate) fn bar_up(&mut self, node: NodeId, button: u8) {
-            let sink = self.dispatcher.clone();
-            self.cx.update(|window, cx| {
-                sink.bar_released(node, &button_payload(button), window, cx);
-            });
-        }
-
-        /// A release of `button` over `node`, pressed over `pressed`.
-        pub(crate) fn up(&mut self, node: NodeId, pressed: NodeId, button: u8) {
-            self.up_counted(node, pressed, button, 1);
-        }
-
-        /// [`Self::up`] for the `count`-th click of a series.
-        pub(crate) fn up_counted(
-            &mut self,
-            node: NodeId,
-            pressed: NodeId,
-            button: u8,
-            count: usize,
-        ) {
-            let sink = self.dispatcher.clone();
-            let mouse_button =
-                [MouseButton::Left, MouseButton::Middle, MouseButton::Right][button as usize];
-            let event = MouseUpEvent {
-                button: mouse_button,
-                position: at(1.0, 1.0),
-                modifiers: gpui::Modifiers::none(),
-                click_count: count,
-            };
-            self.cx.update(|window, cx| {
-                sink.pointer_input("mouseup", node, &button_payload(button), window, cx);
-                sink.pointer_released(&event, Some(pressed), node, window, cx);
-            });
-        }
-
-        /// A script asking to capture the pointer for `node`.
-        pub(crate) fn set_capture(&self, node: NodeId) {
-            request_capture(&self.host, node);
-        }
-
-        /// A script releasing the capture of `node`.
-        pub(crate) fn release_capture(&self, node: NodeId) {
-            release_capture(&self.host, node);
-        }
-    }
-
-    fn button_payload(button: u8) -> EventPayload {
-        EventPayload::Mouse(MousePayload {
-            button,
-            ..MousePayload::at(1.0, 1.0, inca_document::Modifiers::none())
-        })
-    }
-}
-
 /// A listener that pushes `[name, currentTarget, eventPhase]`.
 pub(crate) fn tagged(name: &str) -> String {
     format!("(e) => out.push(['{name}', e.currentTarget, e.eventPhase])")
-}
-
-const SEEN: &str = r"
-    globalThis.seen = [];
-    globalThis.mark = (e) => { globalThis.seen.push(e.type + ':' + e.target); };
-    ";
-
-pub(crate) fn focusable_node(dispatcher: &EventDispatcher, host: &Rc<Host>) -> NodeId {
-    let mut host = host.document.borrow_mut();
-    let node = host.tree.create_node("div").unwrap();
-    let root = host.root();
-    host.tree.append_child(root, node).unwrap();
-    host.tree
-        .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
-        .unwrap();
-    host.focus.mark_tab_dirty(node);
-    drop(host);
-    dispatcher.engine.eval::<()>(SEEN).unwrap();
-    for event in ["focus", "blur"] {
-        listen(dispatcher, node, event, "mark");
-    }
-    node
 }
 
 /// Runs `body` as a function body next to the natives `n`, a new div `id` and its list `list`.
@@ -443,10 +230,6 @@ pub(crate) fn list_run(class: Option<&str>, body: &str) -> serde_json::Value {
 /// the part of this file that moves with the dispatch.
 pub(crate) mod native {
     use super::*;
-
-    pub(crate) fn at(x: f32, y: f32) -> gpui::Point<gpui::Pixels> {
-        point(px(x), px(y))
-    }
 
     pub(crate) fn mouse_at(x: f32, y: f32) -> EventPayload {
         EventPayload::Mouse(MousePayload::at(x, y, inca_document::Modifiers::none()))
@@ -496,85 +279,6 @@ pub(crate) mod native {
         let root = h.root();
         h.tree.append_child(root, node).unwrap();
         node
-    }
-
-    /// Whether `node` matches the state class `class`.
-    pub(crate) fn state(host: &DocumentState, node: NodeId, class: &str) -> bool {
-        inca_style::matches_selector(&host.tree, node, class).unwrap()
-    }
-
-    /// Appends a `<style>` element that holds `css` under the root.
-    pub(crate) fn add_sheet(host: &Host, css: &str) {
-        let host = &mut *host.document.borrow_mut();
-        let [style, text] = ["style", "#text"].map(|tag| host.tree.create_node(tag).unwrap());
-        host.tree.set_data(text, css).unwrap();
-        host.tree.append_child(style, text).unwrap();
-        host.tree.append_child(host.root(), style).unwrap();
-    }
-
-    /// A view whose render runs `begin_frame`, as a window's render does.
-    pub(crate) struct Frame(pub(crate) Rc<EventDispatcher>);
-
-    impl gpui::Render for Frame {
-        fn render(
-            &mut self,
-            window: &mut Window,
-            cx: &mut Context<Self>,
-        ) -> impl gpui::IntoElement {
-            self.0.begin_frame(window, cx);
-            gpui::div()
-        }
-    }
-
-    pub(crate) fn draw(cx: &mut TestAppContext, window: gpui::WindowHandle<Frame>) {
-        cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-            .unwrap();
-    }
-
-    pub(crate) fn set_active(
-        cx: &mut TestAppContext,
-        window: gpui::WindowHandle<Frame>,
-        dispatcher: &EventDispatcher,
-        active: bool,
-    ) {
-        cx.update_window(window.into(), |_, window, cx| {
-            dispatcher.window_activated(active, window, cx);
-        })
-        .unwrap();
-    }
-
-    pub(crate) fn is_focused(host: &DocumentState, node: NodeId) -> bool {
-        state(host, node, ":focus")
-    }
-
-    /// A focusable node under the root of `host`, on which no script listens.
-    pub(crate) fn fake_focusable_node(host: &Rc<Host>) -> NodeId {
-        let mut host = host.document.borrow_mut();
-        let node = host.tree.create_node("div").unwrap();
-        let root = host.root();
-        host.tree.append_child(root, node).unwrap();
-        host.tree
-            .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
-            .unwrap();
-        host.focus.mark_tab_dirty(node);
-        node
-    }
-
-    /// A window over one focusable node, on a [`FakeScript`].
-    pub(crate) fn fake_focus_scene(
-        cx: &mut TestAppContext,
-    ) -> (
-        Rc<EventDispatcher>,
-        Rc<Host>,
-        Rc<FakeScript>,
-        gpui::WindowHandle<Frame>,
-        NodeId,
-    ) {
-        let (dispatcher, host, fake) = fake_dispatcher();
-        let node = fake_focusable_node(&host);
-        let dispatcher = Rc::new(dispatcher);
-        let window = cx.add_window(|_, _| Frame(Rc::clone(&dispatcher)));
-        (dispatcher, host, fake, window, node)
     }
 }
 

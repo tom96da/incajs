@@ -90,7 +90,7 @@ pub(crate) fn lose_focus(ctx: &Ctx<'_>, host: &Rc<Host>, target: NodeId) {
     for name in ["blur", "focusout"] {
         let walk = Walk {
             name,
-            flags: crate::dispatch::spec_of(name).flags,
+            flags: inca_document::spec_of(name).flags,
             target: EventTargetId::Node(target),
             cut: &[],
             payload: &payload,
@@ -111,7 +111,7 @@ pub(crate) fn lose_focus(ctx: &Ctx<'_>, host: &Rc<Host>, target: NodeId) {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use crate::EventDispatcher;
+    use crate::tests::EventDispatcher;
     use crate::tests::{
         dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
         node_under_root, read_out, tree_of_three,

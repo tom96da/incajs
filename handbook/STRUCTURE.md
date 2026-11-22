@@ -56,8 +56,9 @@ incajs/
 │   ├── inca-node/           # retained tree and input text
 │   ├── inca-style/          # selectors, style sheets, cascade, inline style and element spec
 │   ├── inca-document/       # element semantics, the document state and markup steps, the event model, the focus model, box geometry and the text-control model
-│   ├── inca-gpui/           # GPUI rendering, the focus handles, wheel wiring and the event table
-│   ├── inca-bridge/         # binds a QuickJS realm to the retained tree: the `__inca_native__` bridge and event dispatch
+│   ├── inca-gpui/           # GPUI rendering and wheel wiring
+│   ├── inca-window/         # the behaviour of a window: input turned into events and default actions, the focus handles and the per-window state
+│   ├── inca-bridge/         # binds a QuickJS realm to the retained tree: the `__inca_native__` bridge
 │   ├── inca-jsenv/          # the QuickJS Engine, module loader, value inspection and host objects such as `console`
 │   ├── inca-host/           # the runtime binary: loads a bundle, opens the window and serves the dev protocol
 │   └── inca-test-macros/    # test attribute macros, a dev-dependency of the other crates and never part of the `inca-host` build
@@ -80,7 +81,7 @@ incajs/
 │   └── linux-x64/
 ├── examples/
 │   ├── hello_world/         # Vue port of `crates/inca-gpui/examples/hello_world.rs`
-│   └── click_counter/       # Vue port of `crates/inca-bridge/examples/click_counter.rs`
+│   └── click_counter/       # Vue port of `crates/inca-host/examples/click_counter.rs`
 ├── docs/                    # the public VitePress site, deployed by .github/workflows/docs.yml
 ├── specs/                   # pinned web standards, as git submodules — see below
 └── third_party/             # pinned upstream sources, as git submodules — see below

@@ -122,7 +122,9 @@ here, never in a crate or a package.
   it.
 - The `test-support` feature of `inca-host` gates its `Harness` and `snapshot` (`automation` gates
   `snapshot` too) and enables gpui's test platform. The `test-support` feature of `inca-bridge`
-  exposes the engine helpers its tests share. A dev-dependency turns each on.
+  exposes the engine helpers its tests share, and the one of `inca-window` enables gpui's test
+  platform and exposes `inca_window::test_support` (`TestRoot`, the cells, `mount_root`, `Frame`)
+  with the `test-support` features of `inca-document` and `inca-gpui`. A dev-dependency turns each on.
 - The `automation` feature of `inca-host` answers `click`, `snapshot` and `waitIdle` on the dev
   protocol, in a debug build only. The e2e tests need a host built with it.
 
