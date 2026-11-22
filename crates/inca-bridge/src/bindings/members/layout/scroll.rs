@@ -196,13 +196,26 @@ mod tests {
     use inca_document::geometry::Align;
     use rstest::rstest;
 
-    use super::super::fixture::with_box;
+    use super::super::fixture::with_box_view;
+    use crate::test_support::TestView;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    /// The offset the last scroll write left on the node `id`.
+    fn offset(view: &Rc<RefCell<TestView>>, id: u32) -> (f32, f32) {
+        view.borrow()
+            .offsets
+            .borrow()
+            .get(&id)
+            .copied()
+            .unwrap_or_default()
+    }
 
     #[rstest]
     #[case::freed("__inca_native__.destroyNode(id)")]
     #[case::detached("__inca_native__.removeChild(__inca_native__.rootNodeId(), id)")]
     fn a_scroll_write_to_a_node_without_a_box_changes_nothing(#[case] remove: &str) {
-        let (engine, host, id) = with_box([0.0; 9]);
+        let (engine, _host, view, id) = with_box_view([0.0; 9]);
         engine.eval::<()>(remove).unwrap();
 
         engine
@@ -216,35 +229,31 @@ mod tests {
             )
             .unwrap();
 
-        let offset = host.window.borrow().scroll_handle(id).offset();
-        assert_eq!((f32::from(offset.x), f32::from(offset.y)), (0.0, 0.0));
+        assert_eq!(offset(&view, id), (0.0, 0.0));
     }
 
     #[rstest]
     #[case::freed("__inca_native__.destroyNode(id)")]
     #[case::detached("__inca_native__.removeChild(__inca_native__.rootNodeId(), id)")]
     fn a_scroll_into_view_of_a_node_without_a_box_waits_for_nothing(#[case] remove: &str) {
-        let (engine, host, id) = with_box([0.0; 9]);
+        let (engine, _host, view, id) = with_box_view([0.0; 9]);
         engine.eval::<()>(remove).unwrap();
-        host.window.borrow().layout.borrow_mut().remove(&id);
+        view.borrow_mut().boxes.remove(&id);
 
         engine.eval::<()>("el.scrollIntoView()").unwrap();
 
-        assert!(host.window.borrow().scroll_fresh.is_empty());
+        assert!(view.borrow().queued.is_empty());
     }
 
     #[test]
     fn scroll_to_moves_the_offset_with_numbers_and_with_options() {
-        let (engine, host, id) = with_box([0.0; 9]);
-        let offset = || {
-            let offset = host.window.borrow().scroll_handle(id).offset();
-            (f32::from(offset.x), f32::from(offset.y))
-        };
+        let (engine, _host, view, id) = with_box_view([0.0; 9]);
+        let offset = || offset(&view, id);
 
         engine.eval::<()>("el.scrollTo(5, 7)").unwrap();
-        assert_eq!(offset(), (-5.0, -7.0));
+        assert_eq!(offset(), (5.0, 7.0));
         engine.eval::<()>("el.scrollTo({ top: 9 })").unwrap();
-        assert_eq!(offset(), (-5.0, -9.0));
+        assert_eq!(offset(), (5.0, 9.0));
         engine
             .eval::<()>(
                 r"
@@ -253,24 +262,21 @@ mod tests {
                 ",
             )
             .unwrap();
-        assert_eq!(offset(), (-3.0, -2.0));
+        assert_eq!(offset(), (3.0, 2.0));
         engine.eval::<()>("el.scrollTo(NaN, Infinity)").unwrap();
         assert_eq!(offset(), (0.0, 0.0));
     }
 
     #[test]
     fn scroll_by_adds_to_the_current_offset() {
-        let (engine, host, id) = with_box([0.0; 9]);
+        let (engine, _host, view, id) = with_box_view([0.0; 9]);
         engine.eval::<()>("el.scrollBy(2, 3)").unwrap();
-        let first = host.window.borrow().scroll_handle(id).offset();
+        let first = offset(&view, id);
         engine.eval::<()>("el.scrollBy({ left: 1 })").unwrap();
-        let second = host.window.borrow().scroll_handle(id).offset();
+        let second = offset(&view, id);
 
-        // The maximum offset is zero in a unit test, so the base is the clamped offset 0.
-        assert_eq!(
-            (f32::from(first.x), f32::from(first.y), f32::from(second.x)),
-            (-2.0, -3.0, -1.0)
-        );
+        // The maximum offset is zero here, so the base is the clamped offset 0.
+        assert_eq!((first.0, first.1, second.0), (2.0, 3.0, 1.0));
     }
 
     #[rstest]
@@ -298,20 +304,20 @@ mod tests {
         #[case] block: Align,
         #[case] inline: Align,
     ) {
-        let (engine, host, id) = with_box([0.0; 9]);
-        host.window.borrow().layout.borrow_mut().remove(&id);
+        let (engine, _host, view, id) = with_box_view([0.0; 9]);
+        view.borrow_mut().boxes.remove(&id);
 
         engine.eval::<()>(call).unwrap();
 
-        assert_eq!(host.window.borrow().scroll_fresh, [(id, block, inline)]);
+        assert_eq!(view.borrow().queued, [(id, block, inline)]);
     }
 
     #[test]
     fn scroll_into_view_of_a_node_with_a_box_leaves_nothing_waiting() {
-        let (engine, host, _id) = with_box([0.0; 9]);
+        let (engine, _host, view, _id) = with_box_view([0.0; 9]);
 
         engine.eval::<()>("el.scrollIntoView()").unwrap();
 
-        assert!(host.window.borrow().scroll_fresh.is_empty());
+        assert!(view.borrow().queued.is_empty());
     }
 }

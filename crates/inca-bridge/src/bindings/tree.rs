@@ -160,7 +160,7 @@ mod tests {
     use rstest::rstest;
 
     use crate::Host;
-    use crate::test_support::{callback_ids, engine_with_bindings, error_name};
+    use crate::test_support::{callback_ids, engine_with_bindings, engine_with_view, error_name};
     use crate::tests::callback_stored;
     use inca_node::NodeId;
     use std::cell::RefCell;
@@ -550,7 +550,7 @@ mod tests {
 
     #[test]
     fn destroy_node_frees_the_scroll_handles_of_the_subtree_only() {
-        let (engine, host) = engine_with_bindings();
+        let (engine, _host, view) = engine_with_view();
         let ids: Vec<NodeId> = engine
             .eval(
                 r"
@@ -567,15 +567,15 @@ mod tests {
             .unwrap();
         let (branch, leaf, kept) = (ids[0], ids[1], ids[2]);
         for id in [branch, leaf, kept] {
-            host.window.borrow().scroll_handle(id);
+            view.borrow().offsets.borrow_mut().insert(id, (1.0, 1.0));
         }
 
         engine
             .eval::<()>(&format!("__inca_native__.destroyNode({branch})"))
             .unwrap();
 
-        let host = host.window.borrow();
-        let handles = host.scroll_handles.borrow();
+        let view = view.borrow();
+        let handles = view.offsets.borrow();
         assert!(!handles.contains_key(&branch));
         assert!(
             !handles.contains_key(&leaf),

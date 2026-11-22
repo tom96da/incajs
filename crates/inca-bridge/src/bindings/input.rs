@@ -11,7 +11,8 @@ use inca_node::NodeId;
 
 use super::Natives;
 use super::convert::{JsNodeId, existing_node};
-use super::host::{DocumentState, Host};
+use super::host::Host;
+use inca_document::DocumentState;
 
 pub(super) fn install_input(n: &Natives<'_, '_>) -> JsResult<()> {
     n.set("inputValue", input_value)?;

@@ -16,11 +16,11 @@ pub mod warnings;
 
 pub use attributes::store_attribute;
 pub use create::{NameError, is_element_local_name, validate_and_extract};
-pub use document::new_document_tree;
+pub use document::{DocumentState, new_document_tree};
 pub use event::{
     EVENTS, EventListeners, EventPayload, EventSpec, EventTargetId, Flags, Invoke, KeyPayload,
-    Link, Links, Listener, Modifiers, MousePayload, NO_BUTTON, PointerSource, Signals, Walk,
-    WheelPayload, buttons_mask, deliver, flags_of, key_code, keypress_code, listened,
+    Link, Links, Listener, Modifiers, MousePayload, NO_BUTTON, Outcome, PointerSource, Signals,
+    Walk, WheelPayload, buttons_mask, deliver, flags_of, key_code, keypress_code, listened,
     next_event_id, path_from, spec_of,
 };
 pub use focus::{FocusModel, FocusSurface, FocusTransition};

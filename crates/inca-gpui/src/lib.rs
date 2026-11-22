@@ -3,7 +3,6 @@
 
 pub mod element;
 pub mod event_sink;
-pub mod focus;
 pub mod input;
 pub use element::{
     NodeLayout, Scrollbars, TextInputHandler, build_element, build_element_with_events,

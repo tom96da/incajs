@@ -12,7 +12,7 @@ mod payload;
 mod signals;
 mod target;
 
-pub use dispatch::{Invoke, Walk, deliver, listened, next_event_id, path_from};
+pub use dispatch::{Invoke, Outcome, Walk, deliver, listened, next_event_id, path_from};
 pub use flags::{EVENTS, EventSpec, Flags, flags_of, spec_of};
 pub use key_code::{key_code, keypress_code};
 pub use listeners::{EventListeners, Listener};

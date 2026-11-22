@@ -4,23 +4,24 @@
 #![allow(clippy::unwrap_used)]
 
 //! Shared setup for tests: an engine wired to a [`Host`] through the bindings,
-//! with `__inca_test_listen__` for registering listeners, and a GPUI root that
-//! renders the host's tree.
+//! with `__inca_test_listen__` for registering listeners, and a [`TestView`] that stands in for
+//! the window.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use gpui::{Context, Render, TestAppContext, Window, WindowHandle, prelude::*};
-use inca_gpui::{Scrollbars, render_tree_with_events};
+use std::collections::HashMap;
+
+use inca_document::geometry::Align;
+use inca_document::{EventListeners, NodeBox, ScrollRange, View};
 use inca_jsenv::{
     Clock, Engine, EngineError, ErrorReporter, run_timers, stderr_reporter, system_clock,
 };
-use inca_node::NodeId;
+use inca_node::{NodeId, VirtualTree};
 
 use crate::bindings::install;
-use crate::{EventDispatcher, EventTargetId, Host};
-use inca_document::EventListeners;
+use crate::{EventTargetId, Host};
 
 /// The HTML namespace.
 pub const HTML: &str = "http://www.w3.org/1999/xhtml";
@@ -30,6 +31,18 @@ pub const SVG: &str = "http://www.w3.org/2000/svg";
 
 /// The `MathML` namespace.
 pub const MATHML: &str = "http://www.w3.org/1998/Math/MathML";
+
+// Snapshot per call: [type, bubbles, cancelable, composed, defaultPrevented
+// before, defaultPrevented after preventDefault(), eventPhase,
+// currentTarget, isTrusted, timeStamp].
+pub const RECORDER: &str = r"
+    globalThis.seen = [];
+    globalThis.record = (e) => {
+        const before = e.defaultPrevented; e.preventDefault();
+        globalThis.seen.push([e.type, e.bubbles, e.cancelable, e.composed,
+            before, e.defaultPrevented, e.eventPhase, e.currentTarget,
+            e.isTrusted, e.timeStamp]); };
+    ";
 
 /// Defines `__inca_test_listen__(target, type, fn, capture, passive)`, which
 /// registers `fn` through `__inca_native__.addEventListener`.
@@ -61,6 +74,20 @@ pub fn engine_with_bindings() -> (Engine, Rc<Host>) {
     let host = Rc::new(Host::default());
     engine.with(|ctx| install(&ctx, &host)).unwrap();
     (engine, host)
+}
+
+/// [`engine_with_bindings`] with the [`TestView`] that stands in for the host's window.
+///
+/// # Panics
+///
+/// Panics when the engine or the bindings fail to initialise.
+#[cfg(test)]
+pub(crate) fn engine_with_view() -> (Engine, Rc<Host>, Rc<RefCell<TestView>>) {
+    let engine = Engine::new().unwrap();
+    let (host, view) = Host::with_test_view(system_clock());
+    let host = Rc::new(host);
+    engine.with(|ctx| install(&ctx, &host)).unwrap();
+    (engine, host, view)
 }
 
 /// The `name` of what `call` throws, or `'none'`.
@@ -250,147 +277,11 @@ pub fn engine_for(host: &Rc<Host>) -> Rc<Engine> {
 /// # Panics
 ///
 /// Panics when the engine or the bindings fail to initialise.
-pub(crate) fn engine_on_clock(host: &Rc<Host>, clock: Clock) -> Rc<Engine> {
+pub fn engine_on_clock(host: &Rc<Host>, clock: Clock) -> Rc<Engine> {
     let engine = Rc::new(Engine::builder().clock(clock).build().unwrap());
     engine.with(|ctx| install(&ctx, host)).unwrap();
     engine.eval::<()>(LISTEN_JS).unwrap();
     engine
-}
-
-/// A window root that renders the subtree at `node` of `host` through
-/// `dispatcher`, calling [`EventDispatcher::begin_frame`] on every frame.
-pub struct TestRoot {
-    /// The host whose tree is rendered.
-    pub host: Rc<Host>,
-    /// The node the rendering starts at.
-    pub node: NodeId,
-    /// The dispatcher the rendered elements report to.
-    pub dispatcher: EventDispatcher,
-}
-
-impl Render for TestRoot {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.dispatcher.begin_frame(window, cx);
-        let host = self.host.document.borrow();
-        render_tree_with_events(
-            &host.tree,
-            &host.style,
-            self.node,
-            &self.dispatcher,
-            Scrollbars::Overlay,
-        )
-        .unwrap()
-    }
-}
-
-/// Opens a window of [`TestRoot`] over `node` of `host`, dispatching into
-/// `engine`, and draws the first frame.
-///
-/// # Panics
-///
-/// Panics when the window cannot be updated.
-pub fn mount_root(
-    cx: &mut TestAppContext,
-    host: &Rc<Host>,
-    engine: &Rc<Engine>,
-    node: NodeId,
-) -> WindowHandle<TestRoot> {
-    let dispatcher = EventDispatcher::new(Rc::clone(engine), Rc::clone(host));
-    let window = cx.add_window(|_, _| TestRoot {
-        host: Rc::clone(host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    window
-}
-
-/// [`mount_root`] followed by activating the window.
-///
-/// # Panics
-///
-/// Panics when the window cannot be updated.
-pub fn mount_active(
-    cx: &mut TestAppContext,
-    host: &Rc<Host>,
-    engine: &Rc<Engine>,
-    node: NodeId,
-) -> WindowHandle<TestRoot> {
-    let window = mount_root(cx, host, engine, node);
-    cx.update_window(window.into(), |_, window, _cx| window.activate_window())
-        .unwrap();
-    window
-}
-
-/// A host whose timers read the executor clock of `cx`, so
-/// `cx.executor().advance_clock(..)` moves them.
-#[must_use]
-pub fn host_on_executor_clock(cx: &TestAppContext) -> Rc<Host> {
-    let executor = cx.executor();
-    Rc::new(Host::with_clock(Rc::new(move || executor.now())))
-}
-
-/// [`mount_root`] over the root of `host`, with `reporter` and a running timer pump.
-///
-/// # Panics
-///
-/// Panics when the window cannot be updated.
-pub fn mount_with_timers(
-    cx: &mut TestAppContext,
-    host: &Rc<Host>,
-    engine: &Rc<Engine>,
-    reporter: ErrorReporter,
-) -> WindowHandle<TestRoot> {
-    let node = host.document.borrow().root();
-    let dispatcher =
-        EventDispatcher::new(Rc::clone(engine), Rc::clone(host)).with_reporter(reporter);
-    let window = cx.add_window(|_, _| TestRoot {
-        host: Rc::clone(host),
-        node,
-        dispatcher,
-    });
-    cx.update_window(window.into(), |_, window, cx| window.draw(cx).clear(cx))
-        .unwrap();
-    window
-        .update(cx, |root, window, cx| {
-            root.dispatcher.start_timers(window.window_handle(), cx);
-        })
-        .unwrap();
-    window
-}
-
-/// A host whose tree holds `parent` over `children` nodes, each with
-/// `tabindex="0"`. The parent takes focus as well when `parent_focusable` is
-/// set.
-///
-/// # Panics
-///
-/// Panics when the tree rejects a node.
-#[must_use]
-pub fn focusable_tree(children: usize, parent_focusable: bool) -> (Rc<Host>, NodeId, Vec<NodeId>) {
-    let host = Rc::new(Host::default());
-    let mut host_mut = host.document.borrow_mut();
-    let parent = host_mut.tree.create_node("div").unwrap();
-    let root = host_mut.root();
-    host_mut.tree.append_child(root, parent).unwrap();
-    let nodes: Vec<NodeId> = (0..children)
-        .map(|_| {
-            let child = host_mut.tree.create_node("div").unwrap();
-            host_mut.tree.append_child(parent, child).unwrap();
-            child
-        })
-        .collect();
-    let focusable = parent_focusable
-        .then_some(parent)
-        .into_iter()
-        .chain(nodes.iter().copied());
-    for node in focusable {
-        host_mut.tree.set_attribute(node, "tabindex", "0").unwrap();
-        host_mut.focus.mark_tab_dirty(node);
-    }
-    drop(host_mut);
-    (host, parent, nodes)
 }
 
 /// Registers `callback`, a JS function expression, for each of `events` on
@@ -429,4 +320,92 @@ pub fn capture_reporter() -> (ErrorReporter, Reported) {
         Rc::new(move |err: &EngineError| sink.borrow_mut().push(err.clone())),
         reported,
     )
+}
+
+/// A window that draws nothing. It keeps the boxes and the scroll positions a test sets, and the
+/// reveals the natives queue.
+#[derive(Default)]
+pub struct TestView {
+    /// The box of each node the last frame drew.
+    pub boxes: HashMap<NodeId, NodeBox>,
+    /// The offset each scroll write left on each container, as `(left, top)`, unclamped.
+    pub offsets: RefCell<HashMap<NodeId, (f32, f32)>>,
+    /// The largest offset of each container, as `(left, top)`. A container without one has `0`.
+    pub max: HashMap<NodeId, (f32, f32)>,
+    /// The reveals queued for the next frame.
+    pub queued: Vec<(NodeId, Align, Align)>,
+    held: u8,
+}
+
+impl View for TestView {
+    fn node_box(&self, id: NodeId) -> Option<NodeBox> {
+        self.boxes.get(&id).copied()
+    }
+
+    fn scroll_range(&self, id: NodeId) -> ScrollRange {
+        let max = self.max.get(&id).copied().unwrap_or_default();
+        let (left, top) = self.offsets.borrow().get(&id).copied().unwrap_or_default();
+        ScrollRange {
+            offset: (left.min(max.0), top.min(max.1)),
+            max,
+        }
+    }
+
+    fn scroll_to(&self, _tree: &VirtualTree, id: NodeId, left: Option<f64>, top: Option<f64>) {
+        let mut offsets = self.offsets.borrow_mut();
+        let at = offsets.entry(id).or_default();
+        #[allow(clippy::cast_possible_truncation)]
+        let clamped = |v: f64| v.max(0.0) as f32;
+        if let Some(left) = left {
+            at.0 = clamped(left);
+        }
+        if let Some(top) = top {
+            at.1 = clamped(top);
+        }
+    }
+
+    fn reveal(
+        &self,
+        _tree: &VirtualTree,
+        _style: &inca_style::StyleCache,
+        node: NodeId,
+        _block: Align,
+        _inline: Align,
+    ) -> bool {
+        self.boxes.contains_key(&node)
+    }
+
+    fn queue_reveal(&mut self, node: NodeId, block: Align, inline: Align) {
+        self.queued.push((node, block, inline));
+    }
+
+    fn held_buttons(&self) -> u8 {
+        self.held
+    }
+
+    fn set_held_buttons(&mut self, held: u8) {
+        self.held = held;
+    }
+
+    fn reset_scroll(&self, tree: &VirtualTree, id: NodeId) {
+        let mut offsets = self.offsets.borrow_mut();
+        let mut pending = vec![id];
+        while let Some(node) = pending.pop() {
+            if let Some(offset) = offsets.get_mut(&node) {
+                *offset = (0.0, 0.0);
+            }
+            if let Some(node) = tree.get(node) {
+                pending.extend(node.children().iter().copied());
+            }
+        }
+    }
+
+    fn forget(&mut self, ids: &[NodeId]) {
+        for id in ids {
+            self.boxes.remove(id);
+            self.offsets.get_mut().remove(id);
+            self.max.remove(id);
+            self.queued.retain(|&(node, ..)| node != *id);
+        }
+    }
 }

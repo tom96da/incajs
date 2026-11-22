@@ -177,8 +177,8 @@ pub(super) fn install_handle(n: &Natives<'_, '_>) -> JsResult<()> {
 }
 
 /// A new handle of the node `id`, on the stored prototype of the node's interface:
-/// `[handle, parented, special]`, where `parented` tells whether the node has a parent and `special`
-/// is `"input"`, `"template"` or `null`. An id the tree does not have gives `null`.
+/// `[handle, parented, special]`, where `parented` tells whether the node has a parent and
+/// `special` is `"input"`, `"template"` or `null`. An id the tree does not have gives `null`.
 fn node_handle<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
         let host = host.document.borrow();

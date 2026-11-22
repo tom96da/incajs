@@ -5,19 +5,26 @@
 
 #![allow(clippy::unwrap_used)]
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::{Bounds, point, px, size};
-use inca_gpui::NodeLayout;
+use inca_document::NodeBox;
+use inca_document::geometry::Rect;
 use inca_jsenv::Engine;
 
 use crate::bindings::host::Host;
-use crate::test_support::engine_with_bindings;
+use crate::test_support::{TestView, engine_with_view};
 
 /// An engine with the global `el`, a `div` under the root, whose last box is `b`
 /// (`x`, `y`, `width`, `height`, `border`, `scroll x`, `scroll y`, `gutter w`, `gutter h`).
 pub(super) fn with_box(b: [f32; 9]) -> (Engine, Rc<Host>, u32) {
-    let (engine, host) = engine_with_bindings();
+    let (engine, host, _view, id) = with_box_view(b);
+    (engine, host, id)
+}
+
+/// [`with_box`] with the view that holds the box.
+pub(super) fn with_box_view(b: [f32; 9]) -> (Engine, Rc<Host>, Rc<RefCell<TestView>>, u32) {
+    let (engine, host, view) = engine_with_view();
     let id: u32 = engine
         .eval(
             r"
@@ -30,18 +37,23 @@ pub(super) fn with_box(b: [f32; 9]) -> (Engine, Rc<Host>, u32) {
             ",
         )
         .unwrap();
-    record(&host, id, b);
-    (engine, host, id)
+    record(&view, id, b);
+    (engine, host, view, id)
 }
 
-pub(super) fn record(host: &Rc<Host>, id: u32, b: [f32; 9]) {
-    let layout = NodeLayout {
-        bounds: Bounds::new(point(px(b[0]), px(b[1])), size(px(b[2]), px(b[3]))),
-        border: px(b[4]),
-        scroll: point(px(b[5]), px(b[6])),
-        gutter: size(px(b[7]), px(b[8])),
+pub(super) fn record(view: &Rc<RefCell<TestView>>, id: u32, b: [f32; 9]) {
+    let node_box = NodeBox {
+        rect: Rect {
+            x: b[0],
+            y: b[1],
+            width: b[2],
+            height: b[3],
+        },
+        border: b[4],
+        scroll: (b[5], b[6]),
+        gutter: (b[7], b[8]),
     };
-    host.window.borrow().layout.borrow_mut().insert(id, layout);
+    view.borrow_mut().boxes.insert(id, node_box);
 }
 
 pub(super) fn read(engine: &Engine, expr: &str) -> serde_json::Value {

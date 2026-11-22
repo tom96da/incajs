@@ -18,8 +18,9 @@ use inca_node::{NodeId, Removal, VirtualTree};
 
 use super::Natives;
 use super::convert::{JsNodeId, throw_tree_error};
-use super::host::{DocumentState, Host};
+use super::host::Host;
 use super::mutation::removed_subtrees;
+use inca_document::DocumentState;
 
 mod finish;
 use finish::finish;

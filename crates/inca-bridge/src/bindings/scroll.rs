@@ -5,8 +5,8 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Result as JsResult, Value};
 
+use inca_document::ScrollRange;
 use inca_document::geometry::Align;
-use inca_document::{ScrollRange, View};
 use inca_node::NodeId;
 use inca_style::is_scroll_container;
 
@@ -78,56 +78,7 @@ pub(super) fn scroll_into_view(host: &Host, id: NodeId, block: Align, inline: Al
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use super::*;
-    use gpui::{Bounds, point, px};
-
     use crate::test_support::engine_with_bindings;
-
-    /// A node with `overflow: scroll`, the global `n`, and its id.
-    fn scroller() -> (inca_jsenv::Engine, Rc<Host>, u32) {
-        let (engine, host) = engine_with_bindings();
-        let node: u32 = engine
-            .eval("globalThis.n = __inca_native__.createNode('div')")
-            .unwrap();
-        engine
-            .eval::<()>("__inca_native__.setStyle(n, 'overflow', 'scroll')")
-            .unwrap();
-        (engine, host, node)
-    }
-
-    fn offset(host: &Rc<Host>, node: u32) -> (f32, f32) {
-        let offset = host.window.borrow().scroll_handle(node).offset();
-        (f32::from(offset.x), f32::from(offset.y))
-    }
-
-    #[test]
-    fn scroll_node_writes_only_the_given_axes_negated() {
-        let (engine, host, node) = scroller();
-
-        engine
-            .eval::<()>("__inca_native__.scrollNode(n, 5, 7)")
-            .unwrap();
-        assert_eq!(offset(&host, node), (-5., -7.));
-        engine
-            .eval::<()>("__inca_native__.scrollNode(n, null, 9)")
-            .unwrap();
-        assert_eq!(offset(&host, node), (-5., -9.));
-        engine
-            .eval::<()>("__inca_native__.scrollNode(n, 3, undefined)")
-            .unwrap();
-        assert_eq!(offset(&host, node), (-3., -9.));
-    }
-
-    #[test]
-    fn scroll_node_clamps_a_negative_value_to_zero() {
-        let (engine, host, node) = scroller();
-
-        engine
-            .eval::<()>("__inca_native__.scrollNode(n, -4, -1)")
-            .unwrap();
-
-        assert_eq!(offset(&host, node), (0., 0.));
-    }
 
     #[test]
     fn scroll_of_and_scroll_node_raise_type_error_for_an_unknown_node() {
@@ -143,33 +94,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(caught, [true, true]);
-    }
-
-    #[test]
-    fn a_scroll_into_view_of_a_boxless_node_retries_on_one_frame() {
-        let (engine, host) = engine_with_bindings();
-        engine
-            .eval::<()>("globalThis.n = __inca_native__.createNode('div'); __inca_native__.scrollIntoViewNode(n, 'start', 'start')")
-            .unwrap();
-
-        assert!(host.reveal_scrolls());
-        assert!(!host.reveal_scrolls());
-    }
-
-    #[test]
-    fn destroying_a_node_drops_its_waiting_scroll_into_view() {
-        let (engine, host) = engine_with_bindings();
-        engine
-            .eval::<()>(
-                r"
-                const n = __inca_native__; const node = n.createNode('div');
-                n.appendChild(0, node); n.scrollIntoViewNode(node, 'start', 'start');
-                n.destroyNode(node);
-                ",
-            )
-            .unwrap();
-
-        assert!(!host.reveal_scrolls());
     }
 
     #[test]
@@ -193,45 +117,5 @@ mod tests {
             .unwrap();
 
         assert_eq!(caught, [true, true, true, false]);
-    }
-
-    #[test]
-    fn a_scroll_moves_the_recorded_boxes_below_the_container() {
-        let host = Host::default();
-        let mut document = host.document.borrow_mut();
-        let container = document.root();
-        let child = document.tree.create_node("div").unwrap();
-        let grandchild = document.tree.create_node("div").unwrap();
-        document.tree.append_child(container, child).unwrap();
-        document.tree.append_child(child, grandchild).unwrap();
-        let window = host.window.borrow();
-        let record = |id| {
-            let layout = inca_gpui::NodeLayout {
-                bounds: Bounds::new(point(px(10.0), px(50.0)), gpui::size(px(5.0), px(5.0))),
-                border: px(0.0),
-                scroll: point(px(1.0), px(2.0)),
-                gutter: gpui::Size::default(),
-            };
-            window.layout.borrow_mut().insert(id, layout);
-        };
-        for id in [container, child, grandchild] {
-            record(id);
-        }
-
-        window.shift_descendants(&document.tree, container, 3.0, 20.0);
-
-        let layout = window.layout.borrow();
-        let read = |id| {
-            let l = layout[&id];
-            (
-                f32::from(l.bounds.origin.x),
-                f32::from(l.bounds.origin.y),
-                f32::from(l.scroll.x),
-                f32::from(l.scroll.y),
-            )
-        };
-        assert_eq!(read(container), (10.0, 50.0, 1.0, 2.0));
-        assert_eq!(read(child), (7.0, 30.0, 4.0, 22.0));
-        assert_eq!(read(grandchild), (7.0, 30.0, 1.0, 2.0));
     }
 }

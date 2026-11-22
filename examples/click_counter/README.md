@@ -5,7 +5,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 
 # click_counter
 
-A Vue port of [`crates/inca-bridge/examples/click_counter.rs`](../../crates/inca-bridge/examples/click_counter.rs):
+A Vue port of [`crates/inca-host/examples/click_counter.rs`](../../crates/inca-host/examples/click_counter.rs):
 a bordered box whose label counts up when clicked, built as a real `.vue`
 SFC (`src/App.vue`) with `ref`/`computed` reactivity instead of Rust
 `VirtualTree` calls and a hand-written click handler.

@@ -339,7 +339,8 @@ mod tests {
         assert_eq!(f.json("w.deref() === undefined"), json!(true));
     }
 
-    /// A timeout signal with an `abort` listener and nothing else that refers to it, collected once.
+    /// A timeout signal with an `abort` listener and nothing else that refers to it, collected
+    /// once.
     fn pending_timeout(f: &Clocked) {
         f.engine
             .eval::<()>(

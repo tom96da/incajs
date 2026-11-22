@@ -4,7 +4,7 @@
 use inca_node::{AttributeValue, ParsedHtml};
 use inca_style::set_style_text;
 
-use super::super::host::DocumentState;
+use inca_document::DocumentState;
 
 /// The steps that follow a parse once its nodes are in place: applies each `style` attribute as
 /// style props and prints its warnings, gives an `input` the typed text of its `value` attribute

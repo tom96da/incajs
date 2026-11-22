@@ -12,7 +12,8 @@ use inca_node::{AttributeValue, NodeId, valid_attribute_name};
 use inca_style::style_warning;
 
 use super::convert::{JsNodeId, existing_node, or_null, throw_tree_error};
-use super::host::{DocumentState, Host};
+use super::host::Host;
+use inca_document::DocumentState;
 use inca_style::{remove_style as remove_style_prop, set_style as set_style_prop};
 
 pub(super) fn set_attribute<'js>(

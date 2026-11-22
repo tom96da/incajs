@@ -1,0 +1,46 @@
+#:schema https://json.schemastore.org/cargo.json
+
+# Copyright (c) 2026 tom96da
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "inca-window"
+description = "The behaviour of an inca window: the input it receives turned into events and default actions, and the state that lives with a gpui window."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+publish = false
+
+[lib]
+name = "inca_window"
+
+[features]
+# Exposes the test helpers a dependent crate's tests read, and turns on gpui's test platform.
+test-support = ["gpui/test-support", "inca-document/test-support", "inca-gpui/test-support"]
+
+[dependencies]
+async-channel.workspace = true
+gpui.workspace = true
+inca-document = { path = "../inca-document" }
+inca-gpui = { path = "../inca-gpui" }
+inca-node = { path = "../inca-node" }
+inca-style = { path = "../inca-style" }
+
+[dev-dependencies]
+rstest.workspace = true
+serde_json.workspace = true
+inca-test-macros = { path = "../inca-test-macros" }
+env_logger.workspace = true
+# Enables this crate's own `test-support` feature for its tests and clippy.
+inca-window = { path = ".", features = ["test-support"] }
+# test-support gates gpui's TestPlatform/TestAppContext/#[gpui::test].
+gpui = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true

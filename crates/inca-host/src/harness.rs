@@ -12,10 +12,10 @@ use gpui::{
     KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, PlatformInput, TestAppContext,
     VisualTestContext, WindowHandle,
 };
-use inca_bridge::Host;
 pub use inca_gpui::Scrollbars;
 use inca_jsenv::stderr_reporter;
 use inca_node::NodeId;
+use inca_window::Cells;
 
 use crate::app::{HostedApp, start};
 use crate::snapshot::{Node, snapshot};
@@ -28,7 +28,7 @@ use crate::snapshot::{Node, snapshot};
 pub struct Harness {
     pub(crate) cx: VisualTestContext,
     pub(crate) window: WindowHandle<HostedApp>,
-    host: Rc<Host>,
+    cells: Rc<Cells>,
     // Each selector string is leaked once per node id, because
     // `debug_bounds` takes `&'static str`.
     selectors: HashMap<NodeId, &'static str>,
@@ -49,13 +49,13 @@ impl Harness {
         let window = cx
             .update(|cx| start(cx, entry_path, source, stderr_reporter()))
             .unwrap_or_else(|failure| panic!("the bundle failed to start: {failure:?}"));
-        let host = cx
-            .update(|cx| window.read_with(cx, |app, _| Rc::clone(&app.session.host)))
+        let cells = cx
+            .update(|cx| window.read_with(cx, |app, _| Rc::clone(&app.session.cells)))
             .expect("the window just opened");
         let mut harness = Self {
             cx: VisualTestContext::from_window(window.into(), cx),
             window,
-            host,
+            cells,
             selectors: HashMap::new(),
         };
         harness.settle();
@@ -68,11 +68,14 @@ impl Harness {
     ///
     /// Panics when the app has no root node.
     pub fn snapshot(&mut self) -> Node {
-        let host = Rc::clone(&self.host);
-        let host = host.document.borrow();
-        snapshot(&host.tree, &host.style, host.root(), &mut |id| {
-            self.bounds_of(id)
-        })
+        let cells = Rc::clone(&self.cells);
+        let document = cells.document.borrow();
+        snapshot(
+            &document.tree,
+            &document.style,
+            document.root(),
+            &mut |id| self.bounds_of(id),
+        )
         .expect("the root node exists")
     }
 

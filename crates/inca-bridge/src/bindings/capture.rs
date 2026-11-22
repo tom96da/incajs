@@ -6,12 +6,12 @@ use std::rc::Rc;
 use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, Exception, Result as JsResult};
 
-use inca_document::View;
 use inca_node::NodeId;
 
 use super::Natives;
 use super::convert::JsNodeId;
-use super::host::{DocumentState, Host};
+use super::host::Host;
+use inca_document::DocumentState;
 
 /// The id of the one pointer the host has: the mouse.
 const MOUSE_POINTER: i32 = 1;
@@ -117,8 +117,6 @@ mod tests {
     use std::rc::Rc;
 
     use rstest::rstest;
-
-    use inca_document::View;
 
     use super::Host;
     use crate::test_support::{engine_with_bindings, error_name};

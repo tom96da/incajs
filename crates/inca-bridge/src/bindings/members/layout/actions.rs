@@ -83,13 +83,11 @@ mod tests {
 
     use std::rc::Rc;
 
-    use gpui::{AppContext as _, TestAppContext};
     use inca_jsenv::Engine;
-    use inca_test_macros::gpui_cases;
     use rstest::rstest;
 
     use crate::bindings::host::Host;
-    use crate::test_support::{engine_for, engine_with_bindings, mount_active};
+    use crate::test_support::engine_with_bindings;
 
     /// An engine with the global `el`, a `div` the tree has and that has no parent.
     fn with_loose_node() -> (Engine, Rc<Host>) {
@@ -164,71 +162,5 @@ mod tests {
             .unwrap();
 
         assert_eq!(engine.eval::<u32>("clicks").unwrap(), 1);
-    }
-
-    /// Draws the window once more, the frame that applies a focus request.
-    fn draw(cx: &mut TestAppContext, window: gpui::WindowHandle<crate::test_support::TestRoot>) {
-        cx.update_window(window.into(), |_, window, cx| {
-            window.refresh();
-            window.draw(cx).clear(cx);
-        })
-        .unwrap();
-    }
-
-    /// Mounts a scroll container 100 high with ten focusable children 50 high under the root and
-    /// runs `call`, whose `el` is the seventh child, then draws the frame that applies it. Returns
-    /// the vertical scroll offset of the container and whether `el` is focused.
-    fn scroll_after(cx: &mut TestAppContext, call: &str) -> (f32, bool) {
-        let host = Rc::new(Host::default());
-        let engine = engine_for(&host);
-        let container: u32 = engine
-            .eval(
-                r"
-                const n = __inca_native__;
-                const box = n.createNode('div');
-                n.setStyle(box, 'height', 100);
-                n.setStyle(box, 'overflow_y', 'scroll');
-                n.appendChild(n.rootNodeId(), box);
-                globalThis.ids = [];
-                for (let i = 0; i < 10; i++) {
-                    const item = n.createNode('div');
-                    n.setStyle(item, 'height', 50);
-                    n.setAttribute(item, 'tabindex', '0');
-                    n.appendChild(box, item);
-                    ids.push(item);
-                }
-                globalThis.el = n.nodeHandle(ids[6])[0];
-                box;
-                ",
-            )
-            .unwrap();
-        let root = host.document.borrow().root();
-        let window = mount_active(cx, &host, &engine, root);
-
-        engine.eval::<()>(call).unwrap();
-        draw(cx, window);
-
-        let offset = host.window.borrow().scroll_handle(container).offset();
-        let focused = engine
-            .eval::<bool>("__inca_native__.focusedNode() === ids[6]")
-            .unwrap();
-        (f32::from(offset.y), focused)
-    }
-
-    // The child spans 300 to 350 in a container 100 high, so its center is revealed at 275.
-    #[gpui_cases]
-    #[gpui::test]
-    #[case::no_argument("el.focus()")]
-    #[case::a_primitive("el.focus(true)")]
-    fn focus_scrolls_the_node_into_view(cx: &mut TestAppContext, call: &str) {
-        assert_eq!(scroll_after(cx, call), (-275.0, true));
-    }
-
-    #[gpui::test]
-    fn focus_that_prevents_scroll_keeps_the_offset(cx: &mut TestAppContext) {
-        assert_eq!(
-            scroll_after(cx, "el.focus({ preventScroll: true })"),
-            (0.0, true)
-        );
     }
 }

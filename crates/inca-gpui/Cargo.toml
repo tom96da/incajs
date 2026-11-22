@@ -43,12 +43,12 @@ env_logger.workspace = true
 # "test-support"))` gate.
 gpui = { workspace = true, features = ["test-support"] }
 
-[target.'cfg(target_os = "macos")'.dependencies]
+[target.'cfg(target_os = "macos")'.dev-dependencies]
 # font-kit is required on macOS (gpui_macos) for any text to render at all.
 # Without it, gpui_macos silently draws every other primitive but skips text.
 gpui_platform = { workspace = true, features = ["font-kit"] }
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dev-dependencies]
 gpui_platform = { workspace = true, features = ["wayland", "x11"] }
 
 

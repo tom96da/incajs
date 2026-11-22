@@ -6,10 +6,10 @@
 use std::rc::Rc;
 
 use gpui::{ClipboardItem, InputHandler};
-use inca_bridge::EventDispatcher;
 use inca_gpui::TextInputHandler;
 use inca_node::NodeId;
 use inca_style::{ElementTag, build_spec};
+use inca_window::EventDispatcher;
 
 use super::Harness;
 
@@ -83,11 +83,11 @@ impl Harness {
 
     /// The focused node and whether it accepts text, when it is an `input`.
     pub(super) fn focused_input(&mut self) -> Option<(NodeId, bool)> {
-        let host = Rc::clone(&self.host);
+        let cells = Rc::clone(&self.cells);
         self.cx.update(|window, cx| {
-            let host = host.document.borrow();
-            let node = host.focus.focused_node(window, cx)?;
-            match build_spec(&host.tree, &host.style, node)?.tag {
+            let document = cells.document.borrow();
+            let node = cells.focused_node(window, cx)?;
+            match build_spec(&document.tree, &document.style, node)?.tag {
                 ElementTag::Input { editable, .. } => Some((node, editable)),
                 _ => None,
             }

@@ -5,7 +5,7 @@
 
 use gpui::{Size, Window, px};
 
-use inca_bridge::DocumentState;
+use inca_document::DocumentState;
 use inca_node::NodeId;
 use inca_style::declared_window_size;
 
@@ -92,7 +92,6 @@ mod tests {
     use gpui::{
         Bounds, TestAppContext, WindowBounds, WindowHandle, WindowOptions, prelude::*, size,
     };
-    use inca_bridge::Host;
     use inca_jsenv::stderr_reporter;
     use inca_node::AttributeValue;
     use inca_style::set_style;
@@ -431,8 +430,8 @@ mod tests {
 
     #[test]
     fn content_window_size_reads_the_mounted_root_childs_style() {
-        let mut state = Host::default();
-        let host = state.document.get_mut();
+        let mut state = DocumentState::default();
+        let host = &mut state;
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, content, "width", 300.0).unwrap();
@@ -444,8 +443,8 @@ mod tests {
 
     #[test]
     fn content_window_size_reads_a_px_string() {
-        let mut state = Host::default();
-        let host = state.document.get_mut();
+        let mut state = DocumentState::default();
+        let host = &mut state;
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, content, "width", "800px").unwrap();
@@ -460,8 +459,8 @@ mod tests {
     #[case::negative_px(AttributeValue::String("-5px".into()))]
     #[case::too_large_px(AttributeValue::String("1e999px".into()))]
     fn content_window_size_drops_a_negative_or_too_large_dimension(#[case] value: AttributeValue) {
-        let mut state = Host::default();
-        let host = state.document.get_mut();
+        let mut state = DocumentState::default();
+        let host = &mut state;
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
         set_style(&mut host.tree, content, "width", value).unwrap();
@@ -472,8 +471,8 @@ mod tests {
 
     #[test]
     fn content_window_size_is_none_when_unset() {
-        let mut state = Host::default();
-        let host = state.document.get_mut();
+        let mut state = DocumentState::default();
+        let host = &mut state;
         let root = host.root();
         let content = host.tree.create_node("div").unwrap();
         host.tree.append_child(root, content).unwrap();
@@ -483,8 +482,7 @@ mod tests {
 
     #[test]
     fn content_window_size_is_none_when_nothing_mounted() {
-        let host = Host::default();
-        let host = host.document.borrow();
+        let host = DocumentState::default();
 
         assert_eq!(content_window_size(&host, host.root()), (None, None));
     }

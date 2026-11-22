@@ -31,7 +31,7 @@ mod selector;
 mod token_list;
 mod tree;
 
-pub use host::{DocumentState, Host, JsState, WindowState};
+pub use host::{Host, JsState};
 
 use std::rc::Rc;
 

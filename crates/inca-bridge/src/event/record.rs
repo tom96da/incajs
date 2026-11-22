@@ -144,7 +144,7 @@ mod tests {
     use crate::test_support::engine_with_bindings;
     use crate::tests::{
         dispatcher_with_engine, eval_json, fire_and_read, key_payload, listen, mouse_at,
-        pointer_click, read_out, tree_of_three, wheel_at,
+        pointer_click, tree_of_three, wheel_at,
     };
     use gpui::TestAppContext;
     use inca_document::{EventPayload, MousePayload};
@@ -649,30 +649,6 @@ mod tests {
         assert_eq!(out, serde_json::json!([want]));
     }
 
-    /// One body: the presses set the held-button tracker that the move reads.
-    #[gpui_cases]
-    #[gpui::test]
-    #[case::right(&[2], 3)]
-    #[case::middle_before_right(&[2, 1], 2)]
-    fn a_move_names_its_lowest_held_button_in_which(
-        cx: &mut TestAppContext,
-        pressed: &[u8],
-        want: u32,
-    ) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
-        listen(&dispatcher, node, "mousemove", "(e) => out.push(e.which)");
-        let cx = cx.add_empty_window();
-        cx.update(|window, cx| {
-            for &button in pressed {
-                dispatcher.update_held_buttons("mousedown", button);
-            }
-            dispatcher.fire(node, "mousemove", &mouse_at(1.0, 1.0), window, cx);
-        });
-
-        assert_eq!(read_out(&dispatcher), serde_json::json!([want]));
-    }
-
     #[gpui_cases]
     #[gpui::test]
     #[case::keyboard("keydown", key_payload(inca_document::Modifiers::none()))]
@@ -689,37 +665,6 @@ mod tests {
         let out = fire_and_read(cx, &dispatcher, node, event, &payload);
 
         assert_eq!(out, serde_json::json!([0]));
-    }
-
-    /// One body: the presses set the held-button tracker that the next press and the wheel read.
-    #[gpui_cases]
-    #[gpui::test]
-    #[case::mousedown("mousedown", &[1], mouse_button(2), 3)]
-    #[case::wheel("wheel", &[2], wheel_at(1.0, 1.0), 0)]
-    fn which_of_a_press_or_a_wheel_skips_the_held_buttons(
-        cx: &mut TestAppContext,
-        event: &str,
-        pressed: &[u8],
-        payload: EventPayload,
-        want: u32,
-    ) {
-        let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
-        listen(&dispatcher, node, event, "(e) => out.push(e.which)");
-        let cx = cx.add_empty_window();
-        cx.update(|window, cx| {
-            for &button in pressed {
-                dispatcher.update_held_buttons("mousedown", button);
-            }
-            dispatcher.fire(node, event, &payload, window, cx);
-        });
-
-        let out = read_out(&dispatcher);
-
-        assert_eq!(
-            out.as_array().unwrap().last().unwrap(),
-            &serde_json::json!(want)
-        );
     }
 
     #[rstest]

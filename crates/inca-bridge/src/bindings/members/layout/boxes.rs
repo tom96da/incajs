@@ -142,7 +142,7 @@ mod tests {
     use rstest::rstest;
     use serde_json::json;
 
-    use super::super::fixture::{read, record, with_box};
+    use super::super::fixture::{read, record, with_box, with_box_view};
     use crate::test_support::engine_with_bindings;
 
     #[rstest]
@@ -166,7 +166,8 @@ mod tests {
 
     #[test]
     fn an_offset_starts_at_the_padding_edge_of_a_parent_with_a_box() {
-        let (engine, host, _id) = with_box([100.0, 50.0, 200.0, 200.0, 3.0, 0.0, 0.0, 0.0, 0.0]);
+        let (engine, _host, view, _id) =
+            with_box_view([100.0, 50.0, 200.0, 200.0, 3.0, 0.0, 0.0, 0.0, 0.0]);
         let child: u32 = engine
             .eval(
                 r"
@@ -178,7 +179,7 @@ mod tests {
             )
             .unwrap();
         record(
-            &host,
+            &view,
             child,
             [110.0, 60.0, 20.0, 20.0, 0.0, 4.0, 5.0, 0.0, 0.0],
         );

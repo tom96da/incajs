@@ -3,7 +3,7 @@
 
 use std::rc::Rc;
 
-use inca_document::{EventPayload, deliver, path_from};
+use inca_document::{EventPayload, Outcome, deliver, path_from};
 use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 use rquickjs::{Ctx, Result as JsResult};
@@ -11,7 +11,8 @@ use rquickjs::{Ctx, Result as JsResult};
 use super::construct::create;
 use super::{Flags, IncaEvent};
 use crate::EventTargetId;
-use crate::bindings::{DocumentState, Host};
+use crate::bindings::Host;
+use inca_document::DocumentState;
 use listeners::JsInvoke;
 
 mod abort;
@@ -25,15 +26,6 @@ pub(crate) use click::click;
 pub(crate) use inca_document::Walk;
 pub(crate) use script::{dispatch_event, lose_focus};
 pub(super) use targets::targets_of;
-
-/// What a walk asked of its caller.
-#[derive(Default)]
-pub(crate) struct Outcome {
-    /// A listener called `preventDefault()` on a cancelable event.
-    pub(crate) canceled: bool,
-    /// The walk entered the engine, so jobs may be queued.
-    pub(crate) entered: bool,
-}
 
 /// Whether a listener of `name` exists that an event with `flags` fired at
 /// `target` reaches. Nodes in `cut` stay silent.
