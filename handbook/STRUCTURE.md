@@ -103,9 +103,9 @@ build does not use them: it resolves `gpui` from the git tag in the root
 | `third_party/zed` | [zed-industries/zed](https://github.com/zed-industries/zed) | `v1.29.3` | Source of `gpui`. |
 | `third_party/rquickjs` | [DelSkayn/rquickjs](https://github.com/DelSkayn/rquickjs) | `v0.14.0` | Rust bindings to QuickJS. |
 | `third_party/rquickjs/sys/quickjs` | [quickjs-ng/quickjs](https://github.com/quickjs-ng/quickjs) | commit pinned by rquickjs `v0.14.0` | The QuickJS engine, rquickjs's nested submodule. |
-| `third_party/vue` | [vuejs/core](https://github.com/vuejs/core) | `v3.5.43` | Reference for `createRenderer` and `RendererOptions`, which `incajs/vue` implements. |
-| `third_party/vapor` | [vuejs/core](https://github.com/vuejs/core) | `v3.6.0-rc.14` | Reference for Vue Vapor Mode (`runtime-vapor`, `compiler-vapor`). |
-| `third_party/vite` | [vitejs/vite](https://github.com/vitejs/vite) | `v8.3.4` | Reference for Vite's Runtime API (`vite/module-runner`). |
+| `third_party/vue` | [vuejs/core](https://github.com/vuejs/core) | `v3.5.46` | Reference for `createRenderer` and `RendererOptions`, which `incajs/vue` implements. |
+| `third_party/vapor` | [vuejs/core](https://github.com/vuejs/core) | `v3.6.0-rc.16` | Reference for Vue Vapor Mode (`runtime-vapor`, `compiler-vapor`). |
+| `third_party/vite` | [vitejs/vite](https://github.com/vitejs/vite) | `v8.3.8` | Reference for Vite's Runtime API (`vite/module-runner`). |
 
 The five top-level submodules are registered shallow
 (`submodule.<name>.shallow = true` in `.gitmodules`), since the full history
