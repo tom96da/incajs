@@ -99,6 +99,13 @@ impl FocusModel {
         self.held_node(self.observed)
     }
 
+    /// The node a press focuses: the first node of `path`, the pressed node and then its
+    /// ancestors, that takes focus as of the last frame.
+    #[must_use]
+    pub fn press_target(&self, path: &[NodeId]) -> Option<NodeId> {
+        path.iter().copied().find(|id| self.tracked.contains(id))
+    }
+
     /// Records the node the window focuses now. Call it before a read of [`Self::active_node`],
     /// so the read starts from the focus the window applied itself.
     pub fn observe_node(&mut self, window_focus: Option<NodeId>) {
@@ -235,6 +242,20 @@ mod tests {
         registry.observed = Some(id);
         registry.request_focus(plain, true);
         assert_eq!(registry.active_node(&tree, &StyleCache::new()), Some(id));
+    }
+
+    #[rstest::rstest]
+    #[case::the_pressed_node(&[1, 0], Some(1))]
+    #[case::an_ancestor(&[2, 1, 0], Some(1))]
+    #[case::none(&[2], None)]
+    fn the_press_target_is_the_first_ancestor_that_takes_focus(
+        #[case] path: &[NodeId],
+        #[case] target: Option<NodeId>,
+    ) {
+        let mut registry = FocusModel::default();
+        registry.tracked.extend([0, 1]);
+
+        assert_eq!(registry.press_target(path), target);
     }
 
     #[test]

@@ -240,13 +240,16 @@ impl EventDispatcher {
             let focusing = if prevented {
                 None
             } else {
-                path.iter()
-                    .copied()
-                    .find(|&id| handles.handle(id).is_some())
+                document.focus().press_target(&path)
             };
             let focused = document.focus().held_node(handles.focused_node(window, cx));
             let top = document.top();
             document.press_start(target, top, focusing.filter(|&node| Some(node) != focused));
+            // The handles index the nodes that take focus, so the press target has one.
+            debug_assert!(
+                focusing.is_none_or(|node| handles.handle(node).is_some()),
+                "the press target {focusing:?} has no handle"
+            );
             focusing.and_then(|node| handles.handle(node))
         };
         if prevented {
