@@ -306,13 +306,8 @@ impl DocumentState {
         self.focus.request_blur(node_id);
     }
 
-    /// Queues a re-check of the tab index of `node_id`.
-    pub fn mark_tab_dirty(&mut self, node_id: NodeId) {
-        self.focus.mark_tab_dirty(node_id);
-    }
-
     /// Queues a focus re-check of the node and its subtree.
-    pub fn mark_focus_dirty(&mut self, node_id: NodeId) {
+    pub(crate) fn mark_focus_dirty(&mut self, node_id: NodeId) {
         self.focus.mark_subtree_dirty(&self.tree, node_id);
     }
 
