@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The operations of the document on its listeners and its signals: adding and removing a
-//! registration, the life of a signal, and which signals the signal table holds strongly.
+//! registration, the life of a signal, which signals the signal table holds strongly, and the ids
+//! the events take.
 
 use inca_node::NodeId;
 
@@ -38,6 +39,12 @@ pub struct AnySignal {
 }
 
 impl DocumentState {
+    /// Hands out the next `eventId`, the one after the last. The first is 1.
+    pub fn next_event_id(&mut self) -> u64 {
+        self.last_event_id += 1;
+        self.last_event_id
+    }
+
     /// The listener registry, for reads.
     #[must_use]
     pub fn listeners(&self) -> &EventListeners {

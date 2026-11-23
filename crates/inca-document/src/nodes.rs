@@ -1,14 +1,125 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The tree changes that move, remove and free nodes, each with the steps that follow it, and
-//! the release of freed nodes.
+//! The tree changes that create, copy, move, remove and free nodes and that write their data and
+//! the hover and pressed paths, each with the steps that follow it, and the release of freed
+//! nodes.
 
 use inca_node::{InsertArg, Inserted, NodeId, Placement, Removal, TreeError};
 
 use crate::{DocumentState, Released, View};
 
 impl DocumentState {
+    /// Creates a node named `local_name`. See
+    /// [`VirtualTree::create_node`](inca_node::VirtualTree::create_node).
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::create_node`](inca_node::VirtualTree::create_node).
+    pub fn create_node(&mut self, local_name: impl Into<String>) -> Result<NodeId, TreeError> {
+        self.tree.create_node(local_name)
+    }
+
+    /// Creates the element `local_name` in `namespace` with `prefix`. See
+    /// [`VirtualTree::create_element_ns`](inca_node::VirtualTree::create_element_ns).
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::create_element_ns`](inca_node::VirtualTree::create_element_ns).
+    pub fn create_element_ns(
+        &mut self,
+        namespace: Option<&str>,
+        prefix: Option<&str>,
+        local_name: impl Into<String>,
+    ) -> Result<NodeId, TreeError> {
+        self.tree.create_element_ns(namespace, prefix, local_name)
+    }
+
+    /// Copies `node_id`, with its descendants when `deep`, and returns the copy. An HTML `input`
+    /// copy takes the typed text of its original.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::clone_subtree`](inca_node::VirtualTree::clone_subtree).
+    pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> Result<NodeId, TreeError> {
+        let made = self.tree.clone_subtree(node_id, deep)?;
+        for &(original, copy) in &made {
+            let is_input = self
+                .tree
+                .get(copy)
+                .is_some_and(|node| node.is_html("input"));
+            let typed = self.input(original).map(|input| input.value().to_owned());
+            if let (true, Some(typed)) = (is_input, typed) {
+                self.set_input_value(copy, &typed);
+            }
+        }
+        made.first()
+            .map(|&(_, copy)| copy)
+            .ok_or(TreeError::NodeNotFound(node_id))
+    }
+
+    /// Keeps `node_id` from the sweep while it has no parent. See
+    /// [`VirtualTree::hold`](inca_node::VirtualTree::hold).
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::hold`](inca_node::VirtualTree::hold).
+    pub fn hold(&mut self, node_id: NodeId) -> Result<(), TreeError> {
+        self.tree.hold(node_id)
+    }
+
+    /// Ends the hold of `node_id`. See [`VirtualTree::release`](inca_node::VirtualTree::release).
+    pub fn release(&mut self, node_id: NodeId) {
+        self.tree.release(node_id);
+    }
+
+    /// Replaces the data of the text node or comment `node_id`. See
+    /// [`VirtualTree::set_data`](inca_node::VirtualTree::set_data).
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::set_data`](inca_node::VirtualTree::set_data).
+    pub fn set_data(&mut self, node_id: NodeId, data: impl Into<String>) -> Result<(), TreeError> {
+        self.tree.set_data(node_id, data)
+    }
+
+    /// Replaces `count` units of the data of `node_id` from `offset` with `data`. See
+    /// [`VirtualTree::replace_data`](inca_node::VirtualTree::replace_data).
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::replace_data`](inca_node::VirtualTree::replace_data).
+    pub fn replace_data(
+        &mut self,
+        node_id: NodeId,
+        offset: u32,
+        count: u32,
+        data: &str,
+    ) -> Result<(), TreeError> {
+        self.tree.replace_data(node_id, offset, count, data)
+    }
+
+    /// Splits the text node `node_id` at `offset` and returns the new node with the rest. See
+    /// [`VirtualTree::split_text`](inca_node::VirtualTree::split_text).
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::split_text`](inca_node::VirtualTree::split_text).
+    pub fn split_text(&mut self, node_id: NodeId, offset: u32) -> Result<NodeId, TreeError> {
+        self.tree.split_text(node_id, offset)
+    }
+
+    /// Stores the hover path: the deepest hovered container and its ancestors. An empty path
+    /// clears it. Returns whether the set changed.
+    pub fn set_hover_path(&mut self, path: &[NodeId]) -> bool {
+        self.tree.set_hover_path(path)
+    }
+
+    /// Stores the pressed path, like [`Self::set_hover_path`].
+    pub fn set_active_path(&mut self, path: &[NodeId]) -> bool {
+        self.tree.set_active_path(path)
+    }
+
     /// Appends `node_id` to the children of `parent_id` and settles the nodes that move. Returns
     /// the position of the first inserted node.
     ///
@@ -118,6 +229,17 @@ impl DocumentState {
         }
         let callbacks = free_ids(self, view, &nodes);
         Some((nodes, self.released(callbacks, [])))
+    }
+
+    /// Drops the document state of freed nodes and returns the callback ids their listeners held.
+    pub(crate) fn forget(&mut self, ids: &[NodeId]) -> Vec<u32> {
+        for &id in ids {
+            self.warnings.forget(id);
+            self.inputs.remove(&id);
+            self.focus.forget(id);
+            self.reveals.forget(id);
+        }
+        self.listeners.release_nodes(ids)
     }
 }
 

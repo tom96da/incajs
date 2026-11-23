@@ -2,14 +2,18 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 pub mod attributes;
+pub mod capture;
 pub mod create;
 pub mod document;
 pub mod event;
 pub mod focus;
+pub mod focusing;
 pub mod geometry;
+pub mod inline_style;
+pub mod inputs;
 pub mod markup;
+pub mod nodes;
 pub mod registration;
-pub mod removal;
 pub mod reveal;
 pub mod semantics;
 pub mod text;

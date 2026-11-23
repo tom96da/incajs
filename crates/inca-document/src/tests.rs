@@ -7,8 +7,8 @@
 
 use crate::geometry::Align;
 use crate::{
-    FocusModel, FocusPlan, FocusStep, FocusTransition, InputState, NodeBox, Reveal, RevealQueue,
-    ScrollRange, View, new_document_tree,
+    DocumentState, FocusModel, FocusPlan, FocusStep, FocusTransition, InputState, NodeBox, Reveal,
+    RevealQueue, ScrollRange, View, new_document_tree,
 };
 use inca_node::tree::{AttributeValue, NodeId, VirtualTree};
 use inca_style::StyleCache;
@@ -155,4 +155,16 @@ impl View for RecordingView {
     fn forget(&mut self, ids: &[NodeId]) {
         self.forgotten.extend_from_slice(ids);
     }
+}
+
+/// A document with one node under its root, and a view holding the left button.
+pub(crate) fn mounted() -> (DocumentState, RecordingView, NodeId) {
+    let view = RecordingView {
+        held: 1,
+        ..RecordingView::default()
+    };
+    let mut document = DocumentState::default();
+    let node = document.create_node("div").unwrap();
+    document.append_child(&view, document.root(), node).unwrap();
+    (document, view, node)
 }
