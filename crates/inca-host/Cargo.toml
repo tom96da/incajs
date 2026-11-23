@@ -38,6 +38,7 @@ serde_path_to_error.workspace = true
 # Exposes `harness` and `snapshot` for tests, and turns on gpui's test platform.
 test-support = [
   "gpui/test-support",
+  "inca-bridge/test-support",
   "inca-gpui/test-support",
   "inca-window/test-support",
 ]

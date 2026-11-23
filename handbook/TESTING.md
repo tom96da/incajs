@@ -122,7 +122,7 @@ here, never in a crate or a package.
   it.
 - The `test-support` feature of `inca-host` gates its `Harness` and `snapshot` modules
   (`automation` gates `snapshot` too) and enables gpui's test platform and the `test-support`
-  features of `inca-gpui` and `inca-window`. The `test-support` feature of `inca-bridge`
+  features of `inca-bridge`, `inca-gpui` and `inca-window`. The `test-support` feature of `inca-bridge`
   exposes the engine helpers its tests share, and the one of `inca-window` enables gpui's test
   platform and exposes `inca_window::test_support` (`TestRoot`, the cells, `mount_root`, `Frame`)
   with the `test-support` features of `inca-document` and `inca-gpui`. The one of `inca-gpui` exposes
