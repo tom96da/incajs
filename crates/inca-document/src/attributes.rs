@@ -32,23 +32,6 @@ impl DocumentState {
         Ok(())
     }
 
-    /// Stores the attribute as [`Self::set_attribute`] does and skips its focus re-check, so a
-    /// test can start from a state that the follow-up would end, such as a focused button that
-    /// stays focused while disabled.
-    ///
-    /// # Errors
-    ///
-    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn set_attribute_skipping_follow_ups(
-        &mut self,
-        node_id: NodeId,
-        name: &str,
-        value: impl Into<AttributeValue>,
-    ) -> Result<(), TreeError> {
-        store_attribute(self, node_id, name, value.into()).map(drop)
-    }
-
     /// Removes the attribute `name` of `node_id`, folded as [`Self::set_attribute`] folds it, and
     /// queues the focus re-check the key needs.
     ///
