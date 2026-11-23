@@ -34,9 +34,9 @@ impl DocumentState {
         self.capture_request == Some(node) && self.tree.is_connected(node)
     }
 
-    /// The node the capture request names, for the window to apply. A request whose node is not
-    /// connected is dropped and returns `None`.
-    pub fn capture_request(&mut self) -> Option<NodeId> {
+    /// Drops the capture request when its node is not connected, and returns the request that is
+    /// left, for the window to apply.
+    pub fn drop_stale_capture_request(&mut self) -> Option<NodeId> {
         let tree = &self.tree;
         self.capture_request = self.capture_request.filter(|&node| tree.is_connected(node));
         self.capture_request
@@ -100,12 +100,12 @@ mod tests {
         document.remove_child(&view, root, node).unwrap();
         let removed = (
             document.has_capture_request(node),
-            document.capture_request(),
+            document.drop_stale_capture_request(),
         );
 
         document.append_child(&view, root, node).unwrap();
 
         assert_eq!(removed, (false, None));
-        assert_eq!(document.capture_request(), None);
+        assert_eq!(document.drop_stale_capture_request(), None);
     }
 }
