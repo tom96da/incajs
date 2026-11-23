@@ -27,10 +27,10 @@ impl EventDispatcher {
             let mut window_state = self.cells.window.borrow_mut();
             let pending = document
                 .capture_pending
-                .filter(|&node| document.tree.is_connected(node));
+                .filter(|&node| document.tree().is_connected(node));
             document.capture_pending = pending;
             let lost = window_state.capture_active.map(|node| {
-                if document.tree.is_connected(node) {
+                if document.tree().is_connected(node) {
                     EventTargetId::Node(node)
                 } else {
                     EventTargetId::Node(document.document())
@@ -295,8 +295,7 @@ mod tests {
         s.cells
             .document
             .borrow_mut()
-            .tree
-            .append_child(b, a)
+            .append_child(&*s.cells.window.borrow(), b, a)
             .unwrap();
         s.take();
         s.moved(b, (5.0, 5.0));
@@ -330,7 +329,10 @@ mod tests {
         let document = s.cells.document.borrow().document();
         s.watch(document);
         s.take();
-        s.cells.document.borrow_mut().tree.destroy_node(a);
+        s.cells
+            .document
+            .borrow_mut()
+            .destroy_node(&mut *s.cells.window.borrow_mut(), a);
         s.moved(b, (5.0, 5.0));
         let got = s.take();
         assert_eq!(

@@ -26,7 +26,7 @@ pub(crate) fn install_focus(n: &Natives<'_, '_>) -> JsResult<()> {
 fn focus_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, Flag) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), prevent_scroll| {
         let mut host = host.document.borrow_mut();
-        existing_node(&ctx, &host.tree, node_id)?;
+        existing_node(&ctx, host.tree(), node_id)?;
         host.request_focus(node_id, prevent_scroll.0.flatten() != Some(true));
         Ok(())
     }
@@ -39,7 +39,7 @@ fn blur_node(host: Rc<Host>) -> impl Fn(JsNodeId) {
 fn focused_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>) -> JsResult<Value<'js>> {
     move |ctx| {
         let host = host.document.borrow();
-        or_null(&ctx, host.focus().active_node(&host.tree, &host.style))
+        or_null(&ctx, host.focus().active_node(host.tree(), &host.style))
     }
 }
 
@@ -61,7 +61,7 @@ fn define_focus<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> Js
         |ctx, host, id, _, args| {
             let prevent = prevent_scroll(ctx, args)?;
             let mut host = host.document.borrow_mut();
-            if host.tree.is_connected(id) {
+            if host.tree().is_connected(id) {
                 host.request_focus(id, !prevent);
             }
             Ok(())
@@ -76,7 +76,7 @@ fn define_focus<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> Js
         &HTML_OR_SVG,
         |_, host, id, _, _| {
             let mut host = host.document.borrow_mut();
-            if host.tree.get(id).is_some() {
+            if host.tree().get(id).is_some() {
                 host.request_blur(id);
             }
             Ok(())
@@ -95,7 +95,7 @@ pub(super) fn install<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>)
         0,
         &HTML_ELEMENT,
         |ctx, host, id, _, _| {
-            if host.document.borrow().tree.get(id).is_some() {
+            if host.document.borrow().tree().get(id).is_some() {
                 crate::event::click(ctx, host, id);
             }
             Ok(())
@@ -159,7 +159,7 @@ mod tests {
             .eval::<()>("__inca_native__.setAttribute(n, 'tabIndex', 1)")
             .unwrap();
         let host = host.document.borrow();
-        let attrs = host.tree.get(node).unwrap().attributes();
+        let attrs = host.tree().get(node).unwrap().attributes();
         assert_eq!(attrs.get("tabindex"), Some(&AttributeValue::Number(1.0)));
         assert!(!attrs.contains_key("tabIndex"));
     }

@@ -367,7 +367,7 @@ impl Render for BarRoot {
         self.dispatcher.begin_frame(window, cx);
         let host = self.host.document.borrow();
         render_tree_with_events(
-            &host.tree,
+            host.tree(),
             &host.style,
             self.node,
             &self.dispatcher,

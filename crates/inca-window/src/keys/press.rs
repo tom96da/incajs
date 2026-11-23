@@ -440,8 +440,12 @@ mod tests {
             self.cells
                 .document
                 .borrow_mut()
-                .tree
-                .insert_before(self.parent, self.plain, Some(self.second))
+                .insert_before(
+                    &*self.cells.window.borrow(),
+                    self.parent,
+                    self.plain,
+                    Some(self.second),
+                )
                 .unwrap();
         }
     }

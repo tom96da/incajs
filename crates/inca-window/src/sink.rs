@@ -60,7 +60,7 @@ impl EventSink for EventDispatcher {
         let document = self.cells.document.borrow();
         let window = self.cells.window.borrow();
         window.focus.handle(node_id).or_else(|| {
-            (Some(node_id) == document.tree.document_element())
+            (Some(node_id) == document.tree().document_element())
                 .then(|| window.focus.parked_handle())
                 .flatten()
         })
@@ -72,7 +72,7 @@ impl EventSink for EventDispatcher {
 
     fn wheel_axes(&self, node_id: NodeId) -> Option<inca_style::WheelAxes> {
         let document = self.cells.document.borrow();
-        inca_style::wheel_axes(&document.tree, &document.style, node_id)
+        inca_style::wheel_axes(document.tree(), &document.style, node_id)
     }
 
     /// The first call of an update computes the delta and defers clearing it,
@@ -323,7 +323,9 @@ mod tests {
         let root = {
             let state = &mut *cells.document.borrow_mut();
             let (document, root) = (state.document(), state.root());
-            state.tree.remove_child(document, root).unwrap();
+            state
+                .remove_child(&*cells.window.borrow(), document, root)
+                .unwrap();
             root
         };
 
@@ -335,7 +337,10 @@ mod tests {
         let (dispatcher, cells, _fake) = fake_dispatcher();
         let [_, parent, child] = tree_of_three(&cells);
         assert_eq!(dispatcher.resolve(Some(child), parent), child);
-        cells.document.borrow_mut().tree.destroy_node(child);
+        cells
+            .document
+            .borrow_mut()
+            .destroy_node(&mut *cells.window.borrow_mut(), child);
         assert_eq!(dispatcher.resolve(Some(child), parent), parent);
         assert_eq!(dispatcher.resolve(None, parent), parent);
     }

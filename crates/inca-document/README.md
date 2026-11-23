@@ -26,19 +26,20 @@ from a focus and from `scrollIntoView`.
 ## Document
 
 `new_document_tree` builds the tree of a document. `validate_and_extract` and
-`is_element_local_name` check element names. `store_attribute` writes an attribute and applies a
-`style` attribute as style props, and warnings go to a `StyleWarnings` sink. `insert_parsed`,
-`replace_children` and `replace_with` are the markup setters. `parse_inner`, `parse_outer` and
-`parse_adjacent` parse the markup of `innerHTML`, `outerHTML` and `insertAdjacentHTML` and apply
-each `style` attribute as style props. `settle` runs the focus and reveal steps of a tree call that
-moved or removed nodes and resets the scroll offsets of their subtrees in a `View`. `free_ids` drops
-the state of freed nodes in a `View` and in the document and returns the callback ids their
-listeners held. The `text` module holds the text-control model.
+`is_element_local_name` check element names. `insert_parsed`, `replace_children` and `replace_with`
+are the markup setters. `parse_inner`, `parse_outer` and `parse_adjacent` parse the markup of
+`innerHTML`, `outerHTML` and `insertAdjacentHTML` and apply each `style` attribute as style props.
+The `text` module holds the text-control model.
 `DocumentState` holds the tree with its cascade, the listeners, the signals, the focus and the
-reveals, and changes the focus only through its own methods. The tree holds the drawn focus, which
-the document publishes at each frame and at each change of the window's activation. A script query
-matches `:focus` against the focus once the queued requests apply. `StyleWarnings` collects the
-warnings of a style write.
+reveals. The tree is read through `DocumentState::tree` and changed only through the operations of
+the document, each of which runs the steps its change needs: a node that moves or leaves drops the
+focus it held with the reveals a focus asked for, moves the Tab start, queues a focus re-check and
+resets the scroll offsets of its subtree in a `View`; a freed node drops its state in the `View` and
+in the document; an attribute or style write queues the focus re-check it needs and reports its
+warnings to a `StyleWarnings` sink; a copy of an `input` takes its typed text. The document changes
+the focus only through its own methods. The tree holds the drawn focus, which the document publishes
+at each frame and at each change of the window's activation. A script query matches `:focus` against
+the focus once the queued requests apply.
 
 ## Events
 

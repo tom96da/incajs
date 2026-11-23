@@ -56,16 +56,10 @@ fn a_freed_input_drops_its_state() {
 #[test]
 fn click_on_a_disabled_input_runs_nothing() {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let input = cells
-        .document
-        .borrow_mut()
-        .tree
-        .create_node("input")
-        .unwrap();
+    let input = cells.document.borrow_mut().create_node("input").unwrap();
     cells
         .document
         .borrow_mut()
-        .tree
         .set_attribute(input, "disabled", true)
         .unwrap();
     listen(&dispatcher, input, "click", "() => out.push('click')");

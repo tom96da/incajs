@@ -1,16 +1,129 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The steps that follow a tree call that moved or removed nodes, and the release of freed nodes.
+//! The tree changes that move, remove and free nodes, each with the steps that follow it, and
+//! the release of freed nodes.
 
-use inca_node::{NodeId, Removal};
+use inca_node::{InsertArg, Inserted, NodeId, Placement, Removal, TreeError};
 
 use crate::{DocumentState, View};
+
+impl DocumentState {
+    /// Appends `node_id` to the children of `parent_id` and settles the nodes that move. Returns
+    /// the position of the first inserted node.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::insert_before`](inca_node::VirtualTree::insert_before).
+    pub fn append_child(
+        &mut self,
+        view: &dyn View,
+        parent_id: NodeId,
+        node_id: NodeId,
+    ) -> Result<usize, TreeError> {
+        self.insert_before(view, parent_id, node_id, None)
+    }
+
+    /// Inserts `node_id` under `parent_id` before `reference_id`, or last without one, and settles
+    /// the nodes that move. Returns the position of the first inserted node.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::insert_before`](inca_node::VirtualTree::insert_before).
+    pub fn insert_before(
+        &mut self,
+        view: &dyn View,
+        parent_id: NodeId,
+        node_id: NodeId,
+        reference_id: Option<NodeId>,
+    ) -> Result<usize, TreeError> {
+        let (position, left) = self.tree.insert_before(parent_id, node_id, reference_id)?;
+        settle(self, view, &left);
+        Ok(position)
+    }
+
+    /// Takes `child_id` out of `parent_id` and settles it.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::remove_child`](inca_node::VirtualTree::remove_child).
+    pub fn remove_child(
+        &mut self,
+        view: &dyn View,
+        parent_id: NodeId,
+        child_id: NodeId,
+    ) -> Result<(), TreeError> {
+        let left = self.tree.remove_child(parent_id, child_id)?;
+        settle(self, view, &left);
+        Ok(())
+    }
+
+    /// Puts `node_id` in the place of `child_id` under `parent_id` and settles the nodes that
+    /// leave their place.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::replace_child`](inca_node::VirtualTree::replace_child).
+    pub fn replace_child(
+        &mut self,
+        view: &dyn View,
+        parent_id: NodeId,
+        node_id: NodeId,
+        child_id: NodeId,
+    ) -> Result<(), TreeError> {
+        let (_, left) = self.tree.replace_child(parent_id, node_id, child_id)?;
+        settle(self, view, &left);
+        Ok(())
+    }
+
+    /// Checks and applies the insertion of `nodes` at `placement` of `node_id`, and settles the
+    /// nodes that leave their place. Returns `None` without a change for `Before`, `After` and
+    /// `ReplaceWith` on a node without a parent.
+    ///
+    /// # Errors
+    ///
+    /// The error of the plan or of the insertion. A failed plan changes nothing.
+    pub fn insert_nodes(
+        &mut self,
+        view: &dyn View,
+        node_id: NodeId,
+        placement: Placement,
+        nodes: &[InsertArg],
+    ) -> Result<Option<Inserted>, TreeError> {
+        let Some(insertion) = self.tree.plan_insertion(node_id, placement, nodes)? else {
+            return Ok(None);
+        };
+        let inserted = self.tree.apply_insertion(insertion)?;
+        settle(self, view, &inserted.removals);
+        Ok(Some(inserted))
+    }
+
+    /// Frees `node_id` with its subtree, moves the Tab start off it and drops the state of the
+    /// freed nodes in `view` and in the document. Returns the callback ids their listeners held.
+    pub fn destroy_node(&mut self, view: &mut dyn View, node_id: NodeId) -> Vec<u32> {
+        let before = self.tree.preceding(node_id);
+        self.move_tab_start(node_id, before);
+        let freed = self.tree.destroy_node(node_id);
+        free_ids(self, view, &freed)
+    }
+
+    /// Frees every orphan with its subtree and drops the state of the freed nodes in `view` and in
+    /// the document. Returns the freed ids and the callback ids their listeners held, or `None`
+    /// when nothing was freed.
+    pub fn sweep(&mut self, view: &mut dyn View) -> Option<(Vec<NodeId>, Vec<u32>)> {
+        let nodes = self.tree.sweep();
+        if nodes.is_empty() {
+            return None;
+        }
+        let callbacks = free_ids(self, view, &nodes);
+        Some((nodes, callbacks))
+    }
+}
 
 /// Runs the steps that follow a tree change that took `removals` out of the tree. A node that had
 /// a parent drops the focus it held with the reveals a focus asked for, and moves the Tab start.
 /// Every node queues a focus re-check and resets the scroll offsets of its subtree in `view`.
-pub fn settle(state: &mut DocumentState, view: &dyn View, removals: &[Removal]) {
+pub(crate) fn settle(state: &mut DocumentState, view: &dyn View, removals: &[Removal]) {
     for removal in removals {
         if removal.attached {
             state.drop_focus_in(removal.id);
@@ -23,7 +136,7 @@ pub fn settle(state: &mut DocumentState, view: &dyn View, removals: &[Removal]) 
 
 /// Drops the per-node state of the freed nodes `ids` in `view` and in `state`. Returns the callback
 /// ids their listeners held.
-pub fn free_ids(state: &mut DocumentState, view: &mut dyn View, ids: &[NodeId]) -> Vec<u32> {
+pub(crate) fn free_ids(state: &mut DocumentState, view: &mut dyn View, ids: &[NodeId]) -> Vec<u32> {
     view.forget(ids);
     state.forget(ids)
 }
@@ -43,10 +156,7 @@ mod tests {
         removals: &[Removal],
         prepare: impl FnOnce(&mut DocumentState),
     ) -> DocumentState {
-        let mut state = DocumentState {
-            tree,
-            ..DocumentState::default()
-        };
+        let mut state = DocumentState::from_tree(tree);
         prepare(&mut state);
         settle(&mut state, &RecordingView::default(), removals);
         state
@@ -132,10 +242,7 @@ mod tests {
     fn settle_applies_the_removals_then_resets_the_scroll_of_each_node() {
         let (tree, ids) = rooted_tree(2);
         let removals = tree.removals(&[ids[0], ids[1]]);
-        let mut state = DocumentState {
-            tree,
-            ..DocumentState::default()
-        };
+        let mut state = DocumentState::from_tree(tree);
         let view = RecordingView::default();
 
         settle(&mut state, &view, &removals);

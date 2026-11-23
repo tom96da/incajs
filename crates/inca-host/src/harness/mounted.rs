@@ -68,7 +68,7 @@ impl Harness {
         let cells = Rc::clone(&self.cells);
         let document = cells.document.borrow();
         snapshot(
-            &document.tree,
+            document.tree(),
             &document.style,
             document.root(),
             &mut |id| self.bounds_of(id),

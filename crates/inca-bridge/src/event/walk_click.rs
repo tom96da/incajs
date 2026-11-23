@@ -18,7 +18,7 @@ use inca_document::EventTargetId;
 pub(crate) fn click(ctx: &Ctx<'_>, host: &Rc<Host>, target: NodeId) {
     {
         let document = host.document.borrow();
-        let Some(node) = document.tree.get(target) else {
+        let Some(node) = document.tree().get(target) else {
             return;
         };
         if inca_node::is_disabled_control(node) || !host.js.borrow_mut().clicking.insert(target) {
@@ -91,16 +91,10 @@ mod tests {
     #[test]
     fn click_on_a_disabled_button_does_nothing_and_on_an_enabled_one_runs() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let button = host
-            .document
-            .borrow_mut()
-            .tree
-            .create_node("button")
-            .unwrap();
+        let button = host.document.borrow_mut().create_node("button").unwrap();
         listen(&dispatcher, button, "click", "() => out.push('click')");
         host.document
             .borrow_mut()
-            .tree
             .set_attribute(button, "disabled", true)
             .unwrap();
         let disabled = eval_json(
@@ -109,7 +103,6 @@ mod tests {
         );
         host.document
             .borrow_mut()
-            .tree
             .remove_attribute(button, "disabled")
             .unwrap();
         let enabled = eval_json(
@@ -125,7 +118,7 @@ mod tests {
     #[test]
     fn click_inside_the_nodes_own_click_does_nothing_and_a_later_click_runs() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -168,7 +161,7 @@ mod tests {
     #[test]
     fn click_on_an_unheard_node_takes_no_event_id() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>(&format!("__inca_native__.click({node});"))
@@ -199,7 +192,7 @@ mod tests {
     #[test]
     fn click_reports_a_throwing_listener_through_the_pending_failures() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,

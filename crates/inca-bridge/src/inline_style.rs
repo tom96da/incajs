@@ -18,7 +18,7 @@ use inca_jsenv::class::{
     define_this_accessor, define_this_getter, define_this_method, plain_class, receiver, require,
     text,
 };
-use inca_node::{NodeId, TreeError, VirtualNode};
+use inca_node::{NodeId, VirtualNode};
 use inca_style::{
     css_text, priority_refuses_value, property_names, style_item, style_length,
     style_property_value,
@@ -28,7 +28,6 @@ use crate::bindings::convert::{JsNodeId, saturated, unsigned};
 use crate::bindings::{Host, Natives};
 use crate::interfaces::define_unconstructable;
 use inca_jsenv::required_prototype;
-use inca_style::{remove_style_property, set_style_property, set_style_text};
 
 /// A `CSSStyleDeclaration` instance. It holds the node id and no JS value.
 // `IncaStyle` holds a node id and no JS value, so the derive is sound.
@@ -73,30 +72,9 @@ fn node_of<'js>(ctx: &Ctx<'js>, this: &Value<'js>) -> JsResult<NodeId> {
 fn read<T: Default>(host: &Host, node: NodeId, read: impl Fn(&VirtualNode) -> T) -> T {
     host.document
         .borrow()
-        .tree
+        .tree()
         .get(node)
         .map_or_else(T::default, read)
-}
-
-/// Prints the warning lines of a write that reached the node and queues the focus re-check the
-/// write needs. `property` is the property written, `None` for a write of the whole text. A write
-/// to a freed node is dropped.
-fn finish(
-    host: &Host,
-    node: NodeId,
-    property: Option<&str>,
-    result: Result<Vec<String>, TreeError>,
-) {
-    let Ok(lines) = result else { return };
-    let mut host = host.document.borrow_mut();
-    let host = &mut *host;
-    for line in &lines {
-        host.warn_style(node, line);
-    }
-    match property {
-        Some(name) => host.mark_property_dirty(node, name),
-        None => host.mark_focus_dirty(node),
-    }
 }
 
 /// The text of a written value: `null` is empty and a `Symbol` throws a `TypeError`.
@@ -122,8 +100,8 @@ fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> 
         move |ctx, this, value: Value<'js>| {
             let node = node_of(ctx, &this)?;
             let value = value_text(ctx, &value)?;
-            let result = set_style_text(&mut set.document.borrow_mut().tree, node, &value);
-            finish(&set, node, None, result);
+            // A freed node drops the write.
+            let _ = set.document.borrow_mut().set_style_text(node, &value);
             Ok(())
         },
     )?;
@@ -149,8 +127,11 @@ fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> 
         if priority_refuses_value(&priority) && !value.is_empty() {
             return Ok(());
         }
-        let result = set_style_property(&mut h.document.borrow_mut().tree, node, &name, &value);
-        finish(&h, node, Some(&name), result);
+        // A freed node drops the write.
+        let _ = h
+            .document
+            .borrow_mut()
+            .set_style_property(node, &name, &value);
         Ok(())
     })?;
     let h = host.clone();
@@ -158,12 +139,7 @@ fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> 
         let node = node_of(ctx, &this)?;
         require(ctx, "removeProperty", args, 1)?;
         let name = text(ctx, &args[0])?;
-        let former = remove_style_property(&mut h.document.borrow_mut().tree, node, &name);
-        if former.is_ok() {
-            let mut doc = h.document.borrow_mut();
-            let doc = &mut *doc;
-            doc.mark_property_dirty(node, &name);
-        }
+        let former = h.document.borrow_mut().remove_style_property(node, &name);
         Ok(former.unwrap_or_default())
     })?;
     define_this_method(ctx, proto, "getPropertyPriority", 1, |ctx, this, args| {
@@ -203,13 +179,11 @@ fn define_properties<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) 
             move |ctx, this, value: Value<'js>| {
                 let node = node_of(ctx, &this)?;
                 let value = value_text(ctx, &value)?;
-                let result = set_style_property(
-                    &mut set.document.borrow_mut().tree,
-                    node,
-                    &write_name,
-                    &value,
-                );
-                finish(&set, node, Some(&write_name), result);
+                // A freed node drops the write.
+                let _ = set
+                    .document
+                    .borrow_mut()
+                    .set_style_property(node, &write_name, &value);
                 Ok(())
             },
         )?;

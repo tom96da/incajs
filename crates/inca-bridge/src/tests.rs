@@ -58,7 +58,7 @@ impl EventDispatcher {
     /// Returns whether a listener prevented the default action. A `start` that left the tree
     /// fires nothing.
     pub(crate) fn fire(&self, start: NodeId, event: &str, payload: &EventPayload) -> bool {
-        if self.host.document.borrow().tree.get(start).is_none() {
+        if self.host.document.borrow().tree().get(start).is_none() {
             return false;
         }
         let outcome = self.script.walk(&Walk {
@@ -258,20 +258,21 @@ pub(crate) mod native {
 
     pub(crate) fn tree_of_three(host: &Rc<Host>) -> [NodeId; 3] {
         let mut h = host.document.borrow_mut();
-        let outer = h.tree.create_node("div").unwrap();
-        let parent = h.tree.create_node("div").unwrap();
-        let child = h.tree.create_node("div").unwrap();
-        h.tree.append_child(outer, parent).unwrap();
-        h.tree.append_child(parent, child).unwrap();
+        let outer = h.create_node("div").unwrap();
+        let parent = h.create_node("div").unwrap();
+        let child = h.create_node("div").unwrap();
+        let view = host.window.borrow();
+        h.append_child(&*view, outer, parent).unwrap();
+        h.append_child(&*view, parent, child).unwrap();
         [outer, parent, child]
     }
 
     /// A new node under the host root, so an event at it also reaches document and window.
     pub(crate) fn node_under_root(host: &Rc<Host>) -> NodeId {
         let mut h = host.document.borrow_mut();
-        let node = h.tree.create_node("div").unwrap();
+        let node = h.create_node("div").unwrap();
         let root = h.root();
-        h.tree.append_child(root, node).unwrap();
+        h.append_child(&*host.window.borrow(), root, node).unwrap();
         node
     }
 }

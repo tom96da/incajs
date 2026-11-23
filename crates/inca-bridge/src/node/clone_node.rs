@@ -6,7 +6,7 @@
 use std::rc::Rc;
 
 use rquickjs::convert::Coerced;
-use rquickjs::{Ctx, Exception, Result as JsResult};
+use rquickjs::{Ctx, Result as JsResult};
 
 use inca_node::NodeId;
 
@@ -20,27 +20,10 @@ pub(super) fn clone_node<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<bool>) -> JsResult<NodeId> {
     move |ctx, JsNodeId(node_id), Coerced(deep)| {
-        let mut host = host.document.borrow_mut();
-        let made = host
-            .tree
-            .clone_subtree(node_id, deep)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        for &(original, copy) in &made {
-            let Some(node) = host.tree.get(copy) else {
-                return Err(Exception::throw_type(&ctx, "the copy is missing"));
-            };
-            let typed = host
-                .inputs
-                .borrow()
-                .get(&original)
-                .map(|input| input.value().to_owned());
-            if let (true, Some(typed)) = (node.is_html("input"), typed) {
-                host.set_input_value(copy, &typed);
-            }
-        }
-        made.first()
-            .map(|&(_, copy)| copy)
-            .ok_or_else(|| Exception::throw_type(&ctx, "the copy is missing"))
+        host.document
+            .borrow_mut()
+            .clone_node(node_id, deep)
+            .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
 

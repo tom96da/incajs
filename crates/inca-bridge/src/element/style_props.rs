@@ -8,9 +8,6 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Result as JsResult, Value};
 
-use inca_style::style_warning;
-use inca_style::{remove_style as remove_style_prop, set_style as set_style_prop};
-
 use super::attributes::attribute_value_from_js;
 use crate::bindings::Host;
 use crate::bindings::convert::{JsNodeId, throw_tree_error};
@@ -22,14 +19,8 @@ pub(super) fn set_style<'js>(
         let value = attribute_value_from_js(&ctx, &value)?;
         let mut host = host.document.borrow_mut();
         let host = &mut *host;
-        let warning = style_warning(&key, &value);
-        set_style_prop(&mut host.tree, node_id, key.clone(), value)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        host.mark_style_dirty(node_id, &key);
-        if let Some(warning) = warning {
-            host.warn_style(node_id, &warning);
-        }
-        Ok(())
+        host.set_style_prop(node_id, &key, value)
+            .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
 
@@ -39,10 +30,8 @@ pub(super) fn remove_style<'js>(
     move |ctx, JsNodeId(node_id), key| {
         let mut host = host.document.borrow_mut();
         let host = &mut *host;
-        remove_style_prop(&mut host.tree, node_id, &key)
-            .map_err(|err| throw_tree_error(&ctx, err))?;
-        host.mark_style_dirty(node_id, &key);
-        Ok(())
+        host.remove_style_prop(node_id, &key)
+            .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
 
@@ -274,7 +263,7 @@ mod tests {
 
         let host = host.document.borrow();
         for _ in 0..3 {
-            inca_style::build_spec(&host.tree, &host.style, 1).unwrap();
+            inca_style::build_spec(host.tree(), &host.style, 1).unwrap();
         }
         assert_eq!(warnings.borrow().len(), 1);
     }

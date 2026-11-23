@@ -9,7 +9,6 @@ use std::rc::Rc;
 
 use rquickjs::{Ctx, Exception, IntoJs, Result as JsResult, Value};
 
-use inca_document::store_attribute as store;
 use inca_jsenv::class::{require, text};
 use inca_jsenv::required_prototype;
 use inca_node::{AttributeValue, NodeId, valid_attribute_name};
@@ -51,9 +50,8 @@ pub(super) fn store_attribute(
     name: &str,
     value: AttributeValue,
 ) -> JsResult<()> {
-    let key = store(&mut host.tree, &mut host.warnings, node_id, name, value)
+    host.set_attribute(node_id, name, value)
         .map_err(|err| throw_tree_error(ctx, err))?;
-    mark_focus_dirty_for(host, node_id, &key);
     Ok(())
 }
 
@@ -64,11 +62,8 @@ pub(super) fn drop_attribute(
     node_id: NodeId,
     name: &str,
 ) -> JsResult<()> {
-    let key = folded_key(ctx, host, node_id, name)?;
-    host.tree
-        .remove_attribute(node_id, &key)
+    host.remove_attribute(node_id, name)
         .map_err(|err| throw_tree_error(ctx, err))?;
-    mark_focus_dirty_for(host, node_id, &key);
     Ok(())
 }
 
@@ -78,7 +73,7 @@ pub(super) fn get_attribute<'js>(
     move |ctx, JsNodeId(node_id), key| {
         let host = host.document.borrow();
         let key = folded_key(&ctx, &host, node_id, &key)?;
-        let node = existing_node(&ctx, &host.tree, node_id)?;
+        let node = existing_node(&ctx, host.tree(), node_id)?;
         attribute_value_to_js(&ctx, node.attributes().get(&key))
     }
 }
@@ -98,7 +93,7 @@ pub(super) fn folded_key(
     node_id: NodeId,
     name: &str,
 ) -> JsResult<String> {
-    Ok(existing_node(ctx, &host.tree, node_id)?
+    Ok(existing_node(ctx, host.tree(), node_id)?
         .attribute_key(name)
         .into_owned())
 }
@@ -108,14 +103,9 @@ pub(super) fn attribute_names<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Vec<String>> {
     move |ctx, JsNodeId(node_id)| {
         let host = host.document.borrow();
-        let node = existing_node(&ctx, &host.tree, node_id)?;
+        let node = existing_node(&ctx, host.tree(), node_id)?;
         Ok(node.attributes().keys().cloned().collect())
     }
-}
-
-/// Queues the focus re-check an attribute change needs.
-pub(super) fn mark_focus_dirty_for(host: &mut DocumentState, node_id: NodeId, key: &str) {
-    host.mark_attribute_dirty(node_id, key);
 }
 
 pub(super) fn attribute_value_from_js<'js>(
@@ -161,7 +151,7 @@ fn read_attribute(
     name: &str,
 ) -> JsResult<Option<String>> {
     let host = host.document.borrow();
-    let Some(node) = host.tree.get(id) else {
+    let Some(node) = host.tree().get(id) else {
         return Ok(None);
     };
     let key = node.attribute_key(name);
@@ -181,7 +171,7 @@ fn write_attribute(
 ) -> JsResult<()> {
     check_attribute_name(ctx, name)?;
     let mut host = host.document.borrow_mut();
-    if host.tree.get(id).is_none() {
+    if host.tree().get(id).is_none() {
         return Ok(());
     }
     store_attribute(ctx, &mut host, id, name, AttributeValue::String(value))
@@ -264,7 +254,7 @@ pub(super) fn install_members(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
             require(ctx, "removeAttribute", args, 1)?;
             let name = text(ctx, &args[0])?;
             let mut host = host.document.borrow_mut();
-            if host.tree.get(id).is_none() {
+            if host.tree().get(id).is_none() {
                 return Ok(());
             }
             drop_attribute(ctx, &mut host, id, &name)
@@ -281,7 +271,7 @@ pub(super) fn install_members(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
             Ok(host
                 .document
                 .borrow()
-                .tree
+                .tree()
                 .get(id)
                 .map_or_else(Vec::new, |node| {
                     node.attributes().keys().cloned().collect::<Vec<_>>()

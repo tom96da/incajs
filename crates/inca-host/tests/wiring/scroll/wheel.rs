@@ -291,7 +291,6 @@ fn a_script_write_to_an_inert_root_stays(cx: &mut TestAppContext) {
     let host = scrolling_root();
     host.document
         .borrow_mut()
-        .tree
         .set_attribute(0, "inert", true)
         .unwrap();
     let js = on_wheel(

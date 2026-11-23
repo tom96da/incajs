@@ -21,7 +21,7 @@ use inca_node::NodeId;
 #[gpui::test]
 fn a_stale_callback_id_is_skipped_rather_than_reported(cx: &mut TestAppContext) {
     let (dispatcher, cells, reported) = dispatcher_with_engine();
-    let node_id = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node_id = cells.document.borrow_mut().create_node("div").unwrap();
     dispatcher
         .engine
         .eval::<()>(&format!(
@@ -66,7 +66,7 @@ fn drain_jobs_and_refresh_runs_what_a_microtask_only_scheduled(cx: &mut TestAppC
 #[gpui::test]
 fn a_pending_job_waits_when_no_listener_ran(cx: &mut TestAppContext) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let node_id = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node_id = cells.document.borrow_mut().create_node("div").unwrap();
     dispatcher
         .engine
         .eval::<()>("globalThis.ran = false; Promise.resolve().then(() => globalThis.ran = true);")
@@ -86,7 +86,7 @@ fn a_pending_job_waits_when_no_listener_ran(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_throwing_callback_is_reported(cx: &mut TestAppContext) {
     let (dispatcher, cells, reported) = dispatcher_with_engine();
-    let node_id = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node_id = cells.document.borrow_mut().create_node("div").unwrap();
     listen(
         &dispatcher,
         node_id,
@@ -108,7 +108,7 @@ fn a_throwing_callback_is_reported(cx: &mut TestAppContext) {
 #[gpui::test]
 fn one_throwing_callback_does_not_stop_the_others(cx: &mut TestAppContext) {
     let (dispatcher, cells, reported) = dispatcher_with_engine();
-    let node_id = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node_id = cells.document.borrow_mut().create_node("div").unwrap();
     dispatcher
         .engine
         .eval::<()>("globalThis.ran = false;")
@@ -140,7 +140,7 @@ fn listener_errors_of_a_dispatch_in_a_job_are_reported_when_the_jobs_drain(
     cx: &mut TestAppContext,
 ) {
     let (dispatcher, cells, reported) = dispatcher_with_engine();
-    let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = cells.document.borrow_mut().create_node("div").unwrap();
     listen(
         &dispatcher,
         node,
@@ -168,18 +168,16 @@ fn listener_errors_of_a_dispatch_in_a_job_are_reported_when_the_jobs_drain(
 #[gpui::test]
 fn drain_jobs_and_refresh_shows_js_the_focus_the_window_applied(cx: &mut TestAppContext) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = cells.document.borrow_mut().create_node("div").unwrap();
     let root = cells.document.borrow().root();
     cells
         .document
         .borrow_mut()
-        .tree
-        .append_child(root, node)
+        .append_child(&*cells.window.borrow(), root, node)
         .unwrap();
     cells
         .document
         .borrow_mut()
-        .tree
         .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
         .unwrap();
     let cx = cx.add_empty_window();

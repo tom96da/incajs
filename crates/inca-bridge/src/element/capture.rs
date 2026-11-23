@@ -60,7 +60,7 @@ fn set_capture(ctx: &Ctx<'_>, host: &Rc<Host>, node: NodeId, pointer_id: i32) ->
 fn request_capture(host: &Host, node: NodeId) -> bool {
     let held = host.window.borrow().held_buttons() != 0;
     let mut document = host.document.borrow_mut();
-    let connected = document.tree.is_connected(node);
+    let connected = document.tree().is_connected(node);
     if held && connected {
         document.capture_pending = Some(node);
     }
@@ -71,7 +71,7 @@ fn request_capture(host: &Host, node: NodeId) -> bool {
 fn has_capture(host: &DocumentState, node: NodeId, pointer_id: i32) -> bool {
     pointer_id == MOUSE_POINTER
         && host.capture_pending == Some(node)
-        && host.tree.is_connected(node)
+        && host.tree().is_connected(node)
 }
 
 /// Releases the capture of the pointer when `node` has it.

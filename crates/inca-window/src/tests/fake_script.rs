@@ -226,7 +226,7 @@ pub(crate) fn fake_dispatcher_on(cells: &Rc<Cells>) -> (EventDispatcher, Rc<Fake
 pub(crate) fn request_capture(cells: &Cells, node: NodeId) {
     let held = cells.window.borrow().held_buttons != 0;
     let mut document = cells.document.borrow_mut();
-    if held && document.tree.is_connected(node) {
+    if held && document.tree().is_connected(node) {
         document.capture_pending = Some(node);
     }
 }

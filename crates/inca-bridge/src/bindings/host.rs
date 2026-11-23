@@ -109,14 +109,9 @@ impl Host {
     /// listeners held, or `None` when nothing was freed.
     #[cfg(test)]
     pub(crate) fn sweep_orphans(&self) -> Option<(Vec<NodeId>, Vec<u32>)> {
-        let mut document = self.document.borrow_mut();
-        let nodes = document.tree.sweep();
-        if nodes.is_empty() {
-            return None;
-        }
-        let callbacks =
-            inca_document::free_ids(&mut document, &mut *self.window.borrow_mut(), &nodes);
-        Some((nodes, callbacks))
+        self.document
+            .borrow_mut()
+            .sweep(&mut *self.window.borrow_mut())
     }
 
     /// Scrolls every scroll container above `node` so the node shows. Returns
@@ -125,7 +120,7 @@ impl Host {
         let document = self.document.borrow();
         self.window
             .borrow()
-            .reveal(&document.tree, &document.style, node, block, inline)
+            .reveal(document.tree(), &document.style, node, block, inline)
     }
 }
 

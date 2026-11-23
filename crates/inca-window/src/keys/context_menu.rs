@@ -52,7 +52,6 @@ mod tests {
     use inca_gpui::EventSink as _;
     use inca_gpui::modifiers_of;
     use inca_node::NodeId;
-    use inca_style::set_style;
     use inca_test_macros::gpui_cases;
 
     const EVENTS: &[&str] = &["keydown", "contextmenu"];
@@ -179,13 +178,11 @@ mod tests {
     fn contextmenu_key_without_focus_targets_the_container_at_1_1(cx: &mut TestAppContext) {
         let s = scene(cx);
         for style in ["width", "height"] {
-            set_style(
-                &mut s.cells.document.borrow_mut().tree,
-                s.first,
-                style,
-                100.0,
-            )
-            .unwrap();
+            s.cells
+                .document
+                .borrow_mut()
+                .set_style_prop(s.first, style, 100.0)
+                .unwrap();
         }
         s.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
         s.key(cx, "menu", false, false);
@@ -200,20 +197,16 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let s = scene(cx);
-        set_style(
-            &mut s.cells.document.borrow_mut().tree,
-            s.first,
-            "width",
-            100.0,
-        )
-        .unwrap();
-        set_style(
-            &mut s.cells.document.borrow_mut().tree,
-            s.first,
-            "height",
-            100.0,
-        )
-        .unwrap();
+        s.cells
+            .document
+            .borrow_mut()
+            .set_style_prop(s.first, "width", 100.0)
+            .unwrap();
+        s.cells
+            .document
+            .borrow_mut()
+            .set_style_prop(s.first, "height", 100.0)
+            .unwrap();
         s.focus(cx, s.field);
         s.cells.window.borrow().layout.borrow_mut().remove(&s.field);
         s.key(cx, "menu", false, false);

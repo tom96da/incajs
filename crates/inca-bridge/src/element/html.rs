@@ -48,15 +48,14 @@ fn set_inner_html<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let (container, parsed) =
-            parse_inner(&mut host.document.borrow_mut().tree, node_id, &markup)
-                .map_err(|err| throw_tree_error(&ctx, err))?;
-        let old = children_of(&host.document.borrow().tree, container);
+        let (container, parsed) = parse_inner(&mut host.document.borrow_mut(), node_id, &markup)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        let old = children_of(host.document.borrow().tree(), container);
         lose_focus_in(&ctx, &host, &old);
         let mut document = host.document.borrow_mut();
         let old = replace_children(&mut document, &*host.window.borrow(), container, &parsed)
             .map_err(|err| throw_tree_error(&ctx, err))?;
-        removed_subtrees(&ctx, &document.tree, &old)
+        removed_subtrees(&ctx, document.tree(), &old)
     }
 }
 
@@ -67,7 +66,7 @@ fn set_outer_html<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let Some(parsed) = parse_outer(&mut host.document.borrow_mut().tree, node_id, &markup)
+        let Some(parsed) = parse_outer(&mut host.document.borrow_mut(), node_id, &markup)
             .map_err(|err| throw_tree_error(&ctx, err))?
         else {
             return Array::new(ctx.clone());
@@ -79,7 +78,7 @@ fn set_outer_html<'js>(
         if !replaced {
             return Array::new(ctx.clone());
         }
-        removed_subtrees(&ctx, &document.tree, &[node_id])
+        removed_subtrees(&ctx, document.tree(), &[node_id])
     }
 }
 
@@ -92,7 +91,7 @@ fn insert_adjacent_html<'js>(
         let position = parse_position(&ctx, &position)?;
         let mut document = host.document.borrow_mut();
         let (container, reference, parsed) =
-            parse_adjacent(&mut document.tree, node_id, position, &markup)
+            parse_adjacent(&mut document, node_id, position, &markup)
                 .map_err(|err| throw_tree_error(&ctx, err))?;
         insert_parsed(
             &mut document,
@@ -112,9 +111,9 @@ fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<Host>, roots: &[NodeId]) {
     let focused = {
         let host = host.document.borrow();
         host.focus()
-            .visual_focus(&host.tree, &host.style)
+            .visual_focus(host.tree(), &host.style)
             .filter(|&focused| {
-                host.tree
+                host.tree()
                     .ancestors(focused)
                     .any(|ancestor| roots.contains(&ancestor))
             })
@@ -127,10 +126,10 @@ fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<Host>, roots: &[NodeId]) {
 /// The markup of the node `id`, `""` for a freed node.
 fn markup(ctx: &Ctx<'_>, host: &Shared, id: NodeId, scope: HtmlScope) -> JsResult<String> {
     let host = host.document.borrow();
-    if host.tree.get(id).is_none() {
+    if host.tree().get(id).is_none() {
         return Ok(String::new());
     }
-    host.tree
+    host.tree()
         .serialize_html(id, scope)
         .map_err(|err| throw_tree_error(ctx, err))
 }
@@ -581,7 +580,7 @@ mod tests {
 
         let _ = error_name(&engine, "n.insertAdjacentHtml(host, 'inside', '<i></i>')");
 
-        assert!(!host.document.borrow().tree.has_orphans());
+        assert!(!host.document.borrow().tree().has_orphans());
     }
 
     #[test]
@@ -718,7 +717,7 @@ mod tests {
         assert!(
             host.document
                 .borrow()
-                .tree
+                .tree()
                 .get(id)
                 .unwrap()
                 .style_props()

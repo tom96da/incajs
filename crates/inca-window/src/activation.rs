@@ -158,7 +158,7 @@ mod tests {
         set_active(cx, window, &dispatcher, false);
         {
             let document = &mut *cells.document.borrow_mut();
-            document.tree.set_attribute(node, "inert", true).unwrap();
+            document.set_attribute(node, "inert", true).unwrap();
             document.mark_focus_dirty(node);
         }
         draw(cx, window);
@@ -338,8 +338,8 @@ mod tests {
     #[gpui::test]
     fn deactivating_the_window_clears_the_press_state(cx: &mut TestAppContext) {
         let (dispatcher, cells, _fake, window, node) = fake_focus_scene(cx);
-        let path: Vec<_> = cells.document.borrow().tree.ancestors(node).collect();
-        cells.document.borrow_mut().tree.set_active_path(&path);
+        let path: Vec<_> = cells.document.borrow().tree().ancestors(node).collect();
+        cells.document.borrow_mut().set_active_path(&path);
         set_active(cx, window, &dispatcher, false);
 
         assert!(!state(&cells.document.borrow(), node, ":active"));

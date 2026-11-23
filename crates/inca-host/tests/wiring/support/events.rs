@@ -115,11 +115,12 @@ const SEEN: &str = r"
 /// A focusable node under the root whose `focus` and `blur` are recorded into `seen`.
 pub fn focusable_node(dispatcher: &Wired, cells: &Rc<Cells>) -> NodeId {
     let mut document = cells.document.borrow_mut();
-    let node = document.tree.create_node("div").unwrap();
+    let node = document.create_node("div").unwrap();
     let root = document.root();
-    document.tree.append_child(root, node).unwrap();
     document
-        .tree
+        .append_child(&*cells.window.borrow(), root, node)
+        .unwrap();
+    document
         .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
         .unwrap();
     document.mark_tab_dirty(node);

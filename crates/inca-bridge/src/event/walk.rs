@@ -29,7 +29,7 @@ pub(crate) fn listened(
     target: EventTargetId,
     cut: &[NodeId],
 ) -> bool {
-    inca_document::listened(&host.tree, &host.listeners, name, flags, target, cut)
+    inca_document::listened(host.tree(), &host.listeners, name, flags, target, cut)
 }
 
 pub(super) fn next_event_id(host: &Rc<Host>) -> u64 {
@@ -78,7 +78,7 @@ pub(super) fn script_walk<'a>(
 }
 
 pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<Host>, walk: &Walk<'_>, id: u64) -> Outcome {
-    let path = path_from(&host.document.borrow().tree, walk.target);
+    let path = path_from(host.document.borrow().tree(), walk.target);
     let created = targets_of(ctx, &path).and_then(|targets| create(ctx, walk, id, targets));
     let event = match created {
         Ok(event) => event,
@@ -268,11 +268,10 @@ mod tests {
     fn a_cut_silences_the_document_and_window() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let outer = node_under_root(&host);
-        let child = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let child = host.document.borrow_mut().create_node("div").unwrap();
         host.document
             .borrow_mut()
-            .tree
-            .append_child(outer, child)
+            .append_child(&*host.window.borrow(), outer, child)
             .unwrap();
         let document = host.document.borrow().document();
         listen(&dispatcher, child, "click", "() => out.push('child')");
@@ -313,7 +312,7 @@ mod tests {
     #[case::cancel_bubble("e.cancelBubble = true;")]
     fn a_stop_requested_before_dispatch_runs_no_listener(#[case] stop: &str) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(&dispatcher, node, "ping", "() => out.push('ran')");
 
         let got = eval_json(
@@ -336,7 +335,7 @@ mod tests {
     #[test]
     fn a_dispatch_no_listener_hears_clears_the_stop_flags() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
 
         let got = eval_json(
             &dispatcher,

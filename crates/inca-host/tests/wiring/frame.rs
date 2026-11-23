@@ -111,7 +111,7 @@ fn the_hook_receives_the_freed_ids_once(cx: &mut TestAppContext) {
         scene.json("[globalThis.released, [top, leaf, cb]]"),
         serde_json::json!([[[[2, 3], [1]]], [2, 3, 1]])
     );
-    assert!(scene.cells.document.borrow().tree.get(2).is_none());
+    assert!(scene.cells.document.borrow().tree().get(2).is_none());
 }
 
 #[gpui::test]
@@ -260,7 +260,7 @@ fn a_hook_that_throws_lets_the_frame_finish(cx: &mut TestAppContext) {
         scene.json("globalThis.seen"),
         serde_json::json!([format!("focus:{node}")])
     );
-    assert!(!scene.cells.document.borrow().tree.has_orphans());
+    assert!(!scene.cells.document.borrow().tree().has_orphans());
 }
 
 #[gpui::test]
@@ -304,7 +304,7 @@ fn without_a_hook_a_frame_still_frees_the_orphans(cx: &mut TestAppContext) {
 
     draw(cx, scene.window);
 
-    assert!(scene.cells.document.borrow().tree.get(2).is_none());
+    assert!(scene.cells.document.borrow().tree().get(2).is_none());
     assert!(scene.cells.document.borrow().listeners.is_empty());
 }
 
@@ -352,7 +352,7 @@ fn a_removed_focused_node_is_swept_without_a_blur(cx: &mut TestAppContext) {
         scene.json("globalThis.released.map(([n]) => n)"),
         serde_json::json!([[node]])
     );
-    assert!(scene.cells.document.borrow().tree.get(node).is_none());
+    assert!(scene.cells.document.borrow().tree().get(node).is_none());
 }
 
 #[gpui::test]
@@ -405,8 +405,8 @@ fn a_focus_query_in_a_focus_listener_keeps_the_drawn_focus_of_the_frame(cx: &mut
     let (scene, first, second) = focus_and_query_in_a_focus_listener(cx);
 
     let document = scene.cells.document.borrow();
-    assert!(document.tree.is_focused(first));
-    assert!(!document.tree.is_focused(second));
+    assert!(document.tree().is_focused(first));
+    assert!(!document.tree().is_focused(second));
 }
 
 #[gpui::test]

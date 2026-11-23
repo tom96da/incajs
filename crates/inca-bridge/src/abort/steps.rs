@@ -783,10 +783,10 @@ mod tests {
                 ",
             )
             .unwrap();
-        let freed = f.host.document.borrow_mut().tree.sweep();
-        let mut document = f.host.document.borrow_mut();
-        inca_document::free_ids(&mut document, &mut *f.host.window.borrow_mut(), &freed);
-        drop(document);
+        f.host
+            .document
+            .borrow_mut()
+            .sweep(&mut *f.host.window.borrow_mut());
 
         f.engine.eval::<()>("other.abort();").unwrap();
         for _ in 0..2 {

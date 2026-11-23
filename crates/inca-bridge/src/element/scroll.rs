@@ -27,7 +27,7 @@ pub(crate) fn install_scroll(n: &Natives<'_, '_>) -> JsResult<()> {
 
 fn scroll_of<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
-        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+        existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         let rect = node_scroll(&host, node_id);
         or_null(&ctx, rect.as_ref().map(<[f64; 4]>::as_slice))
     }
@@ -37,7 +37,7 @@ fn scroll_node<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Option<f64>, Option<f64>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), left, top| {
-        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+        existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         scroll_to(&host, node_id, left, top);
         Ok(())
     }
@@ -47,7 +47,7 @@ fn scroll_into_view_node<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsAlign, JsAlign) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), JsAlign(block), JsAlign(inline)| {
-        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+        existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         scroll_into_view(&host, node_id, block, inline);
         Ok(())
     }
@@ -57,7 +57,7 @@ fn scroll_into_view_node<'js>(
 /// `max left` and `max top`. A node that scrolls nothing has none.
 fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
     let document = host.document.borrow();
-    is_scroll_container(&document.tree, &document.style, id).then(|| {
+    is_scroll_container(document.tree(), &document.style, id).then(|| {
         let ScrollRange { offset, max } = host.window.borrow().scroll_range(id);
         [offset.0, offset.1, max.0, max.1].map(f64::from)
     })
@@ -66,10 +66,10 @@ fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
 /// Moves the scroll offset of the node `id` on the given axes. A negative value counts as `0`.
 fn scroll_to(host: &Host, id: NodeId, left: Option<f64>, top: Option<f64>) {
     let document = host.document.borrow();
-    if is_scroll_container(&document.tree, &document.style, id) {
+    if is_scroll_container(document.tree(), &document.style, id) {
         host.window
             .borrow()
-            .scroll_to(&document.tree, id, left, top);
+            .scroll_to(document.tree(), id, left, top);
     }
 }
 
@@ -82,7 +82,7 @@ fn scroll_into_view(host: &Host, id: NodeId, block: Align, inline: Align) {
 
 /// The scroll state of the node `id`, `None` for a node that is not connected or scrolls nothing.
 fn connected_scroll(host: &Shared, id: NodeId) -> Option<[f64; 4]> {
-    let connected = host.document.borrow().tree.is_connected(id);
+    let connected = host.document.borrow().tree().is_connected(id);
     connected.then(|| node_scroll(host, id)).flatten()
 }
 
@@ -122,7 +122,7 @@ fn move_scroll<'js>(
     args: &[Value<'js>],
     relative: bool,
 ) -> JsResult<()> {
-    if !host.document.borrow().tree.is_connected(id) {
+    if !host.document.borrow().tree().is_connected(id) {
         return Ok(());
     }
     let undefined = Value::new_undefined(ctx.clone());
@@ -235,7 +235,7 @@ pub(super) fn install<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>)
         0,
         &ELEMENT,
         |ctx, host, id, _, args| {
-            if !host.document.borrow().tree.is_connected(id) {
+            if !host.document.borrow().tree().is_connected(id) {
                 return Ok(());
             }
             let (block, inline) = alignments(ctx, args.first())?;

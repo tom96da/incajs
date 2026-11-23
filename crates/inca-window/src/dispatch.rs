@@ -96,7 +96,7 @@ impl EventDispatcher {
         let document = self.cells.document.borrow();
         !document.listeners.is_empty()
             || self.cells.window.borrow().focus.has_handles()
-            || document.style.uses_pointer_state(&document.tree)
+            || document.style.uses_pointer_state(document.tree())
     }
 
     /// Takes the window's current modifier keys as the baseline for the next

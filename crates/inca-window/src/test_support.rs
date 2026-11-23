@@ -45,7 +45,7 @@ impl Render for TestRoot {
         self.dispatcher.begin_frame(window, cx);
         let document = self.cells.document.borrow();
         render_tree_with_events(
-            &document.tree,
+            document.tree(),
             &document.style,
             self.node,
             &self.dispatcher,
@@ -142,11 +142,12 @@ pub fn key_payload(modifiers: inca_document::Modifiers) -> EventPayload {
 #[must_use]
 pub fn tree_of_three(cells: &Rc<Cells>) -> [NodeId; 3] {
     let mut h = cells.document.borrow_mut();
-    let outer = h.tree.create_node("div").unwrap();
-    let parent = h.tree.create_node("div").unwrap();
-    let child = h.tree.create_node("div").unwrap();
-    h.tree.append_child(outer, parent).unwrap();
-    h.tree.append_child(parent, child).unwrap();
+    let outer = h.create_node("div").unwrap();
+    let parent = h.create_node("div").unwrap();
+    let child = h.create_node("div").unwrap();
+    let view = cells.window.borrow();
+    h.append_child(&*view, outer, parent).unwrap();
+    h.append_child(&*view, parent, child).unwrap();
     [outer, parent, child]
 }
 
@@ -158,9 +159,9 @@ pub fn tree_of_three(cells: &Rc<Cells>) -> [NodeId; 3] {
 #[must_use]
 pub fn node_under_root(cells: &Rc<Cells>) -> NodeId {
     let mut h = cells.document.borrow_mut();
-    let node = h.tree.create_node("div").unwrap();
+    let node = h.create_node("div").unwrap();
     let root = h.root();
-    h.tree.append_child(root, node).unwrap();
+    h.append_child(&*cells.window.borrow(), root, node).unwrap();
     node
 }
 
@@ -171,7 +172,7 @@ pub fn node_under_root(cells: &Rc<Cells>) -> NodeId {
 /// Panics when the tree rejects a node.
 #[must_use]
 pub fn state(document: &DocumentState, node: NodeId, class: &str) -> bool {
-    inca_style::matches_selector(&document.tree, node, class, inca_style::MatchFocus::Drawn)
+    inca_style::matches_selector(document.tree(), node, class, inca_style::MatchFocus::Drawn)
         .unwrap()
 }
 
@@ -182,10 +183,12 @@ pub fn state(document: &DocumentState, node: NodeId, class: &str) -> bool {
 /// Panics when the tree rejects a node.
 pub fn add_sheet(cells: &Cells, css: &str) {
     let document = &mut *cells.document.borrow_mut();
-    let [style, text] = ["style", "#text"].map(|tag| document.tree.create_node(tag).unwrap());
-    document.tree.set_data(text, css).unwrap();
-    document.tree.append_child(style, text).unwrap();
-    document.tree.append_child(document.root(), style).unwrap();
+    let [style, text] = ["style", "#text"].map(|tag| document.create_node(tag).unwrap());
+    document.set_data(text, css).unwrap();
+    let view = cells.window.borrow();
+    document.append_child(&*view, style, text).unwrap();
+    let root = document.root();
+    document.append_child(&*view, root, style).unwrap();
 }
 
 #[must_use]

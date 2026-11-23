@@ -19,7 +19,7 @@ impl EventDispatcher {
     pub(crate) fn is_input(&self, node: NodeId) -> bool {
         let document = self.cells.document.borrow();
         document
-            .tree
+            .tree()
             .get(node)
             .is_some_and(|node| node.is_html("input"))
     }
@@ -27,7 +27,7 @@ impl EventDispatcher {
     /// Reads `node` once: whether it is an `input`, has `readonly`, and is a disabled control.
     fn input_flags(&self, node: NodeId) -> Option<(bool, bool, bool)> {
         let document = self.cells.document.borrow();
-        document.tree.get(node).map(|node| {
+        document.tree().get(node).map(|node| {
             let attributes = node.attributes();
             (
                 node.is_html("input"),
@@ -522,14 +522,12 @@ mod tests {
             .cells
             .document
             .borrow_mut()
-            .tree
             .create_element_ns(Some(SVG), None, "input")
             .unwrap();
         s.cells
             .document
             .borrow_mut()
-            .tree
-            .append_child(s.parent, svg_input)
+            .append_child(&*s.cells.window.borrow(), s.parent, svg_input)
             .unwrap();
         s.cells
             .document

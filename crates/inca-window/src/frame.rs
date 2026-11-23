@@ -40,7 +40,7 @@ impl EventDispatcher {
     /// Prints each warning of the sheets parsed since the last frame, prefixed with `<style>: `.
     fn warn_style_sheets(&self) {
         let document = self.cells.document.borrow();
-        for line in document.style.take_style_warnings(&document.tree) {
+        for line in document.style.take_style_warnings(document.tree()) {
             document.warnings.emit(&format!("<style>: {line}"));
         }
     }
@@ -61,7 +61,7 @@ impl EventDispatcher {
             self.drain_observed(window);
         }
         // The requests end when a frame leaves no orphan.
-        if self.cells.document.borrow().tree.has_orphans() {
+        if self.cells.document.borrow().tree().has_orphans() {
             window.request_animation_frame();
         }
     }
@@ -124,11 +124,15 @@ mod tests {
         {
             let mut document = cells.document.borrow_mut();
             let root = document.root();
-            let style = document.tree.create_node("style").unwrap();
-            let text = document.tree.create_node("#text").unwrap();
-            document.tree.set_data(text, ".a { bogus: 1 }").unwrap();
-            document.tree.append_child(style, text).unwrap();
-            document.tree.append_child(root, style).unwrap();
+            let style = document.create_node("style").unwrap();
+            let text = document.create_node("#text").unwrap();
+            document.set_data(text, ".a { bogus: 1 }").unwrap();
+            document
+                .append_child(&*cells.window.borrow(), style, text)
+                .unwrap();
+            document
+                .append_child(&*cells.window.borrow(), root, style)
+                .unwrap();
         }
         let window = cx.add_window(|_, _| Frame(Rc::new(dispatcher)));
 
@@ -158,7 +162,7 @@ mod tests {
         draw(cx, window);
         {
             let document = &mut *cells.document.borrow_mut();
-            document.tree.remove_attribute(node, "tabindex").unwrap();
+            document.remove_attribute(node, "tabindex").unwrap();
             document.mark_tab_dirty(node);
         }
 
@@ -177,7 +181,7 @@ mod tests {
         fake.take();
         {
             let document = &mut *cells.document.borrow_mut();
-            document.tree.remove_attribute(node, "tabindex").unwrap();
+            document.remove_attribute(node, "tabindex").unwrap();
             document.mark_tab_dirty(node);
         }
 
@@ -319,7 +323,7 @@ mod tests {
         let scene = settled(cx, 1);
         let node = scene.nodes[0];
         scene.on_focus(node, move |cells| {
-            cells.tree.remove_attribute(node, "tabindex").unwrap();
+            cells.remove_attribute(node, "tabindex").unwrap();
             cells.mark_tab_dirty(node);
         });
         scene.request_focus(node);

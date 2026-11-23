@@ -96,7 +96,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        if self.cells.document.borrow().tree.get(start).is_none() {
+        if self.cells.document.borrow().tree().get(start).is_none() {
             return false;
         }
         self.fire_inner(start, event, payload, window, cx)
@@ -142,7 +142,7 @@ impl EventDispatcher {
 
     /// `payload` with a `related_target` that left the tree set to `None`.
     fn live_related(&self, mut payload: EventPayload) -> EventPayload {
-        let gone = |id: &NodeId| self.cells.document.borrow().tree.get(*id).is_none();
+        let gone = |id: &NodeId| self.cells.document.borrow().tree().get(*id).is_none();
         match &mut payload {
             EventPayload::Focus { related_target } => {
                 if related_target.as_ref().is_some_and(gone) {
@@ -164,7 +164,7 @@ impl EventDispatcher {
     pub(super) fn resolve(&self, found: Option<NodeId>, node_id: NodeId) -> NodeId {
         let document = self.cells.document.borrow();
         found
-            .filter(|id| document.tree.get(*id).is_some())
+            .filter(|id| document.tree().get(*id).is_some())
             .unwrap_or(node_id)
     }
 
@@ -173,7 +173,7 @@ impl EventDispatcher {
         self.cells
             .document
             .borrow()
-            .tree
+            .tree()
             .ancestors(target)
             .collect()
     }
@@ -205,7 +205,7 @@ impl EventDispatcher {
             return Vec::new();
         }
         let document = self.cells.document.borrow();
-        let disabled = |id: &NodeId| document.tree.get(*id).is_some_and(is_disabled_control);
+        let disabled = |id: &NodeId| document.tree().get(*id).is_some_and(is_disabled_control);
         let button = match payload {
             EventPayload::Mouse(mouse) => Some(mouse.button),
             _ => None,
@@ -288,13 +288,12 @@ mod tests {
     #[gpui::test]
     fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppContext) {
         let (dispatcher, cells, _fake) = fake_dispatcher();
-        let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = cells.document.borrow_mut().create_node("div").unwrap();
         let root = cells.document.borrow().root();
         cells
             .document
             .borrow_mut()
-            .tree
-            .append_child(root, node)
+            .append_child(&*cells.window.borrow(), root, node)
             .unwrap();
         assert!(!dispatcher.tracks_pointer());
 
@@ -316,7 +315,6 @@ mod tests {
         cells
             .document
             .borrow_mut()
-            .tree
             .set_attribute(node, "tabindex", "0")
             .unwrap();
         cells.document.borrow_mut().mark_tab_dirty(node);

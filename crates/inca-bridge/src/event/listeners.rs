@@ -51,7 +51,7 @@ fn add_event_listener<'js>(
     move |ctx, JsEventTargetId(target), event, callback, capture, passive, signal| {
         let mut host = host.document.borrow_mut();
         if let EventTargetId::Node(node_id) = target {
-            existing_node(&ctx, &host.tree, node_id)?;
+            existing_node(&ctx, host.tree(), node_id)?;
         }
         if !callback.is_function() {
             return Err(Exception::throw_type(
@@ -120,7 +120,7 @@ fn dispatch_event<'js>(
 ) -> impl Fn(Ctx<'js>, JsEventTargetId, Value<'js>) -> JsResult<bool> {
     move |ctx, JsEventTargetId(target), event| {
         if let EventTargetId::Node(node_id) = target {
-            existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+            existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         }
         crate::event::dispatch_event(&ctx, &host, target, &event)
     }
@@ -128,7 +128,7 @@ fn dispatch_event<'js>(
 
 fn click<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<()> {
     move |ctx, JsNodeId(node_id)| {
-        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+        existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         crate::event::click(&ctx, &host, node_id);
         Ok(())
     }

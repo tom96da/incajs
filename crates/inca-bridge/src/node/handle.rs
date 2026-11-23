@@ -181,7 +181,7 @@ pub(crate) fn install_handle(n: &Natives<'_, '_>) -> JsResult<()> {
 fn node_handle<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
         let host = host.document.borrow();
-        let Some(node) = host.tree.get(node_id) else {
+        let Some(node) = host.tree().get(node_id) else {
             return Ok(Value::new_null(ctx));
         };
         let (kind, space) = (node.kind(), Space::of(node));

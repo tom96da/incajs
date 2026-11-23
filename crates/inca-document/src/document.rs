@@ -7,7 +7,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use inca_node::{NodeId, VirtualTree};
+use inca_node::{NodeId, TreeError, VirtualTree};
 use inca_style::{MatchFocus, StyleCache};
 
 use crate::geometry::Align;
@@ -41,7 +41,9 @@ pub fn new_document_tree() -> VirtualTree {
 /// The retained tree a document mutates, the cascade over it, the listeners registered on it and
 /// the state its focus and text controls keep.
 pub struct DocumentState {
-    pub tree: VirtualTree,
+    /// Read through [`Self::tree`] and changed only through the operations of the document, each of
+    /// which runs the steps that follow its change.
+    pub(crate) tree: VirtualTree,
     /// The cascade of the tree, rebuilt when the tree changes.
     pub style: StyleCache,
     /// Receives one line for each style a `setStyle` call stores with an unknown key, an invalid
@@ -69,8 +71,17 @@ pub struct DocumentState {
 
 impl Default for DocumentState {
     fn default() -> Self {
+        Self::from_tree(new_document_tree())
+    }
+}
+
+impl DocumentState {
+    /// A document over `tree`, with no listener, signal, focus, reveal or text state yet. `tree`
+    /// declares its root and its document, as [`new_document_tree`] builds them.
+    #[must_use]
+    pub fn from_tree(tree: VirtualTree) -> Self {
         Self {
-            tree: new_document_tree(),
+            tree,
             style: StyleCache::new(),
             warnings: StyleWarnings::default(),
             listeners: EventListeners::default(),
@@ -81,6 +92,12 @@ impl Default for DocumentState {
             capture_pending: None,
             inputs: RefCell::new(HashMap::new()),
         }
+    }
+
+    /// The tree, for reads.
+    #[must_use]
+    pub fn tree(&self) -> &VirtualTree {
+        &self.tree
     }
 }
 
@@ -136,9 +153,120 @@ impl DocumentState {
             .unwrap_or_else(|| self.document())
     }
 
+    /// Creates a node named `local_name`. See [`VirtualTree::create_node`].
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::create_node`].
+    pub fn create_node(&mut self, local_name: impl Into<String>) -> Result<NodeId, TreeError> {
+        self.tree.create_node(local_name)
+    }
+
+    /// Creates the element `local_name` in `namespace` with `prefix`. See
+    /// [`VirtualTree::create_element_ns`].
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::create_element_ns`].
+    pub fn create_element_ns(
+        &mut self,
+        namespace: Option<&str>,
+        prefix: Option<&str>,
+        local_name: impl Into<String>,
+    ) -> Result<NodeId, TreeError> {
+        self.tree.create_element_ns(namespace, prefix, local_name)
+    }
+
+    /// Copies `node_id`, with its descendants when `deep`, and returns the copy. An HTML `input`
+    /// copy takes the typed text of its original.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::clone_subtree`].
+    pub fn clone_node(&mut self, node_id: NodeId, deep: bool) -> Result<NodeId, TreeError> {
+        let made = self.tree.clone_subtree(node_id, deep)?;
+        for &(original, copy) in &made {
+            let is_input = self
+                .tree
+                .get(copy)
+                .is_some_and(|node| node.is_html("input"));
+            let typed = self
+                .inputs
+                .get_mut()
+                .get(&original)
+                .map(|input| input.value().to_owned());
+            if let (true, Some(typed)) = (is_input, typed) {
+                self.set_input_value(copy, &typed);
+            }
+        }
+        made.first()
+            .map(|&(_, copy)| copy)
+            .ok_or(TreeError::NodeNotFound(node_id))
+    }
+
+    /// Keeps `node_id` from the sweep while it has no parent. See [`VirtualTree::hold`].
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::hold`].
+    pub fn hold(&mut self, node_id: NodeId) -> Result<(), TreeError> {
+        self.tree.hold(node_id)
+    }
+
+    /// Ends the hold of `node_id`. See [`VirtualTree::release`].
+    pub fn release(&mut self, node_id: NodeId) {
+        self.tree.release(node_id);
+    }
+
+    /// Replaces the data of the text node or comment `node_id`. See [`VirtualTree::set_data`].
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::set_data`].
+    pub fn set_data(&mut self, node_id: NodeId, data: impl Into<String>) -> Result<(), TreeError> {
+        self.tree.set_data(node_id, data)
+    }
+
+    /// Replaces `count` units of the data of `node_id` from `offset` with `data`. See
+    /// [`VirtualTree::replace_data`].
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::replace_data`].
+    pub fn replace_data(
+        &mut self,
+        node_id: NodeId,
+        offset: u32,
+        count: u32,
+        data: &str,
+    ) -> Result<(), TreeError> {
+        self.tree.replace_data(node_id, offset, count, data)
+    }
+
+    /// Splits the text node `node_id` at `offset` and returns the new node with the rest. See
+    /// [`VirtualTree::split_text`].
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::split_text`].
+    pub fn split_text(&mut self, node_id: NodeId, offset: u32) -> Result<NodeId, TreeError> {
+        self.tree.split_text(node_id, offset)
+    }
+
+    /// Stores the hover path: the deepest hovered container and its ancestors. An empty path
+    /// clears it. Returns whether the set changed.
+    pub fn set_hover_path(&mut self, path: &[NodeId]) -> bool {
+        self.tree.set_hover_path(path)
+    }
+
+    /// Stores the pressed path, like [`Self::set_hover_path`].
+    pub fn set_active_path(&mut self, path: &[NodeId]) -> bool {
+        self.tree.set_active_path(path)
+    }
+
     /// Moves where Tab starts off `node_id`'s subtree to `before`, the node right before its
     /// place.
-    pub fn move_tab_start(&mut self, node_id: NodeId, before: Option<NodeId>) {
+    pub(crate) fn move_tab_start(&mut self, node_id: NodeId, before: Option<NodeId>) {
         self.focus.start_leaves(&self.tree, node_id, before);
     }
 
@@ -170,17 +298,17 @@ impl DocumentState {
     }
 
     /// Queues the focus re-check the change of the attribute `key` of `node_id` needs.
-    pub fn mark_attribute_dirty(&mut self, node_id: NodeId, key: &str) {
+    pub(crate) fn mark_attribute_dirty(&mut self, node_id: NodeId, key: &str) {
         self.focus.mark_attribute_dirty(&self.tree, node_id, key);
     }
 
     /// Queues the focus re-check the write of the style prop `key` of `node_id` needs.
-    pub fn mark_style_dirty(&mut self, node_id: NodeId, key: &str) {
+    pub(crate) fn mark_style_dirty(&mut self, node_id: NodeId, key: &str) {
         self.focus.mark_style_dirty(&self.tree, node_id, key);
     }
 
     /// Queues the focus re-check the write of the CSS property `name` of `node_id` needs.
-    pub fn mark_property_dirty(&mut self, node_id: NodeId, name: &str) {
+    pub(crate) fn mark_property_dirty(&mut self, node_id: NodeId, name: &str) {
         self.focus.mark_property_dirty(&self.tree, node_id, name);
     }
 
@@ -272,7 +400,7 @@ impl DocumentState {
     }
 
     /// Drops the document state of freed nodes and returns the callback ids their listeners held.
-    pub fn forget(&mut self, ids: &[NodeId]) -> Vec<u32> {
+    pub(crate) fn forget(&mut self, ids: &[NodeId]) -> Vec<u32> {
         for &id in ids {
             self.warnings.forget(id);
             self.inputs.get_mut().remove(&id);

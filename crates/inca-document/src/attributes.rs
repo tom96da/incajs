@@ -1,12 +1,236 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The write of an attribute, with the `style` case.
+//! The writes of attributes, the class list and the inline style, each with the focus re-check and
+//! the style warnings it needs.
 
-use inca_node::{AttributeValue, NodeId, TreeError, VirtualTree};
-use inca_style::set_style_text;
+use inca_node::{AttributeValue, ClassListError, NodeId, TreeError, VirtualTree};
+use inca_style::{
+    remove_style, remove_style_property, set_style, set_style_property, set_style_text,
+    style_warning,
+};
 
-use crate::StyleWarnings;
+use crate::semantics::AriaReferences;
+use crate::{DocumentState, StyleWarnings};
+
+impl DocumentState {
+    /// Stores the attribute `name` of `node_id` under the key the node folds it to, and queues the
+    /// focus re-check the key needs. The `style` attribute writes its text as style props and
+    /// reports the lines it drops, once for each node and line.
+    ///
+    /// # Errors
+    ///
+    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
+    pub fn set_attribute(
+        &mut self,
+        node_id: NodeId,
+        name: &str,
+        value: impl Into<AttributeValue>,
+    ) -> Result<(), TreeError> {
+        let key = store_attribute(
+            &mut self.tree,
+            &mut self.warnings,
+            node_id,
+            name,
+            value.into(),
+        )?;
+        self.mark_attribute_dirty(node_id, &key);
+        Ok(())
+    }
+
+    /// Stores the attribute as [`Self::set_attribute`] does and skips its focus re-check, so a
+    /// test can start from a state that the follow-up would end, such as a focused button that
+    /// stays focused while disabled.
+    ///
+    /// # Errors
+    ///
+    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_attribute_skipping_follow_ups(
+        &mut self,
+        node_id: NodeId,
+        name: &str,
+        value: impl Into<AttributeValue>,
+    ) -> Result<(), TreeError> {
+        store_attribute(
+            &mut self.tree,
+            &mut self.warnings,
+            node_id,
+            name,
+            value.into(),
+        )
+        .map(drop)
+    }
+
+    /// Removes the attribute `name` of `node_id`, folded as [`Self::set_attribute`] folds it, and
+    /// queues the focus re-check the key needs.
+    ///
+    /// # Errors
+    ///
+    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
+    pub fn remove_attribute(&mut self, node_id: NodeId, name: &str) -> Result<(), TreeError> {
+        let key = self
+            .tree
+            .get(node_id)
+            .ok_or(TreeError::NodeNotFound(node_id))?
+            .attribute_key(name)
+            .into_owned();
+        self.tree.remove_attribute(node_id, &key)?;
+        self.mark_attribute_dirty(node_id, &key);
+        Ok(())
+    }
+
+    /// Keeps `ids` as the elements the ARIA attribute `attribute` of `node_id` refers to, or
+    /// removes the attribute for `None`. See [`AriaReferences::set_aria_elements`].
+    ///
+    /// # Errors
+    ///
+    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
+    pub fn set_aria_elements(
+        &mut self,
+        node_id: NodeId,
+        attribute: &str,
+        ids: Option<Vec<NodeId>>,
+    ) -> Result<(), TreeError> {
+        self.tree.set_aria_elements(node_id, attribute, ids)
+    }
+
+    /// Adds each of `tokens` that the class list of `node_id` lacks.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::add_classes`].
+    pub fn add_classes(&mut self, node_id: NodeId, tokens: &[&str]) -> Result<(), ClassListError> {
+        self.tree.add_classes(node_id, tokens)
+    }
+
+    /// Removes each of `tokens` from the class list of `node_id`.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::remove_classes`].
+    pub fn remove_classes(
+        &mut self,
+        node_id: NodeId,
+        tokens: &[&str],
+    ) -> Result<(), ClassListError> {
+        self.tree.remove_classes(node_id, tokens)
+    }
+
+    /// Toggles `token` in the class list of `node_id`, or adds it for `force` true and removes it
+    /// for `force` false. Returns whether the list holds the token after the call.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::toggle_class`].
+    pub fn toggle_class(
+        &mut self,
+        node_id: NodeId,
+        token: &str,
+        force: Option<bool>,
+    ) -> Result<bool, ClassListError> {
+        self.tree.toggle_class(node_id, token, force)
+    }
+
+    /// Replaces `token` with `new_token` in the class list of `node_id`. Returns whether the list
+    /// held `token`.
+    ///
+    /// # Errors
+    ///
+    /// The error of [`VirtualTree::replace_class`].
+    pub fn replace_class(
+        &mut self,
+        node_id: NodeId,
+        token: &str,
+        new_token: &str,
+    ) -> Result<bool, ClassListError> {
+        self.tree.replace_class(node_id, token, new_token)
+    }
+
+    /// Stores the style prop `key` of `node_id`, queues the focus re-check the key needs and
+    /// reports a key or value the document does not support, once for each node and line.
+    ///
+    /// # Errors
+    ///
+    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
+    pub fn set_style_prop(
+        &mut self,
+        node_id: NodeId,
+        key: &str,
+        value: impl Into<AttributeValue>,
+    ) -> Result<(), TreeError> {
+        let value = value.into();
+        let warning = style_warning(key, &value);
+        set_style(&mut self.tree, node_id, key, value)?;
+        self.mark_style_dirty(node_id, key);
+        if let Some(warning) = warning {
+            self.warn_style(node_id, &warning);
+        }
+        Ok(())
+    }
+
+    /// Removes the style prop `key` of `node_id` and queues the focus re-check the key needs.
+    ///
+    /// # Errors
+    ///
+    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
+    pub fn remove_style_prop(&mut self, node_id: NodeId, key: &str) -> Result<(), TreeError> {
+        remove_style(&mut self.tree, node_id, key)?;
+        self.mark_style_dirty(node_id, key);
+        Ok(())
+    }
+
+    /// Replaces the inline style of `node_id` with the declarations of `text`, reports the lines
+    /// it drops and queues a focus re-check of the subtree.
+    ///
+    /// # Errors
+    ///
+    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
+    pub fn set_style_text(&mut self, node_id: NodeId, text: &str) -> Result<(), TreeError> {
+        let lines = set_style_text(&mut self.tree, node_id, text)?;
+        for line in &lines {
+            self.warn_style(node_id, line);
+        }
+        self.mark_focus_dirty(node_id);
+        Ok(())
+    }
+
+    /// Writes the CSS property `name` of the inline style of `node_id` with the text `value`,
+    /// reports the lines it drops and queues the focus re-check the property needs.
+    ///
+    /// # Errors
+    ///
+    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
+    pub fn set_style_property(
+        &mut self,
+        node_id: NodeId,
+        name: &str,
+        value: &str,
+    ) -> Result<(), TreeError> {
+        let lines = set_style_property(&mut self.tree, node_id, name, value)?;
+        for line in &lines {
+            self.warn_style(node_id, line);
+        }
+        self.mark_property_dirty(node_id, name);
+        Ok(())
+    }
+
+    /// Removes the CSS property `name` of the inline style of `node_id` and queues the focus
+    /// re-check the property needs. Returns the text the property had.
+    ///
+    /// # Errors
+    ///
+    /// [`TreeError::NodeNotFound`] when `node_id` names no node.
+    pub fn remove_style_property(
+        &mut self,
+        node_id: NodeId,
+        name: &str,
+    ) -> Result<String, TreeError> {
+        let former = remove_style_property(&mut self.tree, node_id, name)?;
+        self.mark_property_dirty(node_id, name);
+        Ok(former)
+    }
+}
 
 /// Stores the attribute `name` of the node `node_id`. The `style` attribute writes its text as
 /// style props and reports the lines it drops through `warnings`. Returns the folded key the
@@ -15,7 +239,7 @@ use crate::StyleWarnings;
 /// # Errors
 ///
 /// [`TreeError::NodeNotFound`] when `node_id` names no node.
-pub fn store_attribute(
+fn store_attribute(
     tree: &mut VirtualTree,
     warnings: &mut StyleWarnings,
     node_id: NodeId,
@@ -44,40 +268,44 @@ mod tests {
     use super::*;
     use crate::tests::collecting;
 
-    #[test]
-    fn a_plain_attribute_is_stored_under_its_folded_key() {
+    /// A document over a tree of one `div`, whose style warnings go to the returned list.
+    fn state_with_div() -> (
+        DocumentState,
+        NodeId,
+        std::rc::Rc<std::cell::RefCell<Vec<String>>>,
+    ) {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
-        let (mut warnings, _) = collecting();
+        let mut state = DocumentState::from_tree(tree);
+        let (warnings, lines) = collecting();
+        state.warnings = warnings;
+        (state, id, lines)
+    }
 
-        let key = store_attribute(&mut tree, &mut warnings, id, "TabIndex", "0".into()).unwrap();
+    #[test]
+    fn a_plain_attribute_is_stored_under_its_folded_key() {
+        let (mut state, id, _) = state_with_div();
 
-        assert_eq!(key, "tabindex");
+        state.set_attribute(id, "TabIndex", "0").unwrap();
+
         assert_eq!(
-            tree.get(id).unwrap().attributes().get("tabindex"),
+            state.tree().get(id).unwrap().attributes().get("tabindex"),
             Some(&"0".into())
         );
     }
 
     #[test]
     fn a_style_attribute_warns_once_per_line() {
-        let mut tree = VirtualTree::new();
-        let id = tree.create_node("div").unwrap();
-        let (mut warnings, lines) = collecting();
+        let (mut state, id, lines) = state_with_div();
 
         for _ in 0..2 {
-            store_attribute(
-                &mut tree,
-                &mut warnings,
-                id,
-                "style",
-                "bogus: 1; width: 2px".into(),
-            )
-            .unwrap();
+            state
+                .set_attribute(id, "style", "bogus: 1; width: 2px")
+                .unwrap();
         }
 
         assert_eq!(
-            tree.get(id).unwrap().style_props().get("width"),
+            state.tree().get(id).unwrap().style_props().get("width"),
             Some(&"2px".into())
         );
         assert_eq!(lines.borrow().len(), 1, "{:?}", lines.borrow());
@@ -85,10 +313,9 @@ mod tests {
 
     #[test]
     fn a_missing_node_is_an_error() {
-        let mut tree = VirtualTree::new();
-        let (mut warnings, lines) = collecting();
+        let (mut state, _, lines) = state_with_div();
 
-        let result = store_attribute(&mut tree, &mut warnings, 999, "style", "bogus: 1".into());
+        let result = state.set_attribute(999, "style", "bogus: 1");
 
         assert_eq!(result, Err(TreeError::NodeNotFound(999)));
         assert!(lines.borrow().is_empty());

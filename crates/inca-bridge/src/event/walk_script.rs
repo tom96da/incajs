@@ -50,7 +50,7 @@ pub(crate) fn dispatch_event<'js>(
             ),
         ));
     }
-    let path = path_from(&host.document.borrow().tree, target);
+    let path = path_from(host.document.borrow().tree(), target);
     let name = state.name.borrow().clone();
     let walk = script_walk(&name, state.flags.get(), target, &EventPayload::None);
     let targets = targets_of(ctx, &path)?;
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn a_dispatched_event_calls_the_function_stored_under_the_returned_id() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         let got = eval_json(
             &dispatcher,
             &format!(
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn dispatch_event_returns_false_for_a_canceled_cancelable_event_only() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(&dispatcher, node, "ping", "(e) => e.preventDefault()");
         let got = eval_json(
             &dispatcher,
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     fn a_canceled_event_stays_canceled_when_dispatched_again() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn a_redispatched_event_gets_a_new_event_id() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn an_event_nobody_hears_takes_no_event_id_but_gets_its_target() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         let got = eval_json(
             &dispatcher,
             &format!(
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn dispatch_event_while_dispatching_throws_invalid_state_and_the_walk_continues() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn a_nested_dispatch_throws_an_error_that_is_a_domexception_instance() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn dispatch_event_throws_for_anything_that_is_not_an_event_of_this_host() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         let got = eval_json(
             &dispatcher,
             &format!(
@@ -375,7 +375,7 @@ mod tests {
     #[test]
     fn a_listener_that_throws_during_dispatch_event_lets_the_others_run() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -393,7 +393,7 @@ mod tests {
     #[test]
     fn a_listener_that_throws_during_dispatch_event_is_reported_once_idle() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -420,7 +420,7 @@ mod tests {
     #[test]
     fn errors_are_reported_in_the_order_they_happened_across_nested_dispatches() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -452,7 +452,7 @@ mod tests {
     #[test]
     fn a_frozen_event_dispatches_again() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -485,7 +485,7 @@ mod tests {
     #[test]
     fn a_trusted_host_event_kept_by_a_listener_is_untrusted_when_dispatched_again() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn a_custom_event_shows_its_detail_to_the_listener_it_is_dispatched_to() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -552,20 +552,13 @@ mod tests {
     fn dispatch_event_of_a_click_reaches_a_disabled_button_and_its_ancestors() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
         let [_, parent, _] = tree_of_three(&host);
-        let button = host
-            .document
+        let button = host.document.borrow_mut().create_node("button").unwrap();
+        host.document
             .borrow_mut()
-            .tree
-            .create_node("button")
+            .append_child(&*host.window.borrow(), parent, button)
             .unwrap();
         host.document
             .borrow_mut()
-            .tree
-            .append_child(parent, button)
-            .unwrap();
-        host.document
-            .borrow_mut()
-            .tree
             .set_attribute(button, "disabled", true)
             .unwrap();
         listen(&dispatcher, button, "click", "() => out.push('button')");

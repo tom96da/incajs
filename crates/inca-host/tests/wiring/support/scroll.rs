@@ -31,7 +31,7 @@ impl Render for Root {
         self.dispatcher.begin_frame(window, cx);
         let host = self.host.document.borrow();
         let element =
-            render_tree_with_events(&host.tree, &host.style, 0, &self.dispatcher, self.mode)
+            render_tree_with_events(host.tree(), &host.style, 0, &self.dispatcher, self.mode)
                 .unwrap();
         // The walk records only the children of node 0, which is 100x100.
         let bounds = Bounds::new(Point::default(), gpui::size(px(100.), px(100.)));
@@ -160,26 +160,28 @@ pub fn on_wheel(node: NodeId, f: &str) -> String {
 /// Adds a sized div under `parent`, or styles the root when there is none.
 pub fn add_div(host: &mut Rig, parent: Option<NodeId>, height: f64, scrolls: bool) -> NodeId {
     let node = if parent.is_some() {
-        host.document.borrow_mut().tree.create_node("div").unwrap()
+        host.document.borrow_mut().create_node("div").unwrap()
     } else {
         host.document.borrow_mut().root()
     };
-    set_style(&mut host.document.borrow_mut().tree, node, "width", 100.0).unwrap();
-    set_style(&mut host.document.borrow_mut().tree, node, "height", height).unwrap();
-    if scrolls {
-        set_style(
-            &mut host.document.borrow_mut().tree,
-            node,
-            "overflow_y",
-            "scroll",
-        )
+    host.document
+        .borrow_mut()
+        .set_style_prop(node, "width", 100.0)
         .unwrap();
+    host.document
+        .borrow_mut()
+        .set_style_prop(node, "height", height)
+        .unwrap();
+    if scrolls {
+        host.document
+            .borrow_mut()
+            .set_style_prop(node, "overflow_y", "scroll")
+            .unwrap();
     }
     if let Some(parent) = parent {
         host.document
             .borrow_mut()
-            .tree
-            .append_child(parent, node)
+            .append_child(&*host.window.borrow(), parent, node)
             .unwrap();
     }
     node
@@ -208,18 +210,32 @@ pub fn nested_containers() -> Rig {
 pub fn styled_container(styles: &[(&str, &str)]) -> Rig {
     let host = Rig::default();
     let root = host.document.borrow_mut().root();
-    set_style(&mut host.document.borrow_mut().tree, root, "width", 100.0).unwrap();
-    set_style(&mut host.document.borrow_mut().tree, root, "height", 100.0).unwrap();
-    for (key, value) in styles {
-        set_style(&mut host.document.borrow_mut().tree, root, *key, *value).unwrap();
-    }
-    let child = host.document.borrow_mut().tree.create_node("div").unwrap();
-    set_style(&mut host.document.borrow_mut().tree, child, "width", 300.0).unwrap();
-    set_style(&mut host.document.borrow_mut().tree, child, "height", 300.0).unwrap();
     host.document
         .borrow_mut()
-        .tree
-        .append_child(root, child)
+        .set_style_prop(root, "width", 100.0)
+        .unwrap();
+    host.document
+        .borrow_mut()
+        .set_style_prop(root, "height", 100.0)
+        .unwrap();
+    for (key, value) in styles {
+        host.document
+            .borrow_mut()
+            .set_style_prop(root, key, *value)
+            .unwrap();
+    }
+    let child = host.document.borrow_mut().create_node("div").unwrap();
+    host.document
+        .borrow_mut()
+        .set_style_prop(child, "width", 300.0)
+        .unwrap();
+    host.document
+        .borrow_mut()
+        .set_style_prop(child, "height", 300.0)
+        .unwrap();
+    host.document
+        .borrow_mut()
+        .append_child(&*host.window.borrow(), root, child)
         .unwrap();
     host
 }

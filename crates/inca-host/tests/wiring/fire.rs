@@ -48,7 +48,7 @@ fn only_a_listener_the_event_reaches_enters_the_engine(cx: &mut TestAppContext) 
 #[gpui::test]
 fn an_event_nobody_keeps_is_collected_with_its_state(cx: &mut TestAppContext) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = cells.document.borrow_mut().create_node("div").unwrap();
     listen(
         &dispatcher,
         node,
@@ -69,7 +69,7 @@ fn an_event_nobody_keeps_is_collected_with_its_state(cx: &mut TestAppContext) {
 #[gpui::test]
 fn an_unlistened_pointer_or_key_input_leaves_the_engine_untouched(cx: &mut TestAppContext) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = cells.document.borrow_mut().create_node("div").unwrap();
     listen(&dispatcher, node, "click", "() => {}");
     dispatcher
         .engine
@@ -139,7 +139,7 @@ fn cancel_bubble_reads_a_stop_requested_after_the_walk(cx: &mut TestAppContext) 
 #[gpui::test]
 fn a_script_that_patches_the_builtins_cannot_reach_or_break_event_state(cx: &mut TestAppContext) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = cells.document.borrow_mut().create_node("div").unwrap();
     dispatcher
         .engine
         .eval::<()>(

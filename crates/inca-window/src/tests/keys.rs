@@ -10,7 +10,6 @@ use gpui::{App, AppContext as _, Keystroke, TestAppContext, Window, WindowHandle
 use inca_document::{EventPayload, EventTargetId, KeyPayload};
 use inca_gpui::{EventSink, InputRequest};
 use inca_node::NodeId;
-use inca_style::set_style;
 
 use super::{FakeScript, Walked, fake_dispatcher_on, mouse_at};
 use crate::test_support::{TestRoot, cells};
@@ -43,8 +42,9 @@ pub(crate) struct Scene {
 fn tree(cells: &Cells, value: Option<&str>) -> [NodeId; 5] {
     let mut h = cells.document.borrow_mut();
     let root = h.root();
-    let parent = h.tree.create_node("div").unwrap();
-    h.tree.append_child(root, parent).unwrap();
+    let parent = h.create_node("div").unwrap();
+    h.append_child(&*cells.window.borrow(), root, parent)
+        .unwrap();
     let tags = [
         "button",
         "button",
@@ -52,21 +52,22 @@ fn tree(cells: &Cells, value: Option<&str>) -> [NodeId; 5] {
         "div",
     ];
     let [first, second, field, plain] = tags.map(|tag| {
-        let node = h.tree.create_node(tag).unwrap();
-        h.tree.append_child(parent, node).unwrap();
+        let node = h.create_node(tag).unwrap();
+        h.append_child(&*cells.window.borrow(), parent, node)
+            .unwrap();
         node
     });
     match value {
         Some(value) => {
-            set_style(&mut h.tree, field, "width", 100.0).unwrap();
-            set_style(&mut h.tree, field, "text_size", 10.0).unwrap();
+            h.set_style_prop(field, "width", 100.0).unwrap();
+            h.set_style_prop(field, "text_size", 10.0).unwrap();
             h.inputs
                 .get_mut()
                 .entry(field)
                 .or_default()
                 .set_value(value);
         }
-        None => h.tree.set_attribute(field, "tabindex", "0").unwrap(),
+        None => h.set_attribute(field, "tabindex", "0").unwrap(),
     }
     for node in [first, second, field] {
         h.mark_tab_dirty(node);

@@ -38,12 +38,15 @@ pub fn js_input_scene_of(cx: &mut TestAppContext, value: &str) -> InputScene {
         let mut h = rig.cells.document.borrow_mut();
         let root = h.root();
         let [parent, input, button] =
-            ["div", "input", "button"].map(|tag| h.tree.create_node(tag).unwrap());
-        h.tree.append_child(root, parent).unwrap();
-        h.tree.append_child(parent, input).unwrap();
-        h.tree.append_child(parent, button).unwrap();
-        set_style(&mut h.tree, input, "width", 100.0).unwrap();
-        set_style(&mut h.tree, input, "text_size", 10.0).unwrap();
+            ["div", "input", "button"].map(|tag| h.create_node(tag).unwrap());
+        h.append_child(&*rig.cells.window.borrow(), root, parent)
+            .unwrap();
+        h.append_child(&*rig.cells.window.borrow(), parent, input)
+            .unwrap();
+        h.append_child(&*rig.cells.window.borrow(), parent, button)
+            .unwrap();
+        h.set_style_prop(input, "width", 100.0).unwrap();
+        h.set_style_prop(input, "text_size", 10.0).unwrap();
         h.mark_tab_dirty(input);
         h.mark_tab_dirty(button);
         h.inputs
@@ -116,7 +119,7 @@ impl InputScene {
 
     pub fn set_attribute(&self, name: &str) {
         let mut document = self.cells.document.borrow_mut();
-        document.tree.set_attribute(self.input, name, true).unwrap();
+        document.set_attribute(self.input, name, true).unwrap();
     }
 }
 

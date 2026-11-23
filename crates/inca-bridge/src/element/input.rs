@@ -22,7 +22,7 @@ pub(crate) fn install_input(n: &Natives<'_, '_>) -> JsResult<()> {
 /// Throws a `TypeError` unless `id` is an `input` node of the tree of `host`.
 /// `verb` names what the caller does with the value.
 fn input_node(ctx: &Ctx<'_>, host: &DocumentState, id: NodeId, verb: &str) -> JsResult<()> {
-    let node = existing_node(ctx, &host.tree, id)?;
+    let node = existing_node(ctx, host.tree(), id)?;
     if node.is_html("input") {
         return Ok(());
     }
@@ -108,7 +108,6 @@ mod tests {
         let node = host
             .document
             .borrow_mut()
-            .tree
             .create_element_ns(Some(SVG), None, "input")
             .unwrap();
 

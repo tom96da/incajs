@@ -35,12 +35,12 @@ fn closest<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResu
         let host = host.document.borrow();
         let syntax =
             |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
-        if host.tree.get(node_id).is_none() {
+        if host.tree().get(node_id).is_none() {
             check_selector(&selector).map_err(syntax)?;
             return Ok(Value::new_null(ctx.clone()));
         }
-        let found =
-            closest_selector(&host.tree, node_id, &selector, host.query_focus()).map_err(syntax)?;
+        let found = closest_selector(host.tree(), node_id, &selector, host.query_focus())
+            .map_err(syntax)?;
         or_null(&ctx, found)
     }
 }
@@ -50,12 +50,12 @@ fn query<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult
         let host = host.document.borrow();
         let syntax =
             |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
-        if host.tree.get(node_id).is_none() {
+        if host.tree().get(node_id).is_none() {
             check_selector(&selector).map_err(syntax)?;
             return Ok(Value::new_null(ctx.clone()));
         }
         let found =
-            query_selector(&host.tree, node_id, &selector, host.query_focus()).map_err(syntax)?;
+            query_selector(host.tree(), node_id, &selector, host.query_focus()).map_err(syntax)?;
         or_null(&ctx, found)
     }
 }
@@ -65,11 +65,11 @@ fn query_all<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsRe
         let host = host.document.borrow();
         let syntax =
             |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
-        if host.tree.get(node_id).is_none() {
+        if host.tree().get(node_id).is_none() {
             check_selector(&selector).map_err(syntax)?;
             return Ok(Vec::new());
         }
-        query_selector_all(&host.tree, node_id, &selector, host.query_focus()).map_err(syntax)
+        query_selector_all(host.tree(), node_id, &selector, host.query_focus()).map_err(syntax)
     }
 }
 
@@ -93,11 +93,11 @@ pub(super) fn install_matches<'js>(
             let syntax = |err: inca_style::SelectorError| {
                 Exception::throw_dom(ctx, "SyntaxError", &err.to_string())
             };
-            if host.tree.get(id).is_none() {
+            if host.tree().get(id).is_none() {
                 check_selector(&selector).map_err(syntax)?;
                 return Ok(false);
             }
-            matches_selector(&host.tree, id, &selector, host.query_focus()).map_err(syntax)
+            matches_selector(host.tree(), id, &selector, host.query_focus()).map_err(syntax)
         },
     )
 }

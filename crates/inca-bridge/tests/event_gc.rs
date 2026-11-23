@@ -48,11 +48,12 @@ fn three_nodes() -> (JsScript, Rc<Engine>, [NodeId; 3]) {
     let host = Rc::new(Host::default());
     let nodes = {
         let mut h = host.document.borrow_mut();
-        let outer = h.tree.create_node("div").unwrap();
-        let parent = h.tree.create_node("div").unwrap();
-        let child = h.tree.create_node("div").unwrap();
-        h.tree.append_child(outer, parent).unwrap();
-        h.tree.append_child(parent, child).unwrap();
+        let outer = h.create_node("div").unwrap();
+        let parent = h.create_node("div").unwrap();
+        let child = h.create_node("div").unwrap();
+        let view = host.window.borrow();
+        h.append_child(&*view, outer, parent).unwrap();
+        h.append_child(&*view, parent, child).unwrap();
         [outer, parent, child]
     };
     let engine = engine_for(&host);

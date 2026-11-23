@@ -15,7 +15,6 @@ pub mod text;
 pub mod view;
 pub mod warnings;
 
-pub use attributes::store_attribute;
 pub use create::{NameError, is_element_local_name, validate_and_extract};
 pub use document::{DocumentState, new_document_tree};
 pub use event::{
@@ -32,7 +31,6 @@ pub use markup::{
     Position, children_of, insert_parsed, parse_adjacent, parse_inner, parse_outer,
     replace_children, replace_with,
 };
-pub use removal::{free_ids, settle};
 pub use reveal::{Reveal, RevealOrigin, RevealQueue, Reveals};
 pub use semantics::{
     ARIA_REFLECTIONS, AriaKind, AriaReferences, AriaReflection, TabIndex, aria_reflection,

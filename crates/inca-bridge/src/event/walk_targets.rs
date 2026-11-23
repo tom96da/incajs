@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn dispatch_event_gives_an_unheard_event_its_target_object() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         dispatcher.engine.eval::<()>(HOOK).unwrap();
         let got = eval_json(
             &dispatcher,
@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn a_throwing_hook_runs_no_listener() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         dispatcher.engine.eval::<()>(THROWS).unwrap();
         listen(&dispatcher, node, "click", "() => out.push('ran')");
 
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn a_throwing_hook_is_reported() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         dispatcher.engine.eval::<()>(THROWS).unwrap();
         listen(&dispatcher, node, "click", "() => out.push('ran')");
 
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn a_hook_that_returns_no_array_runs_no_listener() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>("globalThis.__inca_targets__ = () => 5;")
@@ -255,7 +255,7 @@ mod tests {
     #[test]
     fn a_hook_that_returns_no_array_is_reported() {
         let (dispatcher, host, reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>("globalThis.__inca_targets__ = () => 5;")
@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn dispatch_event_throws_what_the_hook_throws() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         dispatcher.engine.eval::<()>(THROWS).unwrap();
         let got = eval_json(
             &dispatcher,
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn dispatch_event_throws_when_the_hook_returns_no_array() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         dispatcher
             .engine
             .eval::<()>("globalThis.__inca_targets__ = () => 5;")
@@ -536,7 +536,7 @@ mod tests {
     #[test]
     fn an_event_at_a_node_outside_the_document_never_reaches_document_or_window() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         let document = host.document.borrow().document();
         dispatcher.engine.eval::<()>(HOOK).unwrap();
         listen(&dispatcher, node, "click", &note_walk("node"));

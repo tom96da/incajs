@@ -51,7 +51,7 @@ impl Render for ClickableRoot {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let host = self.host.document.borrow();
         render_tree_with_events(
-            &host.tree,
+            host.tree(),
             &host.style,
             self.node,
             &self.dispatcher,
@@ -64,9 +64,9 @@ impl Render for ClickableRoot {
 pub fn build_clickable_tree() -> (Rig, NodeId) {
     let host = Rig::default();
     let mut host_mut = host.document.borrow_mut();
-    let node = host_mut.tree.create_node("div").unwrap();
-    set_style(&mut host_mut.tree, node, "width", 100.0).unwrap();
-    set_style(&mut host_mut.tree, node, "height", 100.0).unwrap();
+    let node = host_mut.create_node("div").unwrap();
+    host_mut.set_style_prop(node, "width", 100.0).unwrap();
+    host_mut.set_style_prop(node, "height", 100.0).unwrap();
     drop(host_mut);
     (host, node)
 }
@@ -118,17 +118,18 @@ pub fn build_panes(a_events: &[&str], root_events: &[&str]) -> Panes {
 pub fn build_panes_recording(a_events: &[&str], root_events: &[&str], record: &str) -> Panes {
     let host = Rig::default();
     let (root, a, b) = {
+        let view = host.window.borrow();
         let mut host = host.document.borrow_mut();
-        let root = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, root, "display", "flex").unwrap();
-        set_style(&mut host.tree, root, "flex_direction", "row").unwrap();
-        set_style(&mut host.tree, root, "width", 300.0).unwrap();
-        set_style(&mut host.tree, root, "height", 100.0).unwrap();
+        let root = host.create_node("div").unwrap();
+        host.set_style_prop(root, "display", "flex").unwrap();
+        host.set_style_prop(root, "flex_direction", "row").unwrap();
+        host.set_style_prop(root, "width", 300.0).unwrap();
+        host.set_style_prop(root, "height", 100.0).unwrap();
         let mut pane = || {
-            let pane = host.tree.create_node("div").unwrap();
-            set_style(&mut host.tree, pane, "width", 100.0).unwrap();
-            set_style(&mut host.tree, pane, "height", 100.0).unwrap();
-            host.tree.append_child(root, pane).unwrap();
+            let pane = host.create_node("div").unwrap();
+            host.set_style_prop(pane, "width", 100.0).unwrap();
+            host.set_style_prop(pane, "height", 100.0).unwrap();
+            host.append_child(&*view, root, pane).unwrap();
             pane
         };
         let (a, b) = (pane(), pane());
@@ -191,14 +192,15 @@ pub fn mount_recording_pair_with(
 ) -> (VisualTestContext, Rc<Engine>, NodeId, NodeId) {
     let host = Rig::default();
     let (parent, child) = {
+        let view = host.window.borrow();
         let mut host = host.document.borrow_mut();
-        let parent = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, parent, "width", 100.0).unwrap();
-        set_style(&mut host.tree, parent, "height", 100.0).unwrap();
-        let child = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, child, "width", 100.0).unwrap();
-        set_style(&mut host.tree, child, "height", 100.0).unwrap();
-        host.tree.append_child(parent, child).unwrap();
+        let parent = host.create_node("div").unwrap();
+        host.set_style_prop(parent, "width", 100.0).unwrap();
+        host.set_style_prop(parent, "height", 100.0).unwrap();
+        let child = host.create_node("div").unwrap();
+        host.set_style_prop(child, "width", 100.0).unwrap();
+        host.set_style_prop(child, "height", 100.0).unwrap();
+        host.append_child(&*view, parent, child).unwrap();
         (parent, child)
     };
     let engine = wiring::engine_for(&host);

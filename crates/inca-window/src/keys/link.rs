@@ -16,7 +16,7 @@ impl EventDispatcher {
         document
             .focus()
             .held_node(platform)
-            .filter(|id| document.tree.get(*id).is_some_and(VirtualNode::is_link))
+            .filter(|id| document.tree().get(*id).is_some_and(VirtualNode::is_link))
     }
 }
 
@@ -40,15 +40,18 @@ mod tests {
         ) -> NodeId {
             let mut document = self.cells.document.borrow_mut();
             let node = document
-                .tree
                 .create_element_ns(Some(namespace), None, tag)
                 .unwrap();
             for &(key, value) in attributes {
-                document.tree.set_attribute(node, key, value).unwrap();
+                document.set_attribute(node, key, value).unwrap();
             }
             document
-                .tree
-                .insert_before(self.parent, node, Some(self.field))
+                .insert_before(
+                    &*self.cells.window.borrow(),
+                    self.parent,
+                    node,
+                    Some(self.field),
+                )
                 .unwrap();
             document.mark_tab_dirty(node);
             node

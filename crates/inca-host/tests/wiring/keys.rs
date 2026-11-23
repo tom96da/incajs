@@ -275,8 +275,7 @@ fn a_key_event_with_nothing_focused_targets_the_root(cx: &mut TestAppContext) {
     let root = host.document.borrow().root();
     host.document
         .borrow_mut()
-        .tree
-        .append_child(root, parent)
+        .append_child(&*host.window.borrow(), root, parent)
         .unwrap();
     let engine = wiring::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();
@@ -579,8 +578,7 @@ fn a_modifier_alone_with_nothing_focused_targets_the_root(cx: &mut TestAppContex
     let root = host.document.borrow().root();
     host.document
         .borrow_mut()
-        .tree
-        .append_child(root, parent)
+        .append_child(&*host.window.borrow(), root, parent)
         .unwrap();
     let engine = wiring::engine_for(&host);
     engine.eval::<()>("globalThis.seen = [];").unwrap();

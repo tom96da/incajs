@@ -11,7 +11,7 @@ use std::rc::Rc;
 use gpui::{App, Pixels, ScrollHandle, Window, point, px};
 
 use inca_document::geometry::{Align, scroll_chain};
-use inca_document::{DocumentState, NodeBox, RevealOrigin, Reveals, ScrollRange, View, free_ids};
+use inca_document::{DocumentState, NodeBox, RevealOrigin, Reveals, ScrollRange, View};
 use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_node::{NodeId, VirtualTree};
 use inca_style::{StyleCache, is_scroll_container};
@@ -309,13 +309,9 @@ impl Cells {
     /// freed node ids and the callback ids their listeners held, or `None` when nothing was
     /// freed.
     pub(crate) fn sweep_orphans(&self) -> Option<(Vec<NodeId>, Vec<u32>)> {
-        let mut document = self.document.borrow_mut();
-        let nodes = document.tree.sweep();
-        if nodes.is_empty() {
-            return None;
-        }
-        let callbacks = free_ids(&mut document, &mut *self.window.borrow_mut(), &nodes);
-        Some((nodes, callbacks))
+        self.document
+            .borrow_mut()
+            .sweep(&mut *self.window.borrow_mut())
     }
 
     /// The deepest container whose last drawn box holds the point, else the top node.
@@ -323,7 +319,7 @@ impl Cells {
         let document = self.document.borrow();
         self.window
             .borrow()
-            .container_at(&document.tree, x, y)
+            .container_at(document.tree(), x, y)
             .unwrap_or_else(|| document.top())
     }
 
@@ -337,7 +333,7 @@ impl Cells {
         let document = self.document.borrow();
         moved.retain(|&id| {
             inca_document::listened(
-                &document.tree,
+                document.tree(),
                 &document.listeners,
                 "scroll",
                 flags,
@@ -377,7 +373,7 @@ impl Cells {
         let document = self.document.borrow();
         self.window
             .borrow()
-            .reveal(&document.tree, &document.style, node, block, inline)
+            .reveal(document.tree(), &document.style, node, block, inline)
     }
 }
 
@@ -407,8 +403,7 @@ mod tests {
         cells
             .document
             .borrow_mut()
-            .tree
-            .remove_child(document, root)
+            .remove_child(&*cells.window.borrow(), document, root)
             .unwrap();
 
         assert_eq!(cells.container_at(1.0, 1.0), document);
@@ -434,10 +429,14 @@ mod tests {
         let (cells, _wake) = crate::test_support::cells();
         let mut document = cells.document.borrow_mut();
         let container = document.root();
-        let child = document.tree.create_node("div").unwrap();
-        let grandchild = document.tree.create_node("div").unwrap();
-        document.tree.append_child(container, child).unwrap();
-        document.tree.append_child(child, grandchild).unwrap();
+        let child = document.create_node("div").unwrap();
+        let grandchild = document.create_node("div").unwrap();
+        document
+            .append_child(&*cells.window.borrow(), container, child)
+            .unwrap();
+        document
+            .append_child(&*cells.window.borrow(), child, grandchild)
+            .unwrap();
         let window = cells.window.borrow();
         let record = |id| {
             let layout = inca_gpui::NodeLayout {
@@ -452,7 +451,7 @@ mod tests {
             record(id);
         }
 
-        window.shift_descendants(&document.tree, container, 3.0, 20.0);
+        window.shift_descendants(document.tree(), container, 3.0, 20.0);
 
         let layout = window.layout.borrow();
         let read = |id| {
@@ -472,7 +471,7 @@ mod tests {
     #[test]
     fn sweep_orphans_drops_the_window_state_of_the_freed_nodes() {
         let (cells, _wake) = cells();
-        let orphan = cells.document.borrow_mut().tree.create_node("div").unwrap();
+        let orphan = cells.document.borrow_mut().create_node("div").unwrap();
         cells
             .window
             .borrow()

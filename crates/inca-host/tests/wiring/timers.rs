@@ -136,11 +136,12 @@ fn a_timer_callback_sees_the_focus_the_window_applied(cx: &mut TestAppContext) {
     let dispatcher = host.dispatcher(&engine, inca_jsenv::stderr_reporter());
     let node = {
         let mut document = host.document.borrow_mut();
-        let node = document.tree.create_node("div").unwrap();
+        let node = document.create_node("div").unwrap();
         let root = document.root();
-        document.tree.append_child(root, node).unwrap();
         document
-            .tree
+            .append_child(&*host.window.borrow(), root, node)
+            .unwrap();
+        document
             .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
             .unwrap();
         node
