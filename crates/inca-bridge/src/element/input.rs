@@ -34,16 +34,15 @@ fn input_value<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<S
     move |ctx, JsNodeId(node_id)| {
         let host = host.document.borrow();
         input_node(&ctx, &host, node_id, "read")?;
-        let inputs = host.inputs.borrow();
-        Ok(inputs
-            .get(&node_id)
+        Ok(host
+            .input(node_id)
             .map_or_else(String::new, |input| input.value().to_owned()))
     }
 }
 
 fn set_input_value<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), value| {
-        let host = host.document.borrow();
+        let mut host = host.document.borrow_mut();
         input_node(&ctx, &host, node_id, "write")?;
         host.set_input_value(node_id, &value);
         Ok(())

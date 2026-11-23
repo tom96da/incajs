@@ -49,11 +49,7 @@ pub fn js_input_scene_of(cx: &mut TestAppContext, value: &str) -> InputScene {
         h.set_style_prop(input, "text_size", 10.0).unwrap();
         h.mark_tab_dirty(input);
         h.mark_tab_dirty(button);
-        h.inputs
-            .get_mut()
-            .entry(input)
-            .or_default()
-            .set_value(value);
+        h.set_input_value(input, value);
         [parent, input, button]
     };
     let engine = wiring::engine_for(&rig);
@@ -114,7 +110,12 @@ impl InputScene {
     }
 
     pub fn state(&self) -> inca_document::InputState {
-        self.cells.document.borrow().inputs.borrow()[&self.input].clone()
+        self.cells
+            .document
+            .borrow()
+            .input(self.input)
+            .unwrap()
+            .clone()
     }
 
     pub fn set_attribute(&self, name: &str) {

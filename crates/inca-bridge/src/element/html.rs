@@ -699,10 +699,7 @@ mod tests {
             ))
             .unwrap();
 
-        assert_eq!(
-            host.document.borrow().inputs.borrow().contains_key(&id),
-            typed
-        );
+        assert_eq!(host.document.borrow().input(id).is_some(), typed);
     }
 
     #[rstest]

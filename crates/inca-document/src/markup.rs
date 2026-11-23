@@ -383,6 +383,6 @@ mod tests {
         replace_children(&mut state, &view, container, &parsed).unwrap();
 
         let id = state.tree().get(container).unwrap().children()[0];
-        assert!(state.inputs.borrow().contains_key(&id));
+        assert!(state.input(id).is_some());
     }
 }

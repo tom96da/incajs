@@ -61,11 +61,7 @@ fn tree(cells: &Cells, value: Option<&str>) -> [NodeId; 5] {
         Some(value) => {
             h.set_style_prop(field, "width", 100.0).unwrap();
             h.set_style_prop(field, "text_size", 10.0).unwrap();
-            h.inputs
-                .get_mut()
-                .entry(field)
-                .or_default()
-                .set_value(value);
+            h.set_input_value(field, value);
         }
         None => h.set_attribute(field, "tabindex", "0").unwrap(),
     }
@@ -205,7 +201,12 @@ impl Scene {
 
     /// The text state of the input field.
     pub(crate) fn state(&self) -> inca_document::InputState {
-        self.cells.document.borrow().inputs.borrow()[&self.field].clone()
+        self.cells
+            .document
+            .borrow()
+            .input(self.field)
+            .unwrap()
+            .clone()
     }
 
     pub(crate) fn mouse_down(&self, cx: &mut TestAppContext, node: NodeId) {

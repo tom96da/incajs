@@ -4,7 +4,6 @@
 //! The tree a document starts from, and the state that joins it to its style, its listeners and
 //! its focus.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 use inca_node::{NodeId, TreeError, VirtualTree};
@@ -67,9 +66,9 @@ pub struct DocumentState {
     /// The node a script asked to capture the mouse pointer. Its `gotpointercapture` fires before
     /// the next pointer event.
     pub capture_pending: Option<NodeId>,
-    /// The text states of the `input` nodes, created on first use. Its own cell, as the draw runs
-    /// under a shared borrow.
-    pub inputs: RefCell<HashMap<NodeId, InputState>>,
+    /// The text states of the `input` nodes, created on first use. Read through [`Self::input`]
+    /// and changed only through the operations of the document.
+    inputs: HashMap<NodeId, InputState>,
 }
 
 impl Default for DocumentState {
@@ -93,7 +92,7 @@ impl DocumentState {
             reveals: RevealQueue::default(),
             last_event_id: 0,
             capture_pending: None,
-            inputs: RefCell::new(HashMap::new()),
+            inputs: HashMap::new(),
         }
     }
 
@@ -115,14 +114,22 @@ impl std::fmt::Debug for DocumentState {
 }
 
 impl DocumentState {
+    /// The text state of the `input` node `node`, `None` before its first use.
+    #[must_use]
+    pub fn input(&self, node: NodeId) -> Option<&InputState> {
+        self.inputs.get(&node)
+    }
+
     /// Sets the typed text of the `input` node `node` to `value`, creating its text state on first
     /// use.
-    pub fn set_input_value(&self, node: NodeId, value: &str) {
-        self.inputs
-            .borrow_mut()
-            .entry(node)
-            .or_default()
-            .set_value(value);
+    pub fn set_input_value(&mut self, node: NodeId, value: &str) {
+        self.edit_input(node, |input| input.set_value(value));
+    }
+
+    /// Runs `edit` on the text state of the `input` node `node`, created on first use, and returns
+    /// what `edit` returns.
+    pub fn edit_input<R>(&mut self, node: NodeId, edit: impl FnOnce(&mut InputState) -> R) -> R {
+        edit(self.inputs.entry(node).or_default())
     }
 
     /// The node a mounting app attaches under. Allocated with the tree, so `rootNodeId` always
@@ -193,11 +200,7 @@ impl DocumentState {
                 .tree
                 .get(copy)
                 .is_some_and(|node| node.is_html("input"));
-            let typed = self
-                .inputs
-                .get_mut()
-                .get(&original)
-                .map(|input| input.value().to_owned());
+            let typed = self.input(original).map(|input| input.value().to_owned());
             if let (true, Some(typed)) = (is_input, typed) {
                 self.set_input_value(copy, &typed);
             }
@@ -406,7 +409,7 @@ impl DocumentState {
     pub(crate) fn forget(&mut self, ids: &[NodeId]) -> Vec<u32> {
         for &id in ids {
             self.warnings.forget(id);
-            self.inputs.get_mut().remove(&id);
+            self.inputs.remove(&id);
             self.focus.forget(id);
             self.reveals.forget(id);
         }

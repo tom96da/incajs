@@ -51,21 +51,15 @@ impl EventDispatcher {
     /// Whether the text state of `node` has a composition.
     pub(super) fn composing(&self, node: NodeId) -> bool {
         let document = self.cells.document.borrow();
-        let inputs = document.inputs.borrow();
-        inputs
-            .get(&node)
+        document
+            .input(node)
             .is_some_and(|state| state.composition().is_some())
     }
 
     /// A copy of the text state of `node`, the default state without one.
     pub(crate) fn input_state(&self, node: NodeId) -> InputState {
         let document = self.cells.document.borrow();
-        document
-            .inputs
-            .borrow()
-            .get(&node)
-            .cloned()
-            .unwrap_or_default()
+        document.input(node).cloned().unwrap_or_default()
     }
 
     /// Where the last frame drew the text of `node`, empty without one.
@@ -79,12 +73,10 @@ impl EventDispatcher {
             .unwrap_or_default()
     }
 
-    /// Runs `f` on the text state of `node`, created when missing. The borrows of the document
-    /// end when it returns.
+    /// Runs `f` on the text state of `node`, created when missing. The borrow of the document
+    /// ends when it returns.
     pub(super) fn with_input<R>(&self, node: NodeId, f: impl FnOnce(&mut InputState) -> R) -> R {
-        let document = self.cells.document.borrow();
-        let mut inputs = document.inputs.borrow_mut();
-        f(inputs.entry(node).or_default())
+        self.cells.document.borrow_mut().edit_input(node, f)
     }
 
     /// Redraws after an edit or a selection change, and tells the platform to ask again where the
@@ -529,13 +521,7 @@ mod tests {
             .borrow_mut()
             .append_child(&*s.cells.window.borrow(), s.parent, svg_input)
             .unwrap();
-        s.cells
-            .document
-            .borrow_mut()
-            .inputs
-            .get_mut()
-            .entry(svg_input)
-            .or_default();
+        s.cells.document.borrow_mut().set_input_value(svg_input, "");
         forget(&s);
         s.in_window(cx, |scene, window, cx| {
             scene
