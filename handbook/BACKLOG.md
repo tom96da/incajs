@@ -700,16 +700,18 @@ A fixed entry is deleted and its ID is never reused.
   ancestor with a `position` once that style exists.
 
 - **B-162 Style warnings print as plain text outside the console**
-  `Units: gpui,bridge,jsenv · Size: L · Impact: Low`
+  `Units: jsenv,host · Size: L · Impact: Low`
 
   `console` prints decorated lines, with colors, class names and the detail of
   `%o`. A style warning such as ``node 1 (div): ignoring unknown style key
-  `justifyContent` `` is a plain line written by `eprintln!`, so it cannot use
-  that output. The formatting code lives in `inca-jsenv`. Fix: move the
-  output formatting into a crate that `inca-jsenv`, `inca-bridge` and
-  `inca-gpui` depend on, so JS and Rust print through one path. A smaller
-  first step is to route the bridge's style warnings through the console
-  output, because `inca-bridge` already depends on `inca-jsenv`.
+  `justifyContent` `` is a plain line that the document model writes to its
+  default sink, so it cannot use that output. Fix: `console::install` returns
+  a writer handle, plain data with `write(level, line)`, which enters the
+  console before the decoration of each log level. `inca-host` builds the
+  warning sink of the document model from the handle and sets it, so a line
+  from Rust and a line from `console` get the same decoration. The decoration
+  of each log level is meant to become that of the npm package `consola`, and
+  the handle leaves that change to the decoration alone.
 
 - **B-163 A failed transform of the app's modules shows after the host has started**
   `Units: cli · Size: S–M · Impact: Low`

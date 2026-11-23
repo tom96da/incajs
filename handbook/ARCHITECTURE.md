@@ -6,7 +6,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # Architecture
 
 The concepts of Incarnative.js: its layers, how they connect and the development window.
-[FFI.md](./FFI.md) holds the contract of the JS↔Rust boundary and [PROTOCOL.md](./PROTOCOL.md) the
+[MODULES.md](./MODULES.md) holds the duty of each crate and package and the layers and edges between
+them, [FFI.md](./FFI.md) the contract of the JS↔Rust boundary and [PROTOCOL.md](./PROTOCOL.md) the
 dev protocol, HMR delivery included.
 
 ## Tech stack

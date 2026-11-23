@@ -28,7 +28,7 @@ incajs/
 │   ├── STRUCTURE.md         # this file
 │   ├── DEVELOPMENT.md       # project status, architecture links, guiding principles
 │   ├── ARCHITECTURE.md      # the concepts: tech stack, system diagram, development window
-│   ├── ROADMAP.md           # planned phased implementation (Vue 3 first, React later)
+│   ├── MODULES.md           # the duty of each crate and package, the layers they form and the edges allowed between them
 │   ├── FFI.md               # contract of the JS↔Rust host bridge
 │   ├── PROTOCOL.md          # dev protocol between the host binary and the Node process spawning it, and HMR delivery
 │   ├── PLAN.md              # checkbox-tracked, per-phase task breakdown of ROADMAP.md
@@ -37,6 +37,7 @@ incajs/
 │   ├── TESTING.md           # test placement and required checks, Rust + TypeScript
 │   ├── STYLE.md             # how code, comments and documentation are written, and what oxlint and oxfmt enforce
 │   ├── FAILURES.md          # what gets refused, what falls back, and where each is reported
+│   ├── ROADMAP.md           # planned phased implementation (Vue 3 first, React later)
 │   └── MANUAL_GUI_CHECK.md  # how to open a GPUI window yourself and fix its start-up
 ├── .devcontainer/
 │   ├── devcontainer.json    # builds from ./Dockerfile, adds the `node` and `claude-code` features
