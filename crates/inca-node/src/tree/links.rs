@@ -5,22 +5,23 @@
 
 use std::collections::HashSet;
 
-use super::{NodeId, TreeError, VirtualTree};
+use super::{NodeId, Removal, TreeError, VirtualTree};
 
 impl VirtualTree {
-    /// Appends `node_id` to `parent_id`'s children. Thin wrapper over
-    /// [`insert_before`](Self::insert_before) with no reference child.
+    /// Appends `node_id` to `parent_id`'s children and returns the position of the first inserted
+    /// child, as [`insert_before`](Self::insert_before) does with no reference child.
     ///
     /// # Errors
     ///
     /// Same as [`insert_before`](Self::insert_before), with no reference child to fail on.
     pub fn append_child(&mut self, parent_id: NodeId, node_id: NodeId) -> Result<usize, TreeError> {
-        self.insert_before(parent_id, node_id, None)
+        self.insert_node(parent_id, node_id, None)
     }
 
     /// Inserts `node_id` into `parent_id`'s children, before `reference_id` if given, or at the
-    /// end if `None`, and returns the position of the first inserted child among the children of
-    /// `parent_id`. `node_id` is detached from its old parent first, so this both attaches and
+    /// end if `None`. Returns the position of the first inserted child among the children of
+    /// `parent_id`, and the removals of the moved nodes as they were before the call.
+    /// `node_id` is detached from its old parent first, so this both attaches and
     /// moves. A fragment moves its children in order and stays empty and parentless. An empty
     /// fragment changes nothing and returns the position it would take.
     ///
@@ -39,6 +40,19 @@ impl VirtualTree {
     /// - [`TreeError::DocumentChild`] if `parent_id` is a document and the insertion would give
     ///   it text or a second element.
     pub fn insert_before(
+        &mut self,
+        parent_id: NodeId,
+        node_id: NodeId,
+        reference_id: Option<NodeId>,
+    ) -> Result<(usize, Vec<Removal>), TreeError> {
+        let removals = self.removals(&self.nodes_to_move(node_id));
+        let position = self.insert_node(parent_id, node_id, reference_id)?;
+        Ok((position, removals))
+    }
+
+    /// [`insert_before`](Self::insert_before) without the removals, for the callers that apply
+    /// none.
+    pub(crate) fn insert_node(
         &mut self,
         parent_id: NodeId,
         node_id: NodeId,
@@ -130,22 +144,27 @@ impl VirtualTree {
         }
     }
 
-    /// Unlinks `child_id` from `parent_id`'s children. The child node keeps its own children and,
-    /// unless held, is an orphan until it is inserted again. An unknown `child_id` changes
-    /// nothing.
+    /// Unlinks `child_id` from `parent_id`'s children and returns its removal as it was before the
+    /// call. The child node keeps its own children and, unless held, is an orphan until it is
+    /// inserted again. An unknown `child_id` changes nothing.
     ///
     /// # Errors
     ///
     /// Returns [`TreeError::NodeNotFound`] if `parent_id` names no node, and
     /// [`TreeError::NotAChild`] if `child_id` names a node that is not a child of `parent_id`.
-    pub fn remove_child(&mut self, parent_id: NodeId, child_id: NodeId) -> Result<(), TreeError> {
+    pub fn remove_child(
+        &mut self,
+        parent_id: NodeId,
+        child_id: NodeId,
+    ) -> Result<Vec<Removal>, TreeError> {
+        let removals = self.removals(&[child_id]);
         let parent = self
             .nodes
             .get(&parent_id)
             .ok_or(TreeError::NodeNotFound(parent_id))?;
         if !parent.children.contains(&child_id) {
             if !self.nodes.contains_key(&child_id) {
-                return Ok(());
+                return Ok(removals);
             }
             return Err(TreeError::NotAChild {
                 parent: parent_id,
@@ -154,11 +173,12 @@ impl VirtualTree {
         }
         self.detach(child_id);
         self.orphan_if_free(child_id);
-        Ok(())
+        Ok(removals)
     }
 
-    /// Replaces `child_id` among the children of `parent_id` with `node_id` and returns the
-    /// position of the first inserted child. `child_id` leaves the tree with its subtree and is an
+    /// Replaces `child_id` among the children of `parent_id` with `node_id`. Returns the position
+    /// of the first inserted child, and the removals of `child_id` and of the moved nodes, in that
+    /// order, as they were before the call. `child_id` leaves the tree with its subtree and is an
     /// orphan unless held. `node_id` may be a descendant of `child_id`. A fragment moves its
     /// children.
     ///
@@ -171,7 +191,10 @@ impl VirtualTree {
         parent_id: NodeId,
         node_id: NodeId,
         child_id: NodeId,
-    ) -> Result<usize, TreeError> {
+    ) -> Result<(usize, Vec<Removal>), TreeError> {
+        let mut leaving = vec![child_id];
+        leaving.extend(self.nodes_to_move(node_id));
+        let removals = self.removals(&leaving);
         self.check_insertion(parent_id, node_id, Some(child_id), Some(child_id))?;
         let mut reference = self.next_sibling(child_id);
         if reference == Some(node_id) {
@@ -179,7 +202,8 @@ impl VirtualTree {
         }
         self.detach(child_id);
         self.orphan_if_free(child_id);
-        Ok(self.place(parent_id, self.nodes_to_move(node_id), reference))
+        let position = self.place(parent_id, self.nodes_to_move(node_id), reference);
+        Ok((position, removals))
     }
 }
 
@@ -211,7 +235,7 @@ mod tests {
         let extra = node(&mut tree, "span");
         let reference = kids.get(before).copied();
 
-        let position = tree.insert_before(parent, extra, reference).unwrap();
+        let (position, _) = tree.insert_before(parent, extra, reference).unwrap();
 
         assert_eq!(position, expected);
         assert_eq!(children(&tree, parent)[expected], extra);
@@ -222,7 +246,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let (parent, kids) = family(&mut tree, 4);
 
-        let position = tree.insert_before(parent, kids[0], Some(kids[3])).unwrap();
+        let (position, _) = tree.insert_before(parent, kids[0], Some(kids[3])).unwrap();
 
         assert_eq!(position, 2);
         assert_eq!(
@@ -261,7 +285,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let (parent, kids) = family(&mut tree, 2);
 
-        let position = tree
+        let (position, _) = tree
             .insert_before(parent, kids[index], Some(kids[index]))
             .unwrap();
 
@@ -278,7 +302,7 @@ mod tests {
         tree.append_child(fragment, a).unwrap();
         tree.append_child(fragment, b).unwrap();
 
-        let position = tree.insert_before(parent, fragment, Some(kids[0])).unwrap();
+        let (position, _) = tree.insert_before(parent, fragment, Some(kids[0])).unwrap();
 
         assert_eq!(position, 0);
         assert_eq!(children(&tree, parent), [a, b, kids[0]]);
@@ -321,7 +345,7 @@ mod tests {
         let fragment = node(&mut tree, FRAGMENT_TAG);
         let generation = tree.generation;
 
-        let position = tree.insert_before(parent, fragment, Some(kids[1])).unwrap();
+        let (position, _) = tree.insert_before(parent, fragment, Some(kids[1])).unwrap();
 
         assert_eq!(position, 1);
         assert_eq!(children(&tree, parent), kids);
@@ -489,7 +513,7 @@ mod tests {
         let (parent, kids) = family(&mut tree, 3);
         let extra = node(&mut tree, "i");
 
-        let position = tree.replace_child(parent, extra, kids[1]).unwrap();
+        let (position, _) = tree.replace_child(parent, extra, kids[1]).unwrap();
 
         assert_eq!(position, 1);
         assert_eq!(children(&tree, parent), [kids[0], extra, kids[2]]);
@@ -501,7 +525,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let (parent, kids) = family(&mut tree, 3);
 
-        let position = tree.replace_child(parent, kids[1], kids[1]).unwrap();
+        let (position, _) = tree.replace_child(parent, kids[1], kids[1]).unwrap();
 
         assert_eq!(position, 1);
         assert_eq!(children(&tree, parent), kids);
@@ -513,7 +537,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let (parent, kids) = family(&mut tree, 3);
 
-        let position = tree.replace_child(parent, kids[2], kids[1]).unwrap();
+        let (position, _) = tree.replace_child(parent, kids[2], kids[1]).unwrap();
 
         assert_eq!(position, 1);
         assert_eq!(children(&tree, parent), [kids[0], kids[2]]);
@@ -524,7 +548,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let (parent, kids) = family(&mut tree, 3);
 
-        let position = tree.replace_child(parent, kids[0], kids[2]).unwrap();
+        let (position, _) = tree.replace_child(parent, kids[0], kids[2]).unwrap();
 
         assert_eq!(position, 1);
         assert_eq!(children(&tree, parent), [kids[1], kids[0]]);
@@ -539,7 +563,7 @@ mod tests {
         tree.append_child(fragment, a).unwrap();
         tree.append_child(fragment, b).unwrap();
 
-        let position = tree.replace_child(parent, fragment, kids[0]).unwrap();
+        let (position, _) = tree.replace_child(parent, fragment, kids[0]).unwrap();
 
         assert_eq!(position, 0);
         assert_eq!(children(&tree, parent), [a, b, kids[1]]);
@@ -553,7 +577,7 @@ mod tests {
         let inner = node(&mut tree, "i");
         tree.append_child(kids[0], inner).unwrap();
 
-        let position = tree.replace_child(parent, inner, kids[0]).unwrap();
+        let (position, _) = tree.replace_child(parent, inner, kids[0]).unwrap();
 
         assert_eq!(position, 0);
         assert_eq!(children(&tree, parent), [inner, kids[1]]);

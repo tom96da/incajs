@@ -53,10 +53,10 @@ incajs/
 ├── rust-toolchain.toml      # pins the Rust toolchain
 ├── patches/                 # no-op stand-ins for zed's tracing crates, `[patch]`ed into the build
 ├── crates/
-│   ├── inca-node/           # retained tree and input text
+│   ├── inca-node/           # retained tree, node data, markup and input text
 │   ├── inca-style/          # selectors, style sheets, cascade, inline style and element spec
 │   ├── inca-document/       # element semantics, the document state and markup steps, the event model, the focus model, box geometry and the text-control model
-│   ├── inca-gpui/           # GPUI rendering and wheel wiring
+│   ├── inca-gpui/           # GPUI rendering, input drawing, the payload conversion and wheel wiring
 │   ├── inca-window/         # the behaviour of a window: input turned into events and default actions, the focus handles and the per-window state
 │   ├── inca-bridge/         # binds a QuickJS realm to the retained tree: the `__inca_native__` bridge
 │   ├── inca-jsenv/          # the QuickJS Engine, module loader, value inspection and host objects such as `console`

@@ -3,7 +3,7 @@
 
 //! The key names of keyboard events.
 
-use super::Keystroke;
+use gpui::Keystroke;
 
 /// Whether gpui's `key` names the Menu key: `"menu"`, or U+0010 from a Mac keyboard.
 #[must_use]

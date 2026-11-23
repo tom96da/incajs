@@ -7,10 +7,10 @@
 
 use std::rc::Rc;
 
+use crate::support::Rig;
+use crate::support::{Reported, capture_reporter};
 use gpui::WindowHandle;
 use gpui::{AppContext as _, TestAppContext};
-use inca_bridge::test_support::{Reported, capture_reporter};
-use inca_host::wiring::Rig;
 use inca_test_macros::gpui_cases;
 use inca_window::test_support::TestRoot;
 use std::time::Duration;

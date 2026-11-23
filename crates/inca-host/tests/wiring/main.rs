@@ -6,6 +6,7 @@
 mod dispatch;
 mod event_fields;
 mod fire;
+mod focus;
 mod frame;
 mod input;
 mod keys;

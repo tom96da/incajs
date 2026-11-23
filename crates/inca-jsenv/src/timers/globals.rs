@@ -10,7 +10,7 @@ use rquickjs::{
     Array, Coerced, Ctx, Error, Exception, FromJs, Function, Result as JsResult, Value,
 };
 
-use super::Timers;
+use super::queue::Timers;
 use crate::callbacks;
 use crate::class::define_function;
 

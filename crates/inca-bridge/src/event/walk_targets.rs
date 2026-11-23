@@ -1,0 +1,657 @@
+// Copyright (c) 2026 tom96da
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! The targets the global `__inca_targets__` gives objects for, the objects that stand for the
+//! targets of a walk, and the walk of the `abort` event of a signal.
+
+use std::rc::Rc;
+
+use inca_document::{EventPayload, EventTargetId, Flags, Walk};
+use inca_node::NodeId;
+use rquickjs::{Array, Ctx, Function, IntoJs, Object, Result as JsResult, Value};
+
+use super::walk::{listened, next_event_id, run};
+use crate::abort::Table;
+use crate::bindings::Host;
+use crate::event::array_of;
+
+/// The JS tag of [`HookTarget::Window`].
+pub(crate) const WINDOW_TAG: &str = "$window";
+
+/// A target the global `__inca_targets__` gives an object for: a node or the window. A signal
+/// is no hook target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HookTarget {
+    Node(NodeId),
+    Window,
+}
+
+impl HookTarget {
+    /// The hook target of `target`, `None` for a signal.
+    pub(crate) fn of(target: EventTargetId) -> Option<Self> {
+        match target {
+            EventTargetId::Node(id) => Some(Self::Node(id)),
+            EventTargetId::Window => Some(Self::Window),
+            EventTargetId::Signal(_) => None,
+        }
+    }
+}
+
+/// A node is its number, and the window is its tag.
+impl<'js> IntoJs<'js> for HookTarget {
+    fn into_js(self, ctx: &Ctx<'js>) -> JsResult<Value<'js>> {
+        match self {
+            Self::Node(id) => id.into_js(ctx),
+            Self::Window => WINDOW_TAG.into_js(ctx),
+        }
+    }
+}
+
+/// What stands for each of `targets`: the entries of the array that the
+/// global `__inca_targets__` returns for them, or the targets themselves when
+/// the global is not a function. A path of one signal goes to the signal table with no call of the
+/// global, and gives `null` for a signal whose object is gone.
+///
+/// # Errors
+///
+/// Throws what the global throws, and a `TypeError` when it returns no array.
+pub(in crate::event) fn targets_of<'js>(
+    ctx: &Ctx<'js>,
+    targets: &[EventTargetId],
+) -> JsResult<Vec<Value<'js>>> {
+    if let [EventTargetId::Signal(id)] = *targets {
+        let found = Table::open(ctx)?.find(id)?;
+        return Ok(vec![
+            found.map_or_else(|| Value::new_null(ctx.clone()), Object::into_value),
+        ]);
+    }
+    let given = array_of(ctx, targets.iter().filter_map(|&t| HookTarget::of(t)))?;
+    let Ok(hook) = ctx.globals().get::<_, Function>("__inca_targets__") else {
+        return (0..targets.len()).map(|index| given.get(index)).collect();
+    };
+    let found: Array = hook.call((given,))?;
+    (0..targets.len()).map(|index| found.get(index)).collect()
+}
+
+/// Fires the trusted `abort` event at signal `id`. The event does not bubble and cannot be
+/// canceled. It enters the engine only when a listener of the signal exists. Listener errors go to
+/// `JsState::failures`.
+pub(crate) fn fire_abort(ctx: &Ctx<'_>, host: &Rc<Host>, id: u32) {
+    let walk = Walk {
+        name: "abort",
+        flags: Flags::NONE,
+        target: EventTargetId::Signal(id),
+        cut: &[],
+        payload: &EventPayload::None,
+        trusted: true,
+    };
+    if listened(
+        &host.document.borrow(),
+        walk.name,
+        walk.flags,
+        walk.target,
+        walk.cut,
+    ) {
+        run(ctx, host, &walk, next_event_id(host));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use crate::tests::{
+        dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
+        node_under_root, read_out, tree_of_three,
+    };
+    use inca_document::{EventPayload, EventTargetId, MousePayload, WheelPayload};
+    use inca_jsenv::Engine;
+    use rquickjs::IntoJs;
+    use rstest::rstest;
+
+    use super::HookTarget;
+
+    /// Gives every node one object `{ node }` and counts the calls.
+    const HOOK: &str = r"
+        globalThis.calls = 0;
+        globalThis.objs = {};
+        globalThis.nodeOf = (o) => (o === null ? null : o.node);
+        globalThis.__inca_targets__ = (ids) => {
+            globalThis.calls += 1;
+            return ids.map((id) => (globalThis.objs[id] ??= { node: id }));
+        };
+        ";
+
+    const THROWS: &str = "globalThis.__inca_targets__ = () => { throw new Error('no targets'); };";
+
+    #[test]
+    fn event_fields_hold_the_objects_the_hook_returns() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        let note = r"(e) => {
+            out.push([nodeOf(e.target), nodeOf(e.currentTarget), e.srcElement === e.target,
+                e.composedPath().map(nodeOf)]);
+            globalThis.kept = e;
+        }";
+        listen_with(&dispatcher, outer, "click", (true, false), note);
+        listen(&dispatcher, parent, "click", note);
+
+        let out = fire_and_read(&dispatcher, child, "click", &EventPayload::None);
+
+        let path = serde_json::json!([child, parent, outer]);
+        assert_eq!(
+            out,
+            serde_json::json!([[child, outer, true, path], [child, parent, true, path]])
+        );
+        let after = eval_json(
+            &dispatcher,
+            &format!(
+                "[kept.target === objs[{child}], kept.currentTarget, kept.composedPath().length, calls]"
+            ),
+        );
+        assert_eq!(after, serde_json::json!([true, null, 0, 1]));
+    }
+
+    #[test]
+    fn the_hook_runs_once_per_heard_walk_and_never_for_an_unheard_one() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        listen(&dispatcher, outer, "click", "() => {}");
+        listen(&dispatcher, parent, "click", "() => {}");
+        dispatcher.fire(child, "click", &EventPayload::None);
+        dispatcher.fire(child, "keydown", &EventPayload::None);
+
+        assert_eq!(eval_json(&dispatcher, "calls"), serde_json::json!(1));
+    }
+
+    #[test]
+    fn related_target_is_the_object_of_the_related_node() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        for event in ["mouseover", "focus"] {
+            listen(
+                &dispatcher,
+                outer,
+                event,
+                "(e) => out.push([e.type, nodeOf(e.relatedTarget)])",
+            );
+        }
+        let over = EventPayload::Mouse(MousePayload {
+            related_target: Some(parent),
+            ..MousePayload::at(0.0, 0.0, inca_document::Modifiers::none())
+        });
+        dispatcher.fire(outer, "mouseover", &over);
+        for related_target in [Some(child), None] {
+            let payload = EventPayload::Focus { related_target };
+            dispatcher.fire(outer, "focus", &payload);
+        }
+
+        assert_eq!(
+            read_out(&dispatcher),
+            serde_json::json!([["mouseover", parent], ["focus", child], ["focus", null]])
+        );
+    }
+
+    #[test]
+    fn dispatch_event_gives_an_unheard_event_its_target_object() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{ const e = new Event('ping');
+                const r = __inca_native__.dispatchEvent({node}, e);
+                return [r, e.target === objs[{node}], calls]; }})()
+                "
+            ),
+        );
+        assert_eq!(got, serde_json::json!([true, true, 1]));
+    }
+
+    #[test]
+    fn a_throwing_hook_runs_no_listener() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher.engine.eval::<()>(THROWS).unwrap();
+        listen(&dispatcher, node, "click", "() => out.push('ran')");
+
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
+
+        assert_eq!(out, serde_json::json!([]));
+    }
+
+    #[test]
+    fn a_throwing_hook_is_reported() {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher.engine.eval::<()>(THROWS).unwrap();
+        listen(&dispatcher, node, "click", "() => out.push('ran')");
+
+        let _ = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
+
+        assert_eq!(reported.borrow().len(), 1);
+        assert_eq!(reported.borrow()[0].message(), "Error: no targets");
+    }
+
+    #[test]
+    fn a_hook_that_returns_no_array_runs_no_listener() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher
+            .engine
+            .eval::<()>("globalThis.__inca_targets__ = () => 5;")
+            .unwrap();
+        listen(&dispatcher, node, "click", "() => out.push('ran')");
+
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
+
+        assert_eq!(out, serde_json::json!([]));
+    }
+
+    #[test]
+    fn a_hook_that_returns_no_array_is_reported() {
+        let (dispatcher, host, reported) = dispatcher_with_engine();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher
+            .engine
+            .eval::<()>("globalThis.__inca_targets__ = () => 5;")
+            .unwrap();
+        listen(&dispatcher, node, "click", "() => out.push('ran')");
+
+        let _ = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
+
+        assert_eq!(reported.borrow().len(), 1);
+    }
+
+    #[test]
+    fn dispatch_event_throws_what_the_hook_throws() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher.engine.eval::<()>(THROWS).unwrap();
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{ try {{ __inca_native__.dispatchEvent({node}, new Event('ping'));
+                return 'returned'; }} catch (e) {{ return e.message; }} }})()
+                "
+            ),
+        );
+        assert_eq!(got, serde_json::json!("no targets"));
+    }
+
+    #[test]
+    fn dispatch_event_throws_when_the_hook_returns_no_array() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        dispatcher
+            .engine
+            .eval::<()>("globalThis.__inca_targets__ = () => 5;")
+            .unwrap();
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{ try {{ __inca_native__.dispatchEvent({node}, new Event('ping'));
+                return 'returned'; }} catch {{ return 'threw'; }} }})()
+                "
+            ),
+        );
+        assert_eq!(got, serde_json::json!("threw"));
+    }
+
+    #[test]
+    fn a_target_a_listener_destroys_stays_in_the_path() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        listen_with(
+            &dispatcher,
+            outer,
+            "click",
+            (true, false),
+            &format!("() => __inca_native__.destroyNode({child})"),
+        );
+        listen(
+            &dispatcher,
+            parent,
+            "click",
+            "(e) => out.push([nodeOf(e.target), e.composedPath().map(nodeOf), calls])",
+        );
+
+        let out = fire_and_read(&dispatcher, child, "click", &EventPayload::None);
+
+        assert_eq!(out, serde_json::json!([[child, [child, parent, outer], 1]]));
+    }
+
+    #[test]
+    fn a_kept_event_lets_its_path_objects_go_after_the_walk() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [_, _, child] = tree_of_three(&host);
+        dispatcher
+            .engine
+            .eval::<()>("globalThis.__inca_targets__ = (ids) => ids.map((id) => ({ node: id }));")
+            .unwrap();
+        listen(
+            &dispatcher,
+            child,
+            "click",
+            "(e) => { globalThis.kept = e; globalThis.weak = new WeakRef(e.composedPath()[1]); }",
+        );
+        fire_and_read(&dispatcher, child, "click", &EventPayload::None);
+
+        dispatcher.engine.with(|ctx| ctx.run_gc());
+
+        let gone = dispatcher
+            .engine
+            .eval::<bool>(&format!(
+                "kept.target.node === {child} && weak.deref() === undefined"
+            ))
+            .unwrap();
+        assert!(gone);
+    }
+
+    #[test]
+    fn dispatch_event_gives_listeners_the_hook_objects() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, child] = tree_of_three(&host);
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        listen(
+            &dispatcher,
+            parent,
+            "ping",
+            "(e) => out.push([nodeOf(e.target), nodeOf(e.currentTarget), e.composedPath().map(nodeOf), calls])",
+        );
+        dispatcher
+            .engine
+            .eval::<()>(&format!(
+                "__inca_native__.dispatchEvent({child}, new Event('ping', {{ bubbles: true }}));"
+            ))
+            .unwrap();
+
+        assert_eq!(
+            read_out(&dispatcher),
+            serde_json::json!([[child, parent, [child, parent, outer], 1]])
+        );
+    }
+
+    #[test]
+    fn a_wheel_payload_gives_its_related_node_to_the_hook() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let [outer, parent, _] = tree_of_three(&host);
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        listen(
+            &dispatcher,
+            outer,
+            "wheel",
+            "(e) => out.push(nodeOf(e.relatedTarget))",
+        );
+        let wheel = EventPayload::Wheel(WheelPayload {
+            mouse: MousePayload {
+                related_target: Some(parent),
+                ..MousePayload::at(0.0, 0.0, inca_document::Modifiers::none())
+            },
+            delta_x: 0.0,
+            delta_y: 0.0,
+            delta_z: 0.0,
+            delta_mode: 0,
+        });
+
+        let out = fire_and_read(&dispatcher, outer, "wheel", &wheel);
+
+        assert_eq!(out, serde_json::json!([parent]));
+    }
+
+    /// Records `[label, target, currentTarget, eventPhase, path]` of the event it hears.
+    fn note_walk(label: &str) -> String {
+        format!(
+            r"
+            (e) => out.push([
+                '{label}',
+                nodeOf(e.target),
+                nodeOf(e.currentTarget),
+                e.eventPhase,
+                e.composedPath().map(nodeOf),
+            ])
+            "
+        )
+    }
+
+    #[test]
+    fn native_event_path_runs_through_the_root_then_document_then_window() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = node_under_root(&host);
+        let (root, document) = {
+            let host = host.document.borrow();
+            (host.root(), host.document())
+        };
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        listen(&dispatcher, node, "click", &note_walk("node"));
+        listen(&dispatcher, root, "click", &note_walk("root"));
+        listen(&dispatcher, document, "click", &note_walk("document"));
+        listen_global(&dispatcher, "$window", "click", false, &note_walk("window"));
+
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
+
+        let path = serde_json::json!([node, root, document, "$window"]);
+        assert_eq!(
+            out,
+            serde_json::json!([
+                ["node", node, node, 2, path],
+                ["root", node, root, 3, path],
+                ["document", node, document, 3, path],
+                ["window", node, "$window", 3, path],
+            ])
+        );
+    }
+
+    #[test]
+    fn the_window_captures_first_and_bubbles_last() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = node_under_root(&host);
+        let document = host.document.borrow().document();
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        listen_global(
+            &dispatcher,
+            "$window",
+            "click",
+            true,
+            &note_walk("$window capture"),
+        );
+        listen_with(
+            &dispatcher,
+            document,
+            "click",
+            (true, false),
+            &note_walk("document capture"),
+        );
+        listen(
+            &dispatcher,
+            document,
+            "click",
+            &note_walk("document bubble"),
+        );
+        listen_global(
+            &dispatcher,
+            "$window",
+            "click",
+            false,
+            &note_walk("$window bubble"),
+        );
+        listen_with(
+            &dispatcher,
+            node,
+            "click",
+            (true, false),
+            &note_walk("node capture"),
+        );
+        listen(&dispatcher, node, "click", &note_walk("node bubble"));
+
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
+
+        let order: Vec<_> = out
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| (row[0].as_str().unwrap(), row[2].clone(), row[3].clone()))
+            .collect();
+        let win = "$window";
+        assert_eq!(
+            order,
+            [
+                (
+                    "$window capture",
+                    serde_json::json!(win),
+                    serde_json::json!(1)
+                ),
+                (
+                    "document capture",
+                    serde_json::json!(document),
+                    serde_json::json!(1)
+                ),
+                (
+                    "node capture",
+                    serde_json::json!(node),
+                    serde_json::json!(2)
+                ),
+                ("node bubble", serde_json::json!(node), serde_json::json!(2)),
+                (
+                    "document bubble",
+                    serde_json::json!(document),
+                    serde_json::json!(3)
+                ),
+                (
+                    "$window bubble",
+                    serde_json::json!(win),
+                    serde_json::json!(3)
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_event_at_a_node_outside_the_document_never_reaches_document_or_window() {
+        let (dispatcher, host, _reported) = dispatcher_with_engine();
+        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let document = host.document.borrow().document();
+        dispatcher.engine.eval::<()>(HOOK).unwrap();
+        listen(&dispatcher, node, "click", &note_walk("node"));
+        listen(&dispatcher, document, "click", &note_walk("document"));
+        listen_global(&dispatcher, "$window", "click", true, &note_walk("window"));
+
+        let out = fire_and_read(&dispatcher, node, "click", &EventPayload::None);
+
+        assert_eq!(out, serde_json::json!([["node", node, node, 2, [node]]]));
+    }
+
+    #[rstest]
+    #[case::document_tag(
+        "__inca_native__.addEventListener('$document', 'click', () => {}, false, false)"
+    )]
+    #[case::add("__inca_native__.addEventListener('$nope', 'click', () => {}, false, false)")]
+    #[case::remove("__inca_native__.removeEventListener('$nope', 'click', 0)")]
+    #[case::dispatch("__inca_native__.dispatchEvent('$nope', new Event('click'))")]
+    fn unknown_global_target_tag_throws_a_type_error(#[case] call: &str) {
+        let (dispatcher, _host, _reported) = dispatcher_with_engine();
+        let got = eval_json(
+            &dispatcher,
+            &format!(
+                r"
+                (() => {{
+                    try {{
+                        {call};
+                        return 'returned';
+                    }} catch (e) {{
+                        return e instanceof TypeError;
+                    }}
+                }})()
+                "
+            ),
+        );
+        assert_eq!(got, serde_json::json!(true));
+    }
+
+    #[test]
+    fn a_signal_path_is_answered_without_the_hook() {
+        let (engine, _host) = crate::test_support::engine_with_bindings();
+        engine
+            .eval::<()>(
+                r"
+                globalThis.calls = 0;
+                globalThis.__inca_targets__ = () => { globalThis.calls += 1; return []; };
+                globalThis.s = new AbortController().signal;
+                ",
+            )
+            .unwrap();
+
+        let found = engine.with(|ctx| {
+            let given = [inca_document::EventTargetId::Signal(1)];
+            let targets = super::super::targets_of(&ctx, &given).unwrap();
+            ctx.globals().set("found", targets[0].clone()).unwrap();
+            ctx.eval::<bool, _>("found === s").unwrap()
+        });
+
+        assert!(found);
+        assert_eq!(engine.eval::<i32>("calls").unwrap(), 0);
+    }
+
+    #[test]
+    fn a_node_and_window_path_goes_to_the_hook() {
+        let (engine, _host) = crate::test_support::engine_with_bindings();
+        engine
+            .eval::<()>(
+                r"
+                globalThis.seen = null;
+                globalThis.__inca_targets__ = (ids) => { globalThis.seen = ids; return ids; };
+                ",
+            )
+            .unwrap();
+
+        engine.with(|ctx| {
+            let given = [
+                inca_document::EventTargetId::Node(4),
+                inca_document::EventTargetId::Window,
+            ];
+            super::super::targets_of(&ctx, &given).unwrap();
+        });
+
+        let seen: String = engine.eval("JSON.stringify(seen)").unwrap();
+        assert_eq!(seen, "[4,\"$window\"]");
+    }
+
+    #[rstest]
+    #[case::node(EventTargetId::Node(7), Some(HookTarget::Node(7)))]
+    #[case::window(EventTargetId::Window, Some(HookTarget::Window))]
+    #[case::signal(EventTargetId::Signal(3), None)]
+    fn the_hook_takes_nodes_and_the_window_only(
+        #[case] target: EventTargetId,
+        #[case] hook: Option<HookTarget>,
+    ) {
+        assert_eq!(HookTarget::of(target), hook);
+    }
+
+    #[rstest]
+    #[case::node(HookTarget::Node(7), "7")]
+    #[case::window(HookTarget::Window, "\"$window\"")]
+    fn a_hook_target_reaches_js_as_a_number_or_its_tag(
+        #[case] target: HookTarget,
+        #[case] json: &str,
+    ) {
+        let engine = Engine::new().unwrap();
+
+        let text = engine.with(|ctx| {
+            let value = target.into_js(&ctx).unwrap();
+            ctx.json_stringify(value)
+                .unwrap()
+                .unwrap()
+                .to_string()
+                .unwrap()
+        });
+
+        assert_eq!(text, json);
+    }
+}

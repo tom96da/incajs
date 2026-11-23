@@ -8,15 +8,18 @@
 
 mod abort;
 mod bindings;
+mod dataset;
+mod element;
 mod event;
-mod event_target;
+mod inline_style;
 mod interfaces;
+mod node;
 mod script;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 #[cfg(test)]
 mod tests;
+mod token_list;
 
 pub use bindings::{Host, JsState, install};
-pub(crate) use inca_document::EventTargetId;
 pub use script::JsScript;

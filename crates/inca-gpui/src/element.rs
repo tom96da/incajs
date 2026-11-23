@@ -8,10 +8,8 @@
 mod build;
 mod children;
 mod input;
-mod pointer;
-mod scrollbar;
 mod style;
-mod wheel;
+pub(crate) mod wheel;
 
 pub use build::{
     NodeLayout, build_element, build_element_with_events, debug_selector, render_tree,
@@ -19,5 +17,3 @@ pub use build::{
 };
 pub use children::{node_gutter, rect_of};
 pub use input::TextInputHandler;
-pub use pointer::{clear_presses, mouse_target, opens_context_menu, pressed_target};
-pub use scrollbar::Scrollbars;

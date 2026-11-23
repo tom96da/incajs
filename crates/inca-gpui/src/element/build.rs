@@ -6,13 +6,13 @@ use gpui::{AnyElement, App, Bounds, ElementId, Pixels, Point, ScrollHandle, Size
 
 use super::children::{has_bar, record_children, rendered_children};
 use super::input::InputElement;
-use super::pointer::{
-    mark_mouse_target, pointer_tracker, root_keys, wire_focus, wire_hover, wire_modifier_keys,
-};
-use super::scrollbar::{Scrollbars, gutter_of, scrollbar};
 use super::style::{apply_style, clip_scroll_axes, reserve_gutter};
 use super::wheel::{scroll_anchor, wire_scroll};
 use crate::event_sink::{EventSink, noop_sink_methods};
+use crate::pointer::{
+    mark_mouse_target, pointer_tracker, root_keys, wire_focus, wire_hover, wire_modifier_keys,
+};
+use crate::scrollbar::{Scrollbars, gutter_of, scrollbar};
 use inca_document::EventPayload;
 use inca_node::tree::{NodeId, VirtualTree};
 use inca_style::StyleCache;
@@ -220,14 +220,14 @@ impl EventSink for NoSink {
 
 /// Recursively converts an [`ElementSpec`] into a real `gpui` [`AnyElement`],
 /// with no event wiring. See [`build_element_with_events`] for a version
-/// whose containers dispatch input events into JS.
+/// whose containers dispatch input events through an [`EventSink`].
 #[must_use]
 pub fn build_element(spec: &ElementSpec) -> AnyElement {
     build_element_inner::<NoSink>(spec, None, true, false, Scrollbars::Overlay)
 }
 
-/// Like [`build_element`], but input on the containers dispatches into JS
-/// via `dispatch` (any type implementing this crate's [`EventSink`] trait). A scroll
+/// Like [`build_element`], but input on the containers dispatches
+/// through `dispatch` (any type implementing this crate's [`EventSink`] trait). A scroll
 /// container draws its scrollbars as `mode` says.
 #[must_use]
 pub fn build_element_with_events<E: EventSink + Clone + 'static>(
@@ -246,7 +246,7 @@ pub fn render_tree(tree: &VirtualTree, cache: &StyleCache, root: NodeId) -> Opti
     build_spec(tree, cache, root).map(|spec| build_element(&spec))
 }
 
-/// Like [`render_tree`], but input on the containers dispatches into JS via
+/// Like [`render_tree`], but input on the containers dispatches through
 /// `dispatch` (see [`build_element_with_events`]).
 #[must_use]
 pub fn render_tree_with_events<E: EventSink + Clone + 'static>(

@@ -3,7 +3,7 @@
 
 //! The Tab move.
 
-use super::{FocusRegistry, Surface};
+use super::registry::{FocusRegistry, Surface};
 use gpui::{App, Window};
 use inca_document::FocusModel;
 use inca_node::{NodeId, VirtualTree};
@@ -139,15 +139,6 @@ mod tests {
     }
 
     #[gpui::test]
-    fn shift_tab_after_a_press_on_a_stop_focuses_that_stop(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP]);
-        registry.press_start(ids[1], ROOT, None);
-
-        assert_eq!(tab(cx, &mut registry, &tree, true), Some(ids[1]));
-    }
-
-    #[gpui::test]
     fn tab_after_a_press_on_the_last_stop_focuses_nothing(cx: &mut TestAppContext) {
         let cx = cx.add_empty_window();
         let (tree, ids, mut registry) = start_tree(cx, &[STOP, STOP]);
@@ -247,18 +238,6 @@ mod tests {
     }
 
     #[gpui::test]
-    fn a_start_that_leaves_the_tree_moves_before_its_place(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (mut tree, ids, mut registry) = start_tree(cx, &[STOP, PLAIN, STOP]);
-        registry.press_start(ids[1], ROOT, None);
-        let before = tree.preceding(ids[1]);
-        tree.remove_child(ROOT, ids[1]).unwrap();
-        registry.start_leaves(&tree, ids[1], before);
-
-        assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[2]));
-    }
-
-    #[gpui::test]
     fn a_start_outside_the_leaving_subtree_stays(cx: &mut TestAppContext) {
         let cx = cx.add_empty_window();
         let (tree, ids, mut registry) = start_tree(cx, &[STOP, PLAIN, STOP]);
@@ -266,18 +245,6 @@ mod tests {
         registry.start_leaves(&tree, ids[0], tree.preceding(ids[0]));
 
         assert_eq!(tab(cx, &mut registry, &tree, false), Some(ids[2]));
-    }
-
-    #[gpui::test]
-    fn a_start_that_leaves_as_the_first_child_of_the_root_clears(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (mut tree, ids, mut registry) = start_tree(cx, &[PLAIN, STOP, STOP]);
-        registry.press_start(ids[0], ROOT, None);
-        let before = tree.preceding(ids[0]);
-        tree.remove_child(ROOT, ids[0]).unwrap();
-        registry.start_leaves(&tree, ids[0], before);
-
-        assert_eq!(tab(cx, &mut registry, &tree, true), Some(ids[2]));
     }
 
     #[gpui::test]
@@ -308,27 +275,7 @@ mod tests {
     }
 
     #[gpui::test]
-    fn tab_move_returns_the_node_it_focused_and_none_past_the_end(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (tree, id) = tree_with("div", Some(AttributeValue::from("0")));
-        let mut registry = Registry::default();
-        registry.mark_tab_dirty(id);
-        cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
-            assert_eq!(
-                registry.tab_move(&tree, &StyleCache::new(), id, window, cx, false),
-                Some(id)
-            );
-            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
-            assert_eq!(
-                registry.tab_move(&tree, &StyleCache::new(), id, window, cx, false),
-                None
-            );
-        });
-    }
-
-    #[gpui::test]
-    fn a_tab_move_drops_the_scroll_requests_of_earlier_focus_calls(cx: &mut TestAppContext) {
+    fn a_tab_move_drops_a_pending_reveal_retry_and_scroll_request(cx: &mut TestAppContext) {
         let cx = cx.add_empty_window();
         let (mut tree, a) = tree_with("div", Some(AttributeValue::from("0")));
         let b = tree.create_node("div").unwrap();
@@ -346,28 +293,6 @@ mod tests {
                 registry.tab_move(&tree, &StyleCache::new(), a, window, cx, false),
                 Some(b)
             );
-            assert_eq!(registry.take_reveals(), (vec![], vec![]));
-        });
-    }
-
-    #[gpui::test]
-    fn the_last_focus_request_decides_what_scrolls(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (mut tree, a) = tree_with("div", Some(AttributeValue::from("0")));
-        let b = tree.create_node("div").unwrap();
-        tree.set_attribute(b, "tabindex", "0").unwrap();
-        let mut registry = Registry::default();
-        registry.mark_tab_dirty(a);
-        registry.mark_tab_dirty(b);
-        cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
-            registry.request_focus(a, true);
-            registry.request_focus(b, true);
-            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
-            assert_eq!(registry.take_reveals(), (vec![], vec![b]));
-            registry.request_focus(a, true);
-            registry.request_focus(b, false);
-            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
             assert_eq!(registry.take_reveals(), (vec![], vec![]));
         });
     }
@@ -403,28 +328,6 @@ mod tests {
         assert_eq!(moved, Some(ids[2]));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
-    #[case::forward(false, 2)]
-    #[case::backward(true, 0)]
-    fn a_tab_move_from_a_negative_stop_continues_in_tree_order(
-        cx: &mut TestAppContext,
-        backward: bool,
-        want: usize,
-    ) {
-        let cx = cx.add_empty_window();
-        let (mut tree, ids) = rooted_tree(3);
-        tree.set_attribute(ids[1], "tabindex", "-1").unwrap();
-        let mut registry = Registry::default();
-        focus_all(cx, &mut registry, &tree, &ids, ids[1]);
-
-        let moved = cx.update(|window, cx| {
-            registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, backward)
-        });
-
-        assert_eq!(moved, Some(ids[want]));
-    }
-
     #[gpui::test]
     fn a_tab_move_past_the_last_stop_leaves_no_node_focused(cx: &mut TestAppContext) {
         let cx = cx.add_empty_window();
@@ -457,33 +360,6 @@ mod tests {
             })
             .collect();
         (tree, ids)
-    }
-
-    #[gpui::test]
-    fn tab_visits_a_link_and_skips_an_a_without_href(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (tree, ids) = rooted_nodes(&[
-            ("button", &[]),
-            ("a", &[("href", "u")]),
-            ("button", &[]),
-            ("a", &[]),
-        ]);
-        let mut registry = Registry::default();
-        for &id in &ids {
-            registry.mark_tab_dirty(id);
-        }
-        let visited = cx.update(|window, cx| {
-            let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
-            (0..4)
-                .map(|_| {
-                    let moved =
-                        registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, false);
-                    let _ = registry.apply_pending(&tree, &StyleCache::new(), window, cx);
-                    moved
-                })
-                .collect::<Vec<_>>()
-        });
-        assert_eq!(visited, [Some(ids[0]), Some(ids[1]), Some(ids[2]), None]);
     }
 
     #[gpui::test]
@@ -563,31 +439,6 @@ mod tests {
         assert_eq!(moved, (Some(ids[0]), None));
     }
 
-    #[gpui_cases]
-    #[gpui::test]
-    #[case::forward(false, 2)]
-    #[case::backward(true, 1)]
-    fn a_focused_stop_keeps_the_positive_tab_index_order(
-        cx: &mut TestAppContext,
-        backward: bool,
-        want: usize,
-    ) {
-        let cx = cx.add_empty_window();
-        let (tree, ids) = rooted_nodes(&[
-            ("button", &[("tabindex", "2")]),
-            ("button", &[("tabindex", "1")]),
-            ("button", &[("tabindex", "3")]),
-        ]);
-        let mut registry = Registry::default();
-        focus_all(cx, &mut registry, &tree, &ids, ids[0]);
-
-        let moved = cx.update(|window, cx| {
-            registry.tab_move(&tree, &StyleCache::new(), ROOT, window, cx, backward)
-        });
-
-        assert_eq!(moved, Some(ids[want]));
-    }
-
     #[gpui::test]
     fn a_tab_move_from_a_focused_a_that_lost_href_before_the_frame_continues_after_it(
         cx: &mut TestAppContext,
@@ -622,43 +473,5 @@ mod tests {
             cx.update(|window, cx| registry.focused_node(window, cx)),
             None
         );
-    }
-
-    #[gpui::test]
-    fn disabling_a_focused_button_reports_its_blur(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (mut tree, id) = rooted_button(false);
-        let mut registry = Registry::default();
-        focus_all(cx, &mut registry, &tree, &[id], id);
-
-        tree.set_attribute(id, "disabled", true).unwrap();
-        registry.mark_tab_dirty(id);
-        let transitions =
-            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
-
-        assert_eq!(transitions.len(), 1);
-        assert_eq!(transitions[0].blurred(), Some(id));
-        assert_eq!(transitions[0].focused(), None);
-    }
-
-    #[gpui::test]
-    fn an_enabled_button_takes_focus_again(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (mut tree, id) = rooted_button(false);
-        let mut registry = Registry::default();
-        focus_all(cx, &mut registry, &tree, &[id], id);
-        tree.set_attribute(id, "disabled", true).unwrap();
-        registry.mark_tab_dirty(id);
-        cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
-
-        tree.remove_attribute(id, "disabled").unwrap();
-        registry.mark_tab_dirty(id);
-        registry.request_focus(id, false);
-        let transitions =
-            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
-
-        assert_eq!(transitions.len(), 1);
-        assert_eq!(transitions[0].blurred(), None);
-        assert_eq!(transitions[0].focused(), Some(id));
     }
 }

@@ -10,8 +10,6 @@ use rquickjs::{Function, Result as JsResult, Value};
 use super::intrinsics::Kind;
 use super::walk::Walk;
 
-mod error;
-
 /// The order of the flags of a `RegExp`.
 const FLAGS: [&str; 8] = ["d", "g", "i", "m", "s", "u", "v", "y"];
 

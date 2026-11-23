@@ -3,11 +3,13 @@
 
 //! Searching the descendants of a node for a selector.
 
+use inca_node::tree::{NodeId, NodeKind, VirtualTree};
+use selectors::Element;
+use selectors::context::SelectorCaches;
+use selectors::matching::matches_selector_list;
+
 use super::matching::{Node, matching_context};
-use super::{
-    Element, NodeId, NodeKind, SelectorCaches, SelectorError, VirtualTree, matches_selector_list,
-    parse,
-};
+use super::{SelectorError, parse};
 
 /// The descendants of `start`, an element, a fragment or the document, that match `selector`, in
 /// document order. The walk stops at the first match when `first_only` is set.

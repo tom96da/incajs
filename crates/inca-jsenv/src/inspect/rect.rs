@@ -9,7 +9,7 @@
 use rquickjs::Value;
 
 use super::object::{constructor_name, write_key};
-use super::{Mode, put, write_value};
+use super::value::{Mode, put, write_value};
 use crate::geometry::printed;
 use crate::paint::Style;
 

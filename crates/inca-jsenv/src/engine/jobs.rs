@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use rquickjs::function::Rest;
 use rquickjs::{Ctx, Function, Module, Object, Promise, Value};
 
-use super::{Engine, EngineError, EngineResult, ErrorReporter};
+use super::runtime::{Engine, EngineError, EngineResult, ErrorReporter};
 use crate::loader::canonical_name;
 use crate::vault::vault;
 

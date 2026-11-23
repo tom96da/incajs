@@ -4,10 +4,11 @@
 pub mod element;
 pub mod event_sink;
 pub mod input;
+mod pointer;
+mod scrollbar;
 pub use element::{
-    NodeLayout, Scrollbars, TextInputHandler, build_element, build_element_with_events,
-    clear_presses, debug_selector, mouse_target, node_gutter, opens_context_menu, pressed_target,
-    rect_of, render_tree, render_tree_with_events,
+    NodeLayout, TextInputHandler, build_element, build_element_with_events, debug_selector,
+    node_gutter, rect_of, render_tree, render_tree_with_events,
 };
 pub use event_sink::{
     EventSink, click_payload, context_menu_payload, is_menu_key, key_down_payload, key_up_payload,
@@ -15,6 +16,8 @@ pub use event_sink::{
     wheel_payload,
 };
 pub use input::{InputLayout, InputRequest};
+pub use pointer::{clear_presses, mouse_target, opens_context_menu, pressed_target};
+pub use scrollbar::Scrollbars;
 
 #[cfg(test)]
 mod tests;

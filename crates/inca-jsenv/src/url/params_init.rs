@@ -9,7 +9,7 @@ use rquickjs::object::Filter;
 use rquickjs::{Atom, Ctx, Exception, Object, Result as JsResult, Value};
 use url::form_urlencoded;
 
-use super::usv;
+use super::state::usv;
 use crate::class::{Method, iterate, method_of};
 
 type List = Vec<(String, String)>;

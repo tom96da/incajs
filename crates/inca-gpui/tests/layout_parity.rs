@@ -41,7 +41,7 @@ fn selectors() -> Vec<&'static str> {
 
 /// A bordered, centered column containing a text line and a row of six
 /// bordered squares, built purely through the `VirtualTree`/`set_style`
-/// API, no JS involved.
+/// API.
 fn build_tree() -> (VirtualTree, NodeId) {
     let mut tree = VirtualTree::new();
 

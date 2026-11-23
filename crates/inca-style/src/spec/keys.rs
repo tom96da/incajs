@@ -79,7 +79,7 @@ macro_rules! style_props {
         )*
 
         /// Reads one style prop into `style` (and `overflow`), returning the fault
-        /// when the key is unknown or its value is dropped. `key` is a host key. A
+        /// when the key is unknown or its value is dropped. `key` is a style key in `snake_case`. A
         /// box key is only checked here: `edges_from` resolves the box keys
         /// afterwards.
         pub(super) fn read_prop(
@@ -224,8 +224,8 @@ pub(crate) fn unknown_key_warning(key: &str) -> String {
 }
 
 /// The message for the style prop `key` set to `value` when the key is
-/// unknown, a color is invalid, or the value has a shape the host does not
-/// support. `key` may be `camelCase`, `kebab-case` or `snake_case`, a host name
+/// unknown, a color is invalid, or the value has a shape the key does not
+/// support. `key` may be `camelCase`, `kebab-case` or `snake_case`, a style key
 /// or its CSS name, and the message names it as written. `None` when the prop
 /// applies, and for an empty string on a known key.
 #[must_use]

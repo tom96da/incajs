@@ -1,16 +1,37 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Reports the hovered container and fires the hover events.
+//! Reports the hovered container and fires the hover events, and redraws the window when a
+//! pointer or focus state change reaches a style rule.
 
 use gpui::{App, Window};
 use inca_document::{EventPayload, MousePayload, NO_BUTTON};
-use inca_gpui::event_sink::hover_path_difference;
 use inca_gpui::mouse_at;
 use inca_node::NodeId;
 
 use crate::dispatch::EventDispatcher;
 use crate::pointer;
+
+/// The containers a pointer leaves and enters when its deepest container
+/// changes from the end of `old_path` to the end of `new_path`. Each path
+/// lists a container and its ancestors, nearest first. The first list holds
+/// the containers only `old_path` has, innermost first. The second holds the
+/// ones only `new_path` has, outermost first.
+#[must_use]
+fn hover_path_difference(old_path: &[NodeId], new_path: &[NodeId]) -> (Vec<NodeId>, Vec<NodeId>) {
+    let leave = old_path
+        .iter()
+        .copied()
+        .filter(|id| !new_path.contains(id))
+        .collect();
+    let enter = new_path
+        .iter()
+        .rev()
+        .copied()
+        .filter(|id| !old_path.contains(id))
+        .collect();
+    (leave, enter)
+}
 
 impl EventDispatcher {
     /// The deepest container `gpui` reports as hovered. Containers that left
@@ -119,19 +140,39 @@ impl EventDispatcher {
     }
 }
 
+impl EventDispatcher {
+    /// Redraws the window when `changed` and a connected rule names the pointer state (`pointer`)
+    /// or the focus state. Returns whether it requested the redraw.
+    pub(crate) fn restyle(&self, changed: bool, pointer: bool, window: &mut Window) -> bool {
+        let document = self.cells.document.borrow();
+        let redraw = changed
+            && if pointer {
+                document.style.uses_pointer_state(&document.tree)
+            } else {
+                document.style.uses_focus_state(&document.tree)
+            };
+        if redraw {
+            window.refresh();
+        }
+        redraw
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
     use std::rc::Rc;
 
+    use super::hover_path_difference;
     use crate::EventDispatcher;
     use crate::tests::{
-        FakeScript, Walked, fake_dispatcher, node_under_root, state, tree_of_three,
+        FakeScript, Walked, add_sheet, fake_dispatcher, node_under_root, state, tree_of_three,
     };
     use gpui::TestAppContext;
     use inca_document::{EventPayload, MousePayload};
     use inca_gpui::EventSink as _;
     use inca_node::NodeId;
+    use inca_test_macros::gpui_cases;
 
     /// A dispatcher on a fake script.
     struct Rig {
@@ -657,5 +698,57 @@ mod tests {
                 .iter()
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn the_hover_path_difference_lists_the_containers_left_and_entered() {
+        // Paths run nearest first: 3 sits in 2, which sits in 1, then 0.
+        let nested = [3, 2, 1, 0];
+        let cases: [[&[NodeId]; 4]; 5] = [
+            // into a nested container
+            [&[0], &nested, &[], &[1, 2, 3]],
+            // to a sibling inside the same parent
+            [&nested, &[4, 2, 1, 0], &[3], &[4]],
+            // out of everything
+            [&nested, &[], &[3, 2, 1, 0], &[]],
+            // within the same container
+            [&nested, &nested, &[], &[]],
+            // the first move after entering the window
+            [&[], &nested, &[], &[0, 1, 2, 3]],
+        ];
+        for [old, new, leave, enter] in cases {
+            assert_eq!(
+                hover_path_difference(old, new),
+                (leave.to_vec(), enter.to_vec()),
+                "{old:?} -> {new:?}"
+            );
+        }
+    }
+
+    const FOCUS_RULE: &str = "input:focus { width: 60px }";
+    const HOVER_RULE: &str = "div:hover { width: 60px }";
+
+    #[gpui_cases]
+    #[gpui::test]
+    #[case::focus_changed_with_a_focus_rule(true, false, FOCUS_RULE, true)]
+    #[case::focus_changed_without_a_rule(true, false, "", false)]
+    #[case::focus_unchanged_with_a_focus_rule(false, false, FOCUS_RULE, false)]
+    #[case::focus_changed_with_only_a_hover_rule(true, false, HOVER_RULE, false)]
+    #[case::pointer_changed_with_a_hover_rule(true, true, HOVER_RULE, true)]
+    #[case::pointer_changed_with_only_a_focus_rule(true, true, FOCUS_RULE, false)]
+    fn restyle_redraws_only_for_a_changed_value_a_rule_reads(
+        cx: &mut TestAppContext,
+        #[case] changed: bool,
+        #[case] pointer: bool,
+        #[case] css: &str,
+        #[case] expected: bool,
+    ) {
+        let (dispatcher, cells, _fake) = fake_dispatcher();
+        add_sheet(&cells, css);
+        let cx = cx.add_empty_window();
+
+        let redrawn = cx.update(|window, _| dispatcher.restyle(changed, pointer, window));
+
+        assert_eq!(redrawn, expected);
     }
 }

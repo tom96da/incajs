@@ -9,9 +9,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::support::Reported;
+use crate::support::Wired;
 use gpui::{AppContext as _, TestAppContext};
-use inca_bridge::test_support::Reported;
-use inca_host::wiring::Wired;
 use inca_node::NodeId;
 use inca_window::Cells;
 

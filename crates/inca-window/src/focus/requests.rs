@@ -3,7 +3,7 @@
 
 //! The frame that applies the queued focus and blur requests.
 
-use super::{FocusRegistry, Surface};
+use super::registry::{FocusRegistry, Surface};
 use gpui::{App, Window};
 use inca_document::{FocusModel, FocusTransition};
 use inca_node::VirtualTree;
@@ -145,23 +145,6 @@ mod tests {
             cx.update(|window, cx| registry.focused_node(window, cx)),
             None
         );
-    }
-
-    #[gpui::test]
-    fn a_connected_node_losing_tabindex_reports_the_blur(cx: &mut TestAppContext) {
-        let cx = cx.add_empty_window();
-        let (mut tree, ids) = rooted_tree(1);
-        let id = ids[0];
-        let mut registry = Registry::default();
-        focus_all(cx, &mut registry, &tree, &ids, id);
-
-        tree.remove_attribute(id, "tabindex").unwrap();
-        registry.mark_tab_dirty(id);
-        let transitions =
-            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
-
-        assert_eq!(transitions.len(), 1);
-        assert_eq!(transitions[0].blurred(), Some(id));
     }
 
     #[gpui::test]

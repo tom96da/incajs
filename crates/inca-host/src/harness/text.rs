@@ -115,8 +115,7 @@ mod tests {
     use inca_test_macros::gpui_cases;
 
     use super::*;
-    use crate::harness::tests::KEYED;
-    use crate::tests::{eval_string, load_listening, log};
+    use crate::tests::{KEYED, eval_string, load_listening, log};
 
     /// A focused 100x20 `input` held in `globalThis.field`. Its `keydown`,
     /// `compositionupdate` and `compositionend` listeners log `type:data`.

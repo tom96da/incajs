@@ -14,7 +14,7 @@ use rquickjs::{
 };
 
 use super::collections::{write_collection, write_typed_array};
-use super::{Mode, put, settled};
+use super::value::{Mode, put, settled};
 use crate::paint::Style;
 use crate::quickjs::ValueExt;
 

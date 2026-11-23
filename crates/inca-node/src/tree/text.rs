@@ -175,7 +175,7 @@ impl VirtualTree {
         self.set_data(id, text_of(&data[..cut]))?;
         if let Some(parent) = self.get(id).and_then(VirtualNode::parent) {
             let anchor = self.next_sibling(id);
-            self.insert_before(parent, tail, anchor)?;
+            self.insert_node(parent, tail, anchor)?;
         }
         Ok(tail)
     }

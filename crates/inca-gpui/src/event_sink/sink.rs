@@ -3,11 +3,14 @@
 
 //! The sink that receives the events a dispatch fires.
 
-use super::{App, InputLayout, InputRequest, MouseUpEvent, NodeId, NodeLayout, Window};
+use crate::element::NodeLayout;
+use crate::input::{InputLayout, InputRequest};
+use gpui::{App, MouseUpEvent, Window};
 use inca_document::{EventPayload, InputState};
+use inca_node::tree::NodeId;
 
 /// What [`crate::element`] needs from something that can dispatch a native
-/// event into JS. The trait keeps this crate free of a `QuickJS` dependency.
+/// event.
 /// An implementor provides every method.
 pub trait EventSink {
     /// Whether the containers report the pointer. The render path asks once

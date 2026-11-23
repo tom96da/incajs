@@ -7,8 +7,8 @@ use gpui::{App, Window};
 use inca_document::EventPayload;
 use inca_node::NodeId;
 
-use super::super::EventDispatcher;
 use super::pointer_payload;
+use crate::dispatch::EventDispatcher;
 use inca_document::EventTargetId;
 
 impl EventDispatcher {

@@ -25,7 +25,7 @@ pub struct Walk<'a> {
 pub struct Outcome {
     /// A listener called `preventDefault()` on a cancelable event.
     pub canceled: bool,
-    /// The walk entered the script engine, so jobs may be queued.
+    /// The walk ran a listener, so jobs may be queued.
     pub entered: bool,
 }
 

@@ -24,12 +24,14 @@ pub use event::{
     next_event_id, path_from, spec_of,
 };
 pub use focus::{FocusModel, FocusSurface, FocusTransition};
-pub use geometry::{Align, Rect, scroll_chain, scroll_delta};
+pub use geometry::{
+    Align, Rect, client_height, client_width, offset_of, scroll_chain, scroll_delta,
+};
 pub use markup::{
-    MarkupContext, Position, children_of, insert_parsed, parse_adjacent, parse_inner, parse_outer,
+    Position, children_of, insert_parsed, parse_adjacent, parse_inner, parse_outer,
     replace_children, replace_with,
 };
-pub use removal::apply_removals;
+pub use removal::{apply_removals, free_ids, settle};
 pub use semantics::{
     ARIA_REFLECTIONS, AriaKind, AriaReferences, AriaReflection, TabIndex, aria_reflection,
     element_aria_attribute,

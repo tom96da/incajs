@@ -41,18 +41,8 @@ pub fn store_attribute(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
     use super::*;
-
-    fn collecting() -> (StyleWarnings, Rc<RefCell<Vec<String>>>) {
-        let lines = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&lines);
-        let mut warnings = StyleWarnings::default();
-        warnings.set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
-        (warnings, lines)
-    }
+    use crate::tests::collecting;
 
     #[test]
     fn a_plain_attribute_is_stored_under_its_folded_key() {

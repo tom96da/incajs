@@ -11,7 +11,7 @@ use std::rc::Rc;
 use gpui::{App, Pixels, ScrollHandle, Window, point, px};
 
 use inca_document::geometry::{Align, scroll_chain};
-use inca_document::{DocumentState, NodeBox, ScrollRange, View};
+use inca_document::{DocumentState, NodeBox, ScrollRange, View, free_ids};
 use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_node::{NodeId, VirtualTree};
 use inca_style::{StyleCache, is_scroll_container};
@@ -338,8 +338,7 @@ impl Cells {
         if nodes.is_empty() {
             return None;
         }
-        self.window.borrow_mut().forget(&nodes);
-        let callbacks = document.forget(&nodes);
+        let callbacks = free_ids(&mut document, &mut *self.window.borrow_mut(), &nodes);
         Some((nodes, callbacks))
     }
 

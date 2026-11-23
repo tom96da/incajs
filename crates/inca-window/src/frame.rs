@@ -5,9 +5,9 @@
 
 use gpui::{App, Window};
 use inca_document::EventPayload;
-use inca_gpui::event_sink::with_screen;
 
 use crate::dispatch::{EventDispatcher, observe_focus};
+use crate::fire::with_screen;
 use crate::focus::dispatch_transition;
 use inca_document::EventTargetId;
 

@@ -1,13 +1,26 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The registrations `addEventListener` makes.
+//! The targets an event can reach, and the registrations `addEventListener` makes on them.
 
 use std::collections::HashMap;
 
 use inca_node::NodeId;
 
-use super::{EventTargetId, Links};
+use super::Links;
+
+/// Something an event can be dispatched at or travel through: a node of the
+/// tree, the window, which is no node, or an `AbortSignal`, which
+/// Rust knows by its id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EventTargetId {
+    /// A node of the tree.
+    Node(NodeId),
+    /// The window.
+    Window,
+    /// An `AbortSignal`, by its signal id.
+    Signal(u32),
+}
 
 /// One registration: the callback id, the phase it listens in and whether it
 /// is passive.
@@ -21,7 +34,7 @@ pub struct Listener {
     pub passive: bool,
 }
 
-/// Every `(target id, event name)` a JS caller has registered through
+/// Every `(target id, event name)` a caller has registered through
 /// `addEventListener`, mapped to its [`Listener`]s. Holds owned plain data only, so it can be
 /// read at any time. Targets include element nodes, the global document and the global window.
 ///

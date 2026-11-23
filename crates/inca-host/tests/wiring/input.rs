@@ -14,9 +14,9 @@ use inca_test_macros::gpui_cases;
 use rstest::rstest;
 
 use super::support::*;
+use crate::support::Rig;
 use inca_document::{EVENTS, MousePayload, PointerSource};
 use inca_gpui::{EventSink, InputLayout};
-use inca_host::wiring::Rig;
 use inca_node::NodeId;
 
 #[test]

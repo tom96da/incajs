@@ -8,12 +8,13 @@ use rquickjs::function::{IntoJsFunc, ParamRequirement, Params, Rest, This};
 use rquickjs::object::Property;
 use rquickjs::{Class, Ctx, Error, Exception, Function, IntoJs, Object, Result as JsResult, Value};
 
+use super::instance::ParamsInstance;
 use super::iterator::{Kind, ParamsIterator};
 use super::params_init::init_list;
-use super::{ITERATOR, ParamsInstance, State, given, require, shared, usv};
+use super::state::{ITERATOR, State, shared, usv};
 use crate::class::{
-    NEEDS_NEW, define_class, define_getter, define_global, define_sized_method,
-    new_target_prototype,
+    NEEDS_NEW, define_class, define_getter, define_global, define_sized_method, given,
+    new_target_prototype, require,
 };
 use crate::vault::required_prototype;
 

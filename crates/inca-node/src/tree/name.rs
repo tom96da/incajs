@@ -1,14 +1,26 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The kind of a node, and the name, namespace and prefix of an element. The tests of these sit in
-//! the same file.
-
+//! The kind of a node and the tag of each kind, the name, namespace and prefix of an element, and
+//! creating nodes and elements with the ids they take. The tests of these sit in the same file.
 use std::borrow::Cow;
 
-use html5ever::ns;
+use html5ever::{Namespace, ns};
 
-use super::{COMMENT_TAG, DOCUMENT_TAG, FRAGMENT_TAG, TEXT_TAG, VirtualNode};
+use super::{NodeId, TreeError, VirtualNode, VirtualTree};
+
+/// The tag of a comment.
+pub(crate) const COMMENT_TAG: &str = "#comment";
+
+/// The tag of a text content node.
+pub const TEXT_TAG: &str = "#text";
+
+/// The tag of the document: the top of the tree, which holds at most one element and any number of
+/// comments.
+pub(crate) const DOCUMENT_TAG: &str = "#document";
+
+/// The tag of a fragment: a node that holds children, has no parent and is never connected.
+pub const FRAGMENT_TAG: &str = "#fragment";
 
 /// The kind of a node, set when the node is allocated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,13 +180,86 @@ impl VirtualNode {
     }
 }
 
+impl VirtualTree {
+    /// Allocates a new node and returns its id. Ids are assigned
+    /// sequentially starting at 0 and are never reused, even after the node
+    /// they named is destroyed, so a stale id never names another node.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::UnknownTag`] for a tag that starts with `#` and names no kind of node,
+    /// and [`TreeError::IdsExhausted`] once `u32::MAX` nodes have been
+    /// created over the tree's lifetime. A template takes two ids, its own and its content's,
+    /// and fails without creating either when fewer are left.
+    pub fn create_node(&mut self, local_name: impl Into<String>) -> Result<NodeId, TreeError> {
+        let local_name = local_name.into();
+        match NodeKind::of_tag(&local_name).ok_or(TreeError::UnknownTag)? {
+            NodeKind::Element => self.create_element(Some(ns!(html)), None, local_name),
+            kind => self.allocate(kind, local_name, None, None),
+        }
+    }
+
+    /// Makes the next id `next`, so a test reaches the end of the id space.
+    #[cfg(test)]
+    pub(crate) fn set_next_id(&mut self, next: NodeId) {
+        self.next_id = next;
+    }
+
+    pub(super) fn allocate(
+        &mut self,
+        kind: NodeKind,
+        local_name: String,
+        namespace: Option<Namespace>,
+        prefix: Option<String>,
+    ) -> Result<NodeId, TreeError> {
+        let id = self.next_id;
+        self.next_id = id.checked_add(1).ok_or(TreeError::IdsExhausted)?;
+        self.nodes.insert(
+            id,
+            VirtualNode::new(id, kind, local_name, namespace, prefix),
+        );
+        self.orphans.insert(id);
+        Ok(id)
+    }
+
+    /// Allocates an element of `namespace` named `local_name` under `prefix`. An empty or absent
+    /// namespace leaves the element without one. Only an element of the HTML namespace named
+    /// `template` owns a content fragment.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TreeError::IdsExhausted`] as [`create_node`](Self::create_node) does.
+    pub fn create_element_ns(
+        &mut self,
+        namespace: Option<&str>,
+        prefix: Option<&str>,
+        local_name: impl Into<String>,
+    ) -> Result<NodeId, TreeError> {
+        let namespace = namespace
+            .filter(|text| !text.is_empty())
+            .map(Namespace::from);
+        self.create_element(namespace, prefix.map(str::to_owned), local_name.into())
+    }
+
+    pub(super) fn create_element(
+        &mut self,
+        namespace: Option<Namespace>,
+        prefix: Option<String>,
+        local_name: String,
+    ) -> Result<NodeId, TreeError> {
+        if namespace == Some(ns!(html)) && local_name == "template" {
+            return self.create_template(local_name, prefix);
+        }
+        self.allocate(NodeKind::Element, local_name, namespace, prefix)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use super::NodeKind;
+    use super::*;
     use crate::tests::{HTML, MATHML, SVG, node};
-    use crate::tree::VirtualTree;
     use rstest::rstest;
 
     #[rstest]
@@ -366,5 +451,102 @@ mod tests {
         let id = tree.create_element_ns(namespace, None, "e").unwrap();
 
         assert_eq!(tree.get(id).unwrap().attribute_key(name), expected);
+    }
+
+    #[rstest]
+    #[case::style("STYLE")]
+    #[case::template("TEMPLATE")]
+    fn an_html_style_or_template_in_capitals_is_an_ordinary_element(#[case] name: &str) {
+        let mut tree = VirtualTree::new();
+        let id = tree.create_element_ns(Some(HTML), None, name).unwrap();
+
+        let element = tree.get(id).unwrap();
+        assert!(!element.is_style());
+        assert!(!element.is_template());
+        assert_eq!(tree.template_content(id), None);
+        let parsed = tree.parse_html(Some(id), "<b>x</b>").unwrap();
+        let tags: Vec<&str> = parsed.nodes.iter().map(|node| node.tag.as_str()).collect();
+        assert_eq!(tags, ["b", "#text"]);
+    }
+
+    #[rstest]
+    #[case::unknown("#other")]
+    #[case::bare_hash("#")]
+    fn create_node_refuses_a_hash_tag_that_names_no_kind(#[case] tag: &str) {
+        let mut tree = VirtualTree::new();
+
+        assert_eq!(tree.create_node(tag), Err(TreeError::UnknownTag));
+        assert_eq!(tree.nodes.len(), 0);
+        assert_eq!(tree.create_node("div"), Ok(0));
+    }
+
+    #[test]
+    fn create_node_fails_once_the_id_space_is_used_up() {
+        let mut tree = VirtualTree::new();
+        tree.next_id = NodeId::MAX - 1;
+
+        let last = tree.create_node("div").unwrap();
+        assert_eq!(last, NodeId::MAX - 1);
+        assert_eq!(tree.create_node("div"), Err(TreeError::IdsExhausted));
+        assert_eq!(tree.create_node("div"), Err(TreeError::IdsExhausted));
+        assert_eq!(tree.nodes.len(), 1);
+        assert!(tree.get(last).is_some());
+    }
+
+    #[test]
+    fn a_fresh_node_has_no_parent() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+
+        assert_eq!(tree.get(node).unwrap().parent(), None);
+    }
+
+    #[test]
+    fn destroyed_ids_are_not_handed_out_again() {
+        let mut tree = VirtualTree::new();
+        let first = tree.create_node("div").unwrap();
+        tree.destroy_node(first);
+
+        assert_ne!(
+            tree.create_node("div").unwrap(),
+            first,
+            "a stale id never names another node"
+        );
+    }
+
+    #[rstest]
+    #[case::element("div", Some(HTML))]
+    #[case::text("#text", None)]
+    fn create_node_sets_the_namespace_of_an_element_only(
+        #[case] tag: &str,
+        #[case] namespace: Option<&str>,
+    ) {
+        let mut tree = VirtualTree::new();
+        let id = node(&mut tree, tag);
+
+        let created = tree.get(id).unwrap();
+        assert_eq!(created.namespace_uri(), namespace);
+        assert_eq!(created.prefix(), None);
+    }
+
+    #[test]
+    fn create_element_ns_stores_the_namespace() {
+        let mut tree = VirtualTree::new();
+
+        let id = tree.create_element_ns(Some(SVG), None, "svg").unwrap();
+
+        let created = tree.get(id).unwrap();
+        assert_eq!(created.namespace_uri(), Some(SVG));
+    }
+
+    #[rstest]
+    #[case::none(None)]
+    #[case::empty(Some(""))]
+    fn create_element_ns_without_a_namespace_has_none(#[case] namespace: Option<&str>) {
+        let mut tree = VirtualTree::new();
+
+        let id = tree.create_element_ns(namespace, None, "a").unwrap();
+
+        assert_eq!(tree.get(id).unwrap().namespace_uri(), None);
     }
 }

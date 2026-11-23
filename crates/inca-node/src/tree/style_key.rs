@@ -107,10 +107,10 @@ pub enum ValueKind {
     KeywordPair(&'static [&'static str]),
 }
 
-/// A style key the host reads.
+/// A style key.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StyleKey {
-    /// The host key, in `snake_case`.
+    /// The key, in `snake_case`.
     pub key: &'static str,
     /// The CSS names of the same prop, in `snake_case`.
     pub aliases: &'static [&'static str],
@@ -118,7 +118,7 @@ pub struct StyleKey {
     pub kind: ValueKind,
 }
 
-/// Every style key the host reads, in `snake_case`, with its CSS names and
+/// Every style key, in `snake_case`, with its CSS names and
 /// the value it takes.
 pub const STYLE_KEYS: &[StyleKey] = &[
     StyleKey {
@@ -308,9 +308,9 @@ pub const STYLE_KEYS: &[StyleKey] = &[
     },
 ];
 
-/// The host key of a style key. `key` may be `camelCase`, `kebab-case` or
-/// `snake_case`, and a CSS name listed in [`STYLE_KEYS`] names its host key.
-/// A key that is already a host key in `snake_case` comes back borrowed.
+/// The `snake_case` form of a style key. `key` may be `camelCase`, `kebab-case` or
+/// `snake_case`, and a CSS name listed in [`STYLE_KEYS`] names its key.
+/// A key that is already in `snake_case` comes back borrowed.
 #[must_use]
 pub fn style_key(key: &str) -> Cow<'_, str> {
     let snake = if key.bytes().any(|b| b.is_ascii_uppercase() || b == b'-') {
@@ -338,7 +338,7 @@ pub fn style_key(key: &str) -> Cow<'_, str> {
     }
 }
 
-/// The CSS name of the host key `key`: its first CSS alias, or the key itself, in `kebab-case`.
+/// The CSS name of the style key `key`: its first CSS alias, or the key itself, in `kebab-case`.
 #[must_use]
 pub fn css_name(key: &str) -> String {
     let name = STYLE_KEYS

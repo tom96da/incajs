@@ -6,12 +6,23 @@
 use gpui::{App, Window};
 use inca_document::flags_of;
 use inca_document::{EventPayload, MousePayload, PointerSource};
-use inca_gpui::event_sink::with_screen;
 use inca_node::{NodeId, is_disabled_control};
 
 use crate::dispatch::{EventDispatcher, observe_focus};
 use inca_document::EventTargetId;
 use inca_document::Walk;
+
+/// Returns `payload` with `screenX`/`screenY` set to the window's position
+/// on the screen plus the client position.
+#[must_use]
+pub(crate) fn with_screen(mut payload: EventPayload, window: &Window) -> EventPayload {
+    let origin = window.bounds().origin;
+    if let Some(mouse) = payload.mouse_mut() {
+        mouse.screen_x = f32::from(origin.x) + mouse.client_x;
+        mouse.screen_y = f32::from(origin.y) + mouse.client_y;
+    }
+    payload
+}
 
 impl EventDispatcher {
     /// Dispatches `event` along the path of `target`, with `target` as its
@@ -265,11 +276,13 @@ impl EventDispatcher {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::float_cmp, clippy::unwrap_used)]
+    use super::with_screen;
     use crate::Cells;
     use crate::tests::{FakeScript, Walked, fake_dispatcher, tree_of_three, wheel_at};
-    use gpui::{TestAppContext, point, px};
+    use gpui::{AppContext as _, TestAppContext, point, px};
     use inca_document::{EventPayload, MousePayload};
+    use inca_gpui::mouse_at;
     use inca_node::NodeId;
 
     use std::rc::Rc;
@@ -454,5 +467,43 @@ mod tests {
             panic!("expected a wheel payload");
         };
         assert_eq!((wheel.mouse.offset_x, wheel.mouse.offset_y), (50.0, 20.0));
+    }
+
+    fn mouse_of(payload: EventPayload) -> MousePayload {
+        match payload {
+            EventPayload::Mouse(mouse) => mouse,
+            other => panic!("expected a mouse payload, got {other:?}"),
+        }
+    }
+
+    #[gpui::test]
+    fn screen_coordinates_are_the_window_origin_plus_the_client_position(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let bounds = gpui::Bounds::new(
+            gpui::point(gpui::px(30.0), gpui::px(40.0)),
+            gpui::size(gpui::px(100.0), gpui::px(100.0)),
+        );
+        let window = cx.update(|cx| {
+            cx.open_window(
+                gpui::WindowOptions {
+                    window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
+                    ..Default::default()
+                },
+                |_, cx| cx.new(|_| gpui::Empty),
+            )
+            .unwrap()
+        });
+        let position = gpui::point(gpui::px(12.0), gpui::px(34.0));
+        let payload = EventPayload::Mouse(mouse_at(position, gpui::Modifiers::default()));
+
+        let screen = cx
+            .update_window(window.into(), |_, window, _| {
+                mouse_of(with_screen(payload, window))
+            })
+            .unwrap();
+
+        assert_eq!(screen.screen_x, 42.0);
+        assert_eq!(screen.screen_y, 74.0);
     }
 }

@@ -5,7 +5,7 @@
 
 [package]
 name = "inca-gpui"
-description = "The gpui element, focus and event layer inca renders through."
+description = "The gpui element layer and the platform input inca renders through."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

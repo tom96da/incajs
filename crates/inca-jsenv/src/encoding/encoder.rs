@@ -10,7 +10,7 @@ use rquickjs::function::{Opt, This};
 use rquickjs::object::Property;
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, TypedArray, Value};
 
-use super::Construct;
+use super::construct::Construct;
 use crate::buffer_source::{is_detached, is_resizable, read, store};
 use crate::class::{
     define_class, define_getter, define_global, define_method, define_sized_method, plain_class,

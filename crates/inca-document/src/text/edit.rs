@@ -3,7 +3,39 @@
 
 //! The edits of an input value and their event payloads.
 
-use super::{InputState, InputType, Range, bytes_of_units};
+use std::ops::Range;
+
+use super::InputState;
+use super::state::bytes_of_units;
+
+/// The `inputType` of an edit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputType {
+    InsertText,
+    InsertFromPaste,
+    InsertCompositionText,
+    /// A line break (Enter).
+    InsertLineBreak,
+    DeleteContentBackward,
+    DeleteContentForward,
+    DeleteByCut,
+}
+
+impl InputType {
+    /// The `inputType` string of the variant.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::InsertText => "insertText",
+            Self::InsertFromPaste => "insertFromPaste",
+            Self::InsertCompositionText => "insertCompositionText",
+            Self::InsertLineBreak => "insertLineBreak",
+            Self::DeleteContentBackward => "deleteContentBackward",
+            Self::DeleteContentForward => "deleteContentForward",
+            Self::DeleteByCut => "deleteByCut",
+        }
+    }
+}
 
 /// A change to the value and the state after it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -177,7 +209,7 @@ mod tests {
     #![allow(clippy::float_cmp, clippy::unwrap_used)]
 
     use super::*;
-    use crate::text::tests::{at, caret_at};
+    use crate::tests::{at, caret_at};
     use rstest::rstest;
 
     #[test]
@@ -346,5 +378,17 @@ mod tests {
             payload.is_composing,
             input_type == InputType::InsertCompositionText
         );
+    }
+
+    #[rstest]
+    #[case(InputType::InsertText, "insertText")]
+    #[case(InputType::InsertFromPaste, "insertFromPaste")]
+    #[case(InputType::InsertCompositionText, "insertCompositionText")]
+    #[case(InputType::InsertLineBreak, "insertLineBreak")]
+    #[case(InputType::DeleteContentBackward, "deleteContentBackward")]
+    #[case(InputType::DeleteContentForward, "deleteContentForward")]
+    #[case(InputType::DeleteByCut, "deleteByCut")]
+    fn input_type_names_follow_input_events(#[case] input_type: InputType, #[case] want: &str) {
+        assert_eq!(input_type.as_str(), want);
     }
 }

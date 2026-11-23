@@ -158,7 +158,7 @@ pub struct Link {
 }
 
 /// For each signal the registrations that name it as their `signal` option, and for each such
-/// registration the signal. Plain ids and names, no JS value.
+/// registration the signal. Plain ids and names.
 #[derive(Debug, Default)]
 pub struct Links {
     by_callback: HashMap<u32, (u32, Link)>,

@@ -141,9 +141,9 @@ mod tests {
 
     use rstest::rstest;
 
-    use crate::html::tests::parsed;
     use crate::html::{ParsedHtml, ParsedNode};
     use crate::tests::node;
+    use crate::tests::parsed;
     use crate::tree::{COMMENT_TAG, NodeId, NodeKind, TEXT_TAG, VirtualTree};
 
     /// The number of ancestors of `id` below `fragment`, counting `id` itself.

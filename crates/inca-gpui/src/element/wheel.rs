@@ -13,7 +13,7 @@ use inca_style::spec::{ElementSpec, StyleSpec, WheelAxes};
 /// The tracked scroll containers under the pointer for the wheel event being
 /// dispatched, innermost first, without the root.
 #[derive(Default)]
-pub(super) struct WheelChain(pub(super) Vec<(NodeId, ScrollHandle)>);
+pub(crate) struct WheelChain(pub(crate) Vec<(NodeId, ScrollHandle)>);
 
 impl Global for WheelChain {}
 
@@ -21,14 +21,14 @@ impl Global for WheelChain {}
 /// sets it after the listeners ran, and the root's own listener, which runs
 /// last in the bubble phase and only when the pointer is over the root, takes it.
 #[derive(Default)]
-pub(super) struct RootStep(pub(super) Option<Point<Pixels>>);
+pub(crate) struct RootStep(pub(crate) Option<Point<Pixels>>);
 
 impl Global for RootStep {}
 
 /// The containers a wheel step reached, until their bars have been drawn once. A container that
 /// shows its thumb while it scrolls removes its own id when it draws.
 #[derive(Default)]
-pub(super) struct WheelScrolled(pub(super) HashSet<NodeId>);
+pub(crate) struct WheelScrolled(pub(crate) HashSet<NodeId>);
 
 impl Global for WheelScrolled {}
 
@@ -60,7 +60,7 @@ pub(super) fn axis_step(axes: WheelAxes, delta: Point<Pixels>) -> Point<Pixels> 
 
 /// The offset a wheel `delta` moves `handle` to, clamped to the content of the
 /// last layout. `None` when the clamped offset stays where it is.
-pub(super) fn next_offset(
+pub(crate) fn next_offset(
     axes: WheelAxes,
     handle: &ScrollHandle,
     delta: Point<Pixels>,
@@ -90,7 +90,7 @@ pub(super) fn scroll_anchor(style: &StyleSpec) -> impl IntoElement {
 /// The top and left offsets of a zero-size child that sits where the scroll anchor of a container
 /// with `style` sits.
 #[allow(clippy::cast_possible_truncation)]
-pub(super) fn anchor_insets(style: &StyleSpec) -> (Pixels, Pixels) {
+pub(crate) fn anchor_insets(style: &StyleSpec) -> (Pixels, Pixels) {
     let border = style.border_width.unwrap_or(0.0) * 2.0;
     let inset = |padding: Option<f64>| px((padding.unwrap_or(0.0) - border) as f32);
     (inset(style.padding.top), inset(style.padding.left))

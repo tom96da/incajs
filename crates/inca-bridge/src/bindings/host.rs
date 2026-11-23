@@ -6,9 +6,9 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use inca_document::geometry::Align;
-use inca_document::{DocumentState, View, apply_removals};
+use inca_document::{DocumentState, View};
 use inca_jsenv::{EngineError, Frames, Timers};
-use inca_node::{NodeId, Removal};
+use inca_node::NodeId;
 
 /// The document and window cells the bindings share with the dispatch of a window, and the JS cell
 /// of the bindings. A cell is borrowed for one step at a time. No borrow is held across a call into
@@ -104,25 +104,6 @@ impl Host {
         )
     }
 
-    /// Runs the steps that follow a tree change that took `removals` out of the tree. The
-    /// document crate drops the focus, moves the Tab start and queues the focus re-check. Every
-    /// node resets the scroll offsets of its subtree. `document` is the borrow of the document
-    /// cell the caller holds.
-    pub(super) fn settle(&self, document: &mut DocumentState, removals: &[Removal]) {
-        apply_removals(&mut document.focus, &document.tree, removals);
-        let window = self.window.borrow();
-        for removal in removals {
-            window.reset_scroll(&document.tree, removal.id);
-        }
-    }
-
-    /// Drops the per-node state of freed nodes and returns the callback ids
-    /// their listeners held. `document` is the borrow of the document cell the caller holds.
-    pub(crate) fn free_ids(&self, document: &mut DocumentState, ids: &[NodeId]) -> Vec<u32> {
-        self.window.borrow_mut().forget(ids);
-        document.forget(ids)
-    }
-
     /// Frees every orphan of the tree with its subtree and drops their
     /// per-node state. Returns the freed node ids and the callback ids their
     /// listeners held, or `None` when nothing was freed.
@@ -133,7 +114,8 @@ impl Host {
         if nodes.is_empty() {
             return None;
         }
-        let callbacks = self.free_ids(&mut document, &nodes);
+        let callbacks =
+            inca_document::free_ids(&mut document, &mut *self.window.borrow_mut(), &nodes);
         Some((nodes, callbacks))
     }
 

@@ -344,6 +344,25 @@ pub(crate) fn load_listening(cx: &mut TestAppContext, source: &str) -> Harness {
     Harness::load(cx, TEST_ENTRY_PATH, &format!("{LISTEN}{source}"))
 }
 
+/// A focused 100x50 `box` whose `keydown` and `keyup` listeners log `type:key:metaKey`.
+pub(crate) const KEYED: &str = r"
+            const n = __inca_native__;
+            const box = n.createNode('div');
+            n.setStyle(box, 'width', 100);
+            n.setStyle(box, 'height', 50);
+            n.setAttribute(box, 'tabindex', '0');
+            n.appendChild(n.rootNodeId(), box);
+            globalThis.log = [];
+            globalThis.cb = {
+                0: (e) => {
+                    globalThis.log.push(`${e.type}:${e.key}:${e.metaKey}`);
+                },
+            };
+            listen(box, 'keydown', 0);
+            listen(box, 'keyup', 0);
+            n.focusNode(box);
+        ";
+
 pub(crate) fn log(h: &Harness) -> String {
     h.window
         .read_with(&h.cx, |app, _| {

@@ -8,7 +8,7 @@
 
 use super::array::write_more;
 use super::object::write_key;
-use super::{MAX_ENTRIES, Mode, put, quote, write_value};
+use super::value::{MAX_ENTRIES, Mode, put, quote, write_value};
 use crate::paint::Style;
 use crate::url::{Printed, printed};
 

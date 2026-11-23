@@ -3,13 +3,11 @@
 
 //! Format specifiers for the console methods that take a format string.
 
-mod number;
-
 use rquickjs::{Coerced, Ctx, Type, Value};
 
+use super::format_number::{number_text, parse_float, parse_int};
 use crate::inspect;
 use crate::paint::{Style, paint};
-use number::{number_text, parse_float, parse_int};
 
 /// Formats a call's arguments into the line it prints, applying the format
 /// specifiers of the first argument when it is a string.

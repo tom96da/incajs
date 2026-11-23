@@ -3,9 +3,10 @@
 
 //! Queued focus and blur requests, and the frame that applies them.
 
-use super::{
-    FocusModel, FocusSurface, FocusTransition, NodeId, PendingFocus, Start, StyleCache, VirtualTree,
-};
+use inca_node::{NodeId, VirtualTree};
+use inca_style::StyleCache;
+
+use super::{FocusModel, FocusSurface, FocusTransition, PendingFocus, Start};
 
 impl FocusModel {
     /// Queues that `node_id` should be focused next frame. With `scroll`,
@@ -71,8 +72,8 @@ impl FocusModel {
                 }
                 None => {
                     if self.tracked.contains(&node_id) {
-                        // Report a click focus first, then the blur, so JS
-                        // sees both. `forget` would skip the blur.
+                        // Report a click focus first, then the blur, so the
+                        // caller sees both. `forget` would skip the blur.
                         transitions.extend(self.sync(surface));
                         if surface.focused() == Some(node_id) {
                             surface.blur();

@@ -12,7 +12,7 @@ use rquickjs::JsLifetime;
 use rquickjs::function::{Opt, This};
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
-use super::{Construct, flag_of};
+use super::construct::{Construct, flag_of};
 use crate::buffer_source::{bytes_of, source_of, store};
 use crate::class::{
     define_class, define_getter, define_global, define_method, options_of, plain_class,

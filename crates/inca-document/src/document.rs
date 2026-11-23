@@ -45,7 +45,7 @@ pub struct DocumentState {
     /// Writes to stderr by default.
     pub warnings: StyleWarnings,
     pub listeners: EventListeners,
-    /// The state of every `AbortSignal`, by id. Plain data. The objects live in JS.
+    /// The state of every `AbortSignal`, by id. Plain data.
     pub signals: Signals,
     pub focus: FocusModel,
     /// Last number handed out as an `eventId`. Each event takes the next one.
@@ -85,6 +85,16 @@ impl std::fmt::Debug for DocumentState {
 }
 
 impl DocumentState {
+    /// Sets the typed text of the `input` node `node` to `value`, creating its text state on first
+    /// use.
+    pub fn set_input_value(&self, node: NodeId, value: &str) {
+        self.inputs
+            .borrow_mut()
+            .entry(node)
+            .or_default()
+            .set_value(value);
+    }
+
     /// The node a mounting app attaches under. Allocated with the tree, so `rootNodeId` always
     /// resolves.
     ///

@@ -14,8 +14,8 @@ use rquickjs::class::{JsClass, Readable, Trace, Tracer};
 use rquickjs::function::Constructor;
 use rquickjs::{Ctx, Object, Result as JsResult};
 
-use super::Flags;
 use super::payload::Payload;
+use inca_document::Flags;
 
 // A derive on a struct with a lifetime generates items that an `allow` on the struct does not
 // cover, so the struct sits in a module of its own.

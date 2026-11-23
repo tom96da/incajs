@@ -14,7 +14,6 @@ mod hover;
 mod input;
 mod keys;
 mod pointer;
-mod restyle;
 mod script;
 mod sink;
 mod timers;

@@ -12,7 +12,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use percent_encoding::percent_decode_str;
 
 use super::mappings::decode_mappings;
-use super::{Entry, Parsed, RawMap};
+use super::remap::{Entry, Parsed, RawMap};
 
 const MARKER: &str = "//# sourceMappingURL=";
 

@@ -1,7 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The geometry that scrolls a node into view.
+//! The geometry of boxes: what scrolls a node into view and what the client and offset reads
+//! compute from a recorded box.
+
+use crate::view::NodeBox;
 
 /// A box in window coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,6 +35,21 @@ pub enum Align {
     /// A node that shows fully or partly stays put. A node that lies outside
     /// the client rectangle centres.
     CenterOutside,
+}
+
+impl Align {
+    /// The alignment a scroll call names: `start`, `center`, `end` or `nearest`. Any other name
+    /// gives `None`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "start" => Some(Self::Start),
+            "center" => Some(Self::Center),
+            "end" => Some(Self::End),
+            "nearest" => Some(Self::Nearest),
+            _ => None,
+        }
+    }
 }
 
 fn axis_delta(node_start: f32, node_len: f32, view_start: f32, view_len: f32, align: Align) -> f32 {
@@ -97,6 +115,33 @@ pub fn scroll_chain<I: Copy>(
         node.x -= applied_x;
         node.y -= applied_y;
     }
+}
+
+/// The width of the padding box without the scrollbar gutter, never negative and not rounded.
+#[must_use]
+pub fn client_width(node: &NodeBox) -> f64 {
+    (f64::from(node.rect.width) - 2.0 * f64::from(node.border) - f64::from(node.gutter.0)).max(0.0)
+}
+
+/// The height of the padding box without the scrollbar gutter, never negative and not rounded.
+#[must_use]
+pub fn client_height(node: &NodeBox) -> f64 {
+    (f64::from(node.rect.height) - 2.0 * f64::from(node.border) - f64::from(node.gutter.1)).max(0.0)
+}
+
+/// Where `node` sits inside the padding edge of `parent`, not rounded. A parent with no box
+/// gives the window origin. The box moved with the scroll its parent applied when it was
+/// recorded.
+#[must_use]
+pub fn offset_of(node: &NodeBox, parent: Option<&NodeBox>) -> (f64, f64) {
+    let (ox, oy) = parent.map_or((0.0, 0.0), |p| {
+        let border = f64::from(p.border);
+        (f64::from(p.rect.x) + border, f64::from(p.rect.y) + border)
+    });
+    (
+        f64::from(node.rect.x) - ox + f64::from(node.scroll.0),
+        f64::from(node.rect.y) - oy + f64::from(node.scroll.1),
+    )
 }
 
 #[cfg(test)]
@@ -240,5 +285,39 @@ mod tests {
             (dx, if id == 1 { dy / 2.0 } else { dy })
         });
         assert_eq!(seen, [(1, 0.0, 500.0), (2, 0.0, 250.0)]);
+    }
+
+    fn node_box(rect: Rect, border: f32, scroll: (f32, f32), gutter: (f32, f32)) -> NodeBox {
+        NodeBox {
+            rect,
+            border,
+            scroll,
+            gutter,
+        }
+    }
+
+    #[test]
+    fn the_client_size_drops_the_border_and_the_gutter() {
+        let b = node_box(rect(10.0, 0.0, 20.0, 30.0), 2.0, (4.0, 5.0), (5.0, 3.0));
+        assert_eq!((client_width(&b), client_height(&b)), (11.0, 23.0));
+    }
+
+    #[test]
+    fn the_client_size_is_never_negative() {
+        let b = node_box(rect(0.0, 0.0, 3.0, 2.0), 2.0, (0.0, 0.0), (1.0, 1.0));
+        assert_eq!((client_width(&b), client_height(&b)), (0.0, 0.0));
+    }
+
+    #[test]
+    fn an_offset_starts_at_the_padding_edge_of_the_parent_and_adds_the_scroll() {
+        let child = node_box(rect(110.0, 60.0, 20.0, 20.0), 0.0, (4.0, 5.0), (0.0, 0.0));
+        let parent = node_box(rect(100.0, 50.0, 200.0, 200.0), 3.0, (0.0, 0.0), (0.0, 0.0));
+        assert_eq!(offset_of(&child, Some(&parent)), (11.0, 12.0));
+    }
+
+    #[test]
+    fn an_offset_without_a_parent_box_starts_at_the_window_origin() {
+        let child = node_box(rect(110.0, 60.0, 20.0, 20.0), 0.0, (4.0, 5.0), (0.0, 0.0));
+        assert_eq!(offset_of(&child, None), (114.0, 65.0));
     }
 }

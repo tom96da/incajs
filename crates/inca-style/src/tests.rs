@@ -213,3 +213,44 @@ pub(crate) const SVG: &str = "http://www.w3.org/2000/svg";
 pub(crate) fn node(tree: &mut VirtualTree, tag: &str) -> NodeId {
     tree.create_node(tag).unwrap()
 }
+
+/// A node with `name` as its class under the root of `f`.
+pub(crate) fn classed(f: &mut Fixture, name: &str) -> NodeId {
+    let node = f.add(f.root, "div", name);
+    f.attr(node, "class", name);
+    node
+}
+
+pub(crate) fn block(props: &[(&str, AttributeValue)]) -> (VirtualTree, inca_node::NodeId) {
+    let mut tree = VirtualTree::new();
+    let id = tree.create_node("div").unwrap();
+    for (key, value) in props {
+        crate::set_style(&mut tree, id, *key, value.clone()).unwrap();
+    }
+    (tree, id)
+}
+
+pub(crate) fn entry(tree: &VirtualTree, id: inca_node::NodeId) -> Option<String> {
+    tree.get(id)
+        .unwrap()
+        .attributes()
+        .get("style")
+        .map(AttributeValue::text)
+}
+
+pub(crate) fn attribute_keys(tree: &VirtualTree, node: inca_node::NodeId) -> Vec<&str> {
+    tree.get(node)
+        .unwrap()
+        .attributes()
+        .keys()
+        .map(String::as_str)
+        .collect()
+}
+
+pub(crate) fn block_with_no_declaration_keys() -> (VirtualTree, inca_node::NodeId) {
+    block(&[
+        ("not_a_key", num(1.0)),
+        ("height", AttributeValue::Bool(true)),
+        ("width", num(5.0)),
+    ])
+}

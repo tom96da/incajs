@@ -8,12 +8,14 @@
 use crate::element::*;
 use crate::event_sink::{EventSink, noop_sink_methods};
 use crate::input::{InputLayout, InputRequest};
-use gpui::Pixels;
+use crate::pointer::{mouse_target, pressed_target};
+use crate::scrollbar::Scrollbars;
 use gpui::point;
 use gpui::prelude::*;
 use gpui::size;
 use gpui::{App, MouseUpEvent, ScrollHandle, Window, px};
 use gpui::{Context, Render, TestAppContext, VisualTestContext};
+use gpui::{Pixels, Point};
 use inca_document::EventPayload;
 use inca_document::InputState;
 use inca_node::tree::AttributeValue;
@@ -168,7 +170,7 @@ impl EventSink for Probe {
         let name = if active { "bar_drag" } else { "bar_drag_end" };
         self.bars.borrow_mut().push((name.to_owned(), id));
         if !active {
-            // The bridge restyles at the end of a drag, which requests a redraw.
+            // A restyle at the end of a drag requests a redraw.
             window.refresh();
         }
     }
@@ -475,3 +477,13 @@ pub(crate) fn style_of(props: &[(&str, AttributeValue)]) -> StyleSpec {
     }
     build_spec(&tree, &StyleCache::new(), id).unwrap().style
 }
+
+pub(crate) fn at((x, y): (f32, f32)) -> Point<Pixels> {
+    point(px(x), px(y))
+}
+
+pub(crate) fn report(event: &str, target: NodeId) -> (String, NodeId) {
+    (event.to_owned(), target)
+}
+
+pub(crate) const LEAF: (f32, f32) = (10., 10.);

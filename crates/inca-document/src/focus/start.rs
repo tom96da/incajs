@@ -3,8 +3,10 @@
 
 //! Where Tab starts while no node is focused.
 
-use super::{FocusModel, NodeId, VirtualTree};
 use inca_node::tree::VirtualNode;
+use inca_node::{NodeId, VirtualTree};
+
+use super::FocusModel;
 
 /// Where Tab starts while no node is focused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

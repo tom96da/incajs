@@ -5,7 +5,8 @@
 
 #![allow(clippy::unwrap_used)]
 
-use crate::tree::{NodeId, TEXT_TAG, VirtualTree};
+use crate::ParsedHtml;
+use crate::tree::{NodeId, NodeKind, TEXT_TAG, VirtualTree};
 
 /// A tree under construction. Every node an `add` call makes gets an `id` attribute of `name`.
 pub(crate) struct Fixture {
@@ -93,4 +94,42 @@ pub(crate) fn sample(tree: &mut VirtualTree, tag: &str) -> NodeId {
     tree.append_child(span, inner).unwrap();
     tree.append_child(root, tail).unwrap();
     root
+}
+
+pub(crate) fn parsed(context: Option<&str>, markup: &str) -> (VirtualTree, ParsedHtml) {
+    let mut tree = VirtualTree::new();
+    let context = context.map(|tag| node(&mut tree, tag));
+    let html = tree.parse_html(context, markup).unwrap();
+    (tree, html)
+}
+
+/// The nodes below `id` as text: `tag[key=value](children)`, `"text"`, `<!--comment-->` and
+/// `template{content}`.
+#[allow(clippy::format_push_string)]
+pub(crate) fn shape(tree: &VirtualTree, id: NodeId) -> String {
+    let node = tree.get(id).unwrap();
+    match node.kind() {
+        NodeKind::Text => return format!("{:?}", node.data()),
+        NodeKind::Comment => return format!("<!--{}-->", node.data()),
+        _ => {}
+    }
+    let mut text = if node.kind() == NodeKind::Fragment {
+        String::new()
+    } else {
+        node.local_name().to_owned()
+    };
+    if let Some(content) = tree.template_content(id) {
+        text.push_str(&format!("{{{}}}", children_shape(tree, content)));
+    }
+    if !node.children().is_empty() {
+        text.push_str(&format!("({})", children_shape(tree, id)));
+    }
+    text
+}
+
+/// The nodes under `id`, separated by spaces.
+pub(crate) fn children_shape(tree: &VirtualTree, id: NodeId) -> String {
+    let children = tree.get(id).unwrap().children();
+    let shapes: Vec<String> = children.iter().map(|&c| shape(tree, c)).collect();
+    shapes.join(" ")
 }

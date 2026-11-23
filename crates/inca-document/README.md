@@ -28,7 +28,12 @@ focus.
 `is_element_local_name` check element names. `store_attribute` writes an attribute and applies a
 `style` attribute as style props, and warnings go to a `StyleWarnings` sink. `insert_parsed`,
 `replace_children` and `replace_with` are the markup setters, and `apply_removals` carries the focus
-steps of a tree call that moved or removed nodes. The `text` module holds the text-control model.
+steps of a tree call that moved or removed nodes. `parse_inner`, `parse_outer` and `parse_adjacent`
+parse the markup of `innerHTML`, `outerHTML` and `insertAdjacentHTML` and apply each `style`
+attribute as style props. `settle` runs the focus steps of the removed nodes and resets the scroll
+offsets of their subtrees in a `View`. `free_ids` drops the state of freed nodes in a `View` and in
+the document and returns the callback ids their listeners held. The `text` module holds the
+text-control model.
 `DocumentState` holds the tree with its cascade, the listeners, the signals and the focus, and
 `StyleWarnings` collects the warnings of a style write.
 
@@ -49,3 +54,6 @@ positions, the held mouse buttons and the reveals that wait for a box.
 
 `Rect` and `Align` describe a box and where it lands in a client rectangle. `scroll_delta` gives the
 distance that brings a box into view, and `scroll_chain` walks it up the scrolling ancestors.
+`Align::from_name` reads the alignment a scroll call names. `client_width` and `client_height` give
+the client size of a box, and `offset_of` gives where a box sits inside the padding edge of its
+parent.

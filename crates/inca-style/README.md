@@ -52,5 +52,5 @@ raise an exception, and `style_warning` reports such a key or value once, when i
 
 ## Scope
 
-Rendering, windows and JavaScript are outside this crate. A caller builds the tree through
+A caller builds the tree through
 `inca-node` and reads it back through the calls above.

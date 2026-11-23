@@ -3,19 +3,26 @@
 
 //! Matching one node against a selector, and `closest`. The tests sit in the same file.
 
-use super::{
-    Atom, AttrSelectorOperation, BloomFilter, CaseSensitivity, Element, ElementSelectorFlags, Impl,
-    MatchingContext, MatchingForInvalidation, MatchingMode, NamespaceConstraint,
-    NeedsSelectorFlags, NodeId, NodeKind, OpaqueElement, PseudoClass, PseudoElement, QuirksMode,
-    SelectorCaches, SelectorError, SelectorList, VirtualNode, VirtualTree, fmt,
-    matches_selector_list, parse,
+use std::fmt;
+
+use inca_node::tree::{NodeId, NodeKind, VirtualNode, VirtualTree};
+use selectors::attr::{AttrSelectorOperation, CaseSensitivity, NamespaceConstraint};
+use selectors::bloom::BloomFilter;
+use selectors::context::{
+    MatchingContext, MatchingForInvalidation, MatchingMode, NeedsSelectorFlags, QuirksMode,
+    SelectorCaches,
 };
+use selectors::matching::{ElementSelectorFlags, matches_selector_list};
+use selectors::parser::SelectorList;
+use selectors::{Element, OpaqueElement};
+
+use super::{Atom, Impl, PseudoClass, PseudoElement, SelectorError, parse};
 use selectors::matching::matches_selector as matches_selector_one;
 
 /// An element of the tree: a node that is neither text content, a comment nor a fragment.
 #[derive(Clone, Copy)]
 pub(super) struct Node<'t> {
-    tree: &'t VirtualTree,
+    pub(super) tree: &'t VirtualTree,
     pub(super) node: &'t VirtualNode,
 }
 
@@ -137,10 +144,10 @@ impl Element for Node<'_> {
         match class {
             PseudoClass::Never(_) => false,
             PseudoClass::Defined | PseudoClass::DirLtr => true,
-            PseudoClass::Hover => self.tree.is_hovered(self.node.id()),
-            PseudoClass::Active => self.tree.is_active(self.node.id()),
-            PseudoClass::Focus => self.tree.is_focused(self.node.id()),
-            PseudoClass::FocusWithin => self.tree.is_focus_within(self.node.id()),
+            PseudoClass::Hover
+            | PseudoClass::Active
+            | PseudoClass::Focus
+            | PseudoClass::FocusWithin => self.is_in_interaction_state(class),
             PseudoClass::Disabled
             | PseudoClass::Enabled
             | PseudoClass::ReadWrite

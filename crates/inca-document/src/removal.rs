@@ -1,11 +1,11 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The focus steps that follow a tree call that moved or removed nodes.
+//! The steps that follow a tree call that moved or removed nodes, and the release of freed nodes.
 
-use inca_node::{Removal, VirtualTree};
+use inca_node::{NodeId, Removal, VirtualTree};
 
-use crate::FocusModel;
+use crate::{DocumentState, FocusModel, View};
 
 /// Applies the removals a tree call made. A node that had a parent drops the focus it held and
 /// moves the Tab start. Every node queues a focus re-check.
@@ -19,12 +19,30 @@ pub fn apply_removals(focus: &mut FocusModel, tree: &VirtualTree, removals: &[Re
     }
 }
 
+/// Runs the steps that follow a tree change that took `removals` out of the tree. The document
+/// drops the focus, moves the Tab start and queues the focus re-check. Every node resets the scroll
+/// offsets of its subtree in `view`.
+pub fn settle(state: &mut DocumentState, view: &dyn View, removals: &[Removal]) {
+    apply_removals(&mut state.focus, &state.tree, removals);
+    for removal in removals {
+        view.reset_scroll(&state.tree, removal.id);
+    }
+}
+
+/// Drops the per-node state of the freed nodes `ids` in `view` and in `state`. Returns the callback
+/// ids their listeners held.
+pub fn free_ids(state: &mut DocumentState, view: &mut dyn View, ids: &[NodeId]) -> Vec<u32> {
+    view.forget(ids);
+    state.forget(ids)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::tests::rooted_tree;
+    use crate::EventTargetId;
+    use crate::tests::{RecordingView, rooted_tree};
 
     #[test]
     fn an_attached_node_that_leaves_moves_the_tab_start_to_its_before() {
@@ -89,5 +107,61 @@ mod tests {
         apply_removals(&mut focus, &tree, &removals);
 
         assert!(focus.take_tab_dirty().contains(&ids[0]));
+    }
+
+    #[test]
+    fn settle_applies_the_removals_then_resets_the_scroll_of_each_node() {
+        let (tree, ids) = rooted_tree(2);
+        let removals = tree.removals(&[ids[0], ids[1]]);
+        let mut state = DocumentState {
+            tree,
+            ..DocumentState::default()
+        };
+        let view = RecordingView::default();
+
+        settle(&mut state, &view, &removals);
+
+        assert_eq!(*view.resets.borrow(), ids);
+        assert!(state.focus.take_tab_dirty().contains(&ids[0]));
+    }
+
+    #[test]
+    fn free_ids_forgets_the_nodes_in_the_view_and_in_the_state() {
+        let mut state = DocumentState::default();
+        let mut view = RecordingView::default();
+
+        let callbacks = free_ids(&mut state, &mut view, &[3, 4]);
+
+        assert_eq!(view.forgotten, [3, 4]);
+        assert!(callbacks.is_empty());
+    }
+
+    #[test]
+    fn free_ids_releases_the_listeners_of_the_freed_nodes_and_returns_their_callbacks() {
+        let mut state = DocumentState::default();
+        let mut view = RecordingView::default();
+        let target = |id| EventTargetId::Node(id);
+        state.listeners.insert(target(3), "click", 1, false, false);
+        state.listeners.insert(target(4), "click", 2, false, false);
+        state.listeners.insert(target(5), "click", 3, false, false);
+
+        let mut callbacks = free_ids(&mut state, &mut view, &[3, 4]);
+        callbacks.sort_unstable();
+
+        assert_eq!(callbacks, [1, 2]);
+        assert!(state.listeners.listeners_for(target(3), "click").is_empty());
+        assert!(state.listeners.listeners_for(target(4), "click").is_empty());
+        assert_eq!(state.listeners.listeners_for(target(5), "click").len(), 1);
+    }
+
+    #[test]
+    fn free_ids_drops_the_queued_focus_check_of_a_freed_node() {
+        let mut state = DocumentState::default();
+        let mut view = RecordingView::default();
+        state.focus.mark_tab_dirty(3);
+
+        free_ids(&mut state, &mut view, &[3]);
+
+        assert!(state.focus.take_tab_dirty().is_empty());
     }
 }

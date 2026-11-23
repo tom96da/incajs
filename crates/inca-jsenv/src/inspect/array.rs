@@ -6,7 +6,7 @@
 use rquickjs::{Value, object::Filter};
 
 use super::object::{slot, write_slot};
-use super::{MAX_ENTRIES, Mode, plain, put, settled};
+use super::value::{MAX_ENTRIES, Mode, plain, put, settled};
 use crate::paint::Style;
 
 pub(super) fn write_array(out: &mut String, value: &Value<'_>, depth: usize, mode: Mode) {

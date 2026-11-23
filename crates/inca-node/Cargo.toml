@@ -5,7 +5,7 @@
 
 [package]
 name = "inca-node"
-description = "The retained virtual tree, selectors and style spec inca renders."
+description = "The retained node tree, the data stored on its nodes and its markup that inca renders."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -8,7 +8,8 @@ use std::rc::Rc;
 use rquickjs::function::{Opt, Rest};
 use rquickjs::{Coerced, Ctx, Value};
 
-use super::{Console, Level, format};
+use super::format;
+use super::object::{Console, Level};
 
 /// The `console.assert` line: "Assertion failed", joined to a string first
 /// datum with `: `.

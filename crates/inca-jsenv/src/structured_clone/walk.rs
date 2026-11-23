@@ -14,8 +14,6 @@ use super::globals::{Cause, refuse};
 use super::intrinsics::{Kind, Toolkit};
 use crate::quickjs::ObjectExt;
 
-mod containers;
-
 /// The work that is left on a container or an error.
 pub(super) enum Frame<'js> {
     /// The own enumerable string keys of an `Array` or an ordinary object.

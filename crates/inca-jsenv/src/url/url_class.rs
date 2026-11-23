@@ -9,10 +9,12 @@ use rquickjs::function::{IntoJsFunc, Opt, ParamRequirement, Params, Rest, This};
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 use url::{Url, quirks};
 
-use super::{ParamsInstance, State, UrlInstance, given, receiver, require, url_state, usv};
+use super::instance::ParamsInstance;
+use super::instance::UrlInstance;
+use super::state::{State, url_state, usv};
 use crate::class::{
     NEEDS_NEW, define_accessor, define_class, define_getter, define_global, define_method,
-    define_sized_method, new_target_prototype,
+    define_sized_method, given, new_target_prototype, receiver, require,
 };
 use crate::vault::required_prototype;
 

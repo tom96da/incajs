@@ -7,9 +7,9 @@ use gpui::prelude::*;
 use gpui::{Bounds, Pixels, ScrollHandle, Size, point, px};
 
 use super::build::NodeLayout;
-use super::scrollbar::{Scrollbars, gutter_of};
 use super::wheel::snapped_extra;
 use crate::event_sink::EventSink;
+use crate::scrollbar::{Scrollbars, gutter_of};
 use inca_document::geometry::Rect;
 use inca_node::tree::NodeId;
 use inca_style::spec::{DisplaySpec, ElementSpec, ElementTag};
@@ -34,8 +34,7 @@ pub(super) fn has_bar(spec: &ElementSpec, handle: Option<&ScrollHandle>) -> bool
 
 /// The strips the bars of the node `spec` reserve in `mode`: `width` for the vertical bar and
 /// `height` for the horizontal bar. Zero for a node that gets no bar, which is a node without
-/// a scroll handle in `sink` or without a scrolling axis. The host records the document element
-/// with it.
+/// a scroll handle in `sink` or without a scrolling axis.
 #[must_use]
 pub fn node_gutter<E: EventSink>(spec: &ElementSpec, sink: &E, mode: Scrollbars) -> Size<Pixels> {
     // `scroll_handle` keeps a handle at the first ask, so only a scroll container asks.
@@ -183,7 +182,10 @@ mod tests {
         let leaf = layouts[&leaf];
         assert_eq!(leaf.bounds, rect(12., 12., 50., 40.));
         assert_eq!(leaf.border, px(0.));
-        assert!(!layouts.contains_key(&root), "the root is the host's");
+        assert!(
+            !layouts.contains_key(&root),
+            "a box records only its children"
+        );
     }
 
     #[gpui::test]

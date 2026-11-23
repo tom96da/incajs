@@ -3,9 +3,101 @@
 
 use super::keys::{read_edges, read_prop};
 use super::number::MAX_LENGTH_PX;
-use super::{EdgesSpec, LengthSpec, OverflowSpec, StyleSpec};
 use crate::StyleCache;
-use inca_node::tree::{AttributeValue, NodeId, StyleMap, VirtualTree};
+use inca_node::tree::{
+    AlignSpec, AttributeValue, DisplaySpec, FlexDirectionSpec, NodeId, OverflowSpec, StyleMap,
+    VirtualTree,
+};
+
+/// A length in pixels, or `"auto"`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LengthSpec {
+    Px(f64),
+    Auto,
+}
+
+/// A color: `0xRRGGBB` and an alpha from `0` (transparent) to `255` (opaque).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ColorSpec {
+    /// `0xRRGGBB`.
+    pub rgb: u32,
+    pub alpha: u8,
+}
+
+impl ColorSpec {
+    /// An opaque color of `rgb`.
+    #[must_use]
+    pub const fn opaque(rgb: u32) -> Self {
+        Self { rgb, alpha: 255 }
+    }
+}
+
+/// One value per side of a box. `None` leaves that side at its default.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EdgesSpec<T> {
+    pub top: Option<T>,
+    pub right: Option<T>,
+    pub bottom: Option<T>,
+    pub left: Option<T>,
+}
+
+impl<T> Default for EdgesSpec<T> {
+    fn default() -> Self {
+        Self {
+            top: None,
+            right: None,
+            bottom: None,
+            left: None,
+        }
+    }
+}
+
+/// A plain-data style description, built from a
+/// [`VirtualNode`](inca_node::VirtualNode)'s `style_props`.
+/// [`STYLE_KEYS`](inca_node::STYLE_KEYS) lists the keys it is read from.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct StyleSpec {
+    pub display: Option<DisplaySpec>,
+    pub flex_direction: Option<FlexDirectionSpec>,
+    pub justify_content: Option<AlignSpec>,
+    pub align_items: Option<AlignSpec>,
+    /// Uniform gap (px, `>= 0`) applied to both rows and columns.
+    pub gap: Option<f64>,
+    /// Px `>= 0`, or auto.
+    pub width: Option<LengthSpec>,
+    /// Px `>= 0`, or auto.
+    pub height: Option<LengthSpec>,
+    /// Uniform border width (px, `>= 0`) applied to all four sides.
+    pub border_width: Option<f64>,
+    pub background: Option<ColorSpec>,
+    pub border_color: Option<ColorSpec>,
+    /// Uniform corner radius (px, `>= 0`) applied to all four corners.
+    pub corner_radius: Option<f64>,
+    /// Cascades to descendant text. Text leaves carry no style of their own.
+    pub text_color: Option<ColorSpec>,
+    /// Font size (px, `>= 0`). Cascades to descendant text.
+    pub text_size: Option<f64>,
+    pub overflow_x: Option<OverflowSpec>,
+    pub overflow_y: Option<OverflowSpec>,
+    /// Inner spacing (px), each side `>= 0`.
+    pub padding: EdgesSpec<f64>,
+    /// Outer spacing; each side a px value (negative allowed) or `"auto"`.
+    pub margin: EdgesSpec<LengthSpec>,
+    /// `>= 0`.
+    pub flex_grow: Option<f64>,
+    /// `>= 0`.
+    pub flex_shrink: Option<f64>,
+    /// `0.0..=1.0`; multiplies into descendants.
+    pub opacity: Option<f64>,
+    /// Px `>= 0`, or auto.
+    pub min_width: Option<LengthSpec>,
+    /// Px `>= 0`, or auto.
+    pub min_height: Option<LengthSpec>,
+    /// Px `>= 0`, or auto.
+    pub max_width: Option<LengthSpec>,
+    /// Px `>= 0`, or auto.
+    pub max_height: Option<LengthSpec>,
+}
 
 /// One or two overflow values, x first; a single value applies to both axes.
 pub(super) fn overflow_pair_from_str(s: &str) -> Option<(OverflowSpec, OverflowSpec)> {
@@ -72,7 +164,7 @@ pub(super) fn edges_from<T>(
 pub(super) enum StyleFault {
     UnknownKey,
     InvalidColor,
-    /// A value of a shape the host does not support for its known key.
+    /// A value of a shape the key does not support for its known key.
     UnsupportedValue,
 }
 

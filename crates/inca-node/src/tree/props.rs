@@ -61,6 +61,24 @@ mod tests {
     use rstest::rstest;
 
     #[test]
+    fn set_attribute_style_stores_the_text_as_given() {
+        let mut tree = VirtualTree::new();
+        let node = tree.create_node("div").unwrap();
+
+        tree.set_attribute(node, "style", "WIDTH:1px").unwrap();
+
+        assert_eq!(
+            tree.get(node)
+                .unwrap()
+                .attributes()
+                .get("style")
+                .map(AttributeValue::text)
+                .as_deref(),
+            Some("WIDTH:1px")
+        );
+    }
+
+    #[test]
     fn set_attribute_replaces_an_existing_value() {
         let mut tree = VirtualTree::new();
         let node = tree.create_node("input").unwrap();

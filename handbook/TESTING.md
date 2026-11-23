@@ -120,11 +120,13 @@ here, never in a crate or a package.
 - `tests/support/hostBin.mts` exports `resolveTestHostBin()`, which returns
   `target/debug/inca-host`, else `target/release/inca-host`. The tests that spawn the host import
   it.
-- The `test-support` feature of `inca-host` gates its `Harness` and `snapshot` (`automation` gates
-  `snapshot` too) and enables gpui's test platform. The `test-support` feature of `inca-bridge`
+- The `test-support` feature of `inca-host` gates its `Harness` and `snapshot` modules
+  (`automation` gates `snapshot` too) and enables gpui's test platform and the `test-support`
+  features of `inca-gpui` and `inca-window`. The `test-support` feature of `inca-bridge`
   exposes the engine helpers its tests share, and the one of `inca-window` enables gpui's test
   platform and exposes `inca_window::test_support` (`TestRoot`, the cells, `mount_root`, `Frame`)
-  with the `test-support` features of `inca-document` and `inca-gpui`. A dev-dependency turns each on.
+  with the `test-support` features of `inca-document` and `inca-gpui`. The one of `inca-gpui` exposes
+  the scrollbar setting that a dependent crate's tests read. A dev-dependency turns each on.
 - The `automation` feature of `inca-host` answers `click`, `snapshot` and `waitIdle` on the dev
   protocol, in a debug build only. The e2e tests need a host built with it.
 

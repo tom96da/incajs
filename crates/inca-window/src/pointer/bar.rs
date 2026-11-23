@@ -8,7 +8,8 @@ use gpui::{App, Window};
 use inca_document::{EventPayload, NO_BUTTON};
 use inca_node::NodeId;
 
-use super::{EventDispatcher, pointer_payload};
+use super::pointer_payload;
+use crate::dispatch::EventDispatcher;
 
 impl EventDispatcher {
     /// Fires `pointerdown` for the first button pressed and `pointermove` for another one, then

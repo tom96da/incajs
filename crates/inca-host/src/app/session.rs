@@ -273,7 +273,8 @@ mod tests {
     use inca_jsenv::stderr_reporter;
     use rstest::rstest;
 
-    use crate::app::{HostedApp, close_writer_on_quit, open};
+    use crate::app::entry::close_writer_on_quit;
+    use crate::app::{HostedApp, open};
     use crate::dev::{Writer, reporter_for};
     use crate::tests::{CapturingWriter, TEST_ENTRY_PATH, load};
 

@@ -3,29 +3,22 @@
 
 use std::rc::Rc;
 
-use inca_document::{EventPayload, Outcome, deliver, path_from};
+use inca_document::{EventPayload, Outcome, Walk, deliver, path_from};
 use inca_jsenv::{Engine, EngineError};
 use inca_node::NodeId;
 use rquickjs::{Ctx, Result as JsResult};
 
 use super::construct::create;
-use super::{Flags, IncaEvent};
-use crate::EventTargetId;
+use super::walk_listeners::JsInvoke;
 use crate::bindings::Host;
 use inca_document::DocumentState;
-use listeners::JsInvoke;
+use inca_document::EventTargetId;
+use inca_document::Flags;
 
-mod abort;
-mod click;
-mod listeners;
-mod script;
-mod targets;
-
-pub(crate) use abort::fire_abort;
-pub(crate) use click::click;
-pub(crate) use inca_document::Walk;
-pub(crate) use script::{dispatch_event, lose_focus};
-pub(super) use targets::targets_of;
+pub(crate) use super::walk_click::click;
+pub(crate) use super::walk_script::{dispatch_event, lose_focus};
+pub(crate) use super::walk_targets::fire_abort;
+pub(super) use super::walk_targets::targets_of;
 
 /// Whether a listener of `name` exists that an event with `flags` fired at
 /// `target` reaches. Nodes in `cut` stay silent.
@@ -111,7 +104,7 @@ pub(super) fn run(ctx: &Ctx<'_>, host: &Rc<Host>, walk: &Walk<'_>, id: u64) -> O
 
 /// Files a thrown error of `result` in `JsState::failures`, where the dispatcher
 /// reports listener errors in the order they happened.
-fn note(ctx: &Ctx<'_>, host: &Rc<Host>, result: JsResult<()>) {
+pub(super) fn note(ctx: &Ctx<'_>, host: &Rc<Host>, result: JsResult<()>) {
     if let Err(err) = result {
         host.js
             .borrow_mut()
@@ -124,13 +117,14 @@ fn note(ctx: &Ctx<'_>, host: &Rc<Host>, result: JsResult<()>) {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
-    use crate::event::Flags;
+    use crate::event;
     use crate::tests::{
         dispatcher_with_engine, eval_json, fire_and_read, listen, listen_global, listen_with,
         node_under_root, read_out, tagged, tree_of_three,
     };
-    use crate::{EventTargetId, event};
     use inca_document::EventPayload;
+    use inca_document::EventTargetId;
+    use inca_document::Flags;
     use rstest::rstest;
 
     #[test]

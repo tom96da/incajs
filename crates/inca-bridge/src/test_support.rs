@@ -20,8 +20,9 @@ use inca_jsenv::{
 };
 use inca_node::{NodeId, VirtualTree};
 
+use crate::Host;
 use crate::bindings::install;
-use crate::{EventTargetId, Host};
+use inca_document::EventTargetId;
 
 /// The HTML namespace.
 pub const HTML: &str = "http://www.w3.org/1999/xhtml";

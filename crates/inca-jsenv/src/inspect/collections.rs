@@ -12,7 +12,7 @@ use rquickjs::{Function, Object, Value};
 
 use super::array::{separate, write_more};
 use super::object::{constructor_name, slot, write_slot};
-use super::{MAX_ENTRIES, Mode, put, settled, write_value};
+use super::value::{MAX_ENTRIES, Mode, put, settled, write_value};
 use crate::paint::Style;
 
 /// `Name(n) { ... }`, a map's entries as `key => value`.

@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 # inca-window
 
 The behaviour of a window: the input it receives turned into events and default actions, and the
-state that lives with a [`gpui`](https://www.gpui.rs/) window. It needs nothing from a JS engine.
+state that lives with a [`gpui`](https://www.gpui.rs/) window.
 
 `EventDispatcher` implements the `EventSink` of `inca-gpui`. It fills the payload fields that come
 from the window, runs the default actions (clicks, hover, key defaults, text editing and

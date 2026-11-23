@@ -49,7 +49,7 @@ pub(super) fn number(value: &AttributeValue) -> Option<f64> {
 /// A px value: a number, or a string holding one decimal followed by `px`
 /// (any case), with optional surrounding ASCII whitespace. A string without a
 /// unit counts when it reads as zero (`"0"`). The result can be negative, and a value beyond
-/// `MAX_LENGTH_PX` is limited to it. A JS `NaN` or infinity is passed on; each caller filters its
+/// `MAX_LENGTH_PX` is limited to it. A `NaN` or infinity is passed on; each caller filters its
 /// range.
 pub(super) fn style_px(value: &AttributeValue) -> Option<f64> {
     match value {
@@ -114,7 +114,7 @@ pub(super) fn size_spec_from(value: &AttributeValue) -> Option<LengthSpec> {
     }
 }
 
-/// The opacity as specified: a finite JS number, a decimal text, or a decimal text with `%`, which
+/// The opacity as specified: a finite number, a decimal text, or a decimal text with `%`, which
 /// is the fraction rounded to 15 significant digits. Surrounding ASCII whitespace is ignored.
 pub(super) fn opacity_value(value: &AttributeValue) -> Option<f64> {
     match value {
@@ -129,7 +129,7 @@ pub(super) fn opacity_value(value: &AttributeValue) -> Option<f64> {
     }
 }
 
-/// An opacity clamped to `0..=1`; a JS `NaN` or infinity is unset.
+/// An opacity clamped to `0..=1`; a `NaN` or infinity is unset.
 pub(super) fn opacity(value: &AttributeValue) -> Option<f64> {
     opacity_value(value).map(|n| n.clamp(0.0, 1.0))
 }

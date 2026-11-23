@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use super::{NodeId, NodeKind, TEXT_TAG, TreeError, VirtualNode, VirtualTree};
+use super::{NodeId, NodeKind, Removal, TEXT_TAG, TreeError, VirtualNode, VirtualTree};
 
 /// One argument of an insertion: a node of the tree, or a string that becomes a new text node.
 pub enum InsertArg {
@@ -82,6 +82,8 @@ pub struct Inserted {
     pub texts: Vec<NodeId>,
     /// The ids of the nodes that left the tree. A node that moved is not listed.
     pub removed: Vec<NodeId>,
+    /// The removals of the moved and the removed nodes, as they were before the call.
+    pub removals: Vec<Removal>,
 }
 
 impl VirtualTree {
@@ -308,6 +310,7 @@ impl VirtualTree {
     /// Returns [`TreeError::IdsExhausted`] if the tree has fewer ids left than the plan needs. A
     /// plan made by [`plan_insertion`](Self::plan_insertion) from the current state never fails.
     pub fn apply_insertion(&mut self, insertion: Insertion) -> Result<Inserted, TreeError> {
+        let removals = self.removals(&insertion.leaving());
         let Insertion {
             parent,
             group,
@@ -349,6 +352,7 @@ impl VirtualTree {
         Ok(Inserted {
             texts: text_ids,
             removed,
+            removals,
         })
     }
 }

@@ -13,8 +13,8 @@ use rquickjs::function::This;
 use rquickjs::object::Property;
 use rquickjs::{Ctx, Error, IntoJs, Object, Result as JsResult, Value};
 
-use super::{Shared, receiver};
-use crate::class::{define_sized_method, plain_class};
+use super::state::Shared;
+use crate::class::{define_sized_method, plain_class, receiver};
 
 #[derive(Clone, Copy)]
 pub(super) enum Kind {

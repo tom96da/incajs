@@ -8,13 +8,13 @@ use rquickjs::{Class, Ctx, Exception, FromJs, IntoJs, Result as JsResult, Value}
 use inca_document::geometry::Align;
 use inca_node::{NodeId, TreeError, VirtualNode, VirtualTree};
 
-use crate::EventTargetId;
 use crate::abort::IncaSignal;
-use crate::event_target::WINDOW_TAG;
+use crate::event::WINDOW_TAG;
+use inca_document::EventTargetId;
 
 /// An optional boolean argument: omitted, `undefined` and `null` give the
 /// default.
-pub(super) type Flag = Opt<Option<bool>>;
+pub(crate) type Flag = Opt<Option<bool>>;
 
 /// A whole number in `u32` range. `noun` names the argument in the message.
 /// `NaN`, `1.5`, `-1`, `Infinity`, `2**32` and a non-number throw a
@@ -34,12 +34,12 @@ fn whole_u32(ctx: &Ctx<'_>, value: &Value<'_>, noun: &str) -> JsResult<u32> {
 }
 
 /// An offset, a count or an index: the argument converts to an unsigned 32-bit integer.
-pub(super) fn unsigned(Coerced(value): Coerced<i32>) -> u32 {
+pub(crate) fn unsigned(Coerced(value): Coerced<i32>) -> u32 {
     value.cast_unsigned()
 }
 
 /// A length or an index as the `u32` JS reads, saturating at `u32::MAX`.
-pub(super) fn saturated(count: usize) -> u32 {
+pub(crate) fn saturated(count: usize) -> u32 {
     u32::try_from(count).unwrap_or(u32::MAX)
 }
 
@@ -47,7 +47,7 @@ pub(super) fn saturated(count: usize) -> u32 {
 /// anything else (`NaN`, `1.5`, `-1`, `Infinity`, `2**32`, a non-number)
 /// throws a `TypeError`.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct JsNodeId(pub(super) NodeId);
+pub(crate) struct JsNodeId(pub(crate) NodeId);
 
 impl<'js> FromJs<'js> for JsNodeId {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
@@ -57,7 +57,7 @@ impl<'js> FromJs<'js> for JsNodeId {
 
 /// A callback id argument, checked like [`JsNodeId`].
 #[derive(Debug, Clone, Copy)]
-pub(super) struct JsCallbackId(pub(super) u32);
+pub(crate) struct JsCallbackId(pub(crate) u32);
 
 impl<'js> FromJs<'js> for JsCallbackId {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
@@ -68,28 +68,21 @@ impl<'js> FromJs<'js> for JsCallbackId {
 /// A scroll alignment argument: `"start"`, `"center"`, `"end"` or `"nearest"`.
 /// Any other string throws a `TypeError`.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct JsAlign(pub(super) Align);
+pub(crate) struct JsAlign(pub(crate) Align);
 
 impl<'js> FromJs<'js> for JsAlign {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
         let name = String::from_js(ctx, value)?;
-        match name.as_str() {
-            "start" => Ok(Self(Align::Start)),
-            "center" => Ok(Self(Align::Center)),
-            "end" => Ok(Self(Align::End)),
-            "nearest" => Ok(Self(Align::Nearest)),
-            _ => Err(Exception::throw_type(
-                ctx,
-                &format!("unknown scroll alignment: {name}"),
-            )),
-        }
+        Align::from_name(&name)
+            .map(Self)
+            .ok_or_else(|| Exception::throw_type(ctx, &format!("unknown scroll alignment: {name}")))
     }
 }
 
 /// An event target argument: a node id as [`JsNodeId`] takes it, the tag `"$window"`, or an
 /// `AbortSignal` object. Any other string throws a `TypeError`.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct JsEventTargetId(pub(super) EventTargetId);
+pub(crate) struct JsEventTargetId(pub(crate) EventTargetId);
 
 impl<'js> FromJs<'js> for JsEventTargetId {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> JsResult<Self> {
@@ -128,7 +121,7 @@ pub(crate) fn or_null<'js, T: IntoJs<'js>>(
 }
 
 /// The node `id` of `tree`, or a thrown `TypeError` when it does not exist.
-pub(super) fn existing_node<'a>(
+pub(crate) fn existing_node<'a>(
     ctx: &Ctx<'_>,
     tree: &'a VirtualTree,
     id: NodeId,
@@ -137,7 +130,7 @@ pub(super) fn existing_node<'a>(
         .ok_or_else(|| throw_tree_error(ctx, TreeError::NodeNotFound(id)))
 }
 
-pub(super) fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
+pub(crate) fn throw_tree_error(ctx: &Ctx<'_>, err: TreeError) -> rquickjs::Error {
     match err {
         TreeError::WouldCycle(_)
         | TreeError::LeafParent(_)
@@ -205,5 +198,43 @@ mod tests {
             message,
             "unknown event target tag: nope. pass a node id, \"$window\" or an AbortSignal"
         );
+    }
+
+    #[rstest]
+    #[case::nan("NaN")]
+    #[case::fractional("1.5")]
+    #[case::negative("-1")]
+    #[case::infinity("Infinity")]
+    #[case::above_u32("2 ** 32")]
+    #[case::numeric_string("'1'")]
+    fn node_id_that_is_not_a_whole_u32_throws_type_error(#[case] bad: &str) {
+        let (engine, _host) = engine_with_bindings();
+
+        let script = format!(
+            r"
+            (() => {{ const node = __inca_native__.createNode('div');
+            const rejects = (f) => {{
+                try {{ f(); return false; }} catch (e) {{ return e instanceof TypeError; }}
+            }};
+            return [
+                rejects(() => __inca_native__.setStyle({bad}, 'width', 1)),
+                rejects(() => __inca_native__.removeStyle({bad}, 'width')),
+                rejects(() => __inca_native__.getAttribute({bad}, 'label')),
+                rejects(() => __inca_native__.removeAttribute({bad}, 'label')),
+                rejects(() => __inca_native__.appendChild({bad}, node)),
+                rejects(() => __inca_native__.appendChild(node, {bad})),
+                rejects(() => __inca_native__.insertBefore(node, node, {bad})),
+                rejects(() => __inca_native__.destroyNode({bad})),
+                rejects(() => __inca_native__.holdNode({bad})),
+                rejects(() => __inca_native__.releaseNode({bad})),
+                rejects(() => __inca_native__.addEventListener({bad}, 'click', () => {{}})),
+                rejects(() => __inca_native__.removeEventListener({bad}, 'click', 1)),
+                rejects(() => __inca_native__.focusNode({bad})),
+                rejects(() => __inca_native__.dispatchEvent({bad}, {{}})),
+                rejects(() => __inca_native__.click({bad})),
+            ].every(Boolean); }})()
+            "
+        );
+        assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
     }
 }

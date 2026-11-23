@@ -3,7 +3,7 @@
 
 use std::cell::RefCell;
 
-use inca_document::EventPayload;
+use inca_document::{EventPayload, Walk};
 use inca_jsenv::class;
 use inca_jsenv::class::{define_method, define_this_getter};
 use inca_node::NodeId;
@@ -11,19 +11,16 @@ use rquickjs::convert::Coerced;
 use rquickjs::function::{IntoJsFunc, Opt, ParamRequirement, Params, This};
 use rquickjs::{Class, Ctx, Exception, Function, Object, Result as JsResult, Value};
 
+use super::construct_init::{Init, input, keyboard, mouse, pointer, wheel};
 use super::members::PHASES;
 use super::payload::{DELTA_MODES, KEY_LOCATIONS, Payload, Ui};
-use super::walk::Walk;
 use super::{
-    COMPOSITION, CUSTOM, EVENT, FOCUS, Flags, Held, INPUT, IncaEvent, KEYBOARD, MOUSE, POINTER,
-    State, UI, WHEEL, child_of, constants, given, initialize, new_event, other_kind, targets_of,
-    with_event,
+    COMPOSITION, CUSTOM, EVENT, FOCUS, Held, INPUT, IncaEvent, KEYBOARD, MOUSE, POINTER, State, UI,
+    WHEEL, child_of, constants, given, initialize, new_event, other_kind, targets_of, with_event,
 };
-use crate::EventTargetId;
 use crate::bindings::convert::or_null;
-use init::{Init, input, keyboard, mouse, pointer, wheel};
-
-mod init;
+use inca_document::EventTargetId;
+use inca_document::Flags;
 
 /// Each class of event: the kind it builds, its name, and the kind whose constructor its
 /// constructor inherits from.

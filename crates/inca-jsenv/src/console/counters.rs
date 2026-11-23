@@ -8,7 +8,7 @@ use std::rc::Rc;
 use rquickjs::function::{Opt, Rest};
 use rquickjs::{Coerced, Value};
 
-use super::{Console, Level};
+use super::object::{Console, Level};
 use crate::inspect;
 
 /// The label `count`, `time` and their relatives use when given none.

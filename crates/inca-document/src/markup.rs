@@ -5,16 +5,10 @@
 //! setter parses the markup in the context of a node, then puts the parsed nodes in place and
 //! reports each node that leaves the tree.
 
-use inca_node::{NodeId, ParsedHtml, Removal, TreeError, VirtualNode, VirtualTree};
+use inca_node::{AttributeValue, NodeId, ParsedHtml, TreeError, VirtualNode, VirtualTree};
+use inca_style::set_style_text;
 
-/// What the algorithms need to reach the tree they change and the steps that follow a tree call.
-pub trait MarkupContext {
-    /// The tree the setters change.
-    fn tree(&mut self) -> &mut VirtualTree;
-
-    /// Runs the steps that follow a tree call which moved or removed `removals`.
-    fn settle(&mut self, removals: &[Removal]);
-}
+use crate::{DocumentState, View, settle};
 
 /// Where `insertAdjacentHTML` puts the nodes, relative to the node it is called on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,7 +53,7 @@ pub fn parse_inner(
 ) -> Result<(NodeId, ParsedHtml), TreeError> {
     tree.get(node_id).ok_or(TreeError::NodeNotFound(node_id))?;
     let container = tree.template_content(node_id).unwrap_or(node_id);
-    let parsed = tree.parse_html(Some(node_id), markup)?;
+    let parsed = tree.parse_html_with(Some(node_id), markup, &mut set_style_text)?;
     Ok((container, parsed))
 }
 
@@ -82,7 +76,8 @@ pub fn parse_outer(
     if tree.get(parent).is_some_and(VirtualNode::is_document) {
         return Err(TreeError::DocumentParent(node_id));
     }
-    tree.parse_html(Some(parent), markup).map(Some)
+    tree.parse_html_with(Some(parent), markup, &mut set_style_text)
+        .map(Some)
 }
 
 /// Parses `markup` for `insertAdjacentHTML` at `position` of `node_id`. Returns the node that
@@ -112,7 +107,7 @@ pub fn parse_adjacent(
         Some(node) if node.is_html("html") => None,
         _ => Some(container),
     };
-    let parsed = tree.parse_html(context, markup)?;
+    let parsed = tree.parse_html_with(context, markup, &mut set_style_text)?;
     let reference = match position {
         Position::BeforeBegin => Some(node_id),
         Position::AfterBegin => tree.first_child(node_id),
@@ -122,21 +117,24 @@ pub fn parse_adjacent(
     Ok((container, reference, parsed))
 }
 
-/// Moves the nodes of the parse result into `container` before `reference`, or last without one.
+/// Moves the nodes of the parse result into `container` before `reference`, or last without one,
+/// then finishes the parse.
 ///
 /// # Errors
 ///
 /// The error of the insertion.
 pub fn insert_parsed(
-    context: &mut impl MarkupContext,
+    state: &mut DocumentState,
+    view: &dyn View,
     parsed: &ParsedHtml,
     container: NodeId,
     reference: Option<NodeId>,
 ) -> Result<(), TreeError> {
-    let tree = context.tree();
-    let left = tree.removals(&tree.nodes_to_move(parsed.fragment));
-    tree.insert_before(container, parsed.fragment, reference)?;
-    context.settle(&left);
+    let (_, left) = state
+        .tree
+        .insert_before(container, parsed.fragment, reference)?;
+    settle(state, view, &left);
+    finish(state, parsed);
     Ok(())
 }
 
@@ -146,41 +144,62 @@ pub fn insert_parsed(
 ///
 /// The error of a removal or of the insertion.
 pub fn replace_children(
-    context: &mut impl MarkupContext,
+    state: &mut DocumentState,
+    view: &dyn View,
     container: NodeId,
     parsed: &ParsedHtml,
 ) -> Result<Vec<NodeId>, TreeError> {
-    let old = children_of(context.tree(), container);
+    let old = children_of(&state.tree, container);
     for &child in &old {
-        let tree = context.tree();
-        let left = tree.removals(&[child]);
-        tree.remove_child(container, child)?;
-        context.settle(&left);
+        let left = state.tree.remove_child(container, child)?;
+        settle(state, view, &left);
     }
-    insert_parsed(context, parsed, container, None)?;
+    insert_parsed(state, view, parsed, container, None)?;
     Ok(old)
 }
 
-/// Replaces `node_id` with the parse result. Returns `false` and changes nothing when the node has
+/// Replaces `node_id` with the parse result and finishes the parse. Returns `false` and changes nothing when the node has
 /// no parent.
 ///
 /// # Errors
 ///
 /// The error of the replacement.
 pub fn replace_with(
-    context: &mut impl MarkupContext,
+    state: &mut DocumentState,
+    view: &dyn View,
     node_id: NodeId,
     parsed: &ParsedHtml,
 ) -> Result<bool, TreeError> {
-    let tree = context.tree();
+    let tree = &mut state.tree;
     let Some(parent) = tree.get(node_id).and_then(VirtualNode::parent) else {
         return Ok(false);
     };
-    let mut left = tree.removals(&[node_id]);
-    left.extend(tree.removals(&tree.nodes_to_move(parsed.fragment)));
-    tree.replace_child(parent, parsed.fragment, node_id)?;
-    context.settle(&left);
+    let (_, left) = tree.replace_child(parent, parsed.fragment, node_id)?;
+    settle(state, view, &left);
+    finish(state, parsed);
     Ok(true)
+}
+
+/// The steps that follow a parse once its nodes are in place: prints the style warnings of the
+/// parse, gives an `input` the typed text of its `value` attribute and frees the result fragment,
+/// which is empty.
+fn finish(state: &mut DocumentState, parsed: &ParsedHtml) {
+    for (node_id, line) in &parsed.warnings {
+        state.warnings.report(&state.tree, *node_id, line);
+    }
+    for node in &parsed.nodes {
+        let typed = state
+            .tree
+            .get(node.id)
+            .filter(|input| input.is_html("input"))
+            .and_then(|input| input.attributes().get("value"))
+            .and_then(AttributeValue::as_str)
+            .map(str::to_owned);
+        if let Some(typed) = typed {
+            state.set_input_value(node.id, &typed);
+        }
+    }
+    state.tree.destroy_node(parsed.fragment);
 }
 
 #[cfg(test)]
@@ -190,33 +209,15 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::tests::rooted_tree;
+    use crate::tests::{RecordingView, rooted_tree};
 
-    /// A context that records the ids each settle call reports.
-    struct Recorder {
-        tree: VirtualTree,
-        settled: Vec<Vec<NodeId>>,
-    }
-
-    impl MarkupContext for Recorder {
-        fn tree(&mut self) -> &mut VirtualTree {
-            &mut self.tree
-        }
-
-        fn settle(&mut self, removals: &[Removal]) {
-            self.settled.push(removals.iter().map(|r| r.id).collect());
-        }
-    }
-
-    fn recorder(count: usize) -> (Recorder, Vec<NodeId>) {
+    fn state_of(count: usize) -> (DocumentState, Vec<NodeId>) {
         let (tree, ids) = rooted_tree(count);
-        (
-            Recorder {
-                tree,
-                settled: Vec::new(),
-            },
-            ids,
-        )
+        let state = DocumentState {
+            tree,
+            ..DocumentState::default()
+        };
+        (state, ids)
     }
 
     #[rstest]
@@ -230,40 +231,44 @@ mod tests {
     }
 
     #[test]
-    fn replace_children_settles_each_old_child_on_its_own() {
-        let (mut context, ids) = recorder(2);
-        let (container, parsed) = parse_inner(&mut context.tree, 0, "<i></i>").unwrap();
+    fn replace_children_settles_each_old_child_before_the_new_nodes() {
+        let (mut state, ids) = state_of(2);
+        let view = RecordingView::default();
+        let (container, parsed) = parse_inner(&mut state.tree, 0, "<i></i>").unwrap();
 
-        let old = replace_children(&mut context, container, &parsed).unwrap();
+        let old = replace_children(&mut state, &view, container, &parsed).unwrap();
 
+        let resets = view.resets.borrow();
         assert_eq!(old, ids);
-        assert_eq!(context.settled.len(), 3);
-        assert_eq!(context.settled[..2], [vec![ids[0]], vec![ids[1]]]);
+        assert!(resets.len() > 2);
+        assert_eq!(resets[..2], ids);
     }
 
     #[test]
-    fn replace_with_settles_the_node_and_the_moved_nodes_together() {
-        let (mut context, ids) = recorder(1);
-        let parsed = parse_outer(&mut context.tree, ids[0], "<i></i>")
+    fn replace_with_settles_the_node_and_the_moved_nodes() {
+        let (mut state, ids) = state_of(1);
+        let view = RecordingView::default();
+        let parsed = parse_outer(&mut state.tree, ids[0], "<i></i>")
             .unwrap()
             .unwrap();
 
-        assert!(replace_with(&mut context, ids[0], &parsed).unwrap());
+        assert!(replace_with(&mut state, &view, ids[0], &parsed).unwrap());
 
-        assert_eq!(context.settled.len(), 1);
-        assert_eq!(context.settled[0][0], ids[0]);
-        assert!(context.settled[0].len() > 1);
+        let resets = view.resets.borrow();
+        assert_eq!(resets[0], ids[0]);
+        assert!(resets.len() > 1);
     }
 
     #[test]
     fn replace_with_a_parentless_node_changes_nothing() {
-        let (mut context, _ids) = recorder(1);
-        let loose = context.tree.create_node("p").unwrap();
-        let parsed = context.tree.parse_html(None, "<i></i>").unwrap();
+        let (mut state, _ids) = state_of(1);
+        let view = RecordingView::default();
+        let loose = state.tree.create_node("p").unwrap();
+        let parsed = state.tree.parse_html(None, "<i></i>").unwrap();
 
-        assert!(!replace_with(&mut context, loose, &parsed).unwrap());
+        assert!(!replace_with(&mut state, &view, loose, &parsed).unwrap());
 
-        assert!(context.settled.is_empty());
+        assert!(view.resets.borrow().is_empty());
     }
 
     #[test]
@@ -318,5 +323,75 @@ mod tests {
             parse_adjacent(&mut tree, loose, position, "x").map(|_| ()),
             Err(TreeError::NoParent(loose))
         );
+    }
+
+    #[test]
+    fn a_parsed_style_attribute_applies_and_warns_once() {
+        let (mut state, _ids) = state_of(0);
+        let view = RecordingView::default();
+        let lines = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let sink = std::rc::Rc::clone(&lines);
+        state.warnings.set_sink(std::rc::Rc::new(move |line| {
+            sink.borrow_mut().push(line.to_owned());
+        }));
+        let (container, parsed) =
+            parse_inner(&mut state.tree, 0, r#"<p style="bogus:1;width:2px"></p>"#).unwrap();
+
+        replace_children(&mut state, &view, container, &parsed).unwrap();
+
+        let id = state.tree.get(container).unwrap().children()[0];
+        assert_eq!(
+            state.tree.get(id).unwrap().style_props().get("width"),
+            Some(&"2px".into())
+        );
+        assert_eq!(lines.borrow().len(), 1, "{:?}", lines.borrow());
+    }
+
+    #[test]
+    fn a_parsed_element_has_its_style_props_before_it_is_inserted() {
+        let (mut state, _ids) = state_of(0);
+        let (_, parsed) = parse_inner(&mut state.tree, 0, r#"<p style="width:2px"></p>"#).unwrap();
+
+        let props = state.tree.get(parsed.nodes[0].id).unwrap().style_props();
+
+        assert_eq!(props.get("width"), Some(&"2px".into()));
+    }
+
+    #[test]
+    fn a_dropped_element_warns_once_and_in_parse_order() {
+        let (mut state, _ids) = state_of(0);
+        let view = RecordingView::default();
+        let lines = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let sink = std::rc::Rc::clone(&lines);
+        state.warnings.set_sink(std::rc::Rc::new(move |line| {
+            sink.borrow_mut().push(line.to_owned());
+        }));
+        let html = state.tree.create_element_ns(None, None, "html").unwrap();
+        // The frameset replaces the body, so the parser drops the paragraph before the result.
+        let (container, parsed) = parse_inner(
+            &mut state.tree,
+            html,
+            r#"<p style="bogus:1"></p><frameset style="bogus:2">"#,
+        )
+        .unwrap();
+
+        replace_children(&mut state, &view, container, &parsed).unwrap();
+
+        let lines = lines.borrow();
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert!(lines[0].contains("(p)"), "{lines:?}");
+        assert!(lines[1].contains("(frameset)"), "{lines:?}");
+    }
+
+    #[test]
+    fn a_parsed_input_takes_the_value_attribute_as_typed_text() {
+        let (mut state, _ids) = state_of(0);
+        let view = RecordingView::default();
+        let (container, parsed) = parse_inner(&mut state.tree, 0, "<input value=a>").unwrap();
+
+        replace_children(&mut state, &view, container, &parsed).unwrap();
+
+        let id = state.tree.get(container).unwrap().children()[0];
+        assert!(state.inputs.borrow().contains_key(&id));
     }
 }

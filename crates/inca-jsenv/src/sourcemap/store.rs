@@ -9,7 +9,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 #[allow(clippy::disallowed_types)]
 use rquickjs::JsLifetime;
 
-use super::{Entry, StackPaths};
+use super::remap::{Entry, StackPaths};
 
 /// The source maps of one runtime, keyed by the filename `QuickJS` reports.
 // `SourceMaps` holds parsed maps and paths and no JS value, so the derive is sound.

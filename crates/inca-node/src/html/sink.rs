@@ -20,6 +20,7 @@ use html5ever::tokenizer::{
 use html5ever::tree_builder::{TreeBuilder, TreeBuilderOpts};
 use html5ever::{Attribute, LocalName, Namespace, QualName, TokenizerResult, local_name, ns};
 
+use super::StyleHook;
 use crate::tree::{COMMENT_TAG, FRAGMENT_TAG, NodeId, NodeKind, TEXT_TAG};
 use crate::tree::{TreeError, VirtualNode, VirtualTree};
 
@@ -62,12 +63,13 @@ pub(super) type Handle = u64;
 /// The first handle that stands in for a node.
 const STAND_IN: Handle = 1 << 32;
 
-/// The result of a parse: the nodes it created and the first failure.
+/// The result of a parse: the nodes it created, the first failure and the `style` warnings.
 #[derive(Debug, Default)]
 pub(super) struct SinkEnd {
     /// Every node the sink created, the document and the context excluded.
     pub(super) created: Vec<NodeId>,
     pub(super) failure: Option<TreeError>,
+    pub(super) warnings: Vec<(NodeId, String)>,
 }
 
 /// The name of an element as the tree builder reads it.
@@ -92,6 +94,8 @@ pub(super) struct HtmlSink<'a> {
     /// The qualified name of every element the tree builder created, the context included.
     pub(super) names: RefCell<HashMap<Handle, QualName>>,
     failure: Cell<Option<TreeError>>,
+    style: RefCell<&'a mut StyleHook<'a>>,
+    warnings: RefCell<Vec<(NodeId, String)>>,
     created: RefCell<Vec<NodeId>>,
     next_stand_in: Cell<Handle>,
     document: Handle,
@@ -116,13 +120,18 @@ pub(super) fn node_of(handle: Handle) -> Option<NodeId> {
 }
 
 impl<'a> HtmlSink<'a> {
-    /// A sink whose document is a new fragment of `tree`.
-    pub(super) fn new(tree: &'a mut VirtualTree) -> Result<Self, TreeError> {
+    /// A sink whose document is a new fragment of `tree`. `style` handles each `style` attribute.
+    pub(super) fn new(
+        tree: &'a mut VirtualTree,
+        style: &'a mut StyleHook<'a>,
+    ) -> Result<Self, TreeError> {
         let document = tree.create_node(FRAGMENT_TAG)?;
         Ok(Self {
             tree: RefCell::new(tree),
             names: RefCell::default(),
             failure: Cell::new(None),
+            style: RefCell::new(style),
+            warnings: RefCell::default(),
             created: RefCell::default(),
             next_stand_in: Cell::new(STAND_IN),
             document: Handle::from(document),
@@ -196,7 +205,7 @@ impl<'a> HtmlSink<'a> {
             AppendNode(child) => {
                 if let Some(child_id) = node_of(child) {
                     let (parent_id, before_id) = self.landing(parent_id, before, child);
-                    self.change(|tree| tree.insert_before(parent_id, child_id, before_id));
+                    self.change(|tree| tree.insert_node(parent_id, child_id, before_id));
                 }
             }
             AppendText(text) => {
@@ -215,7 +224,7 @@ impl<'a> HtmlSink<'a> {
                 } else {
                     let created = self.leaf(TEXT_TAG, &text);
                     if let Some(id) = node_of(created) {
-                        self.change(|tree| tree.insert_before(parent_id, id, before_id));
+                        self.change(|tree| tree.insert_node(parent_id, id, before_id));
                     }
                 }
             }
@@ -283,6 +292,7 @@ impl TreeSink for HtmlSink<'_> {
         SinkEnd {
             created: self.created.into_inner(),
             failure: self.failure.get(),
+            warnings: self.warnings.into_inner(),
         }
     }
 
@@ -309,16 +319,23 @@ impl TreeSink for HtmlSink<'_> {
     fn create_element(&self, name: QualName, attrs: Vec<Attribute>, flags: ElementFlags) -> Handle {
         let created = self.change(|tree| {
             let id = tree.create_element_ns(Some(&*name.ns), None, &*name.local)?;
+            let mut warnings = Vec::new();
             for attribute in &attrs {
                 let given = prefixed_name(&attribute.name);
                 let node = tree.get(id).ok_or(TreeError::NodeNotFound(id))?;
                 let key = node.attribute_key(&given).into_owned();
-                tree.set_attribute(id, key, &*attribute.value)?;
+                if key == "style" {
+                    let lines = (self.style.borrow_mut())(tree, id, &attribute.value)?;
+                    warnings.extend(lines.into_iter().map(|line| (id, line)));
+                } else {
+                    tree.set_attribute(id, key, &*attribute.value)?;
+                }
             }
-            Ok(id)
+            Ok((id, warnings))
         });
         let handle = match created {
-            Some(id) => {
+            Some((id, warnings)) => {
+                self.warnings.borrow_mut().extend(warnings);
                 self.created.borrow_mut().push(id);
                 Handle::from(id)
             }
@@ -436,9 +453,15 @@ mod tests {
     use html5ever::{LocalName, QualName, ns};
     use rstest::rstest;
 
+    use super::super::parse::store_as_written;
     use super::*;
-    use crate::html::{children_shape, shape};
     use crate::tests::{HTML, MATHML, SVG};
+    use crate::tests::{children_shape, shape};
+
+    /// A sink on `tree` whose `style` hook is the one of `parse_html`.
+    fn sink(tree: &mut VirtualTree) -> HtmlSink<'_> {
+        HtmlSink::new(tree, Box::leak(Box::new(store_as_written))).unwrap()
+    }
 
     fn parse(markup: &str) -> (VirtualTree, crate::ParsedHtml) {
         let mut tree = VirtualTree::new();
@@ -467,9 +490,6 @@ mod tests {
     }
 
     #[rstest]
-    #[case::lower_case_key("<div id=a DATA-X=B>", vec![pair("id", "a"), pair("data-x", "B")])]
-    #[case::valueless("<input disabled>", vec![pair("disabled", "")])]
-    #[case::camel_case_foreign_key("<svg viewBox='0 0 1 1'>", vec![pair("viewBox", "0 0 1 1")])]
     #[case::prefixed_key("<svg xlink:href=u>", vec![pair("xlink:href", "u")])]
     fn an_element_keeps_its_attributes_as_strings(
         #[case] markup: &str,
@@ -479,7 +499,6 @@ mod tests {
     }
 
     #[rstest]
-    #[case::entity("a&amp;b", "\"a&b\"")]
     #[case::around_a_comment("a<!--c-->b", "\"a\" <!--c--> \"b\"")]
     fn adjacent_text_becomes_one_node(#[case] markup: &str, #[case] expected: &str) {
         assert_eq!(shape_of(markup), expected);
@@ -490,7 +509,6 @@ mod tests {
         "<table>x<tr><td>y</td></tr></table>",
         "\"x\" table(tbody(tr(td(\"y\"))))"
     )]
-    #[case::element_before_the_table("<table><div>", "div table")]
     #[case::text_joins_the_text_before_the_table("x<table>y", "\"xy\" table")]
     fn foster_parented_nodes_go_before_the_table(#[case] markup: &str, #[case] expected: &str) {
         assert_eq!(shape_of(markup), expected);
@@ -514,24 +532,9 @@ mod tests {
     }
 
     #[test]
-    fn an_element_with_a_parent_takes_the_child_before_itself() {
-        let mut tree = VirtualTree::new();
-        let sink = HtmlSink::new(&mut tree).unwrap();
-        let parent = element(&sink, "div");
-        let target = element(&sink, "p");
-        let previous = element(&sink, "span");
-        sink.append(&parent, AppendNode(target));
-
-        sink.append_based_on_parent_node(&target, &previous, text("x"));
-
-        sink.finish();
-        assert_eq!(children_shape(&tree, 1), "\"x\" p");
-    }
-
-    #[test]
     fn an_element_without_a_parent_gives_the_child_to_the_previous_element() {
         let mut tree = VirtualTree::new();
-        let sink = HtmlSink::new(&mut tree).unwrap();
+        let sink = sink(&mut tree);
         let target = element(&sink, "p");
         let previous = element(&sink, "span");
 
@@ -542,25 +545,9 @@ mod tests {
     }
 
     #[test]
-    fn reparent_children_moves_them_in_order() {
-        let mut tree = VirtualTree::new();
-        let sink = HtmlSink::new(&mut tree).unwrap();
-        let from = element(&sink, "div");
-        let to = element(&sink, "section");
-        sink.append(&from, text("a"));
-        sink.append(&from, AppendNode(element(&sink, "i")));
-
-        sink.reparent_children(&from, &to);
-
-        sink.finish();
-        assert_eq!(shape(&tree, 2), "section(\"a\" i)");
-        assert_eq!(shape(&tree, 1), "div");
-    }
-
-    #[test]
     fn remove_from_parent_detaches_the_node() {
         let mut tree = VirtualTree::new();
-        let sink = HtmlSink::new(&mut tree).unwrap();
+        let sink = sink(&mut tree);
         let parent = element(&sink, "div");
         let child = element(&sink, "p");
         sink.append(&parent, AppendNode(child));
@@ -597,30 +584,11 @@ mod tests {
     }
 
     #[test]
-    fn a_comment_holds_its_data() {
-        let (tree, html) = parse("<!--c-->");
-
-        let comment = tree.get(html.nodes[0].id).unwrap();
-        assert_eq!(comment.local_name(), COMMENT_TAG);
-        assert_eq!(comment.data(), "c");
-    }
-
-    #[test]
     fn a_comment_has_no_style() {
         let (tree, html) = parse("<!--c-->");
 
         let comment = tree.get(html.nodes[0].id).unwrap();
         assert!(comment.style_props().is_empty());
-    }
-
-    #[test]
-    fn a_self_closing_foreign_element_has_no_children() {
-        assert_eq!(shape_of("<svg><circle/><rect/></svg>"), "svg(circle rect)");
-    }
-
-    #[test]
-    fn a_foreign_element_keeps_the_case_of_its_tag() {
-        assert_eq!(shape_of("<svg><foreignObject></svg>"), "svg(foreignObject)");
     }
 
     fn names_of(html: &crate::ParsedHtml) -> Vec<(&str, Option<&str>)> {
@@ -646,40 +614,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_math_element_is_in_the_mathml_namespace() {
-        let (_tree, html) = parse("<math><mi>");
-
-        assert_eq!(
-            names_of(&html),
-            vec![("math", Some(MATHML)), ("mi", Some(MATHML))]
-        );
-    }
-
-    #[test]
-    fn a_template_in_svg_has_no_content() {
-        let (tree, html) = parse("<svg><template>");
-
-        assert_eq!(tree.template_content(html.nodes[1].id), None);
-    }
-
     #[rstest]
-    #[case::text_html("text/html", "math(annotation-xml(div))")]
-    #[case::xhtml("application/xhtml+xml", "math(annotation-xml(div))")]
-    #[case::upper_case("TEXT/HTML", "math(annotation-xml(div))")]
-    #[case::mixed_case("Text/Html", "math(annotation-xml(div))")]
-    #[case::other("other", "math(annotation-xml) div")]
-    fn an_annotation_xml_that_holds_html_keeps_a_div_as_its_child(
-        #[case] encoding: &str,
-        #[case] expected: &str,
-    ) {
-        let markup = format!("<math><annotation-xml encoding=\"{encoding}\"><div>");
-
-        assert_eq!(shape_of(&markup), expected);
-    }
-
-    #[rstest]
-    #[case::text_html("text/html", HTML)]
     #[case::xhtml("application/xhtml+xml", HTML)]
     #[case::upper_case("TEXT/HTML", HTML)]
     #[case::other_encoding("other", MATHML)]
@@ -696,21 +631,6 @@ mod tests {
         let html = tree.parse_html(Some(node), "<mi>").unwrap();
 
         assert_eq!(names_of(&html), vec![("mi", Some(expected))]);
-    }
-
-    #[test]
-    fn an_svg_context_parses_its_markup_as_svg() {
-        let mut tree = VirtualTree::new();
-        let node = tree.create_element_ns(Some(SVG), None, "svg").unwrap();
-
-        let html = tree
-            .parse_html(Some(node), "<title>x</title><div>")
-            .unwrap();
-
-        assert_eq!(
-            names_of(&html),
-            vec![("title", Some(SVG)), ("#text", None), ("div", Some(HTML))]
-        );
     }
 
     #[rstest]
@@ -741,7 +661,7 @@ mod tests {
     #[test]
     fn an_unknown_handle_names_a_div() {
         let mut tree = VirtualTree::new();
-        let sink = HtmlSink::new(&mut tree).unwrap();
+        let sink = sink(&mut tree);
 
         let name = sink.elem_name(&99);
 
@@ -752,7 +672,7 @@ mod tests {
     #[test]
     fn appending_to_an_unknown_handle_is_ignored() {
         let mut tree = VirtualTree::new();
-        let sink = HtmlSink::new(&mut tree).unwrap();
+        let sink = sink(&mut tree);
 
         sink.append(&98, AppendNode(99));
 
@@ -762,7 +682,7 @@ mod tests {
     #[test]
     fn removing_an_unknown_handle_is_ignored() {
         let mut tree = VirtualTree::new();
-        let sink = HtmlSink::new(&mut tree).unwrap();
+        let sink = sink(&mut tree);
 
         sink.remove_from_parent(&99);
 

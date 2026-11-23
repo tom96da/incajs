@@ -2,14 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The members the host defines on the stored prototypes of the node interfaces. Each takes its
-//! receiver through the rules of `handle.rs`. A node the host no longer has is a freed node: a
+//! receiver through the rules of `node/handle.rs`. A node the host no longer has is a freed node: a
 //! read gives the default of its type, and a write or an action does nothing.
-
-mod element;
-mod layout;
-mod markup;
-mod node;
-mod semantics;
 
 use std::rc::Rc;
 
@@ -18,14 +12,14 @@ use rquickjs::{Ctx, IntoJs, Object, Result as JsResult, Value};
 use inca_jsenv::class::{define_this_accessor, define_this_getter, define_this_method};
 use inca_node::{NodeId, NodeKind};
 
-use super::handle::{Rule, receiver_of};
 use super::host::Host;
+use crate::node::handle::{Rule, receiver_of};
 
 /// The host a member reads and writes.
-type Shared = Rc<Host>;
+pub(crate) type Shared = Rc<Host>;
 
 /// Defines the getter `key` of `proto`. `read` gets the node and the kind of the receiver.
-fn getter<'js, R: IntoJs<'js> + 'js>(
+pub(crate) fn getter<'js, R: IntoJs<'js> + 'js>(
     ctx: &Ctx<'js>,
     proto: &Object<'js>,
     host: &Shared,
@@ -41,7 +35,7 @@ fn getter<'js, R: IntoJs<'js> + 'js>(
 }
 
 /// Defines the accessor `key` of `proto`. `write` gets the assigned value as it came.
-fn accessor<'js, R: IntoJs<'js> + 'js>(
+pub(crate) fn accessor<'js, R: IntoJs<'js> + 'js>(
     ctx: &Ctx<'js>,
     proto: &Object<'js>,
     host: &Shared,
@@ -68,7 +62,7 @@ fn accessor<'js, R: IntoJs<'js> + 'js>(
 
 /// Defines the method `name` of `proto` with `length` parameters. `run` gets the arguments of the
 /// call.
-fn method<'js, R: IntoJs<'js> + 'js>(
+pub(crate) fn method<'js, R: IntoJs<'js> + 'js>(
     ctx: &Ctx<'js>,
     proto: &Object<'js>,
     host: &Shared,
@@ -87,11 +81,11 @@ fn method<'js, R: IntoJs<'js> + 'js>(
 
 /// Defines the host members on the prototypes `interfaces::install` stored.
 pub(super) fn install_members(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
-    node::install(ctx, host)?;
-    element::install(ctx, host)?;
-    markup::install(ctx, host)?;
-    layout::install(ctx, host)?;
-    semantics::install(ctx, host)
+    crate::node::install_members(ctx, host)?;
+    crate::element::install_members(ctx, host)?;
+    crate::element::install_markup_members(ctx, host)?;
+    crate::element::install_layout_members(ctx, host)?;
+    crate::element::install_semantics_members(ctx, host)
 }
 
 #[cfg(test)]

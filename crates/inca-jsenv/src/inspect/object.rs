@@ -8,7 +8,7 @@ use std::fmt::Write;
 use rquickjs::promise::PromiseState;
 use rquickjs::{Object, Promise, Value, object::Filter};
 
-use super::{Mode, plain, put, quote, settled, unproxied, write_value};
+use super::value::{Mode, plain, put, quote, settled, unproxied, write_value};
 use super::{builtins, rect, url};
 use crate::paint::Style;
 use crate::quickjs::ObjectExt;

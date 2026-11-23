@@ -12,7 +12,9 @@ mod buffer;
 mod globals;
 mod intrinsics;
 mod leaf;
+mod leaf_error;
 mod walk;
+mod walk_containers;
 
 pub(crate) use globals::install;
 pub use intrinsics::register_uncloneable;

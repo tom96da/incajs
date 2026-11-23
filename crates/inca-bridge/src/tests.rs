@@ -5,16 +5,22 @@
 
 #![allow(clippy::unwrap_used)]
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
+use inca_document::NodeBox;
+use inca_document::geometry::Rect;
 use inca_document::{
     EventPayload, EventTargetId, MousePayload, PointerSource, Walk, WheelPayload, flags_of,
 };
-use inca_jsenv::Clock;
+use inca_jsenv::{Clock, Engine};
 use inca_node::NodeId;
 
 pub(crate) use crate::test_support::RECORDER;
-use crate::test_support::{Reported, capture_reporter, engine_for, engine_on_clock};
+use crate::test_support::{
+    Clocked, LISTEN_JS, Reported, TestView, capture_reporter, engine_for, engine_on_clock,
+    engine_with_bindings, engine_with_view,
+};
 use crate::{Host, JsScript};
 
 /// What a window does to deliver an event to the engine, without a window: the walk, then the
@@ -271,3 +277,112 @@ pub(crate) mod native {
 }
 
 pub(crate) use native::*;
+
+/// Builds `p > (a, b)`, `q > x`, `g > (g1, g2)` and the parentless `loose`, `loose2`, `t`
+/// (text), `c` (comment) and `f` (empty fragment).
+const FAMILY_SETUP: &str = r"
+    globalThis.n = __inca_native__;
+    const make = (tag) => n.createNode(tag);
+    globalThis.p = make('div');
+    globalThis.a = make('span');
+    globalThis.b = make('span');
+    globalThis.q = make('div');
+    globalThis.x = make('span');
+    globalThis.g = make('#fragment');
+    globalThis.g1 = make('i');
+    globalThis.g2 = make('i');
+    globalThis.loose = make('span');
+    globalThis.loose2 = make('span');
+    globalThis.t = make('#text');
+    globalThis.c = make('#comment');
+    globalThis.f = make('#fragment');
+    n.appendChild(p, a);
+    n.appendChild(p, b);
+    n.appendChild(q, x);
+    n.appendChild(g, g1);
+    n.appendChild(g, g2);
+    ";
+
+pub(crate) fn engine_with_family() -> (Engine, Rc<Host>) {
+    let (engine, host, _view) = engine_with_family_view();
+    (engine, host)
+}
+
+pub(crate) fn engine_with_family_view() -> (Engine, Rc<Host>, Rc<RefCell<TestView>>) {
+    let (engine, host, view) = engine_with_view();
+    engine.eval::<()>(LISTEN_JS).unwrap();
+    engine.eval::<()>(FAMILY_SETUP).unwrap();
+    (engine, host, view)
+}
+
+/// [`engine_with_bindings`] after `LISTEN_JS` and `setup` ran.
+pub(crate) fn engine_with_setup(setup: &str) -> (Engine, Rc<Host>) {
+    let (engine, host) = engine_with_bindings();
+    engine.eval::<()>(LISTEN_JS).unwrap();
+    engine.eval::<()>(setup).unwrap();
+    (engine, host)
+}
+
+/// An engine with the global `el`, a `div` under the root, whose last box is `b`
+/// (`x`, `y`, `width`, `height`, `border`, `scroll x`, `scroll y`, `gutter w`, `gutter h`).
+pub(crate) fn with_box(b: [f32; 9]) -> (Engine, Rc<Host>, u32) {
+    let (engine, host, _view, id) = with_box_view(b);
+    (engine, host, id)
+}
+
+/// [`with_box`] with the view that holds the box.
+pub(crate) fn with_box_view(b: [f32; 9]) -> (Engine, Rc<Host>, Rc<RefCell<TestView>>, u32) {
+    let (engine, host, view) = engine_with_view();
+    let id: u32 = engine
+        .eval(
+            r"
+            const n = __inca_native__;
+            globalThis.id = n.createNode('div');
+            n.appendChild(n.rootNodeId(), id);
+            globalThis.el = n.nodeHandle(id)[0];
+            n.setStyle(id, 'overflow', 'scroll');
+            id;
+            ",
+        )
+        .unwrap();
+    record(&view, id, b);
+    (engine, host, view, id)
+}
+
+pub(crate) fn record(view: &Rc<RefCell<TestView>>, id: u32, b: [f32; 9]) {
+    let node_box = NodeBox {
+        rect: Rect {
+            x: b[0],
+            y: b[1],
+            width: b[2],
+            height: b[3],
+        },
+        border: b[4],
+        scroll: (b[5], b[6]),
+        gutter: (b[7], b[8]),
+    };
+    view.borrow_mut().boxes.insert(id, node_box);
+}
+
+pub(crate) fn read(engine: &Engine, expr: &str) -> serde_json::Value {
+    let text: String = engine.eval(&format!("JSON.stringify({expr})")).unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
+/// A node, a controller `c` with its signal `s`, a log and `add(target, fn, signal, capture)`,
+/// which registers a `click` listener with the signal option.
+const SIGNAL_OPTION_SETUP: &str = r"
+    globalThis.n = __inca_native__;
+    globalThis.node = n.createNode('div');
+    globalThis.c = new AbortController();
+    globalThis.s = c.signal;
+    globalThis.add = (target, fn, signal, capture = false) =>
+        n.addEventListener(target, 'click', fn, capture, false, signal);
+    ";
+
+/// A [`Clocked`] engine after [`SIGNAL_OPTION_SETUP`].
+pub(crate) fn clocked_with_signal_option() -> Clocked {
+    let f = Clocked::new();
+    f.engine.eval::<()>(SIGNAL_OPTION_SETUP).unwrap();
+    f
+}

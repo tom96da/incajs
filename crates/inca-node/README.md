@@ -4,8 +4,8 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 # inca-node
 
-The retained virtual tree (`VirtualTree`) and the pure logic that goes with it: the filters for
-typed and pasted text.
+The retained virtual tree (`VirtualTree`) and the pure logic that goes with it: the data and attributes
+of a node, its markup and the filters for typed and pasted text.
 
 Everything here is plain data and functions. A caller builds a tree, mutates it and asks questions
 of it.
@@ -25,7 +25,7 @@ assert_eq!(tree.get(item).unwrap().parent(), Some(root));
 
 ## The tree
 
-A node has a tag name, attributes kept in insertion order, style props and child links. A node has
+A node has a local name, attributes kept in insertion order, style props and child links. A node has
 one parent: attaching it to a new parent detaches it from the old one. The tag `"#text"` makes a
 text node.
 
@@ -36,8 +36,9 @@ sweep. A node can also be destroyed on its own, and a subtree can be cloned.
 A `template` element owns a content fragment. The fragment has no parent, and it goes with the
 template.
 
-Markup parses into the tree as the children of a context node. A node, or the children of a node,
-writes back as markup.
+Markup parses into the tree as the children of a context node. `VirtualTree::parse_html_with` calls
+a hook for each `style` attribute as the parser creates its element, and the hook stores the
+attribute and returns the warning lines. A node, or the children of a node, writes back as markup.
 
 The tree answers the node relations and the text operations of the DOM: the ancestors and
 siblings of a node, the position of one node against another, and the reading and editing of
@@ -50,5 +51,5 @@ Filters for typed and pasted text drop control characters. A pasted line break b
 
 ## Scope
 
-Rendering, windows and JavaScript are outside this crate. A caller builds the tree through the calls
+A caller builds the tree through the calls
 above and reads it back.
