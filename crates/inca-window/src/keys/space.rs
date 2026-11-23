@@ -602,16 +602,12 @@ mod tests {
         let s = scene(cx);
         s.focus(cx, s.first);
         s.key(cx, "space", false, false);
-        // Disabled and still focused across the frames of the keys, which the follow-up of a
-        // script write would end.
-        s.cells
-            .document
-            .borrow_mut()
-            .set_attribute_skipping_follow_ups(s.first, "disabled", true)
-            .unwrap();
-        s.key(cx, "enter", false, false);
-        s.enable(s.first);
-        s.key(cx, "space", true, false);
+        s.in_window(cx, |s, window, cx| {
+            s.disable(s.first);
+            s.send_key("enter", false, window, cx);
+            s.enable(s.first);
+            s.send_key("space", true, window, cx);
+        });
         assert_eq!(s.clicks(), [s.first]);
     }
 

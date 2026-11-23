@@ -148,20 +148,23 @@ impl Scene {
     }
 
     pub(crate) fn key(&self, cx: &mut TestAppContext, key: &str, up: bool, canceled: bool) {
-        let keystroke = Keystroke::parse_with_os(key, cx.read(|cx| cx.platform_info().os)).unwrap();
+        self.cancel.set(canceled);
+        self.in_window(cx, |scene, window, cx| scene.send_key(key, up, window, cx));
+        cx.run_until_parked();
+    }
+
+    /// Sends one key to the dispatcher inside the caller's window update, so no frame runs
+    /// before the next call.
+    pub(crate) fn send_key(&self, key: &str, up: bool, window: &mut Window, cx: &mut App) {
+        let keystroke = Keystroke::parse_with_os(key, cx.platform_info().os).unwrap();
         let payload = EventPayload::Key(KeyPayload {
             key: keystroke.key.clone(),
             repeat: false,
             modifiers: inca_gpui::modifiers_of(keystroke.modifiers),
             is_composing: false,
         });
-        self.cancel.set(canceled);
-        self.in_window(cx, |scene, window, cx| {
-            scene
-                .dispatcher
-                .key_input(&keystroke, up, &payload, window, cx);
-        });
-        cx.run_until_parked();
+        self.dispatcher
+            .key_input(&keystroke, up, &payload, window, cx);
     }
 
     /// Sends the space-separated keystrokes through the window, so a
