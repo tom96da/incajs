@@ -40,141 +40,143 @@ pub fn children_of(tree: &VirtualTree, id: NodeId) -> Vec<NodeId> {
         .map_or_else(Vec::new, |node| node.children().to_vec())
 }
 
-/// Parses `markup` for `innerHTML` on `node_id`. Returns the node that takes the children, which
-/// is the content of a template, and the parse result.
-///
-/// # Errors
-///
-/// `NodeNotFound` when `node_id` is gone, or the error of the parse.
-pub fn parse_inner(
-    state: &mut DocumentState,
-    node_id: NodeId,
-    markup: &str,
-) -> Result<(NodeId, ParsedHtml), TreeError> {
-    let tree = &mut state.tree;
-    tree.get(node_id).ok_or(TreeError::NodeNotFound(node_id))?;
-    let container = tree.template_content(node_id).unwrap_or(node_id);
-    let parsed = tree.parse_html_with(Some(node_id), markup, &mut set_style_text)?;
-    Ok((container, parsed))
-}
-
-/// Parses `markup` for `outerHTML` on `node_id` in the context of its parent. A node without a
-/// parent gives `None`.
-///
-/// # Errors
-///
-/// `NodeNotFound` when `node_id` is gone, `DocumentParent` when its parent is a document, or the
-/// error of the parse.
-pub fn parse_outer(
-    state: &mut DocumentState,
-    node_id: NodeId,
-    markup: &str,
-) -> Result<Option<ParsedHtml>, TreeError> {
-    let tree = &mut state.tree;
-    let node = tree.get(node_id).ok_or(TreeError::NodeNotFound(node_id))?;
-    let Some(parent) = node.parent() else {
-        return Ok(None);
-    };
-    if tree.get(parent).is_some_and(VirtualNode::is_document) {
-        return Err(TreeError::DocumentParent(node_id));
+impl DocumentState {
+    /// Parses `markup` for `innerHTML` on `node_id`. Returns the node that takes the children,
+    /// which is the content of a template, and the parse result.
+    ///
+    /// # Errors
+    ///
+    /// `NodeNotFound` when `node_id` is gone, or the error of the parse.
+    pub fn parse_inner(
+        &mut self,
+        node_id: NodeId,
+        markup: &str,
+    ) -> Result<(NodeId, ParsedHtml), TreeError> {
+        let tree = &mut self.tree;
+        tree.get(node_id).ok_or(TreeError::NodeNotFound(node_id))?;
+        let container = tree.template_content(node_id).unwrap_or(node_id);
+        let parsed = tree.parse_html_with(Some(node_id), markup, &mut set_style_text)?;
+        Ok((container, parsed))
     }
-    tree.parse_html_with(Some(parent), markup, &mut set_style_text)
-        .map(Some)
-}
 
-/// Parses `markup` for `insertAdjacentHTML` at `position` of `node_id`. Returns the node that
-/// takes the nodes, the node they go before (the last place without one) and the parse result.
-///
-/// # Errors
-///
-/// `NodeNotFound` when `node_id` is gone, `NoParent` or `DocumentParent` for a sibling position
-/// without an element parent, or the error of the parse.
-pub fn parse_adjacent(
-    state: &mut DocumentState,
-    node_id: NodeId,
-    position: Position,
-    markup: &str,
-) -> Result<(NodeId, Option<NodeId>, ParsedHtml), TreeError> {
-    let tree = &mut state.tree;
-    let node = tree.get(node_id).ok_or(TreeError::NodeNotFound(node_id))?;
-    let sibling = matches!(position, Position::BeforeBegin | Position::AfterEnd);
-    let container = if sibling {
-        node.parent().ok_or(TreeError::NoParent(node_id))?
-    } else {
-        node_id
-    };
-    if sibling && tree.get(container).is_some_and(VirtualNode::is_document) {
-        return Err(TreeError::DocumentParent(node_id));
+    /// Parses `markup` for `outerHTML` on `node_id` in the context of its parent. A node without a
+    /// parent gives `None`.
+    ///
+    /// # Errors
+    ///
+    /// `NodeNotFound` when `node_id` is gone, `DocumentParent` when its parent is a document, or
+    /// the error of the parse.
+    pub fn parse_outer(
+        &mut self,
+        node_id: NodeId,
+        markup: &str,
+    ) -> Result<Option<ParsedHtml>, TreeError> {
+        let tree = &mut self.tree;
+        let node = tree.get(node_id).ok_or(TreeError::NodeNotFound(node_id))?;
+        let Some(parent) = node.parent() else {
+            return Ok(None);
+        };
+        if tree.get(parent).is_some_and(VirtualNode::is_document) {
+            return Err(TreeError::DocumentParent(node_id));
+        }
+        tree.parse_html_with(Some(parent), markup, &mut set_style_text)
+            .map(Some)
     }
-    let context = match tree.get(container) {
-        Some(node) if node.is_html("html") => None,
-        _ => Some(container),
-    };
-    let parsed = tree.parse_html_with(context, markup, &mut set_style_text)?;
-    let reference = match position {
-        Position::BeforeBegin => Some(node_id),
-        Position::AfterBegin => tree.first_child(node_id),
-        Position::BeforeEnd => None,
-        Position::AfterEnd => tree.next_sibling(node_id),
-    };
-    Ok((container, reference, parsed))
-}
 
-/// Moves the nodes of the parse result into `container` before `reference`, or last without one,
-/// then finishes the parse.
-///
-/// # Errors
-///
-/// The error of the insertion.
-pub fn insert_parsed(
-    state: &mut DocumentState,
-    view: &dyn View,
-    parsed: &ParsedHtml,
-    container: NodeId,
-    reference: Option<NodeId>,
-) -> Result<(), TreeError> {
-    state.insert_before(view, container, parsed.fragment, reference)?;
-    finish(state, parsed);
-    Ok(())
-}
-
-/// Removes every child of `container` and puts the parse result in. Returns the old children.
-///
-/// # Errors
-///
-/// The error of a removal or of the insertion.
-pub fn replace_children(
-    state: &mut DocumentState,
-    view: &dyn View,
-    container: NodeId,
-    parsed: &ParsedHtml,
-) -> Result<Vec<NodeId>, TreeError> {
-    let old = children_of(&state.tree, container);
-    for &child in &old {
-        state.remove_child(view, container, child)?;
+    /// Parses `markup` for `insertAdjacentHTML` at `position` of `node_id`. Returns the node that
+    /// takes the nodes, the node they go before (the last place without one) and the parse result.
+    ///
+    /// # Errors
+    ///
+    /// `NodeNotFound` when `node_id` is gone, `NoParent` or `DocumentParent` for a sibling position
+    /// without an element parent, or the error of the parse.
+    pub fn parse_adjacent(
+        &mut self,
+        node_id: NodeId,
+        position: Position,
+        markup: &str,
+    ) -> Result<(NodeId, Option<NodeId>, ParsedHtml), TreeError> {
+        let tree = &mut self.tree;
+        let node = tree.get(node_id).ok_or(TreeError::NodeNotFound(node_id))?;
+        let sibling = matches!(position, Position::BeforeBegin | Position::AfterEnd);
+        let container = if sibling {
+            node.parent().ok_or(TreeError::NoParent(node_id))?
+        } else {
+            node_id
+        };
+        if sibling && tree.get(container).is_some_and(VirtualNode::is_document) {
+            return Err(TreeError::DocumentParent(node_id));
+        }
+        let context = match tree.get(container) {
+            Some(node) if node.is_html("html") => None,
+            _ => Some(container),
+        };
+        let parsed = tree.parse_html_with(context, markup, &mut set_style_text)?;
+        let reference = match position {
+            Position::BeforeBegin => Some(node_id),
+            Position::AfterBegin => tree.first_child(node_id),
+            Position::BeforeEnd => None,
+            Position::AfterEnd => tree.next_sibling(node_id),
+        };
+        Ok((container, reference, parsed))
     }
-    insert_parsed(state, view, parsed, container, None)?;
-    Ok(old)
-}
 
-/// Replaces `node_id` with the parse result and finishes the parse. Returns `false` and changes nothing when the node has
-/// no parent.
-///
-/// # Errors
-///
-/// The error of the replacement.
-pub fn replace_with(
-    state: &mut DocumentState,
-    view: &dyn View,
-    node_id: NodeId,
-    parsed: &ParsedHtml,
-) -> Result<bool, TreeError> {
-    let Some(parent) = state.tree.get(node_id).and_then(VirtualNode::parent) else {
-        return Ok(false);
-    };
-    state.replace_child(view, parent, parsed.fragment, node_id)?;
-    finish(state, parsed);
-    Ok(true)
+    /// Moves the nodes of the parse result into `container` before `reference`, or last without
+    /// one, then finishes the parse.
+    ///
+    /// # Errors
+    ///
+    /// The error of the insertion.
+    pub fn insert_parsed(
+        &mut self,
+        view: &dyn View,
+        parsed: &ParsedHtml,
+        container: NodeId,
+        reference: Option<NodeId>,
+    ) -> Result<(), TreeError> {
+        self.insert_before(view, container, parsed.fragment, reference)?;
+        finish(self, parsed);
+        Ok(())
+    }
+
+    /// Removes every child of `container` and puts the parse result in. Returns the old children.
+    ///
+    /// # Errors
+    ///
+    /// The error of a removal or of the insertion.
+    pub fn replace_children(
+        &mut self,
+        view: &dyn View,
+        container: NodeId,
+        parsed: &ParsedHtml,
+    ) -> Result<Vec<NodeId>, TreeError> {
+        let old = children_of(&self.tree, container);
+        for &child in &old {
+            self.remove_child(view, container, child)?;
+        }
+        self.insert_parsed(view, parsed, container, None)?;
+        Ok(old)
+    }
+
+    /// Replaces `node_id` with the parse result and finishes the parse. Returns `false` and changes
+    /// nothing when the node has no parent.
+    ///
+    /// # Errors
+    ///
+    /// The error of the replacement.
+    pub fn replace_with(
+        &mut self,
+        view: &dyn View,
+        node_id: NodeId,
+        parsed: &ParsedHtml,
+    ) -> Result<bool, TreeError> {
+        let Some(parent) = self.tree.get(node_id).and_then(VirtualNode::parent) else {
+            return Ok(false);
+        };
+        self.replace_child(view, parent, parsed.fragment, node_id)?;
+        finish(self, parsed);
+        Ok(true)
+    }
 }
 
 /// The steps that follow a parse once its nodes are in place: prints the style warnings of the
@@ -227,9 +229,9 @@ mod tests {
     fn replace_children_settles_each_old_child_before_the_new_nodes() {
         let (mut state, ids) = state_of(2);
         let view = RecordingView::default();
-        let (container, parsed) = parse_inner(&mut state, 0, "<i></i>").unwrap();
+        let (container, parsed) = state.parse_inner(0, "<i></i>").unwrap();
 
-        let old = replace_children(&mut state, &view, container, &parsed).unwrap();
+        let old = state.replace_children(&view, container, &parsed).unwrap();
 
         let resets = view.resets.borrow();
         assert_eq!(old, ids);
@@ -241,9 +243,9 @@ mod tests {
     fn replace_with_settles_the_node_and_the_moved_nodes() {
         let (mut state, ids) = state_of(1);
         let view = RecordingView::default();
-        let parsed = parse_outer(&mut state, ids[0], "<i></i>").unwrap().unwrap();
+        let parsed = state.parse_outer(ids[0], "<i></i>").unwrap().unwrap();
 
-        assert!(replace_with(&mut state, &view, ids[0], &parsed).unwrap());
+        assert!(state.replace_with(&view, ids[0], &parsed).unwrap());
 
         let resets = view.resets.borrow();
         assert_eq!(resets[0], ids[0]);
@@ -255,9 +257,9 @@ mod tests {
         let (mut state, _ids) = state_of(1);
         let view = RecordingView::default();
         let loose = state.create_node("p").unwrap();
-        let (_, parsed) = parse_inner(&mut state, loose, "<i></i>").unwrap();
+        let (_, parsed) = state.parse_inner(loose, "<i></i>").unwrap();
 
-        assert!(!replace_with(&mut state, &view, loose, &parsed).unwrap());
+        assert!(!state.replace_with(&view, loose, &parsed).unwrap());
 
         assert!(view.resets.borrow().is_empty());
     }
@@ -267,17 +269,14 @@ mod tests {
         let (mut state, _ids) = state_of(0);
         let loose = state.create_node("p").unwrap();
 
-        assert_eq!(parse_outer(&mut state, loose, "x").unwrap(), None);
+        assert_eq!(state.parse_outer(loose, "x").unwrap(), None);
     }
 
     #[test]
     fn parse_outer_under_a_document_is_refused() {
         let (mut state, _ids) = state_of(0);
 
-        assert_eq!(
-            parse_outer(&mut state, 0, "x"),
-            Err(TreeError::DocumentParent(0))
-        );
+        assert_eq!(state.parse_outer(0, "x"), Err(TreeError::DocumentParent(0)));
     }
 
     /// `container` and `reference` index `[root, first, second]`, the nodes of `rooted_tree(2)`.
@@ -295,7 +294,7 @@ mod tests {
         let nodes = [0, ids[0], ids[1]];
 
         let (got_container, got_reference, _parsed) =
-            parse_adjacent(&mut state, ids[0], position, "x").unwrap();
+            state.parse_adjacent(ids[0], position, "x").unwrap();
 
         assert_eq!(
             (got_container, got_reference),
@@ -311,7 +310,7 @@ mod tests {
         let loose = state.create_node("p").unwrap();
 
         assert_eq!(
-            parse_adjacent(&mut state, loose, position, "x").map(|_| ()),
+            state.parse_adjacent(loose, position, "x").map(|_| ()),
             Err(TreeError::NoParent(loose))
         );
     }
@@ -321,10 +320,11 @@ mod tests {
         let (mut state, _ids) = state_of(0);
         let view = RecordingView::default();
         let lines = state.record_warnings();
-        let (container, parsed) =
-            parse_inner(&mut state, 0, r#"<p style="bogus:1;width:2px"></p>"#).unwrap();
+        let (container, parsed) = state
+            .parse_inner(0, r#"<p style="bogus:1;width:2px"></p>"#)
+            .unwrap();
 
-        replace_children(&mut state, &view, container, &parsed).unwrap();
+        state.replace_children(&view, container, &parsed).unwrap();
 
         let id = state.tree().get(container).unwrap().children()[0];
         assert_eq!(
@@ -337,7 +337,9 @@ mod tests {
     #[test]
     fn a_parsed_element_has_its_style_props_before_it_is_inserted() {
         let (mut state, _ids) = state_of(0);
-        let (_, parsed) = parse_inner(&mut state, 0, r#"<p style="width:2px"></p>"#).unwrap();
+        let (_, parsed) = state
+            .parse_inner(0, r#"<p style="width:2px"></p>"#)
+            .unwrap();
 
         let props = state.tree().get(parsed.nodes[0].id).unwrap().style_props();
 
@@ -351,14 +353,11 @@ mod tests {
         let lines = state.record_warnings();
         let html = state.create_element_ns(None, None, "html").unwrap();
         // The frameset replaces the body, so the parser drops the paragraph before the result.
-        let (container, parsed) = parse_inner(
-            &mut state,
-            html,
-            r#"<p style="bogus:1"></p><frameset style="bogus:2">"#,
-        )
-        .unwrap();
+        let (container, parsed) = state
+            .parse_inner(html, r#"<p style="bogus:1"></p><frameset style="bogus:2">"#)
+            .unwrap();
 
-        replace_children(&mut state, &view, container, &parsed).unwrap();
+        state.replace_children(&view, container, &parsed).unwrap();
 
         let lines = lines.borrow();
         assert_eq!(lines.len(), 2, "{lines:?}");
@@ -370,9 +369,9 @@ mod tests {
     fn a_parsed_input_takes_the_value_attribute_as_typed_text() {
         let (mut state, _ids) = state_of(0);
         let view = RecordingView::default();
-        let (container, parsed) = parse_inner(&mut state, 0, "<input value=a>").unwrap();
+        let (container, parsed) = state.parse_inner(0, "<input value=a>").unwrap();
 
-        replace_children(&mut state, &view, container, &parsed).unwrap();
+        state.replace_children(&view, container, &parsed).unwrap();
 
         let id = state.tree().get(container).unwrap().children()[0];
         assert!(state.input(id).is_some());

@@ -26,9 +26,10 @@ from a focus and from `scrollIntoView`.
 ## Document
 
 `new_document_tree` builds the tree of a document. `validate_and_extract` and
-`is_element_local_name` check element names. `insert_parsed`, `replace_children` and `replace_with`
-are the markup setters. `parse_inner`, `parse_outer` and `parse_adjacent` parse the markup of
-`innerHTML`, `outerHTML` and `insertAdjacentHTML` and apply each `style` attribute as style props.
+`is_element_local_name` check element names. The `DocumentState` operations `insert_parsed`,
+`replace_children` and `replace_with` are the markup setters. `parse_inner`, `parse_outer` and
+`parse_adjacent` parse the markup of `innerHTML`, `outerHTML` and `insertAdjacentHTML` and apply
+each `style` attribute as style props.
 The `text` module holds the text-control model.
 `DocumentState` holds the tree with its cascade, the listeners, the signals, the focus and the
 reveals. The cascade is read through `DocumentState::style`. The tree is read through

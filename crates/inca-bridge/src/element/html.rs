@@ -10,10 +10,7 @@ use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 
-use inca_document::{
-    Position, children_of, insert_parsed, parse_adjacent, parse_inner, parse_outer,
-    replace_children, replace_with,
-};
+use inca_document::{Position, children_of};
 use inca_jsenv::required_prototype;
 use inca_node::{HtmlScope, NodeId};
 
@@ -48,12 +45,16 @@ fn set_inner_html<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let (container, parsed) = parse_inner(&mut host.document.borrow_mut(), node_id, &markup)
+        let (container, parsed) = host
+            .document
+            .borrow_mut()
+            .parse_inner(node_id, &markup)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         let old = children_of(host.document.borrow().tree(), container);
         lose_focus_in(&ctx, &host, &old);
         let mut document = host.document.borrow_mut();
-        let old = replace_children(&mut document, &*host.window.borrow(), container, &parsed)
+        let old = document
+            .replace_children(&*host.window.borrow(), container, &parsed)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         removed_subtrees(&ctx, document.tree(), &old)
     }
@@ -66,14 +67,18 @@ fn set_outer_html<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let Some(parsed) = parse_outer(&mut host.document.borrow_mut(), node_id, &markup)
+        let Some(parsed) = host
+            .document
+            .borrow_mut()
+            .parse_outer(node_id, &markup)
             .map_err(|err| throw_tree_error(&ctx, err))?
         else {
             return Array::new(ctx.clone());
         };
         lose_focus_in(&ctx, &host, &[node_id]);
         let mut document = host.document.borrow_mut();
-        let replaced = replace_with(&mut document, &*host.window.borrow(), node_id, &parsed)
+        let replaced = document
+            .replace_with(&*host.window.borrow(), node_id, &parsed)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         if !replaced {
             return Array::new(ctx.clone());
@@ -90,17 +95,12 @@ fn insert_adjacent_html<'js>(
     move |ctx, JsNodeId(node_id), position, markup| {
         let position = parse_position(&ctx, &position)?;
         let mut document = host.document.borrow_mut();
-        let (container, reference, parsed) =
-            parse_adjacent(&mut document, node_id, position, &markup)
-                .map_err(|err| throw_tree_error(&ctx, err))?;
-        insert_parsed(
-            &mut document,
-            &*host.window.borrow(),
-            &parsed,
-            container,
-            reference,
-        )
-        .map_err(|err| throw_tree_error(&ctx, err))?;
+        let (container, reference, parsed) = document
+            .parse_adjacent(node_id, position, &markup)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        document
+            .insert_parsed(&*host.window.borrow(), &parsed, container, reference)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
         Ok(())
     }
 }

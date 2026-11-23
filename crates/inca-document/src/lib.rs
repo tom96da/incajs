@@ -32,10 +32,7 @@ pub use focus::{FocusModel, FocusPlan, FocusStep, FocusTransition};
 pub use geometry::{
     Align, Rect, client_height, client_width, offset_of, scroll_chain, scroll_delta,
 };
-pub use markup::{
-    Position, children_of, insert_parsed, parse_adjacent, parse_inner, parse_outer,
-    replace_children, replace_with,
-};
+pub use markup::{Position, children_of};
 pub use registration::{Added, AnySignal, Released};
 pub use reveal::{Reveal, RevealOrigin, RevealQueue, Reveals};
 pub use semantics::{
