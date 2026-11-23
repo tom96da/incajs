@@ -286,7 +286,7 @@ mod tests {
             ),
         );
         assert_eq!(got, serde_json::json!([true, node, true]));
-        assert_eq!(host.document.borrow().last_event_id, 0);
+        assert_eq!(host.document.borrow_mut().next_event_id(), 1);
     }
 
     #[test]

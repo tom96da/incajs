@@ -22,7 +22,7 @@ pub use event::{
     EVENTS, EventListeners, EventPayload, EventSpec, EventTargetId, Flags, Invoke, KeyPayload,
     Link, Links, Listener, Modifiers, MousePayload, NO_BUTTON, Outcome, PointerSource, Signals,
     Walk, WheelPayload, buttons_mask, deliver, flags_of, key_code, keypress_code, listened,
-    next_event_id, path_from, spec_of,
+    path_from, spec_of,
 };
 pub use focus::{FocusModel, FocusPlan, FocusStep, FocusTransition};
 pub use geometry::{

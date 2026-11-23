@@ -62,8 +62,8 @@ pub struct DocumentState {
     pub(crate) focus: FocusModel,
     /// The reveals that wait for a box: from a focus and from `scrollIntoView`.
     pub(crate) reveals: RevealQueue,
-    /// Last number handed out as an `eventId`. Each event takes the next one.
-    pub last_event_id: u64,
+    /// The last number handed out as an `eventId`. Changed only through [`Self::next_event_id`].
+    last_event_id: u64,
     /// The node a script asked to capture the mouse pointer. Its `gotpointercapture` fires before
     /// the next pointer event. Changed only through the capture requests of the document.
     capture_request: Option<NodeId>,
@@ -101,6 +101,12 @@ impl DocumentState {
     #[must_use]
     pub fn tree(&self) -> &VirtualTree {
         &self.tree
+    }
+
+    /// Hands out the next `eventId`, the one after the last. The first is 1.
+    pub fn next_event_id(&mut self) -> u64 {
+        self.last_event_id += 1;
+        self.last_event_id
     }
 }
 

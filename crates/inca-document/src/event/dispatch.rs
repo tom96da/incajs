@@ -111,12 +111,6 @@ pub fn listened(
         })
 }
 
-/// Takes the next number after `last` as an `eventId`.
-pub fn next_event_id(last: &mut u64) -> u64 {
-    *last += 1;
-    *last
-}
-
 /// Calls the listeners along `path`, then leaves the event idle. Returns whether it ended
 /// canceled. Capture listeners run from the end of `path` down to the target, then bubble
 /// listeners from the target up, the latter only while the event bubbles. At the target, capture

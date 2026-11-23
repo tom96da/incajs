@@ -33,7 +33,7 @@ pub(crate) fn listened(
 }
 
 pub(super) fn next_event_id(host: &Rc<Host>) -> u64 {
-    inca_document::next_event_id(&mut host.document.borrow_mut().last_event_id)
+    host.document.borrow_mut().next_event_id()
 }
 
 /// Runs the listeners of `walk.name` along the path of `walk.target` with one

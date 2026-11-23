@@ -166,7 +166,7 @@ mod tests {
             .engine
             .eval::<()>(&format!("__inca_native__.click({node});"))
             .unwrap();
-        assert_eq!(host.document.borrow().last_event_id, 0);
+        assert_eq!(host.document.borrow_mut().next_event_id(), 1);
     }
 
     #[test]
