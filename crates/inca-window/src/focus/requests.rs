@@ -3,35 +3,25 @@
 
 //! The frame that applies the queued focus and blur requests.
 
-use super::registry::{FocusRegistry, Surface};
 use gpui::{App, Window};
-use inca_document::{FocusModel, FocusTransition};
-use inca_node::VirtualTree;
-use inca_style::StyleCache;
+use inca_document::FocusTransition;
 
-impl FocusRegistry {
-    /// Applies every queued request in order and reports each transition it produced. Call once
-    /// per frame, before the element tree that needs the resulting `track_focus` wiring is built.
+use crate::Cells;
+
+impl Cells {
+    /// Applies the queued focus requests of the document as a frame does: records the node the
+    /// window focuses, plans the frame and applies the plan to the handles and the window's focus.
+    /// Returns each transition the plan reports. Call once per frame, before the element tree
+    /// that needs the resulting `track_focus` wiring is built.
     ///
-    /// The transitions are returned and not dispatched here, so the caller fires them after
-    /// releasing its borrow of `self`. An [`inca_gpui::EventSink`] that re-borrows the same
-    /// `RefCell` while firing would otherwise panic with "already mutably borrowed".
-    #[must_use]
-    pub fn apply_pending(
-        &mut self,
-        model: &mut FocusModel,
-        tree: &VirtualTree,
-        cache: &StyleCache,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Vec<FocusTransition> {
-        let mut surface = Surface {
-            handles: &mut self.handles,
-            parked: &mut self.parked,
-            window,
-            cx,
-        };
-        model.apply_pending(tree, cache, &mut surface)
+    /// The transitions are returned and not dispatched here, so the caller fires them after the
+    /// borrows of the cells end. An [`inca_gpui::EventSink`] that re-borrows a cell while firing
+    /// would otherwise panic with "already mutably borrowed".
+    pub fn apply_focus(&self, window: &mut Window, cx: &mut App) -> Vec<FocusTransition> {
+        self.observe_focus(window, cx);
+        let plan = self.document.borrow_mut().plan_focus_frame();
+        self.window.borrow_mut().focus.apply(&plan, window, cx);
+        plan.transitions
     }
 }
 
@@ -39,11 +29,11 @@ impl FocusRegistry {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use super::*;
     use crate::tests::focus::Registry;
     use crate::tests::*;
     use gpui::TestAppContext;
     use inca_node::AttributeValue;
+    use inca_style::StyleCache;
 
     #[gpui::test]
     fn removing_tabindex_blurs_the_focused_node(cx: &mut TestAppContext) {

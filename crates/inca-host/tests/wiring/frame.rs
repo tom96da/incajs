@@ -191,12 +191,7 @@ fn a_hook_that_throws_is_reported(cx: &mut TestAppContext) {
     );
     scene.js("__inca_native__.createNode('div');");
     let node = focusable_node(&scene.dispatcher, &scene.cells);
-    scene
-        .cells
-        .document
-        .borrow_mut()
-        .focus
-        .request_focus(node, true);
+    scene.cells.document.borrow_mut().request_focus(node, true);
 
     draw(cx, scene.window);
 
@@ -257,12 +252,7 @@ fn a_hook_that_throws_lets_the_frame_finish(cx: &mut TestAppContext) {
     );
     scene.js("__inca_native__.createNode('div');");
     let node = focusable_node(&scene.dispatcher, &scene.cells);
-    scene
-        .cells
-        .document
-        .borrow_mut()
-        .focus
-        .request_focus(node, true);
+    scene.cells.document.borrow_mut().request_focus(node, true);
 
     draw(cx, scene.window);
 
@@ -348,12 +338,7 @@ fn without_a_hook_a_frame_reports_nothing(cx: &mut TestAppContext) {
 fn a_removed_focused_node_is_swept_without_a_blur(cx: &mut TestAppContext) {
     let scene = scene(cx, RELEASED);
     let node = focusable_node(&scene.dispatcher, &scene.cells);
-    scene
-        .cells
-        .document
-        .borrow_mut()
-        .focus
-        .request_focus(node, true);
+    scene.cells.document.borrow_mut().request_focus(node, true);
     draw(cx, scene.window);
     scene.js("globalThis.seen = [];");
 
@@ -380,4 +365,56 @@ fn a_frame_without_orphans_does_not_call_the_hook(cx: &mut TestAppContext) {
     draw(cx, scene.window);
 
     assert_eq!(scene.json("globalThis.released"), serde_json::json!([]));
+}
+
+/// Two focusable nodes, drawn once, whose first node's `focus` listener focuses the second and
+/// stores in `out` what `matches(':focus')`, `querySelector` and `closest` answer then.
+fn focus_and_query_in_a_focus_listener(cx: &mut TestAppContext) -> (Scene, NodeId, NodeId) {
+    let scene = scene(cx, "");
+    let first = focusable_node(&scene.dispatcher, &scene.cells);
+    let second = focusable_node(&scene.dispatcher, &scene.cells);
+    draw(cx, scene.window);
+    listen(
+        &scene.dispatcher,
+        first,
+        "focus",
+        &format!(
+            r"() => {{
+                const n = __inca_native__;
+                n.focusNode({second});
+                globalThis.out = [
+                    n.nodeHandle({first})[0].matches(':focus'),
+                    n.nodeHandle({second})[0].matches(':focus'),
+                    n.querySelector(n.rootNodeId(), ':focus') === {second},
+                    n.closest({second}, ':focus') === {second},
+                ];
+            }}"
+        ),
+    );
+    scene
+        .cells
+        .document
+        .borrow_mut()
+        .request_focus(first, false);
+    draw(cx, scene.window);
+    (scene, first, second)
+}
+
+#[gpui::test]
+fn a_focus_query_in_a_focus_listener_keeps_the_drawn_focus_of_the_frame(cx: &mut TestAppContext) {
+    let (scene, first, second) = focus_and_query_in_a_focus_listener(cx);
+
+    let document = scene.cells.document.borrow();
+    assert!(document.tree.is_focused(first));
+    assert!(!document.tree.is_focused(second));
+}
+
+#[gpui::test]
+fn a_focus_query_in_a_focus_listener_sees_the_focus_it_queued(cx: &mut TestAppContext) {
+    let (scene, _first, _second) = focus_and_query_in_a_focus_listener(cx);
+
+    assert_eq!(
+        read_out(&scene.dispatcher),
+        serde_json::json!([false, true, true, true])
+    );
 }

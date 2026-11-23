@@ -25,7 +25,7 @@ pub(super) fn set_style<'js>(
         let warning = style_warning(&key, &value);
         set_style_prop(&mut host.tree, node_id, key.clone(), value)
             .map_err(|err| throw_tree_error(&ctx, err))?;
-        host.focus.mark_style_dirty(&host.tree, node_id, &key);
+        host.mark_style_dirty(node_id, &key);
         if let Some(warning) = warning {
             host.warn_style(node_id, &warning);
         }
@@ -41,7 +41,7 @@ pub(super) fn remove_style<'js>(
         let host = &mut *host;
         remove_style_prop(&mut host.tree, node_id, &key)
             .map_err(|err| throw_tree_error(&ctx, err))?;
-        host.focus.mark_style_dirty(&host.tree, node_id, &key);
+        host.mark_style_dirty(node_id, &key);
         Ok(())
     }
 }

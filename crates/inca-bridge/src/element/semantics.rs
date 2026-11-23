@@ -243,7 +243,7 @@ mod tests {
         );
 
         assert_eq!(got, json!(-1));
-        assert!(!host.document.borrow().focus.has_queued_work());
+        assert!(!host.document.borrow().focus().has_queued_work());
     }
 
     #[test]

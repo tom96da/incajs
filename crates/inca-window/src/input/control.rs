@@ -672,7 +672,7 @@ mod tests {
 
     /// Blurs the input through the script and draws the frame that applies it.
     fn script_blur(s: &InputScene, cx: &mut TestAppContext) {
-        s.cells.document.borrow_mut().focus.request_blur(s.input);
+        s.cells.document.borrow_mut().request_blur(s.input);
         s.draw(cx);
         cx.run_until_parked();
     }

@@ -11,7 +11,7 @@ use std::rc::Rc;
 use gpui::{App, Pixels, ScrollHandle, Window, point, px};
 
 use inca_document::geometry::{Align, scroll_chain};
-use inca_document::{DocumentState, NodeBox, ScrollRange, View, free_ids};
+use inca_document::{DocumentState, NodeBox, RevealOrigin, Reveals, ScrollRange, View, free_ids};
 use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_node::{NodeId, VirtualTree};
 use inca_style::{StyleCache, is_scroll_container};
@@ -27,9 +27,6 @@ pub struct Cells {
     /// What the window drew and holds: boxes, scroll offsets, held buttons and the capture.
     pub window: Rc<RefCell<WindowState>>,
 }
-
-/// A `scrollIntoViewNode` call: the node and the block and inline alignment.
-type ScrollCall = (NodeId, Align, Align);
 
 /// The window cell of [`Cells`].
 pub struct WindowState {
@@ -49,10 +46,6 @@ pub struct WindowState {
     /// The node the pointer events go to while a capture is active. A node that left the tree
     /// loses the capture at the next pointer event.
     pub(crate) capture_active: Option<NodeId>,
-    /// `scrollIntoViewNode` calls whose node had no box yet: awaiting the next
-    /// `reveal_focus`, and awaiting the frame after it.
-    pub(crate) scroll_fresh: Vec<ScrollCall>,
-    pub(crate) scroll_retry: Vec<ScrollCall>,
     /// Receives one message each time the timers start a timer or the frames queue a callback.
     pub(crate) wake: async_channel::Receiver<()>,
     /// The focus handle of each node that can take focus.
@@ -70,8 +63,6 @@ impl WindowState {
             input_layouts: RefCell::new(HashMap::new()),
             held_buttons: 0,
             capture_active: None,
-            scroll_fresh: Vec::new(),
-            scroll_retry: Vec::new(),
             wake,
             focus: FocusRegistry::default(),
         }
@@ -182,18 +173,8 @@ impl View for WindowState {
         true
     }
 
-    /// Queues a `scrollIntoViewNode` call whose node has no box yet for the next
-    /// [`Cells::reveal_focus`].
-    fn queue_reveal(&mut self, node: NodeId, block: Align, inline: Align) {
-        self.scroll_fresh.push((node, block, inline));
-    }
-
     fn held_buttons(&self) -> u8 {
         self.held_buttons
-    }
-
-    fn set_held_buttons(&mut self, held: u8) {
-        self.held_buttons = held;
     }
 
     /// Sets the scroll offset of `node_id` and of every node below it to zero.
@@ -221,8 +202,6 @@ impl View for WindowState {
             self.input_layouts.get_mut().remove(id);
         }
         for &id in ids {
-            self.scroll_fresh.retain(|&(node, ..)| node != id);
-            self.scroll_retry.retain(|&(node, ..)| node != id);
             self.focus.forget(id);
         }
     }
@@ -273,14 +252,6 @@ impl WindowState {
         moved
     }
 
-    /// Takes the queued `scrollIntoViewNode` calls, the ones that waited a frame first.
-    pub(crate) fn take_scroll_calls(&mut self) -> (Vec<ScrollCall>, Vec<ScrollCall>) {
-        (
-            std::mem::take(&mut self.scroll_retry),
-            std::mem::take(&mut self.scroll_fresh),
-        )
-    }
-
     /// Moves the recorded boxes below `container` by the scroll just applied, so a
     /// second reveal before the next draw starts from where the content now is. The
     /// direct children also take it into their recorded scroll offset.
@@ -313,14 +284,19 @@ impl WindowState {
 }
 
 impl Cells {
+    /// Records in the document the node `window` focuses now: the snapshot of the platform focus
+    /// that a turn, a frame and an activation start from.
+    pub(crate) fn observe_focus(&self, window: &Window, cx: &App) {
+        let platform = self.window.borrow().focus.focused_node(window, cx);
+        self.document.borrow_mut().observe_focus(platform);
+    }
+
     /// The node holding focus in `window` right now. A node whose focus a tree change took is not
     /// held.
     #[must_use]
     pub fn focused_node(&self, window: &Window, cx: &App) -> Option<NodeId> {
-        self.window
-            .borrow()
-            .focus
-            .focused_node(&self.document.borrow().focus, window, cx)
+        let platform = self.window.borrow().focus.focused_node(window, cx);
+        self.document.borrow().focus().held_node(platform)
     }
 
     /// The handle of `node`, if it can take focus.
@@ -373,46 +349,26 @@ impl Cells {
         moved
     }
 
-    /// Scrolls the scroll containers above the node whose focus request asked
-    /// for it, using the boxes of the last drawn frame. A node whose box the
-    /// frame lacks gets one more frame to receive it. It also runs the
-    /// `scrollIntoViewNode` calls that waited for a box, with the same one-frame
-    /// retry. Call it once per frame after `FocusRegistry::apply_pending`.
-    pub fn reveal_focus(&self, window: &mut gpui::Window) {
-        let (retries, fresh) = self.document.borrow_mut().focus.take_reveals();
-        for node in retries {
-            self.reveal(node, Align::Reveal, Align::CenterOutside);
-        }
-        let mut wait = false;
-        for node in fresh {
-            if !self.reveal(node, Align::Reveal, Align::CenterOutside) {
-                self.document.borrow_mut().focus.retry_reveal(node);
-                wait = true;
-            }
-        }
-        wait |= self.reveal_scrolls();
-        if wait {
-            window.request_animation_frame();
-        }
-    }
-
-    /// Runs the queued `scrollIntoViewNode` calls. A call whose node still has
-    /// no box waits one more frame. Returns whether one waits.
+    /// Runs the reveals the document queued, using the boxes of the last drawn frame: the ones a
+    /// focus asked for, then the `scrollIntoViewNode` calls, each the retries first. A reveal whose
+    /// node has no box yet waits one more frame. Returns whether one waits. Call it once per frame
+    /// after the focus applied.
     #[must_use]
-    pub fn reveal_scrolls(&self) -> bool {
-        let (retries, fresh) = self.window.borrow_mut().take_scroll_calls();
-        for (node, block, inline) in retries {
-            self.reveal(node, block, inline);
-        }
-        let mut retry = Vec::new();
-        for (node, block, inline) in fresh {
-            if !self.reveal(node, block, inline) {
-                retry.push((node, block, inline));
+    pub fn reveal_all(&self) -> bool {
+        let Reveals { retries, fresh } = self.document.borrow_mut().take_reveals();
+        let mut wait = false;
+        for origin in [RevealOrigin::Focus, RevealOrigin::Script] {
+            for reveal in retries.iter().filter(|reveal| reveal.origin == origin) {
+                self.reveal(reveal.node, reveal.block, reveal.inline);
+            }
+            for reveal in fresh.iter().filter(|reveal| reveal.origin == origin) {
+                if !self.reveal(reveal.node, reveal.block, reveal.inline) {
+                    self.document.borrow_mut().retry_reveal(*reveal);
+                    wait = true;
+                }
             }
         }
-        let mut window = self.window.borrow_mut();
-        window.scroll_retry.extend(retry);
-        !window.scroll_retry.is_empty()
+        wait
     }
 
     /// Scrolls every scroll container above `node` so the node shows. Returns

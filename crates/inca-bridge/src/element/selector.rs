@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Selectors: the natives `closest`, `querySelector` and `querySelectorAll`, and the member
-//! `matches`, which gives `false` for a freed element and still checks the selector.
+//! `matches`, which gives `false` for a freed element and still checks the selector. Each matches
+//! `:focus` and `:focus-within` against the focus once the queued requests apply.
 
 use std::rc::Rc;
 
@@ -31,45 +32,44 @@ pub(crate) fn install_selector(n: &Natives<'_, '_>) -> JsResult<()> {
 
 fn closest<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), selector| {
-        let mut host = host.document.borrow_mut();
-        host.sync_focus_style();
+        let host = host.document.borrow();
         let syntax =
             |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
         if host.tree.get(node_id).is_none() {
             check_selector(&selector).map_err(syntax)?;
             return Ok(Value::new_null(ctx.clone()));
         }
-        let found = closest_selector(&host.tree, node_id, &selector).map_err(syntax)?;
+        let found =
+            closest_selector(&host.tree, node_id, &selector, host.query_focus()).map_err(syntax)?;
         or_null(&ctx, found)
     }
 }
 
 fn query<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), selector| {
-        let mut host = host.document.borrow_mut();
-        host.sync_focus_style();
+        let host = host.document.borrow();
         let syntax =
             |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
         if host.tree.get(node_id).is_none() {
             check_selector(&selector).map_err(syntax)?;
             return Ok(Value::new_null(ctx.clone()));
         }
-        let found = query_selector(&host.tree, node_id, &selector).map_err(syntax)?;
+        let found =
+            query_selector(&host.tree, node_id, &selector, host.query_focus()).map_err(syntax)?;
         or_null(&ctx, found)
     }
 }
 
 fn query_all<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Vec<NodeId>> {
     move |ctx, JsNodeId(node_id), selector| {
-        let mut host = host.document.borrow_mut();
-        host.sync_focus_style();
+        let host = host.document.borrow();
         let syntax =
             |err: SelectorError| Exception::throw_dom(&ctx, "SyntaxError", &err.to_string());
         if host.tree.get(node_id).is_none() {
             check_selector(&selector).map_err(syntax)?;
             return Ok(Vec::new());
         }
-        query_selector_all(&host.tree, node_id, &selector).map_err(syntax)
+        query_selector_all(&host.tree, node_id, &selector, host.query_focus()).map_err(syntax)
     }
 }
 
@@ -89,8 +89,7 @@ pub(super) fn install_matches<'js>(
         |ctx, host, id, _, args| {
             require(ctx, "matches", args, 1)?;
             let selector = text(ctx, &args[0])?;
-            let mut host = host.document.borrow_mut();
-            host.sync_focus_style();
+            let host = host.document.borrow();
             let syntax = |err: inca_style::SelectorError| {
                 Exception::throw_dom(ctx, "SyntaxError", &err.to_string())
             };
@@ -98,7 +97,7 @@ pub(super) fn install_matches<'js>(
                 check_selector(&selector).map_err(syntax)?;
                 return Ok(false);
             }
-            matches_selector(&host.tree, id, &selector).map_err(syntax)
+            matches_selector(&host.tree, id, &selector, host.query_focus()).map_err(syntax)
         },
     )
 }

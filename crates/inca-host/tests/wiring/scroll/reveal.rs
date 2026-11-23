@@ -340,6 +340,45 @@ fn scroll_into_view_aligns_to_the_client_rectangle_beside_a_strip(cx: &mut TestA
     assert_eq!(num(&h, "top(box)"), 28.0);
 }
 
+/// A focus of `items[6]` in `box` and a `scrollIntoView` of a new item at the end of a second
+/// container, queued in one frame and followed by `then`, applied by two frames: the new item has
+/// its box at the second.
+#[gpui_cases]
+#[gpui::test]
+#[case::both_run("", true)]
+#[case::a_later_focus_clears_only_the_focus_reveal("n.focusNode(items[1], true);", false)]
+fn a_focus_reveal_and_a_scroll_into_view_of_one_frame(
+    cx: &mut TestAppContext,
+    then: &str,
+    focus_scrolls: bool,
+) {
+    let mut h = mount(cx, "scroll", false);
+    run(
+        &mut h,
+        r"
+        globalThis.other = mkBox(pad, 'scroll');
+        for (let i = 0; i < 10; i++) {
+            mkItem(other);
+        }
+        ",
+    );
+    run(
+        &mut h,
+        &format!(
+            r"
+            const n = __inca_native__;
+            n.focusNode(items[6]);
+            n.scrollIntoViewNode(mkItem(other), 'start', 'start');
+            {then}
+            "
+        ),
+    );
+    h.draw();
+
+    assert_eq!(num(&h, "top(box)") > 0.0, focus_scrolls);
+    assert!(num(&h, "top(other)") > 0.0);
+}
+
 #[test]
 fn a_scroll_into_view_of_a_boxless_node_retries_on_one_frame() {
     let host = Rig::default();
@@ -348,8 +387,8 @@ fn a_scroll_into_view_of_a_boxless_node_retries_on_one_frame() {
             .eval::<()>("globalThis.n = __inca_native__.createNode('div'); __inca_native__.scrollIntoViewNode(n, 'start', 'start')")
             .unwrap();
 
-    assert!(host.cells.reveal_scrolls());
-    assert!(!host.cells.reveal_scrolls());
+    assert!(host.cells.reveal_all());
+    assert!(!host.cells.reveal_all());
 }
 
 #[test]
@@ -366,7 +405,7 @@ fn destroying_a_node_drops_its_waiting_scroll_into_view() {
         )
         .unwrap();
 
-    assert!(!host.cells.reveal_scrolls());
+    assert!(!host.cells.reveal_all());
 }
 
 /// Draws the window once more, the frame that applies a focus request.

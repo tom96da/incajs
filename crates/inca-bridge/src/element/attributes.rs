@@ -115,7 +115,7 @@ pub(super) fn attribute_names<'js>(
 
 /// Queues the focus re-check an attribute change needs.
 pub(super) fn mark_focus_dirty_for(host: &mut DocumentState, node_id: NodeId, key: &str) {
-    host.focus.mark_attribute_dirty(&host.tree, node_id, key);
+    host.mark_attribute_dirty(node_id, key);
 }
 
 pub(super) fn attribute_value_from_js<'js>(
@@ -732,7 +732,7 @@ mod tests {
         );
 
         let id = u32::try_from(got.as_u64().unwrap()).unwrap();
-        let tab_dirty = host.document.borrow_mut().focus.take_tab_dirty();
+        let tab_dirty = host.document.borrow_mut().take_tab_dirty();
         assert!(tab_dirty.contains(&id));
     }
 
@@ -748,12 +748,6 @@ mod tests {
         );
 
         let id = u32::try_from(got.as_u64().unwrap()).unwrap();
-        assert!(
-            host.document
-                .borrow_mut()
-                .focus
-                .take_tab_dirty()
-                .contains(&id)
-        );
+        assert!(host.document.borrow_mut().take_tab_dirty().contains(&id));
     }
 }

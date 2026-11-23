@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! What the document reads from the last drawn frame and writes back to the window: the boxes, the
-//! scroll offsets, the held mouse buttons and the queue of reveals that wait for a box.
+//! What the document reads from the last drawn frame and moves in the window: the boxes, the scroll
+//! offsets and the held mouse buttons.
 
 use inca_node::{NodeId, VirtualTree};
 use inca_style::StyleCache;
@@ -55,14 +55,8 @@ pub trait View {
         inline: Align,
     ) -> bool;
 
-    /// Queues a reveal of `node` whose box the last frame lacks, for the next frame.
-    fn queue_reveal(&mut self, node: NodeId, block: Align, inline: Align);
-
     /// The mouse buttons held now, as the `buttons` bitmask of the events.
     fn held_buttons(&self) -> u8;
-
-    /// Records the mouse buttons held now.
-    fn set_held_buttons(&mut self, held: u8);
 
     /// Sets the scroll offset of `id` and of every node below it to zero.
     fn reset_scroll(&self, tree: &VirtualTree, id: NodeId);

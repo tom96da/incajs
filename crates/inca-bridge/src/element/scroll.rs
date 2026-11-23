@@ -76,7 +76,7 @@ fn scroll_to(host: &Host, id: NodeId, left: Option<f64>, top: Option<f64>) {
 /// Reveals the node `id` now, or at the next frame when it has no box yet.
 fn scroll_into_view(host: &Host, id: NodeId, block: Align, inline: Align) {
     if !host.reveal(id, block, inline) {
-        host.window.borrow_mut().queue_reveal(id, block, inline);
+        host.document.borrow_mut().queue_reveal(id, block, inline);
     }
 }
 
@@ -248,6 +248,7 @@ pub(super) fn install<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>)
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    use crate::bindings::Host;
     use crate::test_support::TestView;
     use crate::test_support::engine_with_bindings;
     use crate::tests::with_box_view;
@@ -296,6 +297,17 @@ mod tests {
     }
 
     /// The offset the last scroll write left on the node `id`.
+    /// The `scrollIntoView` calls the document queued for the next frame.
+    fn queued(host: &Host) -> Vec<(u32, Align, Align)> {
+        host.document
+            .borrow_mut()
+            .take_reveals()
+            .fresh
+            .iter()
+            .map(|reveal| (reveal.node, reveal.block, reveal.inline))
+            .collect()
+    }
+
     fn offset(view: &Rc<RefCell<TestView>>, id: u32) -> (f32, f32) {
         view.borrow()
             .offsets
@@ -330,13 +342,13 @@ mod tests {
     #[case::freed("__inca_native__.destroyNode(id)")]
     #[case::detached("__inca_native__.removeChild(__inca_native__.rootNodeId(), id)")]
     fn a_scroll_into_view_of_a_node_without_a_box_waits_for_nothing(#[case] remove: &str) {
-        let (engine, _host, view, id) = with_box_view([0.0; 9]);
+        let (engine, host, view, id) = with_box_view([0.0; 9]);
         engine.eval::<()>(remove).unwrap();
         view.borrow_mut().boxes.remove(&id);
 
         engine.eval::<()>("el.scrollIntoView()").unwrap();
 
-        assert!(view.borrow().queued.is_empty());
+        assert!(queued(&host).is_empty());
     }
 
     #[test]
@@ -398,20 +410,20 @@ mod tests {
         #[case] block: Align,
         #[case] inline: Align,
     ) {
-        let (engine, _host, view, id) = with_box_view([0.0; 9]);
+        let (engine, host, view, id) = with_box_view([0.0; 9]);
         view.borrow_mut().boxes.remove(&id);
 
         engine.eval::<()>(call).unwrap();
 
-        assert_eq!(view.borrow().queued, [(id, block, inline)]);
+        assert_eq!(queued(&host), [(id, block, inline)]);
     }
 
     #[test]
     fn scroll_into_view_of_a_node_with_a_box_leaves_nothing_waiting() {
-        let (engine, _host, view, _id) = with_box_view([0.0; 9]);
+        let (engine, host, _view, _id) = with_box_view([0.0; 9]);
 
         engine.eval::<()>("el.scrollIntoView()").unwrap();
 
-        assert!(view.borrow().queued.is_empty());
+        assert!(queued(&host).is_empty());
     }
 }

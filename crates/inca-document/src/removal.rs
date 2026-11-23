@@ -3,28 +3,20 @@
 
 //! The steps that follow a tree call that moved or removed nodes, and the release of freed nodes.
 
-use inca_node::{NodeId, Removal, VirtualTree};
+use inca_node::{NodeId, Removal};
 
-use crate::{DocumentState, FocusModel, View};
+use crate::{DocumentState, View};
 
-/// Applies the removals a tree call made. A node that had a parent drops the focus it held and
-/// moves the Tab start. Every node queues a focus re-check.
-pub fn apply_removals(focus: &mut FocusModel, tree: &VirtualTree, removals: &[Removal]) {
+/// Runs the steps that follow a tree change that took `removals` out of the tree. A node that had
+/// a parent drops the focus it held with the reveals a focus asked for, and moves the Tab start.
+/// Every node queues a focus re-check and resets the scroll offsets of its subtree in `view`.
+pub fn settle(state: &mut DocumentState, view: &dyn View, removals: &[Removal]) {
     for removal in removals {
         if removal.attached {
-            focus.drop_focus_in(tree, removal.id);
-            focus.start_leaves(tree, removal.id, removal.before);
+            state.drop_focus_in(removal.id);
+            state.move_tab_start(removal.id, removal.before);
         }
-        focus.mark_subtree_dirty(tree, removal.id);
-    }
-}
-
-/// Runs the steps that follow a tree change that took `removals` out of the tree. The document
-/// drops the focus, moves the Tab start and queues the focus re-check. Every node resets the scroll
-/// offsets of its subtree in `view`.
-pub fn settle(state: &mut DocumentState, view: &dyn View, removals: &[Removal]) {
-    apply_removals(&mut state.focus, &state.tree, removals);
-    for removal in removals {
+        state.mark_focus_dirty(removal.id);
         view.reset_scroll(&state.tree, removal.id);
     }
 }
@@ -41,46 +33,56 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::EventTargetId;
     use crate::tests::{RecordingView, rooted_tree};
+    use crate::{Align, EventTargetId, Reveal, RevealOrigin};
+    use inca_node::VirtualTree;
+
+    /// Settles `removals` on a document over `tree` whose focus `prepare` sets up first.
+    fn settled(
+        tree: VirtualTree,
+        removals: &[Removal],
+        prepare: impl FnOnce(&mut DocumentState),
+    ) -> DocumentState {
+        let mut state = DocumentState {
+            tree,
+            ..DocumentState::default()
+        };
+        prepare(&mut state);
+        settle(&mut state, &RecordingView::default(), removals);
+        state
+    }
 
     #[test]
     fn an_attached_node_that_leaves_moves_the_tab_start_to_its_before() {
         let (mut tree, ids) = rooted_tree(2);
-        let mut focus = FocusModel::default();
-        focus.press_start(ids[1], 0, None);
         let removals = tree.removals(&[ids[1]]);
         tree.remove_child(0, ids[1]).unwrap();
 
-        apply_removals(&mut focus, &tree, &removals);
+        let state = settled(tree, &removals, |state| state.press_start(ids[1], 0, None));
 
-        assert_eq!(focus.start_node(), Some(ids[0]));
+        assert_eq!(state.focus().start_node(), Some(ids[0]));
     }
 
     #[test]
     fn an_attached_node_that_leaves_drops_the_focus_it_held() {
         let (mut tree, ids) = rooted_tree(2);
-        let mut focus = FocusModel::default();
-        focus.observe_node(Some(ids[1]));
         let removals = tree.removals(&[ids[1]]);
         tree.remove_child(0, ids[1]).unwrap();
 
-        apply_removals(&mut focus, &tree, &removals);
+        let state = settled(tree, &removals, |state| state.observe_focus(Some(ids[1])));
 
-        assert_eq!(focus.held_node(Some(ids[1])), None);
+        assert_eq!(state.focus().held_node(Some(ids[1])), None);
     }
 
     #[test]
     fn a_first_node_that_leaves_clears_the_tab_start() {
         let (mut tree, ids) = rooted_tree(2);
-        let mut focus = FocusModel::default();
-        focus.press_start(ids[0], 0, None);
         let removals = tree.removals(&[ids[0]]);
         tree.remove_child(0, ids[0]).unwrap();
 
-        apply_removals(&mut focus, &tree, &removals);
+        let state = settled(tree, &removals, |state| state.press_start(ids[0], 0, None));
 
-        assert_eq!(focus.start_node(), None);
+        assert_eq!(state.focus().start_node(), None);
     }
 
     #[test]
@@ -89,24 +91,41 @@ mod tests {
         let loose = tree.create_node("div").unwrap();
         let inner = tree.create_node("div").unwrap();
         tree.append_child(loose, inner).unwrap();
-        let mut focus = FocusModel::default();
-        focus.press_start(inner, 0, None);
         let removals = tree.removals(&[loose]);
 
-        apply_removals(&mut focus, &tree, &removals);
+        let state = settled(tree, &removals, |state| state.press_start(inner, 0, None));
 
-        assert_eq!(focus.start_node(), Some(inner));
+        assert_eq!(state.focus().start_node(), Some(inner));
     }
 
     #[test]
     fn a_removed_node_queues_a_focus_recheck() {
         let (tree, ids) = rooted_tree(1);
-        let mut focus = FocusModel::default();
         let removals = tree.removals(&[ids[0]]);
 
-        apply_removals(&mut focus, &tree, &removals);
+        let mut state = settled(tree, &removals, |_| {});
 
-        assert!(focus.take_tab_dirty().contains(&ids[0]));
+        assert!(state.take_tab_dirty().contains(&ids[0]));
+    }
+
+    #[test]
+    fn an_attached_node_that_leaves_drops_the_reveals_its_focus_asked_for() {
+        let (mut tree, ids) = rooted_tree(1);
+        let removals = tree.removals(&[ids[0]]);
+        tree.remove_child(0, ids[0]).unwrap();
+
+        let mut state = settled(tree, &removals, |state| {
+            state.reveals.queue(Reveal::focus(ids[0]));
+            state.queue_reveal(ids[0], Align::Start, Align::Start);
+        });
+
+        let origins: Vec<_> = state
+            .take_reveals()
+            .fresh
+            .iter()
+            .map(|r| r.origin)
+            .collect();
+        assert_eq!(origins, [RevealOrigin::Script]);
     }
 
     #[test]

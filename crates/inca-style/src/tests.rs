@@ -6,7 +6,7 @@
 #![allow(clippy::unwrap_used)]
 
 use crate::StyleCache;
-use crate::selector::{closest_selector, matches_selector};
+use crate::selector::{MatchFocus, closest_selector, matches_selector};
 use crate::set_style;
 use crate::spec::*;
 use inca_node::OverflowSpec;
@@ -76,11 +76,11 @@ impl Fixture {
     }
 
     pub(crate) fn matches(&self, node: NodeId, selector: &str) -> bool {
-        matches_selector(&self.tree, node, selector).unwrap()
+        matches_selector(&self.tree, node, selector, MatchFocus::Drawn).unwrap()
     }
 
     pub(crate) fn closest(&self, node: NodeId, selector: &str) -> Option<NodeId> {
-        closest_selector(&self.tree, node, selector).unwrap()
+        closest_selector(&self.tree, node, selector, MatchFocus::Drawn).unwrap()
     }
 }
 

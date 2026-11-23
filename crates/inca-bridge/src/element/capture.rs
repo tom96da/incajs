@@ -169,12 +169,12 @@ mod tests {
     use rstest::rstest;
 
     use super::Host;
-    use crate::test_support::{engine_with_bindings, error_name};
+    use crate::test_support::{engine_with_view, error_name};
 
     /// A mounted node, and the engine and host it lives in.
     fn mounted(held: u8) -> (inca_jsenv::Engine, Rc<Host>, u32) {
-        let (engine, host) = engine_with_bindings();
-        host.window.borrow_mut().set_held_buttons(held);
+        let (engine, host, view) = engine_with_view();
+        view.borrow_mut().held = held;
         let node: u32 = engine
             .eval(
                 r"

@@ -12,12 +12,8 @@ use crate::dispatch::EventDispatcher;
 impl EventDispatcher {
     pub(super) fn focused_enabled_button(&self, window: &Window, cx: &App) -> Option<NodeId> {
         let document = self.cells.document.borrow();
-        let focused = self
-            .cells
-            .window
-            .borrow()
-            .focus
-            .focused_node(&document.focus, window, cx);
+        let platform = self.cells.window.borrow().focus.focused_node(window, cx);
+        let focused = document.focus().held_node(platform);
         focused.filter(|id| {
             document
                 .tree
@@ -225,7 +221,7 @@ mod tests {
             let mut cells = s.cells.document.borrow_mut();
             cells.tree.set_attribute(button, "tabindex", "0").unwrap();
             cells.tree.append_child(s.parent, button).unwrap();
-            cells.focus.mark_tab_dirty(button);
+            cells.mark_tab_dirty(button);
         }
         s.watch(button);
         s.focus(cx, button);
@@ -455,7 +451,7 @@ mod tests {
                         .tree
                         .set_attribute(nodes[changed], attribute, value)
                         .unwrap();
-                    document.focus.mark_tab_dirty(nodes[changed]);
+                    document.mark_tab_dirty(nodes[changed]);
                 }));
             }
             false
@@ -654,7 +650,7 @@ mod tests {
             let inner = cells.tree.create_node("div").unwrap();
             cells.tree.set_attribute(inner, "tabindex", "-1").unwrap();
             cells.tree.append_child(s.first, inner).unwrap();
-            cells.focus.mark_tab_dirty(inner);
+            cells.mark_tab_dirty(inner);
             inner
         };
         s.focus(cx, inner);
@@ -670,10 +666,10 @@ mod tests {
         {
             let mut cells = s.cells.document.borrow_mut();
             cells.tree.set_attribute(s.parent, "tabindex", "0").unwrap();
-            cells.focus.mark_tab_dirty(s.parent);
+            cells.mark_tab_dirty(s.parent);
         }
         s.disable(s.first);
-        s.cells.document.borrow_mut().focus.mark_tab_dirty(s.first);
+        s.cells.document.borrow_mut().mark_tab_dirty(s.first);
         s.focus(cx, s.second);
         s.mouse_down(cx, s.first);
         assert_eq!(s.focused(cx), Some(s.parent));

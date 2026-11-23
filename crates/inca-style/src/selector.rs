@@ -16,3 +16,4 @@ use parse::{Atom, Impl, PseudoClass, PseudoElement, parse};
 pub use parse::{SelectorError, check_selector};
 pub(crate) use parse::{Selectors, StateFlags};
 pub use query::{query_selector, query_selector_all};
+pub use state::MatchFocus;

@@ -164,14 +164,15 @@ pub fn node_under_root(cells: &Rc<Cells>) -> NodeId {
     node
 }
 
-/// Whether `node` matches the state class `class`.
+/// Whether `node` matches the state class `class` in the drawn interaction state.
 ///
 /// # Panics
 ///
 /// Panics when the tree rejects a node.
 #[must_use]
 pub fn state(document: &DocumentState, node: NodeId, class: &str) -> bool {
-    inca_style::matches_selector(&document.tree, node, class).unwrap()
+    inca_style::matches_selector(&document.tree, node, class, inca_style::MatchFocus::Drawn)
+        .unwrap()
 }
 
 /// Appends a `<style>` element that holds `css` under the root.
@@ -218,12 +219,5 @@ pub fn apply_focus(
     window: &mut Window,
     cx: &mut gpui::App,
 ) -> Vec<inca_document::FocusTransition> {
-    let document = &mut *cells.document.borrow_mut();
-    cells.window.borrow_mut().focus.apply_pending(
-        &mut document.focus,
-        &document.tree,
-        &document.style,
-        window,
-        cx,
-    )
+    cells.apply_focus(window, cx)
 }

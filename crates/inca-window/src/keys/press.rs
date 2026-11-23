@@ -86,18 +86,7 @@ impl EventDispatcher {
         let plain = !(modifiers.control || modifiers.alt || modifiers.platform);
         let click = match (key, up) {
             ("tab", false) if plain => {
-                let moved = {
-                    let document = &mut *self.cells.document.borrow_mut();
-                    let root = document.document();
-                    self.cells.window.borrow_mut().focus.tab_move(
-                        &mut document.focus,
-                        (&document.tree, &document.style),
-                        root,
-                        window,
-                        cx,
-                        modifiers.shift,
-                    )
-                };
+                let moved = self.cells.tab_move(modifiers.shift, window, cx);
                 if let Some(node) = moved {
                     self.cells.reveal(node, Align::Reveal, Align::CenterOutside);
                     self.select_input(node);
@@ -368,11 +357,7 @@ mod tests {
         let (cells, button, field) = (s.cells.clone(), s.first, s.field);
         s.on_walk(move |walked| {
             if walked.name == "keydown" && walked.target_text() == field.to_string() {
-                cells
-                    .document
-                    .borrow_mut()
-                    .focus
-                    .request_focus(button, false);
+                cells.document.borrow_mut().request_focus(button, false);
             }
             false
         });

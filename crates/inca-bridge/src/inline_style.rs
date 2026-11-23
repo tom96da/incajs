@@ -94,7 +94,7 @@ fn finish(
         host.warn_style(node, line);
     }
     match property {
-        Some(name) => host.focus.mark_property_dirty(&host.tree, node, name),
+        Some(name) => host.mark_property_dirty(node, name),
         None => host.mark_focus_dirty(node),
     }
 }
@@ -162,7 +162,7 @@ fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> 
         if former.is_ok() {
             let mut doc = h.document.borrow_mut();
             let doc = &mut *doc;
-            doc.focus.mark_property_dirty(&doc.tree, node, &name);
+            doc.mark_property_dirty(node, &name);
         }
         Ok(former.unwrap_or_default())
     })?;
@@ -723,11 +723,11 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.document.borrow_mut().focus.take_tab_dirty();
+        host.document.borrow_mut().take_tab_dirty();
 
         engine.eval::<()>(write).unwrap();
 
-        let dirty = host.document.borrow_mut().focus.take_tab_dirty();
+        let dirty = host.document.borrow_mut().take_tab_dirty();
         assert_eq!(dirty.contains(&node), queued);
     }
 }

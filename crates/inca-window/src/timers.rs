@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use gpui::{AnyWindowHandle, App, FutureExt as _, Window};
 
-use crate::dispatch::{EventDispatcher, State, drain_jobs_and_refresh, observe_focus};
+use crate::dispatch::{EventDispatcher, State, drain_jobs_and_refresh};
 use crate::script::Script;
 use crate::view::Cells;
 
@@ -59,12 +59,17 @@ impl EventDispatcher {
                     None => {
                         let live = cx.update(|cx| {
                             window.update(cx, |_, window, cx| {
-                                let (Some(script), Some(cells)) =
-                                    (script.upgrade(), cells.upgrade())
+                                let (Some(script), Some(cells), Some(state)) =
+                                    (script.upgrade(), cells.upgrade(), state.upgrade())
                                 else {
                                     return;
                                 };
-                                fire_timers(&*script, &cells, window, cx);
+                                EventDispatcher {
+                                    script,
+                                    cells,
+                                    state,
+                                }
+                                .fire_timers(window, cx);
                             })
                         });
                         if live.is_err() {
@@ -79,8 +84,27 @@ impl EventDispatcher {
 
     /// Runs the frame callbacks the script requested, as the next frame of
     /// `window` does before it draws, and redraws when one ran.
-    pub fn run_frame_callbacks(&self, window: &mut Window, cx: &App) {
-        run_frame_callbacks(&*self.script, &self.cells, &self.state, window, cx);
+    pub fn run_frame_callbacks(&self, window: &mut Window, cx: &mut App) {
+        self.state.frame_requested.set(false);
+        self.turn(window, cx, |window, _| {
+            if self.script.run_frames() == 0 {
+                return;
+            }
+            drain_jobs_and_refresh(&*self.script, window);
+            self.script.report_pending();
+        });
+    }
+
+    /// One turn: the due callbacks, then the redraw and the failures they caused.
+    /// A turn with no due callback changes nothing.
+    fn fire_timers(&self, window: &mut Window, cx: &mut App) {
+        self.turn(window, cx, |window, _| {
+            if self.script.run_timers() == 0 {
+                return;
+            }
+            drain_jobs_and_refresh(&*self.script, window);
+            self.script.report_pending();
+        });
     }
 
     /// Ends the task [`start_timers`](Self::start_timers) started, so no timer
@@ -122,37 +146,13 @@ fn request_frame(
         else {
             return;
         };
-        run_frame_callbacks(&*script, &cells, &state, window, cx);
+        EventDispatcher {
+            script,
+            cells,
+            state,
+        }
+        .run_frame_callbacks(window, cx);
     });
-}
-
-/// One frame: the callbacks pending now, then the redraw and the failures they caused. A frame
-/// with no pending callback changes nothing.
-fn run_frame_callbacks(
-    script: &dyn Script,
-    cells: &Cells,
-    state: &State,
-    window: &mut Window,
-    cx: &App,
-) {
-    state.frame_requested.set(false);
-    observe_focus(cells, window, cx);
-    if script.run_frames() == 0 {
-        return;
-    }
-    drain_jobs_and_refresh(script, window);
-    script.report_pending();
-}
-
-/// One turn: the due callbacks, then the redraw and the failures they caused.
-/// A turn with no due callback changes nothing.
-fn fire_timers(script: &dyn Script, cells: &Cells, window: &mut Window, cx: &App) {
-    observe_focus(cells, window, cx);
-    if script.run_timers() == 0 {
-        return;
-    }
-    drain_jobs_and_refresh(script, window);
-    script.report_pending();
 }
 
 #[cfg(test)]

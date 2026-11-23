@@ -9,7 +9,7 @@ use selectors::context::SelectorCaches;
 use selectors::matching::matches_selector_list;
 
 use super::matching::{Node, matching_context};
-use super::{SelectorError, parse};
+use super::{MatchFocus, SelectorError, parse};
 
 /// The descendants of `start`, an element, a fragment or the document, that match `selector`, in
 /// document order. The walk stops at the first match when `first_only` is set.
@@ -18,6 +18,7 @@ fn search(
     start: NodeId,
     selector: &str,
     first_only: bool,
+    focus: MatchFocus,
 ) -> Result<Vec<NodeId>, SelectorError> {
     let (list, _) = parse(selector)?;
     let mut found = Vec::new();
@@ -29,7 +30,7 @@ fn search(
     };
     let scope = Node::of(tree, start.id()).map(|element| element.opaque());
     let mut caches = SelectorCaches::default();
-    let mut context = matching_context(&mut caches, scope);
+    let mut context = matching_context(&mut caches, scope, focus);
     let mut pending: Vec<NodeId> = start.children().iter().rev().copied().collect();
     while let Some(id) = pending.pop() {
         let Some(element) = Node::of(tree, id) else {
@@ -46,7 +47,8 @@ fn search(
     Ok(found)
 }
 
-/// The first descendant of `node` that matches `selector` in document order. `:scope` and a
+/// The first descendant of `node` that matches `selector` in document order, with `focus` for
+/// `:focus` and `:focus-within`. `:scope` and a
 /// top-level `&` are `node` when it is an element. From the document they select its element, and
 /// from a fragment they select no element, so a selector that starts with `:scope` finds nothing
 /// there. A node that is no element, fragment or document, such as a text leaf or a comment,
@@ -59,8 +61,9 @@ pub fn query_selector(
     tree: &VirtualTree,
     node: NodeId,
     selector: &str,
+    focus: MatchFocus,
 ) -> Result<Option<NodeId>, SelectorError> {
-    Ok(search(tree, node, selector, true)?.first().copied())
+    Ok(search(tree, node, selector, true, focus)?.first().copied())
 }
 
 /// Every descendant of `node` that matches `selector`, each once, in document order. The other
@@ -73,8 +76,9 @@ pub fn query_selector_all(
     tree: &VirtualTree,
     node: NodeId,
     selector: &str,
+    focus: MatchFocus,
 ) -> Result<Vec<NodeId>, SelectorError> {
-    search(tree, node, selector, false)
+    search(tree, node, selector, false, focus)
 }
 
 #[cfg(test)]
@@ -102,7 +106,7 @@ mod tests {
         let (f, [a, a1, a2, b]) = forest();
 
         assert_eq!(
-            query_selector_all(&f.tree, f.root, "*").unwrap(),
+            query_selector_all(&f.tree, f.root, "*", MatchFocus::Drawn).unwrap(),
             [a, a1, a2, b]
         );
     }
@@ -112,7 +116,7 @@ mod tests {
         let p = page();
 
         assert_eq!(
-            query_selector_all(&p.f.tree, p.f.root, "span, p, #p1").unwrap(),
+            query_selector_all(&p.f.tree, p.f.root, "span, p, #p1", MatchFocus::Drawn).unwrap(),
             [p.p1, p.p2, p.p3]
         );
     }
@@ -122,7 +126,7 @@ mod tests {
         let p = page();
 
         assert_eq!(
-            query_selector(&p.f.tree, p.f.root, "p").unwrap(),
+            query_selector(&p.f.tree, p.f.root, "p", MatchFocus::Drawn).unwrap(),
             Some(p.p1)
         );
     }
@@ -132,7 +136,7 @@ mod tests {
         let p = page();
 
         assert_eq!(
-            query_selector(&p.f.tree, p.f.root, "article").unwrap(),
+            query_selector(&p.f.tree, p.f.root, "article", MatchFocus::Drawn).unwrap(),
             None
         );
     }
@@ -142,7 +146,7 @@ mod tests {
         let p = page();
 
         assert_eq!(
-            query_selector_all(&p.f.tree, p.main, "section, p").unwrap(),
+            query_selector_all(&p.f.tree, p.main, "section, p", MatchFocus::Drawn).unwrap(),
             [p.p1, p.p3]
         );
     }
@@ -157,7 +161,7 @@ mod tests {
         let p = page();
 
         assert_eq!(
-            query_selector_all(&p.f.tree, p.main, selector).unwrap(),
+            query_selector_all(&p.f.tree, p.main, selector, MatchFocus::Drawn).unwrap(),
             expected.iter().map(|name| p.node(name)).collect::<Vec<_>>()
         );
     }
@@ -167,7 +171,7 @@ mod tests {
         let p = page();
 
         assert_eq!(
-            query_selector_all(&p.f.tree, p.main, "div p").unwrap(),
+            query_selector_all(&p.f.tree, p.main, "div p", MatchFocus::Drawn).unwrap(),
             [p.p1, p.p3]
         );
     }
@@ -177,7 +181,7 @@ mod tests {
         let m = mixed();
 
         assert_eq!(
-            query_selector_all(&m.f.tree, m.parent, "*").unwrap(),
+            query_selector_all(&m.f.tree, m.parent, "*", MatchFocus::Drawn).unwrap(),
             [m.a, m.b]
         );
     }
@@ -190,11 +194,14 @@ mod tests {
         let m = mixed();
 
         assert!(
-            query_selector_all(&m.f.tree, start, "*")
+            query_selector_all(&m.f.tree, start, "*", MatchFocus::Drawn)
                 .unwrap()
                 .is_empty()
         );
-        assert_eq!(query_selector(&m.f.tree, start, "*").unwrap(), None);
+        assert_eq!(
+            query_selector(&m.f.tree, start, "*", MatchFocus::Drawn).unwrap(),
+            None
+        );
     }
 
     /// A fragment holding `div#outer > p#inner`.
@@ -211,7 +218,7 @@ mod tests {
         let (f, fragment, [outer, _]) = fragment_with_div();
 
         assert_eq!(
-            query_selector_all(&f.tree, fragment, "div").unwrap(),
+            query_selector_all(&f.tree, fragment, "div", MatchFocus::Drawn).unwrap(),
             [outer]
         );
     }
@@ -220,14 +227,20 @@ mod tests {
     fn a_fragment_start_finds_a_nested_descendant() {
         let (f, fragment, [_, inner]) = fragment_with_div();
 
-        assert_eq!(query_selector_all(&f.tree, fragment, "p").unwrap(), [inner]);
+        assert_eq!(
+            query_selector_all(&f.tree, fragment, "p", MatchFocus::Drawn).unwrap(),
+            [inner]
+        );
     }
 
     #[test]
     fn a_fragment_start_stops_at_the_first_match_when_first_only_is_set() {
         let (f, fragment, [outer, _]) = fragment_with_div();
 
-        assert_eq!(search(&f.tree, fragment, "div, p", true).unwrap(), [outer]);
+        assert_eq!(
+            search(&f.tree, fragment, "div, p", true, MatchFocus::Drawn).unwrap(),
+            [outer]
+        );
     }
 
     #[test]
@@ -237,7 +250,10 @@ mod tests {
         let child = tree.create_node("p").unwrap();
         tree.append_child(top, child).unwrap();
 
-        assert_eq!(query_selector_all(&tree, top, "p").unwrap(), [child]);
+        assert_eq!(
+            query_selector_all(&tree, top, "p", MatchFocus::Drawn).unwrap(),
+            [child]
+        );
     }
 
     #[test]
@@ -250,7 +266,12 @@ mod tests {
             top = parent;
         }
 
-        assert_eq!(query_selector_all(&tree, top, "*").unwrap().len(), 99_999);
+        assert_eq!(
+            query_selector_all(&tree, top, "*", MatchFocus::Drawn)
+                .unwrap()
+                .len(),
+            99_999
+        );
     }
 
     #[rstest]
@@ -267,7 +288,7 @@ mod tests {
         let named = [("root", f.root), ("first", first), ("second", second)];
 
         assert_eq!(
-            query_selector_all(&f.tree, document, selector).unwrap(),
+            query_selector_all(&f.tree, document, selector, MatchFocus::Drawn).unwrap(),
             expected
                 .iter()
                 .map(|name| named.iter().find(|(n, _)| n == name).unwrap().1)
@@ -283,7 +304,13 @@ mod tests {
         let inner = node(&mut f.tree, "span");
         f.tree.append_child(content, inner).unwrap();
 
-        assert_eq!(query_selector(&f.tree, f.root, "span").unwrap(), None);
-        assert_eq!(query_selector(&f.tree, template, "span").unwrap(), None);
+        assert_eq!(
+            query_selector(&f.tree, f.root, "span", MatchFocus::Drawn).unwrap(),
+            None
+        );
+        assert_eq!(
+            query_selector(&f.tree, template, "span", MatchFocus::Drawn).unwrap(),
+            None
+        );
     }
 }

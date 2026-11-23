@@ -55,8 +55,8 @@ fn tree(cells: &Cells, value: &str) -> [NodeId; 3] {
     h.tree.append_child(parent, button).unwrap();
     set_style(&mut h.tree, input, "width", 100.0).unwrap();
     set_style(&mut h.tree, input, "text_size", 10.0).unwrap();
-    h.focus.mark_tab_dirty(input);
-    h.focus.mark_tab_dirty(button);
+    h.mark_tab_dirty(input);
+    h.mark_tab_dirty(button);
     h.inputs
         .get_mut()
         .entry(input)
@@ -131,11 +131,7 @@ impl InputScene {
     }
 
     pub(crate) fn focus(&self, cx: &mut TestAppContext, node: NodeId) {
-        self.cells
-            .document
-            .borrow_mut()
-            .focus
-            .request_focus(node, false);
+        self.cells.document.borrow_mut().request_focus(node, false);
         self.draw(cx);
         cx.run_until_parked();
     }

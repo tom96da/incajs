@@ -334,7 +334,7 @@ fn focused_pair(cx: &mut TestAppContext, js: &str) -> Pair {
     listen_for_keys(&engine, [parent, child], js, false);
     let window = wiring::mount_active(cx, &host, &engine, parent);
     cx.update_window(window.into(), |_root, window, cx| {
-        host.document.borrow_mut().focus.request_focus(child, true);
+        host.document.borrow_mut().request_focus(child, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();

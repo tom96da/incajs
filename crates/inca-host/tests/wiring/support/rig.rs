@@ -236,7 +236,7 @@ pub fn focusable_tree(children: usize, parent_focusable: bool) -> (Rig, NodeId, 
         .chain(nodes.iter().copied());
     for node in focusable {
         document.tree.set_attribute(node, "tabindex", "0").unwrap();
-        document.focus.mark_tab_dirty(node);
+        document.mark_tab_dirty(node);
     }
     drop(document);
     (rig.clone(), parent, nodes)

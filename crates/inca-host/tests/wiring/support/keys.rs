@@ -71,7 +71,7 @@ fn key_tree(cells: &Cells, value: Option<&str>) -> [NodeId; 5] {
         None => h.tree.set_attribute(field, "tabindex", "0").unwrap(),
     }
     for node in [first, second, field] {
-        h.focus.mark_tab_dirty(node);
+        h.mark_tab_dirty(node);
     }
     [parent, first, second, field, plain]
 }
@@ -135,11 +135,7 @@ fn js_scene_of(cx: &mut TestAppContext, value: Option<&str>) -> KeyScene {
 
 impl KeyScene {
     pub fn focus(&self, cx: &mut TestAppContext, node: NodeId) {
-        self.cells
-            .document
-            .borrow_mut()
-            .focus
-            .request_focus(node, false);
+        self.cells.document.borrow_mut().request_focus(node, false);
         self.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
         cx.run_until_parked();
     }
@@ -238,7 +234,7 @@ impl KeyScene {
             .tree
             .insert_before(self.parent, node, Some(self.field))
             .unwrap();
-        document.focus.mark_tab_dirty(node);
+        document.mark_tab_dirty(node);
         node
     }
 }

@@ -8,7 +8,7 @@ use inca_document::flags_of;
 use inca_document::{EventPayload, MousePayload, PointerSource};
 use inca_node::{NodeId, is_disabled_control};
 
-use crate::dispatch::{EventDispatcher, observe_focus};
+use crate::dispatch::EventDispatcher;
 use inca_document::EventTargetId;
 use inca_document::Walk;
 
@@ -110,14 +110,15 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        observe_focus(&self.cells, window, cx);
-        let payload = &self.prepare(event, start, payload, window);
-        let cut = self.cut_by_disabled_control(event, payload, cx);
-        let (canceled, entered) = self.walk(EventTargetId::Node(start), event, payload, &cut);
-        if entered {
-            self.drain_observed(window);
-        }
-        canceled
+        self.turn(window, cx, |window, cx| {
+            let payload = &self.prepare(event, start, payload, window);
+            let cut = self.cut_by_disabled_control(event, payload, cx);
+            let (canceled, entered) = self.walk(EventTargetId::Node(start), event, payload, &cut);
+            if entered {
+                self.drain_observed(window);
+            }
+            canceled
+        })
     }
 
     /// `payload` with `offsetX`/`offsetY` measured from the padding edge of
@@ -243,11 +244,9 @@ impl EventDispatcher {
                     .copied()
                     .find(|&id| handles.handle(id).is_some())
             };
-            let focused = handles.focused_node(&document.focus, window, cx);
+            let focused = document.focus().held_node(handles.focused_node(window, cx));
             let top = document.top();
-            document
-                .focus
-                .press_start(target, top, focusing.filter(|&node| Some(node) != focused));
+            document.press_start(target, top, focusing.filter(|&node| Some(node) != focused));
             focusing.and_then(|node| handles.handle(node))
         };
         if prevented {
@@ -262,12 +261,8 @@ impl EventDispatcher {
     pub(super) fn key_target(&self, window: &mut Window, cx: &mut App) -> NodeId {
         let (top, focused) = {
             let document = self.cells.document.borrow();
-            let focused =
-                self.cells
-                    .window
-                    .borrow()
-                    .focus
-                    .focused_node(&document.focus, window, cx);
+            let platform = self.cells.window.borrow().focus.focused_node(window, cx);
+            let focused = document.focus().held_node(platform);
             (document.top(), focused)
         };
         self.resolve(focused, top)
@@ -321,7 +316,7 @@ mod tests {
             .tree
             .set_attribute(node, "tabindex", "0")
             .unwrap();
-        cells.document.borrow_mut().focus.mark_tab_dirty(node);
+        cells.document.borrow_mut().mark_tab_dirty(node);
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
             let _ = crate::tests::apply_focus(&cells, window, cx);

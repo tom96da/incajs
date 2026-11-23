@@ -111,7 +111,7 @@ fn insert_adjacent_html<'js>(
 fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<Host>, roots: &[NodeId]) {
     let focused = {
         let host = host.document.borrow();
-        host.focus
+        host.focus()
             .visual_focus(&host.tree, &host.style)
             .filter(|&focused| {
                 host.tree
@@ -588,7 +588,7 @@ mod tests {
     fn nothing_fires_in_an_inactive_window() {
         let (engine, host) = engine();
         engine.eval::<()>(FOCUSED).unwrap();
-        host.document.borrow_mut().focus.set_window_blurred(true);
+        host.document.borrow_mut().set_window_blurred(true);
 
         let got = eval(&engine, "n.setInnerHtml(host, ''); return out;");
 

@@ -323,8 +323,7 @@ pub fn capture_reporter() -> (ErrorReporter, Reported) {
     )
 }
 
-/// A window that draws nothing. It keeps the boxes and the scroll positions a test sets, and the
-/// reveals the natives queue.
+/// A window that draws nothing. It keeps the boxes and the scroll positions a test sets.
 #[derive(Default)]
 pub struct TestView {
     /// The box of each node the last frame drew.
@@ -333,9 +332,8 @@ pub struct TestView {
     pub offsets: RefCell<HashMap<NodeId, (f32, f32)>>,
     /// The largest offset of each container, as `(left, top)`. A container without one has `0`.
     pub max: HashMap<NodeId, (f32, f32)>,
-    /// The reveals queued for the next frame.
-    pub queued: Vec<(NodeId, Align, Align)>,
-    held: u8,
+    /// The mouse buttons held, as the `buttons` bitmask of the events.
+    pub held: u8,
 }
 
 impl View for TestView {
@@ -376,16 +374,8 @@ impl View for TestView {
         self.boxes.contains_key(&node)
     }
 
-    fn queue_reveal(&mut self, node: NodeId, block: Align, inline: Align) {
-        self.queued.push((node, block, inline));
-    }
-
     fn held_buttons(&self) -> u8 {
         self.held
-    }
-
-    fn set_held_buttons(&mut self, held: u8) {
-        self.held = held;
     }
 
     fn reset_scroll(&self, tree: &VirtualTree, id: NodeId) {
@@ -406,7 +396,6 @@ impl View for TestView {
             self.boxes.remove(id);
             self.offsets.get_mut().remove(id);
             self.max.remove(id);
-            self.queued.retain(|&(node, ..)| node != *id);
         }
     }
 }

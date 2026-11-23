@@ -1,12 +1,37 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Queued focus and blur requests, and the frame that applies them.
+//! Queued focus and blur requests, and the plan of the frame that applies them.
 
 use inca_node::{NodeId, VirtualTree};
 use inca_style::StyleCache;
 
-use super::{FocusModel, FocusSurface, FocusTransition, PendingFocus, Start};
+use super::{FocusModel, FocusPlan, FocusReveal, FocusStep, FocusTransition, PendingFocus, Start};
+
+/// A plan being built, with the platform focus it leaves after each step.
+struct Draft {
+    plan: FocusPlan,
+    platform: Option<NodeId>,
+}
+
+impl Draft {
+    fn focus(&mut self, node: NodeId) {
+        self.plan.steps.push(FocusStep::Focus(node));
+        self.platform = Some(node);
+    }
+
+    fn blur(&mut self) {
+        self.plan.steps.push(FocusStep::Blur);
+        self.platform = None;
+    }
+
+    /// Blurs when the platform focus rests on `node`.
+    fn blur_if(&mut self, node: NodeId) {
+        if self.platform == Some(node) {
+            self.blur();
+        }
+    }
+}
 
 impl FocusModel {
     /// Queues that `node_id` should be focused next frame. With `scroll`,
@@ -24,63 +49,45 @@ impl FocusModel {
         self.pending.push_back(PendingFocus::Blur(node_id));
     }
 
-    /// Applies every queued request in order and reports each transition
-    /// it produced. Call once per frame, before the element tree that
-    /// needs the resulting handles is built.
+    /// Applies every queued request in order to the model, starting from the platform focus last
+    /// observed, and returns what the window does and the transitions it reports. Call once per
+    /// frame, after [`Self::observe_node`] and before the element tree that needs the resulting
+    /// handles is built.
     ///
-    /// The transitions are returned and not dispatched here, so the caller
-    /// fires them after releasing its borrow of `self`. A listener that
-    /// re-borrows the same `RefCell` while firing would otherwise
-    /// panic with "already mutably borrowed".
-    #[must_use]
-    pub fn apply_pending(
-        &mut self,
-        tree: &VirtualTree,
-        cache: &StyleCache,
-        surface: &mut impl FocusSurface,
-    ) -> Vec<FocusTransition> {
-        let transitions = self.apply_requests(tree, cache, surface);
-        surface.park();
-        transitions
-    }
-
-    fn apply_requests(
-        &mut self,
-        tree: &VirtualTree,
-        cache: &StyleCache,
-        surface: &mut impl FocusSurface,
-    ) -> Vec<FocusTransition> {
-        let mut transitions = Vec::new();
-        if let Some(owed) = self.blur_owed.take()
-            && surface.focused() == Some(owed)
-        {
-            surface.blur();
+    /// The plan records the platform focus each step leaves: a focus of a node that takes focus
+    /// moves it there, and a blur releases it. The window applies the steps in the same order.
+    pub fn plan_frame(&mut self, tree: &VirtualTree, cache: &StyleCache) -> FocusPlan {
+        let mut draft = Draft {
+            plan: FocusPlan {
+                park: true,
+                ..FocusPlan::default()
+            },
+            platform: self.observed,
+        };
+        if let Some(owed) = self.blur_owed.take() {
+            draft.blur_if(owed);
         }
         for node_id in std::mem::take(&mut self.tab_dirty) {
             match Self::tab_index_of(tree, cache, node_id) {
                 Some(_) => {
                     self.tracked.insert(node_id);
-                    surface.track(node_id);
+                    draft.plan.gained.push(node_id);
                 }
                 None if !tree.is_connected(node_id) => {
                     // A node that left the tree loses focus without events.
-                    if surface.focused() == Some(node_id) {
-                        surface.blur();
-                    }
+                    draft.blur_if(node_id);
                     self.forget(node_id);
-                    surface.untrack(node_id);
+                    draft.plan.lost.push(node_id);
                 }
                 None => {
                     if self.tracked.contains(&node_id) {
                         // Report a click focus first, then the blur, so the
                         // caller sees both. `forget` would skip the blur.
-                        transitions.extend(self.sync(surface));
-                        if surface.focused() == Some(node_id) {
-                            surface.blur();
-                        }
+                        self.sync(&mut draft);
+                        draft.blur_if(node_id);
                         self.tracked.remove(&node_id);
-                        surface.untrack(node_id);
-                        transitions.extend(self.sync(surface));
+                        draft.plan.lost.push(node_id);
+                        self.sync(&mut draft);
                     }
                 }
             }
@@ -90,47 +97,23 @@ impl FocusModel {
             // Nothing queued this frame doesn't mean focus didn't move:
             // the window's own click-to-focus moves it without ever going
             // through `request_focus`.
-            transitions.extend(self.sync(surface));
-            return transitions;
+            self.sync(&mut draft);
+            return draft.plan;
         }
         for request in pending {
             match request {
                 PendingFocus::Focus { node, scroll } => {
-                    // Only a node with a handle takes focus.
+                    // Only a node that takes focus gets it.
                     if self.tracked.contains(&node) {
-                        surface.focus(node);
-                        // The last focus decides what scrolls.
-                        self.reveal.clear();
-                        self.retry.clear();
-                        if scroll {
-                            self.reveal.push(node);
-                        }
+                        draft.focus(node);
+                        draft.plan.reveal = FocusReveal::Replace(scroll.then_some(node));
                     }
                 }
-                PendingFocus::Blur(node_id) => {
-                    if surface.focused() == Some(node_id) {
-                        surface.blur();
-                    }
-                }
+                PendingFocus::Blur(node_id) => draft.blur_if(node_id),
             }
-            transitions.extend(self.sync(surface));
+            self.sync(&mut draft);
         }
-        transitions
-    }
-
-    /// Hands over the focused nodes to scroll into view this frame:
-    /// `(retries, fresh)`. A retry is a node whose box the previous frame
-    /// lacked.
-    pub fn take_reveals(&mut self) -> (Vec<NodeId>, Vec<NodeId>) {
-        (
-            std::mem::take(&mut self.retry),
-            std::mem::take(&mut self.reveal),
-        )
-    }
-
-    /// Keeps `node_id` for one more frame.
-    pub fn retry_reveal(&mut self, node_id: NodeId) {
-        self.retry.push(node_id);
+        draft.plan
     }
 
     /// Reports a transition if which node is focused changed since the
@@ -138,11 +121,11 @@ impl FocusModel {
     /// only one made through [`Self::request_focus`]. A node that takes focus
     /// becomes where Tab starts, except the one the last press focused (see
     /// [`Self::press_start`]).
-    fn sync(&mut self, surface: &impl FocusSurface) -> Option<FocusTransition> {
-        let focused_now = surface.focused();
+    fn sync(&mut self, draft: &mut Draft) {
+        let focused_now = draft.platform;
         self.observed = focused_now;
         if focused_now == self.focused {
-            return None;
+            return;
         }
         let blurred = self.focused;
         self.focused = focused_now;
@@ -161,12 +144,12 @@ impl FocusModel {
         // An inactive window holds the events. Its deactivation already
         // blurred the old node and its activation focuses the new one.
         if self.window_blurred || (blurred.is_none() && focused_now.is_none()) {
-            return None;
+            return;
         }
-        Some(FocusTransition {
+        draft.plan.transitions.push(FocusTransition {
             blurred,
             focused: focused_now,
-        })
+        });
     }
 }
 
@@ -175,25 +158,24 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::tests::{FakeSurface, rooted_tree};
+    use crate::tests::{FakeWindow, apply_frame, rooted_tree};
     use std::collections::HashSet;
 
     fn applied(
         model: &mut FocusModel,
         tree: &VirtualTree,
-        surface: &mut FakeSurface,
+        surface: &mut FakeWindow,
     ) -> Vec<(Option<NodeId>, Option<NodeId>)> {
-        model
-            .apply_pending(tree, &StyleCache::new(), surface)
+        apply_frame(model, tree, surface)
             .iter()
             .map(|t| (t.blurred(), t.focused()))
             .collect()
     }
 
-    fn tracked_pair() -> (VirtualTree, [NodeId; 2], FocusModel, FakeSurface) {
+    fn tracked_pair() -> (VirtualTree, [NodeId; 2], FocusModel, FakeWindow) {
         let (tree, ids) = rooted_tree(2);
         let mut model = FocusModel::default();
-        let mut surface = FakeSurface::default();
+        let mut surface = FakeWindow::default();
         model.mark_tab_dirty(ids[0]);
         model.mark_tab_dirty(ids[1]);
         assert!(applied(&mut model, &tree, &mut surface).is_empty());
@@ -205,6 +187,21 @@ mod tests {
         let (_tree, [first, second], _model, surface) = tracked_pair();
 
         assert_eq!(surface.handles, HashSet::from([first, second]));
+    }
+
+    #[test]
+    fn a_node_that_gains_its_tab_index_is_focused_in_the_same_apply() {
+        let (tree, ids) = rooted_tree(1);
+        let mut model = FocusModel::default();
+        let mut surface = FakeWindow::default();
+        model.mark_tab_dirty(ids[0]);
+        model.request_focus(ids[0], false);
+
+        assert_eq!(
+            applied(&mut model, &tree, &mut surface),
+            [(None, Some(ids[0]))]
+        );
+        assert_eq!(surface.focus, Some(ids[0]));
     }
 
     #[test]
@@ -234,7 +231,7 @@ mod tests {
 
         assert!(applied(&mut model, &tree, &mut surface).is_empty());
         assert_eq!(surface.focus, None);
-        assert_eq!(model.take_reveals(), (vec![], vec![]));
+        assert_eq!(surface.take_reveals(), (vec![], vec![]));
     }
 
     #[test]
@@ -256,7 +253,7 @@ mod tests {
         model.request_focus(second, false);
         let _ = applied(&mut model, &tree, &mut surface);
 
-        assert_eq!(model.take_reveals(), (vec![], vec![]));
+        assert_eq!(surface.take_reveals(), (vec![], vec![]));
     }
 
     #[test]
@@ -265,16 +262,8 @@ mod tests {
         model.request_focus(first, true);
         let _ = applied(&mut model, &tree, &mut surface);
 
-        assert_eq!(model.take_reveals(), (vec![], vec![first]));
-        assert_eq!(model.take_reveals(), (vec![], vec![]));
-    }
-
-    #[test]
-    fn a_reveal_retry_comes_back_as_a_retry() {
-        let mut model = FocusModel::default();
-        model.retry_reveal(4);
-
-        assert_eq!(model.take_reveals(), (vec![4], vec![]));
+        assert_eq!(surface.take_reveals(), (vec![], vec![first]));
+        assert_eq!(surface.take_reveals(), (vec![], vec![]));
     }
 
     #[test]

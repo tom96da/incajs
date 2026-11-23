@@ -58,7 +58,7 @@ fn focus_node_dispatches_focus_next_frame(cx: &mut TestAppContext) {
     );
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.document.borrow_mut().focus.request_focus(a, true);
+        host.document.borrow_mut().request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -81,7 +81,7 @@ fn blur_node_with_nothing_focused_reports_nothing(cx: &mut TestAppContext) {
     let window = wiring::mount_active(cx, &host, &engine, parent);
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.document.borrow_mut().focus.request_blur(a);
+        host.document.borrow_mut().request_blur(a);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -106,7 +106,7 @@ fn destroying_a_focused_node_reports_no_blur(cx: &mut TestAppContext) {
     let window = wiring::mount_active(cx, &host, &engine, parent);
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.document.borrow_mut().focus.request_focus(a, true);
+        host.document.borrow_mut().request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -142,8 +142,8 @@ fn two_focus_node_calls_before_the_next_frame_both_take_effect(cx: &mut TestAppC
     let window = wiring::mount_active(cx, &host, &engine, parent);
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.document.borrow_mut().focus.request_focus(a, true);
-        host.document.borrow_mut().focus.request_focus(b, true);
+        host.document.borrow_mut().request_focus(a, true);
+        host.document.borrow_mut().request_focus(b, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -202,7 +202,7 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(
     install_focus_recorder(&engine, &host, parent);
     let window = wiring::mount_active(cx, &host, &engine, parent);
     cx.update_window(window.into(), |_root, window, cx| {
-        host.document.borrow_mut().focus.request_focus(a, true);
+        host.document.borrow_mut().request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -210,7 +210,7 @@ fn blur_node_of_a_node_that_is_not_focused_is_a_no_op(
     engine.eval::<()>("globalThis.seen = [];").unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.document.borrow_mut().focus.request_blur(other_id);
+        host.document.borrow_mut().request_blur(other_id);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -250,7 +250,7 @@ fn each_focus_transition_gets_its_own_event_id(cx: &mut TestAppContext) {
     for targets in [vec![a, b], vec![a]] {
         cx.update_window(window.into(), |_root, window, cx| {
             for target in targets {
-                host.document.borrow_mut().focus.request_focus(target, true);
+                host.document.borrow_mut().request_focus(target, true);
             }
             window.draw(cx).clear(cx);
         })
@@ -347,11 +347,11 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
         cx.update_window(window.into(), |_root, window, cx| {
             let mut host = host.document.borrow_mut();
             match step {
-                Step::Focus(i) => host.focus.request_focus(nodes[i], true),
-                Step::Blur(i) => host.focus.request_blur(nodes[i]),
+                Step::Focus(i) => host.request_focus(nodes[i], true),
+                Step::Blur(i) => host.request_blur(nodes[i]),
                 Step::RemoveTabindex(i) => {
                     host.tree.remove_attribute(nodes[i], "tabindex").unwrap();
-                    host.focus.mark_tab_dirty(nodes[i]);
+                    host.mark_tab_dirty(nodes[i]);
                 }
             }
             drop(host);
@@ -386,7 +386,7 @@ fn an_ancestor_becoming_display_none_blurs_the_focused_node(cx: &mut TestAppCont
     }
     let window = wiring::mount_active(cx, &host, &engine, parent);
     cx.update_window(window.into(), |_, window, cx| {
-        host.document.borrow_mut().focus.request_focus(a, true);
+        host.document.borrow_mut().request_focus(a, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();
@@ -454,7 +454,7 @@ fn focus_then_run(
     );
     let window = wiring::mount_active(cx, &host, &engine, parent);
     cx.update_window(window.into(), |_root, window, cx| {
-        host.document.borrow_mut().focus.request_focus(leaf, true);
+        host.document.borrow_mut().request_focus(leaf, true);
         window.draw(cx).clear(cx);
     })
     .unwrap();

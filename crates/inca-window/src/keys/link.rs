@@ -12,11 +12,10 @@ impl EventDispatcher {
     /// The focused node when it is a link. A link has no disabled state.
     pub(crate) fn focused_link(&self, window: &Window, cx: &App) -> Option<NodeId> {
         let document = self.cells.document.borrow();
-        self.cells
-            .window
-            .borrow()
-            .focus
-            .focused_node(&document.focus, window, cx)
+        let platform = self.cells.window.borrow().focus.focused_node(window, cx);
+        document
+            .focus()
+            .held_node(platform)
             .filter(|id| document.tree.get(*id).is_some_and(VirtualNode::is_link))
     }
 }
@@ -51,7 +50,7 @@ mod tests {
                 .tree
                 .insert_before(self.parent, node, Some(self.field))
                 .unwrap();
-            document.focus.mark_tab_dirty(node);
+            document.mark_tab_dirty(node);
             node
         }
 

@@ -7,7 +7,8 @@
 
 use crate::geometry::Align;
 use crate::{
-    FocusSurface, InputState, NodeBox, ScrollRange, StyleWarnings, View, new_document_tree,
+    FocusModel, FocusPlan, FocusStep, FocusTransition, InputState, NodeBox, Reveal, RevealQueue,
+    ScrollRange, StyleWarnings, View, new_document_tree,
 };
 use inca_node::tree::{AttributeValue, NodeId, VirtualTree};
 use inca_style::StyleCache;
@@ -44,40 +45,59 @@ pub(crate) fn tree_with(tag: &str, tabindex: Option<AttributeValue>) -> (Virtual
     (tree, id)
 }
 
-/// A window side that records what the focus model asks of it.
+/// A window that applies focus plans as the real one does, with no platform behind it: a node
+/// panics on a focus step that names a node with no handle, and a park only counts.
 #[derive(Default)]
-pub(crate) struct FakeSurface {
+pub(crate) struct FakeWindow {
     pub(crate) handles: HashSet<NodeId>,
     pub(crate) focus: Option<NodeId>,
     pub(crate) parks: usize,
+    pub(crate) reveals: RevealQueue,
 }
 
-impl FocusSurface for FakeSurface {
-    fn focused(&self) -> Option<NodeId> {
-        self.focus
-    }
-
-    fn track(&mut self, node: NodeId) {
-        self.handles.insert(node);
-    }
-
-    fn untrack(&mut self, node: NodeId) {
-        self.handles.remove(&node);
-    }
-
-    fn focus(&mut self, node: NodeId) {
-        if self.handles.contains(&node) {
-            self.focus = Some(node);
+impl FakeWindow {
+    pub(crate) fn apply(&mut self, plan: &FocusPlan) {
+        self.handles.extend(plan.gained.iter().copied());
+        for step in &plan.steps {
+            match *step {
+                FocusStep::Focus(node) => {
+                    assert!(
+                        self.handles.contains(&node),
+                        "the focus plan names {node}, which has no handle"
+                    );
+                    self.focus = Some(node);
+                }
+                FocusStep::Blur => self.focus = None,
+            }
         }
+        for node in &plan.lost {
+            self.handles.remove(node);
+        }
+        if plan.park {
+            self.parks += 1;
+        }
+        self.reveals.follow_plan(plan);
     }
 
-    fn blur(&mut self) {
-        self.focus = None;
+    /// The nodes of the reveals a focus queued: `(retries, fresh)`.
+    pub(crate) fn take_reveals(&mut self) -> (Vec<NodeId>, Vec<NodeId>) {
+        let reveals = self.reveals.take();
+        let nodes = |list: Vec<Reveal>| list.into_iter().map(|reveal| reveal.node).collect();
+        (nodes(reveals.retries), nodes(reveals.fresh))
     }
+}
 
-    fn park(&mut self) {
-        self.parks += 1;
-    }
+/// Runs a frame of `model` on `window` as the window does: it observes the window's focus, plans
+/// the frame and applies the plan. Returns the transitions.
+pub(crate) fn apply_frame(
+    model: &mut FocusModel,
+    tree: &VirtualTree,
+    window: &mut FakeWindow,
+) -> Vec<FocusTransition> {
+    model.observe_node(window.focus);
+    let plan = model.plan_frame(tree, &StyleCache::new());
+    window.apply(&plan);
+    plan.transitions
 }
 
 /// An input state holding `value` with `selection` selected. The caret sits at the start of the
@@ -132,13 +152,9 @@ impl View for RecordingView {
         false
     }
 
-    fn queue_reveal(&mut self, _: NodeId, _: Align, _: Align) {}
-
     fn held_buttons(&self) -> u8 {
         0
     }
-
-    fn set_held_buttons(&mut self, _: u8) {}
 
     fn reset_scroll(&self, _: &VirtualTree, id: NodeId) {
         self.resets.borrow_mut().push(id);

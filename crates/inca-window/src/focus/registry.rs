@@ -7,14 +7,14 @@ use std::collections::HashMap;
 
 use gpui::{App, FocusHandle, Window};
 
-use inca_document::{EventPayload, FocusModel, FocusSurface, FocusTransition};
+use inca_document::{EventPayload, FocusPlan, FocusStep, FocusTransition};
 use inca_gpui::EventSink;
 use inca_node::NodeId;
 
 /// Dispatches `blur`, `focusout`, `focus` and `focusin`, in that order, for whichever of
 /// `blurred`/`focused` `transition` carries. Each carries the other node as `relatedTarget`. Call
 /// after releasing whatever borrow produced the transition. See
-/// [`FocusRegistry::apply_pending`].
+/// [`crate::Cells::apply_focus`].
 pub fn dispatch_transition(
     transition: &FocusTransition,
     dispatch: &(impl EventSink + Clone + 'static),
@@ -39,7 +39,8 @@ pub fn dispatch_transition(
     }
 }
 
-/// The `FocusHandle` of each node that can take focus.
+/// The `FocusHandle` of each node that can take focus. Only [`Self::apply`] writes the handles,
+/// and a freed node drops its handle.
 #[derive(Debug, Default)]
 pub struct FocusRegistry {
     pub(super) handles: HashMap<NodeId, FocusHandle>,
@@ -48,41 +49,37 @@ pub struct FocusRegistry {
     pub(super) parked: Option<FocusHandle>,
 }
 
-/// The window and the handles, as the focus model drives them.
-pub(super) struct Surface<'a> {
-    pub(super) handles: &'a mut HashMap<NodeId, FocusHandle>,
-    pub(super) parked: &'a mut Option<FocusHandle>,
-    pub(super) window: &'a mut Window,
-    pub(super) cx: &'a mut App,
-}
-
-impl FocusSurface for Surface<'_> {
-    fn focused(&self) -> Option<NodeId> {
-        node_for(self.handles, &self.window.focused(self.cx)?)
-    }
-
-    fn track(&mut self, node: NodeId) {
-        get_or_create(self.handles, node, self.cx);
-    }
-
-    fn untrack(&mut self, node: NodeId) {
-        self.handles.remove(&node);
-    }
-
-    fn focus(&mut self, node: NodeId) {
-        if let Some(handle) = self.handles.get(&node) {
-            handle.focus(self.window, self.cx);
+impl FocusRegistry {
+    /// Applies `plan` to the handles and to the focus of `window`: creates the handle of each
+    /// gained node that has none, runs the steps, drops the handles of the lost nodes and parks.
+    pub fn apply(&mut self, plan: &FocusPlan, window: &mut Window, cx: &mut App) {
+        for &node in &plan.gained {
+            get_or_create(&mut self.handles, node, cx);
         }
-    }
-
-    fn blur(&mut self) {
-        self.window.blur(self.cx);
-    }
-
-    fn park(&mut self) {
-        let parked = self.parked.get_or_insert_with(|| self.cx.focus_handle());
-        if self.window.focused(self.cx).is_none() {
-            parked.focus(self.window, self.cx);
+        for step in &plan.steps {
+            match *step {
+                FocusStep::Focus(node) => {
+                    let handle = self.handles.get(&node);
+                    // A plan focuses only a node it tracks, and each tracked node has a handle.
+                    debug_assert!(
+                        handle.is_some(),
+                        "the focus plan names {node}, which has no handle"
+                    );
+                    if let Some(handle) = handle {
+                        handle.focus(window, cx);
+                    }
+                }
+                FocusStep::Blur => window.blur(cx),
+            }
+        }
+        for node in &plan.lost {
+            self.handles.remove(node);
+        }
+        if plan.park {
+            let parked = self.parked.get_or_insert_with(|| cx.focus_handle());
+            if window.focused(cx).is_none() {
+                parked.focus(window, cx);
+            }
         }
     }
 }
@@ -119,35 +116,22 @@ impl FocusRegistry {
         !self.handles.is_empty()
     }
 
-    /// The node holding focus in `window` right now. A node whose focus a
-    /// tree change took is not held.
+    /// The node whose handle `window` focuses right now.
     #[must_use]
-    pub fn focused_node(&self, model: &FocusModel, window: &Window, cx: &App) -> Option<NodeId> {
-        model.held_node(self.window_node(window, cx))
-    }
-
-    /// The node whose handle the window focuses, owed blur or not.
-    fn window_node(&self, window: &Window, cx: &App) -> Option<NodeId> {
+    pub fn focused_node(&self, window: &Window, cx: &App) -> Option<NodeId> {
         node_for(&self.handles, &window.focused(cx)?)
     }
 
-    /// Records the node the window focuses now in `model`. Call it before a read of
-    /// [`FocusModel::active_node`], so the read starts from the focus GPUI applied
-    /// itself.
-    pub fn observe(&self, model: &mut FocusModel, window: &Window, cx: &App) {
-        let node = self.window_node(window, cx);
-        model.observe_node(node);
-    }
-
-    /// The handle the root container tracks, once [`Self::apply_pending`]
-    /// has run. It holds the window's focus while no node is focused.
+    /// The handle the root container tracks, once a frame [`Self::apply`] has
+    /// run. It holds the window's focus while no node is focused.
     #[must_use]
     pub fn parked_handle(&self) -> Option<FocusHandle> {
         self.parked.clone()
     }
 
-    /// Drops `node_id`'s handle. Call it for every node a destroyed subtree freed.
-    pub fn forget(&mut self, node_id: NodeId) {
+    /// Drops `node_id`'s handle. Call it for every node a destroyed subtree freed, with the
+    /// `forget` of the document.
+    pub(crate) fn forget(&mut self, node_id: NodeId) {
         self.handles.remove(&node_id);
     }
 }
@@ -218,6 +202,135 @@ mod tests {
             cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
         assert!(transitions.is_empty());
         assert!(registry.handle(id).is_none());
+    }
+
+    #[gpui::test]
+    fn a_node_that_gains_its_tab_index_and_a_focus_in_one_frame_takes_it(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_tree(1);
+        let mut registry = Registry::default();
+        registry.mark_tab_dirty(ids[0]);
+        registry.request_focus(ids[0], false);
+
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+
+        let events: Vec<_> = transitions
+            .iter()
+            .map(|t| (t.blurred(), t.focused()))
+            .collect();
+        assert_eq!(events, [(None, Some(ids[0]))]);
+        assert_eq!(
+            cx.update(|window, cx| registry.focused_node(window, cx)),
+            Some(ids[0])
+        );
+    }
+
+    #[gpui::test]
+    fn a_node_removed_and_added_again_before_a_frame_keeps_its_handle_and_focus(
+        cx: &mut TestAppContext,
+    ) {
+        let cx = cx.add_empty_window();
+        let (mut tree, ids) = rooted_tree(1);
+        let id = ids[0];
+        let mut registry = Registry::default();
+        focus_all(cx, &mut registry, &tree, &ids, id);
+        let before = registry.handle(id).unwrap();
+
+        tree.remove_child(ROOT, id).unwrap();
+        tree.append_child(ROOT, id).unwrap();
+        registry.mark_tab_dirty(id);
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+
+        assert!(transitions.is_empty());
+        assert_eq!(registry.handle(id), Some(before.clone()));
+        assert!(cx.update(|window, _| before.is_focused(window)));
+    }
+
+    #[gpui::test]
+    fn a_mixed_frame_leaves_a_handle_for_exactly_the_nodes_that_take_focus(
+        cx: &mut TestAppContext,
+    ) {
+        let cx = cx.add_empty_window();
+        let (mut tree, ids) = rooted_tree(5);
+        let [kept, lost, gone, gained, never] = [ids[0], ids[1], ids[2], ids[3], ids[4]];
+        tree.remove_attribute(gained, "tabindex").unwrap();
+        tree.remove_attribute(never, "tabindex").unwrap();
+        let mut registry = Registry::default();
+        focus_all(cx, &mut registry, &tree, &ids, kept);
+
+        tree.remove_attribute(lost, "tabindex").unwrap();
+        tree.remove_child(ROOT, gone).unwrap();
+        tree.set_attribute(gained, "tabindex", "0").unwrap();
+        for id in ids.iter().copied() {
+            registry.mark_tab_dirty(id);
+        }
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+
+        let with_handle: Vec<bool> = [kept, lost, gone, gained, never]
+            .iter()
+            .map(|&id| registry.handle(id).is_some())
+            .collect();
+        assert_eq!(with_handle, [true, false, false, true, false]);
+        assert_eq!(
+            cx.update(|window, cx| registry.focused_node(window, cx)),
+            Some(kept)
+        );
+    }
+
+    #[gpui::test]
+    fn a_click_focus_then_a_request_for_another_node_reports_the_request(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_tree(2);
+        let (clicked, requested) = (ids[0], ids[1]);
+        let mut registry = Registry::default();
+        for &id in &ids {
+            registry.mark_tab_dirty(id);
+        }
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+        let held = registry.handle(clicked).unwrap();
+        // Focus moved outside the registry, as a click does.
+        cx.update(|window, cx| held.focus(window, cx));
+        registry.request_focus(requested, false);
+
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+
+        let events: Vec<_> = transitions
+            .iter()
+            .map(|t| (t.blurred(), t.focused()))
+            .collect();
+        assert_eq!(events, [(None, Some(requested))]);
+        assert_eq!(
+            cx.update(|window, cx| registry.focused_node(window, cx)),
+            Some(requested)
+        );
+    }
+
+    #[gpui::test]
+    fn a_node_whose_handle_was_forgotten_takes_no_focus(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+        let (tree, ids) = rooted_tree(1);
+        let id = ids[0];
+        let mut registry = Registry::default();
+        registry.mark_tab_dirty(id);
+        let _ =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+        registry.forget(id);
+        registry.request_focus(id, false);
+
+        let transitions =
+            cx.update(|window, cx| registry.apply_pending(&tree, &StyleCache::new(), window, cx));
+
+        assert!(transitions.is_empty());
+        assert!(registry.handle(id).is_none());
+        assert_eq!(
+            cx.update(|window, cx| registry.focused_node(window, cx)),
+            None
+        );
     }
 
     #[gpui::test]

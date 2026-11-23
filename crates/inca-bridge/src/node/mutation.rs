@@ -209,11 +209,11 @@ mod tests {
     #[test]
     fn remove_child_ignores_an_unknown_child() {
         let (engine, host) = engine_with_family();
-        host.document.borrow_mut().focus.take_tab_dirty();
+        host.document.borrow_mut().take_tab_dirty();
 
         assert_eq!(error_name(&engine, "n.removeChild(p, 999)"), "none");
 
-        assert!(host.document.borrow_mut().focus.take_tab_dirty().is_empty());
+        assert!(host.document.borrow_mut().take_tab_dirty().is_empty());
     }
 
     #[rstest]
@@ -242,11 +242,11 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.document.borrow_mut().focus.take_tab_dirty();
+        host.document.borrow_mut().take_tab_dirty();
         engine.eval::<()>("n.appendChild(p, g);").unwrap();
         let ids: Vec<u32> = engine.eval("[g1, g2]").unwrap();
 
-        let queued = host.document.borrow_mut().focus.take_tab_dirty();
+        let queued = host.document.borrow_mut().take_tab_dirty();
 
         assert!(ids.iter().all(|id| queued.contains(id)));
     }
@@ -264,13 +264,7 @@ mod tests {
             .unwrap();
         let a: u32 = engine.eval("a").unwrap();
 
-        assert!(
-            host.document
-                .borrow_mut()
-                .focus
-                .take_tab_dirty()
-                .contains(&a)
-        );
+        assert!(host.document.borrow_mut().take_tab_dirty().contains(&a));
     }
 
     #[test]
@@ -283,11 +277,11 @@ mod tests {
                 ",
             )
             .unwrap();
-        host.document.borrow_mut().focus.take_tab_dirty();
+        host.document.borrow_mut().take_tab_dirty();
 
         assert_eq!(error_name(&engine, "n.removeChild(p, x)"), "NotFoundError");
 
-        assert!(host.document.borrow_mut().focus.take_tab_dirty().is_empty());
+        assert!(host.document.borrow_mut().take_tab_dirty().is_empty());
         let x: u32 = engine.eval("x").unwrap();
         let host = host.document.borrow();
         assert!(host.tree.get(x).unwrap().parent().is_some());
@@ -562,7 +556,7 @@ mod tests {
         assert_eq!(
             host.document
                 .borrow()
-                .focus
+                .focus()
                 .active_node(&host.document.borrow().tree, &host.document.borrow().style),
             Some(kid)
         );
@@ -579,7 +573,7 @@ mod tests {
         assert_eq!(
             host.document
                 .borrow()
-                .focus
+                .focus()
                 .active_node(&host.document.borrow().tree, &host.document.borrow().style),
             None
         );

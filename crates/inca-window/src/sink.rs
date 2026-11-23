@@ -9,7 +9,7 @@ use inca_document::{EventPayload, KeyPayload};
 use inca_gpui::{EventSink, InputLayout, InputRequest, modifiers_of};
 use inca_node::NodeId;
 
-use crate::dispatch::{EventDispatcher, observe_focus};
+use crate::dispatch::EventDispatcher;
 use inca_document::EventTargetId;
 
 impl EventSink for EventDispatcher {
@@ -223,27 +223,28 @@ impl EventSink for EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        observe_focus(&self.cells, window, cx);
-        let target = self.key_target(window, cx);
-        let event = if up { "keyup" } else { "keydown" };
-        let target = EventTargetId::Node(target);
-        let mut payload = payload.clone();
-        if let EventPayload::Key(key) = &mut payload {
-            key.is_composing = self.composing_at_focus(window, cx);
-        }
-        let canceled = self.walk_key(target, event, &payload, window);
-        if canceled {
-            // Handled for the platform: a shortcut or an input method sees nothing.
-            window.prevent_default();
-            cx.stop_propagation();
-        }
-        // A canceled keypress keeps the default of Space, which runs on key up.
-        let typed_canceled = !up
-            && !canceled
-            && (keystroke.key != "enter" || self.focused_link(window, cx).is_none())
-            && self.keypress_canceled(keystroke, target, &payload, window, cx)
-            && keystroke.key != "space";
-        self.key_default(keystroke, up, canceled || typed_canceled, window, cx);
+        self.turn(window, cx, |window, cx| {
+            let target = self.key_target(window, cx);
+            let event = if up { "keyup" } else { "keydown" };
+            let target = EventTargetId::Node(target);
+            let mut payload = payload.clone();
+            if let EventPayload::Key(key) = &mut payload {
+                key.is_composing = self.composing_at_focus(window, cx);
+            }
+            let canceled = self.walk_key(target, event, &payload, window);
+            if canceled {
+                // Handled for the platform: a shortcut or an input method sees nothing.
+                window.prevent_default();
+                cx.stop_propagation();
+            }
+            // A canceled keypress keeps the default of Space, which runs on key up.
+            let typed_canceled = !up
+                && !canceled
+                && (keystroke.key != "enter" || self.focused_link(window, cx).is_none())
+                && self.keypress_canceled(keystroke, target, &payload, window, cx)
+                && keystroke.key != "space";
+            self.key_default(keystroke, up, canceled || typed_canceled, window, cx);
+        });
     }
 
     fn input(&self, node_id: NodeId) -> Option<InputState> {

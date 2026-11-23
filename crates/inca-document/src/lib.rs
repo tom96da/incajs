@@ -9,6 +9,7 @@ pub mod focus;
 pub mod geometry;
 pub mod markup;
 pub mod removal;
+pub mod reveal;
 pub mod semantics;
 pub mod text;
 pub mod view;
@@ -23,7 +24,7 @@ pub use event::{
     Walk, WheelPayload, buttons_mask, deliver, flags_of, key_code, keypress_code, listened,
     next_event_id, path_from, spec_of,
 };
-pub use focus::{FocusModel, FocusSurface, FocusTransition};
+pub use focus::{FocusModel, FocusPlan, FocusStep, FocusTransition};
 pub use geometry::{
     Align, Rect, client_height, client_width, offset_of, scroll_chain, scroll_delta,
 };
@@ -31,7 +32,8 @@ pub use markup::{
     Position, children_of, insert_parsed, parse_adjacent, parse_inner, parse_outer,
     replace_children, replace_with,
 };
-pub use removal::{apply_removals, free_ids, settle};
+pub use removal::{free_ids, settle};
+pub use reveal::{Reveal, RevealOrigin, RevealQueue, Reveals};
 pub use semantics::{
     ARIA_REFLECTIONS, AriaKind, AriaReferences, AriaReflection, TabIndex, aria_reflection,
     element_aria_attribute,

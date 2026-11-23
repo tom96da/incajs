@@ -62,8 +62,9 @@ fn relay_to_js(
     let params_json = params_json(params);
 
     let _ = window.update(cx, |app, window, cx| {
-        app.session.dispatcher.observe_focus(window, cx);
-        deliver(&app.session.engine, method, &params_json, reporter);
+        app.session.dispatcher.turn(window, cx, |_, _| {
+            deliver(&app.session.engine, method, &params_json, reporter);
+        });
         app.session.dispatcher.drain_jobs_and_refresh(window, cx);
         maybe_auto_resize_to_content(app, window);
     });

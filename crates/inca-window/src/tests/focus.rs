@@ -8,7 +8,9 @@
 use std::ops::{Deref, DerefMut};
 
 use gpui::{App, FocusHandle, Window};
-use inca_document::{FocusModel, FocusTransition, new_document_tree};
+use inca_document::{
+    FocusModel, FocusPlan, FocusTransition, Reveal, RevealOrigin, RevealQueue, new_document_tree,
+};
 use inca_node::tree::{AttributeValue, NodeId, VirtualTree};
 use inca_style::StyleCache;
 
@@ -42,11 +44,12 @@ pub(crate) fn tree_with(tag: &str, tabindex: Option<AttributeValue>) -> (Virtual
     (tree, id)
 }
 
-/// The focus model and the handles of one window. The model's methods are reached through
-/// `Deref`.
+/// The focus model, the reveal queue and the handles of one window. The model's methods are
+/// reached through `Deref`.
 #[derive(Default)]
 pub(crate) struct Registry {
     pub(crate) model: FocusModel,
+    pub(crate) reveals: RevealQueue,
     pub(crate) handles: FocusRegistry,
 }
 
@@ -70,18 +73,48 @@ impl Registry {
     }
 
     pub(crate) fn focused_node(&self, window: &Window, cx: &App) -> Option<NodeId> {
-        self.handles.focused_node(&self.model, window, cx)
+        self.model.held_node(self.handles.focused_node(window, cx))
     }
 
     pub(crate) fn observe(&mut self, window: &Window, cx: &App) {
-        self.handles.observe(&mut self.model, window, cx);
+        self.model
+            .observe_node(self.handles.focused_node(window, cx));
     }
 
     pub(crate) fn forget(&mut self, node: NodeId) {
         self.model.forget(node);
+        self.reveals.forget(node);
         self.handles.forget(node);
     }
 
+    pub(crate) fn drop_focus_in(&mut self, tree: &VirtualTree, node: NodeId) {
+        self.model.drop_focus_in(tree, node);
+        self.reveals.drop_focus_in(tree, node);
+    }
+
+    pub(crate) fn retry_reveal(&mut self, node: NodeId) {
+        self.reveals.retry(Reveal::focus(node));
+    }
+
+    /// The nodes of the reveals a focus queued: `(retries, fresh)`.
+    pub(crate) fn take_reveals(&mut self) -> (Vec<NodeId>, Vec<NodeId>) {
+        let reveals = self.reveals.take();
+        let nodes = |list: Vec<Reveal>| {
+            list.into_iter()
+                .filter(|reveal| reveal.origin == RevealOrigin::Focus)
+                .map(|reveal| reveal.node)
+                .collect()
+        };
+        (nodes(reveals.retries), nodes(reveals.fresh))
+    }
+
+    /// Applies `plan` as the window does.
+    fn apply(&mut self, plan: &FocusPlan, window: &mut Window, cx: &mut App) {
+        self.reveals.follow_plan(plan);
+        self.handles.apply(plan, window, cx);
+    }
+
+    /// Runs a frame as the window does: observes the window's focus, plans and applies.
     pub(crate) fn apply_pending(
         &mut self,
         tree: &VirtualTree,
@@ -89,10 +122,13 @@ impl Registry {
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<FocusTransition> {
-        self.handles
-            .apply_pending(&mut self.model, tree, cache, window, cx)
+        self.observe(window, cx);
+        let plan = self.model.plan_frame(tree, cache);
+        self.apply(&plan, window, cx);
+        plan.transitions
     }
 
+    /// Runs a Tab press as the window does: observes the window's focus, plans and applies.
     pub(crate) fn tab_move(
         &mut self,
         tree: &VirtualTree,
@@ -102,8 +138,10 @@ impl Registry {
         cx: &mut App,
         backward: bool,
     ) -> Option<NodeId> {
-        self.handles
-            .tab_move(&mut self.model, (tree, cache), root, window, cx, backward)
+        self.observe(window, cx);
+        let (target, plan) = self.model.plan_tab(tree, cache, root, backward);
+        self.apply(&plan, window, cx);
+        target
     }
 }
 
