@@ -10,7 +10,7 @@ use inca_node::{NodeId, VirtualNode, VirtualTree};
 
 /// Receives the style warning lines. A node prints each line once. The sink writes to stderr by
 /// default.
-pub struct StyleWarnings {
+pub(crate) struct StyleWarnings {
     sink: Rc<dyn Fn(&str)>,
     /// The lines printed for each node, as the text without the node prefix.
     printed: HashMap<NodeId, HashSet<String>>,
@@ -27,18 +27,18 @@ impl Default for StyleWarnings {
 
 impl StyleWarnings {
     /// Replaces the sink that receives the lines.
-    pub fn set_sink(&mut self, sink: Rc<dyn Fn(&str)>) {
+    pub(crate) fn set_sink(&mut self, sink: Rc<dyn Fn(&str)>) {
         self.sink = sink;
     }
 
-    /// Sends `line` to the sink as it is.
-    pub fn emit(&self, line: &str) {
-        (self.sink)(line);
+    /// Prints the `warning` of a `<style>` sheet as `<style>: <warning>`.
+    pub(crate) fn report_sheet(&self, warning: &str) {
+        (self.sink)(&format!("<style>: {warning}"));
     }
 
     /// Prints the `warning` of a style of `node_id` as `node <id> (<tag>): <warning>`, once for
     /// each node and line.
-    pub fn report(&mut self, tree: &VirtualTree, node_id: NodeId, warning: &str) {
+    pub(crate) fn report(&mut self, tree: &VirtualTree, node_id: NodeId, warning: &str) {
         if self
             .printed
             .entry(node_id)
@@ -51,13 +51,13 @@ impl StyleWarnings {
     }
 
     /// Drops the lines recorded for a freed node.
-    pub fn forget(&mut self, node_id: NodeId) {
+    pub(crate) fn forget(&mut self, node_id: NodeId) {
         self.printed.remove(&node_id);
     }
 
     /// Whether no node has a recorded line.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
         self.printed.is_empty()
     }
 }
@@ -66,8 +66,18 @@ impl StyleWarnings {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use std::cell::RefCell;
+
     use super::*;
-    use crate::tests::collecting;
+
+    /// A `StyleWarnings` that sends each line to a list the caller reads.
+    fn collecting() -> (StyleWarnings, Rc<RefCell<Vec<String>>>) {
+        let lines = Rc::new(RefCell::new(Vec::new()));
+        let sink = Rc::clone(&lines);
+        let mut warnings = StyleWarnings::default();
+        warnings.set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
+        (warnings, lines)
+    }
 
     #[test]
     fn a_line_prints_once_for_each_node() {
@@ -101,10 +111,10 @@ mod tests {
     }
 
     #[test]
-    fn emit_sends_the_line_without_a_prefix() {
+    fn a_sheet_line_prints_with_the_style_prefix() {
         let (warnings, lines) = collecting();
 
-        warnings.emit("<style>: y");
+        warnings.report_sheet("y");
 
         assert_eq!(*lines.borrow(), ["<style>: y"]);
     }

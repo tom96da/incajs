@@ -8,14 +8,13 @@
 use crate::geometry::Align;
 use crate::{
     FocusModel, FocusPlan, FocusStep, FocusTransition, InputState, NodeBox, Reveal, RevealQueue,
-    ScrollRange, StyleWarnings, View, new_document_tree,
+    ScrollRange, View, new_document_tree,
 };
 use inca_node::tree::{AttributeValue, NodeId, VirtualTree};
 use inca_style::StyleCache;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Range;
-use std::rc::Rc;
 
 /// The root of a tree `rooted_tree` builds: the first node created. The document is node 1.
 pub(crate) const ROOT: NodeId = 0;
@@ -116,15 +115,6 @@ pub(crate) fn at(value: &str, selection: Range<usize>, reversed: bool) -> InputS
 /// An input state with a caret at `caret` in `value`.
 pub(crate) fn caret_at(value: &str, caret: usize) -> InputState {
     at(value, caret..caret, false)
-}
-
-/// A `StyleWarnings` that sends each line to a list the caller reads.
-pub(crate) fn collecting() -> (StyleWarnings, Rc<RefCell<Vec<String>>>) {
-    let lines = Rc::new(RefCell::new(Vec::new()));
-    let sink = Rc::clone(&lines);
-    let mut warnings = StyleWarnings::default();
-    warnings.set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
-    (warnings, lines)
 }
 
 /// A `View` that draws nothing, holds the buttons `held`, and records the nodes whose scroll reset

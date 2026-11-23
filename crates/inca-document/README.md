@@ -36,10 +36,12 @@ the document, each of which runs the steps its change needs: a node that moves o
 focus it held with the reveals a focus asked for, moves the Tab start, queues a focus re-check and
 resets the scroll offsets of its subtree in a `View`; a freed node drops its state in the `View` and
 in the document; an attribute or style write queues the focus re-check it needs and reports its
-warnings to a `StyleWarnings` sink; a copy of an `input` takes its typed text. The document changes
+warnings to the warning sink; a copy of an `input` takes its typed text. The document changes
 the focus only through its own methods. The tree holds the drawn focus, which the document publishes
 at each frame and at each change of the window's activation. A script query matches `:focus` against
-the focus once the queued requests apply.
+the focus once the queued requests apply. `DocumentState::set_warning_sink` sets the sink of the
+style warnings, which writes to stderr by default; `report_sheet_warnings` sends it the warnings of
+the `<style>` sheets parsed since its last call.
 
 ## Events
 

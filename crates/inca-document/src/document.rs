@@ -5,14 +5,16 @@
 //! its focus.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use inca_node::{NodeId, TreeError, VirtualTree};
 use inca_style::{MatchFocus, StyleCache};
 
 use crate::geometry::Align;
+use crate::warnings::StyleWarnings;
 use crate::{
     EventListeners, FocusModel, FocusPlan, InputState, Reveal, RevealOrigin, RevealQueue, Reveals,
-    Signals, StyleWarnings, View,
+    Signals, View,
 };
 
 /// A tree with a root element under a document node. The root is the node a mounting app
@@ -45,10 +47,9 @@ pub struct DocumentState {
     pub(crate) tree: VirtualTree,
     /// The cascade of the tree, rebuilt when the tree changes.
     pub style: StyleCache,
-    /// Receives one line for each style a `setStyle` call stores with an unknown key, an invalid
-    /// color or a value of a shape the document does not support. A node prints each line once.
-    /// Writes to stderr by default.
-    pub warnings: StyleWarnings,
+    /// The sink of the style warnings with the lines each node has printed. Changed only through
+    /// the operations of the document.
+    warnings: StyleWarnings,
     /// Read through [`Self::listeners`] and changed only through the operations of the document,
     /// which keep the links of the signals in step.
     pub(crate) listeners: EventListeners,
@@ -438,8 +439,30 @@ impl DocumentState {
         self.capture_request = None;
     }
 
+    /// Replaces the sink that receives the style warning lines. The default sink writes to stderr.
+    pub fn set_warning_sink(&mut self, sink: Rc<dyn Fn(&str)>) {
+        self.warnings.set_sink(sink);
+    }
+
+    /// Sends the sink a line for each warning of the `<style>` sheets parsed since the last call,
+    /// as `<style>: <warning>`.
+    pub fn report_sheet_warnings(&mut self) {
+        for warning in self.style.take_style_warnings(&self.tree) {
+            self.warnings.report_sheet(&warning);
+        }
+    }
+
+    /// Sets a sink that keeps each style warning line in the returned list.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn record_warnings(&mut self) -> Rc<std::cell::RefCell<Vec<String>>> {
+        let lines = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let sink = Rc::clone(&lines);
+        self.set_warning_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
+        lines
+    }
+
     /// Reports a style warning of `node_id` through the sink, once for each node and line.
-    pub fn warn_style(&mut self, node_id: NodeId, line: &str) {
+    pub(crate) fn warn_style(&mut self, node_id: NodeId, line: &str) {
         self.warnings.report(&self.tree, node_id, line);
     }
 
@@ -527,6 +550,37 @@ mod tests {
 
         assert_eq!(removed, (false, None));
         assert_eq!(document.capture_request(), None);
+    }
+
+    #[test]
+    fn the_sheet_warnings_since_the_last_report_reach_the_sink() {
+        let (mut document, view, _) = mounted();
+        let lines = document.record_warnings();
+        let style = document.create_node("style").unwrap();
+        let text = document.create_node("#text").unwrap();
+        document.set_data(text, ".a { bogus: 1 }").unwrap();
+        document.append_child(&view, style, text).unwrap();
+        document
+            .append_child(&view, document.root(), style)
+            .unwrap();
+
+        document.report_sheet_warnings();
+
+        assert_eq!(
+            *lines.borrow(),
+            ["<style>: ignoring unknown style key `bogus`"]
+        );
+    }
+
+    #[test]
+    fn a_freed_node_drops_the_style_lines_it_reported() {
+        let (mut document, mut view, node) = mounted();
+        document.set_style_prop(node, "bogus", "1").unwrap();
+        let reported = !document.warnings.is_empty();
+
+        let _released = document.destroy_node(&mut view, node);
+
+        assert_eq!((reported, document.warnings.is_empty()), (true, true));
     }
 
     #[test]

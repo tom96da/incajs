@@ -4,14 +4,14 @@
 //! The writes of attributes, the class list and the inline style, each with the focus re-check and
 //! the style warnings it needs.
 
-use inca_node::{AttributeValue, ClassListError, NodeId, TreeError, VirtualTree};
+use inca_node::{AttributeValue, ClassListError, NodeId, TreeError};
 use inca_style::{
     remove_style, remove_style_property, set_style, set_style_property, set_style_text,
     style_warning,
 };
 
+use crate::DocumentState;
 use crate::semantics::AriaReferences;
-use crate::{DocumentState, StyleWarnings};
 
 impl DocumentState {
     /// Stores the attribute `name` of `node_id` under the key the node folds it to, and queues the
@@ -27,13 +27,7 @@ impl DocumentState {
         name: &str,
         value: impl Into<AttributeValue>,
     ) -> Result<(), TreeError> {
-        let key = store_attribute(
-            &mut self.tree,
-            &mut self.warnings,
-            node_id,
-            name,
-            value.into(),
-        )?;
+        let key = store_attribute(self, node_id, name, value.into())?;
         self.mark_attribute_dirty(node_id, &key);
         Ok(())
     }
@@ -52,14 +46,7 @@ impl DocumentState {
         name: &str,
         value: impl Into<AttributeValue>,
     ) -> Result<(), TreeError> {
-        store_attribute(
-            &mut self.tree,
-            &mut self.warnings,
-            node_id,
-            name,
-            value.into(),
-        )
-        .map(drop)
+        store_attribute(self, node_id, name, value.into()).map(drop)
     }
 
     /// Removes the attribute `name` of `node_id`, folded as [`Self::set_attribute`] folds it, and
@@ -99,7 +86,7 @@ impl DocumentState {
     ///
     /// # Errors
     ///
-    /// The error of [`VirtualTree::add_classes`].
+    /// The error of [`VirtualTree::add_classes`](inca_node::VirtualTree::add_classes).
     pub fn add_classes(&mut self, node_id: NodeId, tokens: &[&str]) -> Result<(), ClassListError> {
         self.tree.add_classes(node_id, tokens)
     }
@@ -108,7 +95,7 @@ impl DocumentState {
     ///
     /// # Errors
     ///
-    /// The error of [`VirtualTree::remove_classes`].
+    /// The error of [`VirtualTree::remove_classes`](inca_node::VirtualTree::remove_classes).
     pub fn remove_classes(
         &mut self,
         node_id: NodeId,
@@ -122,7 +109,7 @@ impl DocumentState {
     ///
     /// # Errors
     ///
-    /// The error of [`VirtualTree::toggle_class`].
+    /// The error of [`VirtualTree::toggle_class`](inca_node::VirtualTree::toggle_class).
     pub fn toggle_class(
         &mut self,
         node_id: NodeId,
@@ -137,7 +124,7 @@ impl DocumentState {
     ///
     /// # Errors
     ///
-    /// The error of [`VirtualTree::replace_class`].
+    /// The error of [`VirtualTree::replace_class`](inca_node::VirtualTree::replace_class).
     pub fn replace_class(
         &mut self,
         node_id: NodeId,
@@ -233,30 +220,30 @@ impl DocumentState {
 }
 
 /// Stores the attribute `name` of the node `node_id`. The `style` attribute writes its text as
-/// style props and reports the lines it drops through `warnings`. Returns the folded key the
-/// attribute has on the node.
+/// style props and reports the lines it drops. Returns the folded key the attribute has on the
+/// node.
 ///
 /// # Errors
 ///
 /// [`TreeError::NodeNotFound`] when `node_id` names no node.
 fn store_attribute(
-    tree: &mut VirtualTree,
-    warnings: &mut StyleWarnings,
+    state: &mut DocumentState,
     node_id: NodeId,
     name: &str,
     value: AttributeValue,
 ) -> Result<String, TreeError> {
-    let key = tree
+    let key = state
+        .tree
         .get(node_id)
         .ok_or(TreeError::NodeNotFound(node_id))?
         .attribute_key(name)
         .into_owned();
     if key == "style" {
-        for line in set_style_text(tree, node_id, &value.text())? {
-            warnings.report(tree, node_id, &line);
+        for line in set_style_text(&mut state.tree, node_id, &value.text())? {
+            state.warn_style(node_id, &line);
         }
     } else {
-        tree.set_attribute(node_id, key.clone(), value)?;
+        state.tree.set_attribute(node_id, key.clone(), value)?;
     }
     Ok(key)
 }
@@ -265,8 +252,9 @@ fn store_attribute(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use inca_node::VirtualTree;
+
     use super::*;
-    use crate::tests::collecting;
 
     /// A document over a tree of one `div`, whose style warnings go to the returned list.
     fn state_with_div() -> (
@@ -277,8 +265,7 @@ mod tests {
         let mut tree = VirtualTree::new();
         let id = tree.create_node("div").unwrap();
         let mut state = DocumentState::from_tree(tree);
-        let (warnings, lines) = collecting();
-        state.warnings = warnings;
+        let lines = state.record_warnings();
         (state, id, lines)
     }
 

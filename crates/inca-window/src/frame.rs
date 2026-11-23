@@ -18,7 +18,7 @@ impl EventDispatcher {
     /// reveals the focused node and fires pending `scroll` events, and requests another frame
     /// while a focus request waits. Call it first in the window's render.
     pub fn begin_frame(&self, window: &mut Window, cx: &mut App) {
-        self.warn_style_sheets();
+        self.cells.document.borrow_mut().report_sheet_warnings();
         self.sync_modifiers(window, false);
         let transitions = self.cells.apply_focus(window, cx);
         for transition in &transitions {
@@ -34,14 +34,6 @@ impl EventDispatcher {
         // the next frame.
         if self.cells.document.borrow().focus().has_queued_work() {
             window.request_animation_frame();
-        }
-    }
-
-    /// Prints each warning of the sheets parsed since the last frame, prefixed with `<style>: `.
-    fn warn_style_sheets(&self) {
-        let document = self.cells.document.borrow();
-        for line in document.style.take_style_warnings(document.tree()) {
-            document.warnings.emit(&format!("<style>: {line}"));
         }
     }
 
@@ -106,19 +98,12 @@ mod tests {
         FakeScript, Frame, draw, fake_dispatcher, fake_focus_scene, fake_focusable_node, is_focused,
     };
     use gpui::{AppContext as _, TestAppContext};
-    use std::cell::RefCell;
     use std::rc::Rc;
 
     #[gpui::test]
     fn a_frame_prints_the_warnings_of_a_style_sheet_once(cx: &mut TestAppContext) {
         let (dispatcher, cells, _fake) = fake_dispatcher();
-        let printed = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&printed);
-        cells
-            .document
-            .borrow_mut()
-            .warnings
-            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
+        let printed = cells.document.borrow_mut().record_warnings();
         {
             let mut document = cells.document.borrow_mut();
             let root = document.root();

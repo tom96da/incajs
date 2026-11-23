@@ -14,7 +14,7 @@ pub mod reveal;
 pub mod semantics;
 pub mod text;
 pub mod view;
-pub mod warnings;
+mod warnings;
 
 pub use create::{NameError, is_element_local_name, validate_and_extract};
 pub use document::{DocumentState, new_document_tree};
@@ -40,7 +40,6 @@ pub use semantics::{
 };
 pub use text::{Edit, InputPayload, InputState, InputType, Motion};
 pub use view::{NodeBox, ScrollRange, View};
-pub use warnings::StyleWarnings;
 
 #[cfg(test)]
 mod tests;

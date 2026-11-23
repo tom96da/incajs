@@ -69,12 +69,7 @@ mod tests {
     /// collected, and returns them with the host.
     fn warnings_from(script: &str) -> (Rc<RefCell<Vec<String>>>, Rc<Host>) {
         let (engine, host) = engine_with_bindings();
-        let warnings = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&warnings);
-        host.document
-            .borrow_mut()
-            .warnings
-            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
+        let warnings = host.document.borrow_mut().record_warnings();
         engine.eval::<()>(script).unwrap();
         (warnings, host)
     }
@@ -190,21 +185,8 @@ mod tests {
     }
 
     #[test]
-    fn a_destroyed_node_forgets_its_style_warnings() {
-        let (_, host) = warnings_from(
-            r"
-            const n = __inca_native__.createNode('div');
-            __inca_native__.setStyle(n, 'bogus', 1);
-            __inca_native__.destroyNode(n);
-            ",
-        );
-
-        assert!(host.document.borrow().warnings.is_empty());
-    }
-
-    #[test]
     fn a_failed_set_style_emits_no_warning() {
-        let (warnings, host) = warnings_from(
+        let (warnings, _) = warnings_from(
             r"
             try {
                 __inca_native__.setStyle(999, 'bogus', 1);
@@ -217,7 +199,6 @@ mod tests {
         );
 
         assert!(warnings.borrow().is_empty(), "{:?}", warnings.borrow());
-        assert!(host.document.borrow().warnings.is_empty());
     }
 
     #[test]

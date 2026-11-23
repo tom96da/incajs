@@ -195,9 +195,6 @@ fn define_properties<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) 
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
     use rstest::rstest;
     use serde_json::{Value, json};
 
@@ -207,12 +204,7 @@ mod tests {
     /// `style`. Returns what `body` returns as JSON, and the warning lines the host printed.
     fn exec(body: &str) -> (Value, Vec<String>) {
         let (engine, host) = engine_with_bindings();
-        let warnings = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&warnings);
-        host.document
-            .borrow_mut()
-            .warnings
-            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
+        let warnings = host.document.borrow_mut().record_warnings();
         let json: String = engine
             .eval(&format!(
                 r"

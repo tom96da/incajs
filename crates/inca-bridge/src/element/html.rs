@@ -159,7 +159,6 @@ pub(super) fn install_getters(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::RefCell;
     use std::rc::Rc;
 
     use inca_jsenv::Engine;
@@ -665,17 +664,6 @@ mod tests {
             .unwrap()
     }
 
-    /// Collects the warnings the host prints.
-    fn collect_warnings(host: &Rc<Host>) -> Rc<RefCell<Vec<String>>> {
-        let lines = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&lines);
-        host.document
-            .borrow_mut()
-            .warnings
-            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
-        lines
-    }
-
     #[rstest]
     #[case::html("<input value=a>", "n.childNodeIds(host)[0]", true)]
     #[case::svg(
@@ -728,7 +716,7 @@ mod tests {
     #[case::valueless("<div style>")]
     fn an_empty_parsed_style_attribute_warns_nothing(#[case] markup: &str) {
         let (engine, host) = engine();
-        let lines = collect_warnings(&host);
+        let lines = host.document.borrow_mut().record_warnings();
 
         parse_first(&engine, markup);
 

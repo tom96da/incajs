@@ -182,7 +182,7 @@ pub fn replace_with(
 /// which is empty.
 fn finish(state: &mut DocumentState, parsed: &ParsedHtml) {
     for (node_id, line) in &parsed.warnings {
-        state.warnings.report(&state.tree, *node_id, line);
+        state.warn_style(*node_id, line);
     }
     for node in &parsed.nodes {
         let typed = state
@@ -320,11 +320,7 @@ mod tests {
     fn a_parsed_style_attribute_applies_and_warns_once() {
         let (mut state, _ids) = state_of(0);
         let view = RecordingView::default();
-        let lines = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-        let sink = std::rc::Rc::clone(&lines);
-        state.warnings.set_sink(std::rc::Rc::new(move |line| {
-            sink.borrow_mut().push(line.to_owned());
-        }));
+        let lines = state.record_warnings();
         let (container, parsed) =
             parse_inner(&mut state, 0, r#"<p style="bogus:1;width:2px"></p>"#).unwrap();
 
@@ -352,11 +348,7 @@ mod tests {
     fn a_dropped_element_warns_once_and_in_parse_order() {
         let (mut state, _ids) = state_of(0);
         let view = RecordingView::default();
-        let lines = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-        let sink = std::rc::Rc::clone(&lines);
-        state.warnings.set_sink(std::rc::Rc::new(move |line| {
-            sink.borrow_mut().push(line.to_owned());
-        }));
+        let lines = state.record_warnings();
         let html = state.create_element_ns(None, None, "html").unwrap();
         // The frameset replaces the body, so the parser drops the paragraph before the result.
         let (container, parsed) = parse_inner(
