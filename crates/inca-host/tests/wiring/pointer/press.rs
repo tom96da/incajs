@@ -368,7 +368,7 @@ impl Render for BarRoot {
         let host = self.host.document.borrow();
         render_tree_with_events(
             host.tree(),
-            &host.style,
+            host.style(),
             self.node,
             &self.dispatcher,
             Scrollbars::Classic,

@@ -87,7 +87,7 @@ impl Harness {
         self.cx.update(|window, cx| {
             let document = cells.document.borrow();
             let node = cells.focused_node(window, cx)?;
-            match build_spec(document.tree(), &document.style, node)?.tag {
+            match build_spec(document.tree(), document.style(), node)?.tag {
                 ElementTag::Input { editable, .. } => Some((node, editable)),
                 _ => None,
             }

@@ -244,7 +244,7 @@ mod tests {
 
         let host = host.document.borrow();
         for _ in 0..3 {
-            inca_style::build_spec(host.tree(), &host.style, 1).unwrap();
+            inca_style::build_spec(host.tree(), host.style(), 1).unwrap();
         }
         assert_eq!(warnings.borrow().len(), 1);
     }

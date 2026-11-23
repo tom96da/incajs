@@ -147,9 +147,9 @@ impl EventDispatcher {
         let document = self.cells.document.borrow();
         let redraw = changed
             && if pointer {
-                document.style.uses_pointer_state(document.tree())
+                document.style().uses_pointer_state(document.tree())
             } else {
-                document.style.uses_focus_state(document.tree())
+                document.style().uses_focus_state(document.tree())
             };
         if redraw {
             window.refresh();

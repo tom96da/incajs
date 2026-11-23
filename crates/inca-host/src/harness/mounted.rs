@@ -69,7 +69,7 @@ impl Harness {
         let document = cells.document.borrow();
         snapshot(
             document.tree(),
-            &document.style,
+            document.style(),
             document.root(),
             &mut |id| self.bounds_of(id),
         )

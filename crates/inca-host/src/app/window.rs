@@ -81,7 +81,7 @@ impl Render for HostedApp {
         let mode = Scrollbars::of(cx);
         let host = session.cells.document.borrow();
         let top = host.tree().document_element();
-        let spec = top.and_then(|id| build_spec(host.tree(), &host.style, id));
+        let spec = top.and_then(|id| build_spec(host.tree(), host.style(), id));
         let element = spec.as_ref().map_or_else(
             || div().into_any_element(),
             |spec| build_element_with_events(spec, &session.dispatcher, mode),

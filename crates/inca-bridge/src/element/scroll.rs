@@ -57,7 +57,7 @@ fn scroll_into_view_node<'js>(
 /// `max left` and `max top`. A node that scrolls nothing has none.
 fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
     let document = host.document.borrow();
-    is_scroll_container(document.tree(), &document.style, id).then(|| {
+    is_scroll_container(document.tree(), document.style(), id).then(|| {
         let ScrollRange { offset, max } = host.window.borrow().scroll_range(id);
         [offset.0, offset.1, max.0, max.1].map(f64::from)
     })
@@ -66,7 +66,7 @@ fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
 /// Moves the scroll offset of the node `id` on the given axes. A negative value counts as `0`.
 fn scroll_to(host: &Host, id: NodeId, left: Option<f64>, top: Option<f64>) {
     let document = host.document.borrow();
-    if is_scroll_container(document.tree(), &document.style, id) {
+    if is_scroll_container(document.tree(), document.style(), id) {
         host.window
             .borrow()
             .scroll_to(document.tree(), id, left, top);

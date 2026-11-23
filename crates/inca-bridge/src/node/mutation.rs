@@ -545,10 +545,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            host.document
-                .borrow()
-                .focus()
-                .active_node(host.document.borrow().tree(), &host.document.borrow().style),
+            host.document.borrow().focus().active_node(
+                host.document.borrow().tree(),
+                host.document.borrow().style()
+            ),
             Some(kid)
         );
 
@@ -562,10 +562,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            host.document
-                .borrow()
-                .focus()
-                .active_node(host.document.borrow().tree(), &host.document.borrow().style),
+            host.document.borrow().focus().active_node(
+                host.document.borrow().tree(),
+                host.document.borrow().style()
+            ),
             None
         );
     }

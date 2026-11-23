@@ -177,9 +177,9 @@ impl StyleCache {
 
     /// The warning lines of the sheet parses since the last call. A sheet with unchanged text
     /// adds none.
-    pub fn take_style_warnings(&self, tree: &VirtualTree) -> Vec<String> {
+    pub fn take_style_warnings(&mut self, tree: &VirtualTree) -> Vec<String> {
         self.refresh(tree);
-        std::mem::take(&mut self.0.borrow_mut().warnings)
+        std::mem::take(&mut self.0.get_mut().warnings)
     }
 
     /// The style of `id` after the rules of the connected `<style>` elements apply: the matching

@@ -31,8 +31,9 @@ are the markup setters. `parse_inner`, `parse_outer` and `parse_adjacent` parse 
 `innerHTML`, `outerHTML` and `insertAdjacentHTML` and apply each `style` attribute as style props.
 The `text` module holds the text-control model.
 `DocumentState` holds the tree with its cascade, the listeners, the signals, the focus and the
-reveals. The tree is read through `DocumentState::tree` and changed only through the operations of
-the document, each of which runs the steps its change needs: a node that moves or leaves drops the
+reveals. The cascade is read through `DocumentState::style`. The tree is read through
+`DocumentState::tree` and changed only through the operations of the document, each of which runs
+the steps its change needs: a node that moves or leaves drops the
 focus it held with the reveals a focus asked for, moves the Tab start, queues a focus re-check and
 resets the scroll offsets of its subtree in a `View`; a freed node drops its state in the `View` and
 in the document; an attribute or style write queues the focus re-check it needs and reports its

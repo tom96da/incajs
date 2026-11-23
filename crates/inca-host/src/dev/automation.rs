@@ -77,7 +77,7 @@ fn snapshot_of(window: WindowHandle<HostedApp>, cx: &mut App) -> Result<Node, Fa
             let window = app.session.cells.window.borrow();
             snapshot(
                 document.tree(),
-                &document.style,
+                document.style(),
                 document.root(),
                 &mut |id| {
                     window

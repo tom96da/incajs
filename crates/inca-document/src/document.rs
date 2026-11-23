@@ -45,8 +45,8 @@ pub struct DocumentState {
     /// Read through [`Self::tree`] and changed only through the operations of the document, each of
     /// which runs the steps that follow its change.
     pub(crate) tree: VirtualTree,
-    /// The cascade of the tree, rebuilt when the tree changes.
-    pub style: StyleCache,
+    /// The cascade of the tree, rebuilt when the tree changes. Read through [`Self::style`].
+    style: StyleCache,
     /// The sink of the style warnings with the lines each node has printed. Changed only through
     /// the operations of the document.
     warnings: StyleWarnings,
@@ -101,6 +101,12 @@ impl DocumentState {
     #[must_use]
     pub fn tree(&self) -> &VirtualTree {
         &self.tree
+    }
+
+    /// The cascade of the tree, for reads.
+    #[must_use]
+    pub fn style(&self) -> &StyleCache {
+        &self.style
     }
 
     /// Hands out the next `eventId`, the one after the last. The first is 1.

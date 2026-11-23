@@ -46,7 +46,7 @@ impl Render for TestRoot {
         let document = self.cells.document.borrow();
         render_tree_with_events(
             document.tree(),
-            &document.style,
+            document.style(),
             self.node,
             &self.dispatcher,
             Scrollbars::Overlay,

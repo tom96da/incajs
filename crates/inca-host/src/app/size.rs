@@ -33,7 +33,7 @@ pub(super) fn content_window_size(
     else {
         return (None, None);
     };
-    let (width, height) = declared_window_size(host.tree(), &host.style, content);
+    let (width, height) = declared_window_size(host.tree(), host.style(), content);
 
     // A window dimension in px is always far within f32's
     // precision range. No meaningful truncation risk here.

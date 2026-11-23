@@ -31,7 +31,7 @@ impl Render for Root {
         self.dispatcher.begin_frame(window, cx);
         let host = self.host.document.borrow();
         let element =
-            render_tree_with_events(host.tree(), &host.style, 0, &self.dispatcher, self.mode)
+            render_tree_with_events(host.tree(), host.style(), 0, &self.dispatcher, self.mode)
                 .unwrap();
         // The walk records only the children of node 0, which is 100x100.
         let bounds = Bounds::new(Point::default(), gpui::size(px(100.), px(100.)));

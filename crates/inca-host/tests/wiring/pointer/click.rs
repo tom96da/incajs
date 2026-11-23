@@ -36,7 +36,7 @@ fn repeated_builds_with_no_event_never_touch_the_js_engine() {
         let host = host.document.borrow();
         let _ = render_tree_with_events(
             host.tree(),
-            &host.style,
+            host.style(),
             node,
             dispatcher.dispatcher(),
             Scrollbars::Overlay,

@@ -120,7 +120,7 @@ impl Host {
         let document = self.document.borrow();
         self.window
             .borrow()
-            .reveal(document.tree(), &document.style, node, block, inline)
+            .reveal(document.tree(), document.style(), node, block, inline)
     }
 }
 

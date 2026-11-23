@@ -72,7 +72,7 @@ impl EventSink for EventDispatcher {
 
     fn wheel_axes(&self, node_id: NodeId) -> Option<inca_style::WheelAxes> {
         let document = self.cells.document.borrow();
-        inca_style::wheel_axes(document.tree(), &document.style, node_id)
+        inca_style::wheel_axes(document.tree(), document.style(), node_id)
     }
 
     /// The first call of an update computes the delta and defers clearing it,

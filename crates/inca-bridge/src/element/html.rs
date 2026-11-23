@@ -111,7 +111,7 @@ fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<Host>, roots: &[NodeId]) {
     let focused = {
         let host = host.document.borrow();
         host.focus()
-            .visual_focus(host.tree(), &host.style)
+            .visual_focus(host.tree(), host.style())
             .filter(|&focused| {
                 host.tree()
                     .ancestors(focused)
