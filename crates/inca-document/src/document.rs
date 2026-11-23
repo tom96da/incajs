@@ -75,7 +75,8 @@ impl Default for DocumentState {
 
 impl DocumentState {
     /// A document over `tree`, with no listener, signal, focus, reveal or text state yet. `tree`
-    /// declares its root and its document, as [`new_document_tree`] builds them.
+    /// declares its root and its document, as [`new_document_tree`] builds them. The hover path,
+    /// the pressed path and the drawn focus that `tree` holds are taken as they are.
     #[must_use]
     pub fn from_tree(tree: VirtualTree) -> Self {
         Self {
