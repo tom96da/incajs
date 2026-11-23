@@ -14,5 +14,6 @@ composition, scrollbars) and decides the order of a frame. It reaches the script
 `Script` trait, which the caller implements.
 
 `WindowState` holds what lives with the window: the boxes of the last drawn frame, the scroll
-handles, the held mouse buttons, the active pointer capture and the focus handles. It implements
+handles, the held mouse buttons, the active pointer capture and the focus handles. The focus plans
+of the document create and drop the focus handles, and a freed node drops its own. It implements
 the `View` of `inca-document`.

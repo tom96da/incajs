@@ -41,7 +41,7 @@ fn linked_node<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, String, Flag) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), link, element_only| {
         let host = host.document.borrow();
-        existing_node(&ctx, &host.tree, node_id)?;
+        existing_node(&ctx, host.tree(), node_id)?;
         let link = match link.as_str() {
             "parent" => Link::Parent,
             "first" => Link::First,
@@ -62,7 +62,7 @@ fn linked_node<'js>(
             }
         };
         let element_only = element_only.0.flatten() == Some(true);
-        or_null(&ctx, host.tree.linked(node_id, link, element_only))
+        or_null(&ctx, host.tree().linked(node_id, link, element_only))
     }
 }
 
@@ -72,9 +72,9 @@ fn child_node_ids<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, Flag) -> JsResult<Vec<NodeId>> {
     move |ctx, JsNodeId(node_id), element_only| {
         let host = host.document.borrow();
-        existing_node(&ctx, &host.tree, node_id)?;
+        existing_node(&ctx, host.tree(), node_id)?;
         Ok(host
-            .tree
+            .tree()
             .child_ids(node_id, element_only.0.flatten() == Some(true)))
     }
 }
@@ -83,7 +83,7 @@ fn root_of<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<NodeI
     move |ctx, JsNodeId(node_id)| {
         host.document
             .borrow()
-            .tree
+            .tree()
             .root_of(node_id)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
@@ -95,7 +95,7 @@ fn compare_node_position<'js>(
     move |ctx, JsNodeId(node_id), JsNodeId(other_id)| {
         host.document
             .borrow()
-            .tree
+            .tree()
             .compare_position(node_id, other_id)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
@@ -105,7 +105,7 @@ fn is_equal_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -
     move |ctx, JsNodeId(node_id), JsNodeId(other_id)| {
         host.document
             .borrow()
-            .tree
+            .tree()
             .is_equal(node_id, other_id)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
@@ -114,7 +114,7 @@ fn is_equal_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, JsNodeId) -
 fn text_content<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<String> {
     move |ctx, JsNodeId(node_id)| {
         let host = host.document.borrow();
-        host.tree
+        host.tree()
             .text_content(node_id)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
@@ -150,7 +150,7 @@ fn install_node_members(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
             NodeKind::Element => host
                 .document
                 .borrow()
-                .tree
+                .tree()
                 .get(id)
                 .map_or_else(String::new, |node| node.tag_name().into_owned()),
             NodeKind::Text => "#text".to_owned(),
@@ -188,7 +188,7 @@ fn install_node_members(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
     )?;
     getter(ctx, &proto, host, "isConnected", &NODE, |_, host, id, _| {
         let host = host.document.borrow();
-        Ok(has(&host, id) && host.tree.in_document(id))
+        Ok(has(&host, id) && host.tree().in_document(id))
     })?;
     method(
         ctx,
@@ -201,7 +201,7 @@ fn install_node_members(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
             Ok(host
                 .document
                 .borrow()
-                .tree
+                .tree()
                 .get(id)
                 .is_some_and(|node| !node.children().is_empty()))
         },

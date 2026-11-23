@@ -16,7 +16,7 @@ use selectors::matching::{ElementSelectorFlags, matches_selector_list};
 use selectors::parser::SelectorList;
 use selectors::{Element, OpaqueElement};
 
-use super::{Atom, Impl, PseudoClass, PseudoElement, SelectorError, parse};
+use super::{Atom, Impl, MatchFocus, PseudoClass, PseudoElement, SelectorError, parse};
 use selectors::matching::matches_selector as matches_selector_one;
 
 /// An element of the tree: a node that is neither text content, a comment nor a fragment.
@@ -139,7 +139,7 @@ impl Element for Node<'_> {
     fn match_non_ts_pseudo_class(
         &self,
         class: &PseudoClass,
-        _context: &mut MatchingContext<Impl>,
+        context: &mut MatchingContext<Impl>,
     ) -> bool {
         match class {
             PseudoClass::Never(_) => false,
@@ -147,7 +147,7 @@ impl Element for Node<'_> {
             PseudoClass::Hover
             | PseudoClass::Active
             | PseudoClass::Focus
-            | PseudoClass::FocusWithin => self.is_in_interaction_state(class),
+            | PseudoClass::FocusWithin => self.is_in_interaction_state(class, context.extra_data),
             PseudoClass::Disabled
             | PseudoClass::Enabled
             | PseudoClass::ReadWrite
@@ -234,6 +234,7 @@ impl Element for Node<'_> {
 pub(super) fn matching_context(
     caches: &mut SelectorCaches,
     scope: Option<OpaqueElement>,
+    focus: MatchFocus,
 ) -> MatchingContext<'_, Impl> {
     let mut context = MatchingContext::new(
         MatchingMode::Normal,
@@ -244,6 +245,7 @@ pub(super) fn matching_context(
         MatchingForInvalidation::No,
     );
     context.scope_element = scope;
+    context.extra_data = focus;
     context
 }
 
@@ -251,12 +253,13 @@ pub(super) fn matches_with(
     list: &SelectorList<Impl>,
     element: Node<'_>,
     scope: OpaqueElement,
+    focus: MatchFocus,
 ) -> bool {
     let mut caches = SelectorCaches::default();
     matches_selector_list(
         list,
         element,
-        &mut matching_context(&mut caches, Some(scope)),
+        &mut matching_context(&mut caches, Some(scope), focus),
     )
 }
 
@@ -267,7 +270,7 @@ pub(super) fn specificity_of_match(
 ) -> Option<u32> {
     let element = Node::of(tree, id)?;
     let mut caches = SelectorCaches::default();
-    let mut context = matching_context(&mut caches, Some(element.opaque()));
+    let mut context = matching_context(&mut caches, Some(element.opaque()), MatchFocus::Drawn);
     list.slice()
         .iter()
         .filter(|selector| matches_selector_one(selector, 0, None, element, &mut context))
@@ -275,8 +278,9 @@ pub(super) fn specificity_of_match(
         .max()
 }
 
-/// Whether the element `node` matches `selector`. A node that is not an element, such as a text
-/// leaf or a comment, and an unknown id match nothing.
+/// Whether the element `node` matches `selector`, with `focus` for `:focus` and `:focus-within`.
+/// A node that is not an element, such as a text leaf or a comment, and an unknown id match
+/// nothing.
 ///
 /// # Errors
 ///
@@ -285,16 +289,18 @@ pub fn matches_selector(
     tree: &VirtualTree,
     node: NodeId,
     selector: &str,
+    focus: MatchFocus,
 ) -> Result<bool, SelectorError> {
     let (list, _) = parse(selector)?;
     Ok(Node::of(tree, node).is_some_and(|element| {
         let scope = element.opaque();
-        matches_with(&list, element, scope)
+        matches_with(&list, element, scope, focus)
     }))
 }
 
-/// The nearest element at or above `node` that matches `selector`. A `#text` node starts at its
-/// nearest element ancestor, and a comment and an unknown id find nothing.
+/// The nearest element at or above `node` that matches `selector`, with `focus` for `:focus` and
+/// `:focus-within`. A `#text` node starts at its nearest element ancestor, and a comment and an
+/// unknown id find nothing.
 ///
 /// # Errors
 ///
@@ -303,6 +309,7 @@ pub fn closest_selector(
     tree: &VirtualTree,
     node: NodeId,
     selector: &str,
+    focus: MatchFocus,
 ) -> Result<Option<NodeId>, SelectorError> {
     let (list, _) = parse(selector)?;
     let Some(start) = tree.get(node) else {
@@ -314,7 +321,7 @@ pub fn closest_selector(
     let scope = OpaqueElement::new(start);
     let mut current = Node::of(tree, node).or_else(|| Node::nearest_above(tree, start));
     while let Some(element) = current {
-        if matches_with(&list, element, scope) {
+        if matches_with(&list, element, scope, focus) {
             return Ok(Some(element.node.id()));
         }
         current = element.parent_element();
@@ -503,8 +510,8 @@ mod tests {
         let child = tree.create_node("p").unwrap();
         tree.append_child(top, child).unwrap();
 
-        assert!(matches_selector(&tree, top, ":root").unwrap());
-        assert!(!matches_selector(&tree, child, ":root").unwrap());
+        assert!(matches_selector(&tree, top, ":root", MatchFocus::Drawn).unwrap());
+        assert!(!matches_selector(&tree, child, ":root", MatchFocus::Drawn).unwrap());
     }
 
     #[test]
@@ -665,8 +672,11 @@ mod tests {
     fn an_unknown_node_matches_nothing() {
         let p = page();
 
-        assert!(!matches_selector(&p.f.tree, 9999, "*").unwrap());
-        assert_eq!(closest_selector(&p.f.tree, 9999, "*").unwrap(), None);
+        assert!(!matches_selector(&p.f.tree, 9999, "*", MatchFocus::Drawn).unwrap());
+        assert_eq!(
+            closest_selector(&p.f.tree, 9999, "*", MatchFocus::Drawn).unwrap(),
+            None
+        );
     }
 
     #[test]

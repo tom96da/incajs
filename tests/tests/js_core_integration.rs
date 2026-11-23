@@ -57,7 +57,7 @@ fn compiled_inca_bundle_drives_the_real_virtual_tree() {
         .unwrap();
 
     let host = host.document.borrow();
-    let node = host.tree.get(node_id).unwrap();
+    let node = host.tree().get(node_id).unwrap();
     assert_eq!(node.local_name(), "div");
     assert_eq!(
         node.attributes().get("value"),
@@ -101,9 +101,9 @@ fn append_gives_the_host_the_text_node_of_a_string() {
 
     let (data, last_is_x, p, x): (String, bool, u32, u32) = serde_json::from_str(&outcome).unwrap();
     let host = host.document.borrow();
-    let children = host.tree.get(p).unwrap().children();
+    let children = host.tree().get(p).unwrap().children();
     assert_eq!((data.as_str(), last_is_x), ("a", true));
-    assert_eq!(host.tree.get(children[0]).unwrap().local_name(), "#text");
+    assert_eq!(host.tree().get(children[0]).unwrap().local_name(), "#text");
     assert_eq!(children[1], x);
 }
 
@@ -125,7 +125,13 @@ fn replace_children_leaves_no_child() {
 
     let (p, detached): (u32, bool) = serde_json::from_str(&outcome).unwrap();
     assert_eq!(
-        host.document.borrow().tree.get(p).unwrap().children().len(),
+        host.document
+            .borrow()
+            .tree()
+            .get(p)
+            .unwrap()
+            .children()
+            .len(),
         0
     );
     assert!(detached);

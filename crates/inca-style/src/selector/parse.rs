@@ -13,7 +13,7 @@ use selectors::parser::{
     NonTSPseudoClass, ParseRelative, Parser, SelectorImpl, SelectorList, SelectorParseErrorKind,
 };
 
-use super::matching;
+use super::{MatchFocus, matching};
 use inca_node::tree::{NodeId, VirtualTree};
 
 /// The interaction state classes a selector list names, nested positions included.
@@ -223,7 +223,7 @@ impl selectors::parser::PseudoElement for PseudoElement {}
 pub(super) struct Impl;
 
 impl SelectorImpl for Impl {
-    type ExtraMatchingData<'a> = ();
+    type ExtraMatchingData<'a> = MatchFocus;
     type AttrValue = Atom;
     type Identifier = Atom;
     type LocalName = Atom;
@@ -468,7 +468,7 @@ mod tests {
 
     use super::*;
     use crate::tests::*;
-    use crate::{matches_selector, query_selector, query_selector_all};
+    use crate::{MatchFocus, matches_selector, query_selector, query_selector_all};
     use rstest::rstest;
 
     #[rstest]
@@ -559,27 +559,27 @@ mod tests {
 
     fn check_matches(selector: &str) -> Result<(), SelectorError> {
         let p = page();
-        matches_selector(&p.f.tree, p.p1, selector).map(drop)
+        matches_selector(&p.f.tree, p.p1, selector, MatchFocus::Drawn).map(drop)
     }
 
     fn check_query(selector: &str) -> Result<(), SelectorError> {
         let p = page();
-        query_selector(&p.f.tree, p.main, selector).map(drop)
+        query_selector(&p.f.tree, p.main, selector, MatchFocus::Drawn).map(drop)
     }
 
     fn check_query_all(selector: &str) -> Result<(), SelectorError> {
         let p = page();
-        query_selector_all(&p.f.tree, p.main, selector).map(drop)
+        query_selector_all(&p.f.tree, p.main, selector, MatchFocus::Drawn).map(drop)
     }
 
     fn check_query_on_a_comment(selector: &str) -> Result<(), SelectorError> {
         let m = mixed();
-        query_selector(&m.f.tree, m.comment, selector).map(drop)
+        query_selector(&m.f.tree, m.comment, selector, MatchFocus::Drawn).map(drop)
     }
 
     fn check_query_all_on_a_comment(selector: &str) -> Result<(), SelectorError> {
         let m = mixed();
-        query_selector_all(&m.f.tree, m.comment, selector).map(drop)
+        query_selector_all(&m.f.tree, m.comment, selector, MatchFocus::Drawn).map(drop)
     }
 
     #[test]

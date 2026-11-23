@@ -16,7 +16,7 @@ mod table;
 
 pub(crate) use classes::IncaSignal;
 pub(crate) use steps::{
-    abort_signal, after_removal, dom_exception, install, new_signal, release_signal, settle_freed,
-    signal_id, signal_id_native,
+    abort_signal, dom_exception, install, new_signal, pin, release_signal, signal_id,
+    signal_id_native, unpin,
 };
 pub(crate) use table::Table;

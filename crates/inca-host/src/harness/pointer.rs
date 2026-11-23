@@ -279,7 +279,9 @@ mod tests {
     #[should_panic(expected = "the root node exists")]
     fn snapshot_panics_without_a_root_node(cx: &mut TestAppContext) {
         let mut h = Harness::load(cx, TEST_ENTRY_PATH, "");
-        h.cells.document.borrow_mut().tree.set_root(9999);
+        let mut tree = inca_document::new_document_tree();
+        tree.set_root(9999);
+        *h.cells.document.borrow_mut() = inca_document::DocumentState::from_tree(tree);
         h.snapshot();
     }
 

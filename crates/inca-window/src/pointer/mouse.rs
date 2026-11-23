@@ -66,7 +66,7 @@ impl EventDispatcher {
         self.state.press_target.set(Some(target));
         if button <= 1 {
             let path = self.path_from(target);
-            let changed = self.cells.document.borrow_mut().tree.set_active_path(&path);
+            let changed = self.cells.document.borrow_mut().set_active_path(&path);
             self.restyle(changed, true, window);
         }
         let pointer = pointer_payload(payload, button);
@@ -116,7 +116,7 @@ impl EventDispatcher {
         if last {
             self.state.pointerdown_canceled.set(false);
             if self.cells.window.borrow().capture_active.is_some() {
-                self.cells.document.borrow_mut().capture_pending = None;
+                self.cells.document.borrow_mut().cancel_capture_request();
                 self.process_capture(payload, button, window, cx);
                 self.state.captured_release.set(Some((target, button)));
             }
@@ -125,7 +125,7 @@ impl EventDispatcher {
 
     /// Clears the pressed path and redraws when a rule reads it.
     pub(crate) fn clear_press(&self, window: &mut Window) {
-        let changed = self.cells.document.borrow_mut().tree.set_active_path(&[]);
+        let changed = self.cells.document.borrow_mut().set_active_path(&[]);
         self.restyle(changed, true, window);
     }
 
@@ -411,12 +411,9 @@ mod tests {
             [&format!("pointermove@{b}"), &format!("mousemove@{b}")]
         );
         assert!(!got.iter().any(|e| e.starts_with("lostpointercapture")));
-        let pending = s.cells.document.borrow().capture_pending;
+        assert!(!s.cells.document.borrow().has_capture_request(a));
         let window = s.cells.window.borrow();
-        assert_eq!(
-            (window.held_buttons, pending, window.capture_active),
-            (0, None, None)
-        );
+        assert_eq!((window.held_buttons, window.capture_active), (0, None));
     }
 
     fn movement_of(payload: &EventPayload) -> (f32, f32) {
@@ -564,12 +561,14 @@ mod tests {
     ) {
         let mut s = scene(cx);
         let (button, child) = {
-            let tree = &mut s.cells.document.borrow_mut().tree;
-            let button = tree.create_node("button").unwrap();
-            let child = tree.create_node("span").unwrap();
-            tree.set_attribute(button, "disabled", true).unwrap();
-            tree.append_child(button, child).unwrap();
-            tree.append_child(tree.root().unwrap(), button).unwrap();
+            let view = s.cells.window.borrow();
+            let mut document = s.cells.document.borrow_mut();
+            let button = document.create_node("button").unwrap();
+            let child = document.create_node("span").unwrap();
+            document.set_attribute(button, "disabled", true).unwrap();
+            document.append_child(&*view, button, child).unwrap();
+            let root = document.root();
+            document.append_child(&*view, root, button).unwrap();
             (button, child)
         };
         s.down(if on_child { child } else { button }, 0);
@@ -650,10 +649,13 @@ mod tests {
         let mut s = scene(cx);
         s.down(s.a, 0);
         {
-            let tree = &mut s.cells.document.borrow_mut().tree;
-            let root = tree.root().unwrap();
-            tree.remove_child(root, s.a).unwrap();
-            tree.insert_before(root, s.a, Some(s.b)).unwrap();
+            let view = s.cells.window.borrow();
+            let mut document = s.cells.document.borrow_mut();
+            let root = document.root();
+            document.remove_child(&*view, root, s.a).unwrap();
+            document
+                .insert_before(&*view, root, s.a, Some(s.b))
+                .unwrap();
         }
 
         assert!(pressed(&s, s.a));

@@ -33,7 +33,7 @@ impl Default for Signals {
 impl Signals {
     /// An empty set whose first id is `next`.
     #[must_use]
-    pub fn starting_at(next: u32) -> Self {
+    pub(crate) fn starting_at(next: u32) -> Self {
         Self {
             next: Some(next),
             by_id: HashMap::new(),
@@ -41,7 +41,7 @@ impl Signals {
     }
 
     /// A new record under the next id, `None` after the last id.
-    pub fn create(&mut self, dependent: bool) -> Option<u32> {
+    pub(crate) fn create(&mut self, dependent: bool) -> Option<u32> {
         let id = self.next?;
         self.next = id.checked_add(1);
         self.by_id.insert(
@@ -58,7 +58,7 @@ impl Signals {
 
     /// Marks `id` aborted, and every dependent that is not aborted yet. Returns those dependents,
     /// `None` when `id` is aborted already or unknown.
-    pub fn mark_aborted(&mut self, id: u32) -> Option<Vec<u32>> {
+    pub(crate) fn mark_aborted(&mut self, id: u32) -> Option<Vec<u32>> {
         let state = self.by_id.get_mut(&id).filter(|state| !state.aborted)?;
         state.aborted = true;
         let dependents = state.dependents.clone();
@@ -74,7 +74,7 @@ impl Signals {
 
     /// Makes `result` depend on `sources`. A source that is dependent contributes its own
     /// sources, and each source counts once.
-    pub fn link_dependent(&mut self, result: u32, sources: &[u32]) {
+    pub(crate) fn link_dependent(&mut self, result: u32, sources: &[u32]) {
         let mut flat: Vec<u32> = Vec::new();
         for source in sources {
             let own = self
@@ -100,7 +100,7 @@ impl Signals {
     }
 
     /// Drops the record of `id` and its links. Returns the dependents that have no source left.
-    pub fn release(&mut self, id: u32) -> Vec<u32> {
+    pub(crate) fn release(&mut self, id: u32) -> Vec<u32> {
         let Some(state) = self.by_id.remove(&id) else {
             return Vec::new();
         };
@@ -168,13 +168,13 @@ pub struct Links {
 
 impl Links {
     /// Records that the abort of `signal` removes the registration with `callback`.
-    pub fn link(&mut self, signal: u32, callback: u32, link: Link) {
+    pub(crate) fn link(&mut self, signal: u32, callback: u32, link: Link) {
         self.by_callback.insert(callback, (signal, link));
         self.by_signal.entry(signal).or_default().insert(callback);
     }
 
     /// Drops the link of `callback` and records its signal as freed. Returns the signal.
-    pub fn unlink(&mut self, callback: u32) -> Option<u32> {
+    pub(crate) fn unlink(&mut self, callback: u32) -> Option<u32> {
         let (signal, _) = self.by_callback.remove(&callback)?;
         self.drop_from_signal(signal, callback);
         self.freed.push(signal);
@@ -183,7 +183,7 @@ impl Links {
 
     /// The callback id and link of each registration of `signal`, removed from both maps, in
     /// callback id order.
-    pub fn take(&mut self, signal: u32) -> Vec<(u32, Link)> {
+    pub(crate) fn take(&mut self, signal: u32) -> Vec<(u32, Link)> {
         let callbacks = self.by_signal.remove(&signal).unwrap_or_default();
         callbacks
             .into_iter()
@@ -201,12 +201,12 @@ impl Links {
     }
 
     /// Drops the links of `signal` and leaves the registrations in place.
-    pub fn forget(&mut self, signal: u32) {
+    pub(crate) fn forget(&mut self, signal: u32) {
         drop(self.take(signal));
     }
 
     /// The signals that lost a link since the last call.
-    pub fn take_freed(&mut self) -> Vec<u32> {
+    pub(crate) fn take_freed(&mut self) -> Vec<u32> {
         std::mem::take(&mut self.freed)
     }
 

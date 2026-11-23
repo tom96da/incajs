@@ -38,19 +38,16 @@ pub fn js_input_scene_of(cx: &mut TestAppContext, value: &str) -> InputScene {
         let mut h = rig.cells.document.borrow_mut();
         let root = h.root();
         let [parent, input, button] =
-            ["div", "input", "button"].map(|tag| h.tree.create_node(tag).unwrap());
-        h.tree.append_child(root, parent).unwrap();
-        h.tree.append_child(parent, input).unwrap();
-        h.tree.append_child(parent, button).unwrap();
-        set_style(&mut h.tree, input, "width", 100.0).unwrap();
-        set_style(&mut h.tree, input, "text_size", 10.0).unwrap();
-        h.focus.mark_tab_dirty(input);
-        h.focus.mark_tab_dirty(button);
-        h.inputs
-            .get_mut()
-            .entry(input)
-            .or_default()
-            .set_value(value);
+            ["div", "input", "button"].map(|tag| h.create_node(tag).unwrap());
+        h.append_child(&*rig.cells.window.borrow(), root, parent)
+            .unwrap();
+        h.append_child(&*rig.cells.window.borrow(), parent, input)
+            .unwrap();
+        h.append_child(&*rig.cells.window.borrow(), parent, button)
+            .unwrap();
+        h.set_style_prop(input, "width", 100.0).unwrap();
+        h.set_style_prop(input, "text_size", 10.0).unwrap();
+        h.set_input_value(input, value);
         [parent, input, button]
     };
     let engine = wiring::engine_for(&rig);
@@ -83,11 +80,7 @@ impl InputScene {
     }
 
     pub fn focus(&self, cx: &mut TestAppContext, node: NodeId) {
-        self.cells
-            .document
-            .borrow_mut()
-            .focus
-            .request_focus(node, false);
+        self.cells.document.borrow_mut().request_focus(node, false);
         self.draw(cx);
         cx.run_until_parked();
     }
@@ -115,12 +108,17 @@ impl InputScene {
     }
 
     pub fn state(&self) -> inca_document::InputState {
-        self.cells.document.borrow().inputs.borrow()[&self.input].clone()
+        self.cells
+            .document
+            .borrow()
+            .input(self.input)
+            .unwrap()
+            .clone()
     }
 
     pub fn set_attribute(&self, name: &str) {
         let mut document = self.cells.document.borrow_mut();
-        document.tree.set_attribute(self.input, name, true).unwrap();
+        document.set_attribute(self.input, name, true).unwrap();
     }
 }
 

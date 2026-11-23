@@ -3,38 +3,19 @@
 
 //! The Tab move.
 
-use super::registry::{FocusRegistry, Surface};
 use gpui::{App, Window};
-use inca_document::FocusModel;
-use inca_node::{NodeId, VirtualTree};
-use inca_style::StyleCache;
+use inca_node::NodeId;
 
-impl FocusRegistry {
-    /// Moves focus one tab stop forward, or `backward`. With no node focused,
-    /// the move starts from the last press or focus (see
-    /// [`FocusModel::press_start`]). Past the last stop nothing holds focus, and the
-    /// next Tab starts over at the first. A move that finds no stop forgets
-    /// where it started. The transition is reported by the next
-    /// [`Self::apply_pending`]. Returns the node that took focus. The move
-    /// also drops the scroll requests of earlier focus calls. From a node that no longer takes
-    /// focus, the move goes to the nearest stop after its place in tree order (before it when
-    /// `backward`), or forward with none after it to the first stop.
-    pub fn tab_move(
-        &mut self,
-        model: &mut FocusModel,
-        (tree, cache): (&VirtualTree, &StyleCache),
-        root: NodeId,
-        window: &mut Window,
-        cx: &mut App,
-        backward: bool,
-    ) -> Option<NodeId> {
-        let mut surface = Surface {
-            handles: &mut self.handles,
-            parked: &mut self.parked,
-            window,
-            cx,
-        };
-        model.tab_move(tree, cache, root, &mut surface, backward)
+use crate::Cells;
+
+impl Cells {
+    /// Moves focus one tab stop forward, or `backward`, from the focus the document last observed,
+    /// and applies the move to the window's focus. Returns the node that took focus. The next
+    /// frame reports the transition. See [`inca_document::FocusModel::plan_tab`].
+    pub fn tab_move(&self, backward: bool, window: &mut Window, cx: &mut App) -> Option<NodeId> {
+        let (target, plan) = self.document.borrow_mut().plan_tab(backward);
+        self.window.borrow_mut().focus.apply(&plan, window, cx);
+        target
     }
 }
 
@@ -46,7 +27,8 @@ mod tests {
     use crate::tests::focus::Registry;
     use crate::tests::*;
     use gpui::{TestAppContext, VisualTestContext};
-    use inca_node::AttributeValue;
+    use inca_node::{AttributeValue, VirtualTree};
+    use inca_style::StyleCache;
     use inca_test_macros::gpui_cases;
 
     /// A rooted tree with one `button`, disabled when `disabled`.

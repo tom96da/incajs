@@ -27,7 +27,6 @@ pub(super) fn set_character_data<'js>(
     move |ctx, JsNodeId(node_id), data| {
         host.document
             .borrow_mut()
-            .tree
             .set_data(node_id, data)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
@@ -38,8 +37,7 @@ pub(super) fn split_text<'js>(
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>) -> JsResult<NodeId> {
     move |ctx, JsNodeId(node_id), offset| {
         let mut host = host.document.borrow_mut();
-        host.tree
-            .split_text(node_id, unsigned(offset))
+        host.split_text(node_id, unsigned(offset))
             .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
@@ -48,7 +46,7 @@ pub(super) fn split_text<'js>(
 pub(super) fn data_of(host: &Shared, id: NodeId) -> String {
     host.document
         .borrow()
-        .tree
+        .tree()
         .text_content(id)
         .unwrap_or_default()
 }
@@ -60,7 +58,7 @@ fn data_len(host: &Shared, id: NodeId) -> u32 {
 
 /// Whether the host has the node `id`.
 pub(super) fn has(host: &DocumentState, id: NodeId) -> bool {
-    host.tree.get(id).is_some()
+    host.tree().get(id).is_some()
 }
 
 /// Writes the data of the node `id`; a freed node ignores it.
@@ -69,8 +67,7 @@ pub(super) fn write_data(ctx: &Ctx<'_>, host: &Shared, id: NodeId, data: String)
     if !has(&host, id) {
         return Ok(());
     }
-    host.tree
-        .set_data(id, data)
+    host.set_data(id, data)
         .map_err(|err| throw_tree_error(ctx, err))
 }
 
@@ -86,8 +83,7 @@ fn replace(
     if !has(&host, id) {
         return Ok(());
     }
-    host.tree
-        .replace_data(id, offset, count, data)
+    host.replace_data(id, offset, count, data)
         .map_err(|err| throw_tree_error(ctx, err))
 }
 
@@ -146,7 +142,7 @@ pub(super) fn install_character_data(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult
             if !has(&host, id) {
                 return Ok(String::new());
             }
-            host.tree
+            host.tree()
                 .substring_data(id, offset, count)
                 .map_err(|err| throw_tree_error(ctx, err))
         },
@@ -224,7 +220,7 @@ pub(super) fn install_text(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
         Ok(host
             .document
             .borrow()
-            .tree
+            .tree()
             .whole_text(id)
             .unwrap_or_default())
     })

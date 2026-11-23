@@ -17,38 +17,51 @@ of an `aria` attribute and the `tabindex` of an element, with the default of eac
 
 ## Focus
 
-`FocusModel` holds the node that has focus, the focus and blur requests that wait for the next
-frame, the nodes whose `tabindex` changed and where Tab starts, and it moves focus along the Tab
-order. A `FocusSurface` is the window side that creates the handle of a node and moves the window's
-focus.
+`FocusModel` holds the nodes that take focus, the node that has focus, the focus and blur requests
+that wait for the next frame, the nodes whose `tabindex` changed and where Tab starts. Each frame
+and each Tab press it returns a `FocusPlan`: the handles to create and drop, the moves of the
+window's focus and the transitions to report. `RevealQueue` holds the reveals that wait for a box,
+from a focus and from `scrollIntoView`.
 
 ## Document
 
 `new_document_tree` builds the tree of a document. `validate_and_extract` and
-`is_element_local_name` check element names. `store_attribute` writes an attribute and applies a
-`style` attribute as style props, and warnings go to a `StyleWarnings` sink. `insert_parsed`,
-`replace_children` and `replace_with` are the markup setters, and `apply_removals` carries the focus
-steps of a tree call that moved or removed nodes. `parse_inner`, `parse_outer` and `parse_adjacent`
-parse the markup of `innerHTML`, `outerHTML` and `insertAdjacentHTML` and apply each `style`
-attribute as style props. `settle` runs the focus steps of the removed nodes and resets the scroll
-offsets of their subtrees in a `View`. `free_ids` drops the state of freed nodes in a `View` and in
-the document and returns the callback ids their listeners held. The `text` module holds the
-text-control model.
-`DocumentState` holds the tree with its cascade, the listeners, the signals and the focus, and
-`StyleWarnings` collects the warnings of a style write.
+`is_element_local_name` check element names. The `DocumentState` operations `insert_parsed`,
+`replace_children` and `replace_with` are the markup setters. `parse_inner`, `parse_outer` and
+`parse_adjacent` parse the markup of `innerHTML`, `outerHTML` and `insertAdjacentHTML` and apply
+each `style` attribute as style props.
+The `text` module holds the text-control model.
+`DocumentState` holds the tree with its cascade, the listeners, the signals, the focus and the
+reveals. The cascade is read through `DocumentState::style`. The tree is read through
+`DocumentState::tree` and changed only through the operations of the document, each of which runs
+the steps its change needs: a node that moves or leaves drops the
+focus it held with the reveals a focus asked for, moves the Tab start, queues a focus re-check and
+resets the scroll offsets of its subtree in a `View`; a freed node drops its state in the `View` and
+in the document; an attribute or style write queues the focus re-check it needs and reports its
+warnings to the warning sink; a copy of an `input` takes its typed text. The document changes
+the focus only through its own methods. The tree holds the drawn focus, which the document publishes
+at each frame and at each change of the window's activation. A script query matches `:focus` against
+the focus once the queued requests apply. `DocumentState::set_warning_sink` sets the sink of the
+style warnings, which writes to stderr by default; `report_sheet_warnings` sends it the warnings of
+the `<style>` sheets parsed since its last call.
 
 ## Events
 
 `EVENTS` and `Flags` describe each event type. `EventPayload`, `Modifiers` and the other plain
 payloads carry what an event reports. `EventListeners`, `Signals` and `Links` hold the listeners and
-the abort signals and links of a document. `EventTargetId` names a target, `Walk` describes one
+the abort signals and links of a document. `DocumentState` reads them through
+`DocumentState::listeners` and `DocumentState::signals` and changes them only through its
+operations, which hold the rules of the signal option: adding and removing a listener, and creating,
+aborting and releasing a signal. `add_listener` returns the signals to hold strongly. An operation
+that drops registrations returns a `Released` with their callback ids and the signals whose strong
+hold ends. `EventTargetId` names a target, `Walk` describes one
 dispatch and `deliver` runs it through an `Invoke`. `key_code` and `keypress_code` give the `code`
 of a key.
 
 ## View
 
 `View` is the window as the document sees it: the boxes of the last drawn frame, the scroll
-positions, the held mouse buttons and the reveals that wait for a box.
+positions and the held mouse buttons.
 
 ## Geometry
 

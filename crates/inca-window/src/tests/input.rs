@@ -19,7 +19,6 @@ use serde_json::{Value, json};
 use crate::test_support::{TestRoot, cells};
 use crate::tests::{Walked, fake_dispatcher_on};
 use crate::{Cells, EventDispatcher};
-use inca_style::set_style;
 
 type Rule = Box<dyn Fn(&Walked) -> bool>;
 
@@ -48,20 +47,16 @@ pub(crate) struct InputScene {
 fn tree(cells: &Cells, value: &str) -> [NodeId; 3] {
     let mut h = cells.document.borrow_mut();
     let root = h.root();
-    let [parent, input, button] =
-        ["div", "input", "button"].map(|tag| h.tree.create_node(tag).unwrap());
-    h.tree.append_child(root, parent).unwrap();
-    h.tree.append_child(parent, input).unwrap();
-    h.tree.append_child(parent, button).unwrap();
-    set_style(&mut h.tree, input, "width", 100.0).unwrap();
-    set_style(&mut h.tree, input, "text_size", 10.0).unwrap();
-    h.focus.mark_tab_dirty(input);
-    h.focus.mark_tab_dirty(button);
-    h.inputs
-        .get_mut()
-        .entry(input)
-        .or_default()
-        .set_value(value);
+    let [parent, input, button] = ["div", "input", "button"].map(|tag| h.create_node(tag).unwrap());
+    h.append_child(&*cells.window.borrow(), root, parent)
+        .unwrap();
+    h.append_child(&*cells.window.borrow(), parent, input)
+        .unwrap();
+    h.append_child(&*cells.window.borrow(), parent, button)
+        .unwrap();
+    h.set_style_prop(input, "width", 100.0).unwrap();
+    h.set_style_prop(input, "text_size", 10.0).unwrap();
+    h.set_input_value(input, value);
     [parent, input, button]
 }
 
@@ -77,9 +72,8 @@ pub(crate) fn input_scene(cx: &mut TestAppContext, value: &str) -> InputScene {
         fake.on_walk(move |walked| {
             let value = {
                 let document = cells.document.borrow();
-                let inputs = document.inputs.borrow();
-                inputs
-                    .get(&input)
+                document
+                    .input(input)
                     .map_or_else(String::new, |state| state.value().to_owned())
             };
             logged.borrow_mut().push(Logged {
@@ -131,11 +125,7 @@ impl InputScene {
     }
 
     pub(crate) fn focus(&self, cx: &mut TestAppContext, node: NodeId) {
-        self.cells
-            .document
-            .borrow_mut()
-            .focus
-            .request_focus(node, false);
+        self.cells.document.borrow_mut().request_focus(node, false);
         self.draw(cx);
         cx.run_until_parked();
     }
@@ -192,14 +182,18 @@ impl InputScene {
     }
 
     pub(crate) fn state(&self) -> InputState {
-        self.cells.document.borrow().inputs.borrow()[&self.input].clone()
+        self.cells
+            .document
+            .borrow()
+            .input(self.input)
+            .unwrap()
+            .clone()
     }
 
     /// Selects `anchor` to `focus` in the input.
     pub(crate) fn select(&self, anchor: usize, focus: usize) {
-        let document = self.cells.document.borrow();
-        let mut inputs = document.inputs.borrow_mut();
-        inputs.get_mut(&self.input).unwrap().select(anchor, focus);
+        let mut document = self.cells.document.borrow_mut();
+        document.edit_input(self.input, |state| state.select(anchor, focus));
     }
 
     /// Writes `value` into the input, which `setInputValue` does for a script.
@@ -209,7 +203,7 @@ impl InputScene {
 
     pub(crate) fn set_attribute(&self, name: &str) {
         let mut document = self.cells.document.borrow_mut();
-        document.tree.set_attribute(self.input, name, true).unwrap();
+        document.set_attribute(self.input, name, true).unwrap();
     }
 }
 
@@ -333,9 +327,7 @@ pub(crate) fn cancel(s: &InputScene, node: NodeId, event: &str) {
 
 /// Writes `value` into the text state of `input`, which `setInputValue` does for a script.
 pub(crate) fn write_value(cells: &Cells, input: NodeId, value: &str) {
-    let document = cells.document.borrow();
-    let mut inputs = document.inputs.borrow_mut();
-    inputs.entry(input).or_default().set_value(value);
+    cells.document.borrow_mut().set_input_value(input, value);
 }
 
 /// A mouse payload of `button` at window x `x` and y 5.

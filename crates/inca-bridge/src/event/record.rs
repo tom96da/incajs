@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn a_host_event_owns_only_is_trusted() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn every_event_shares_one_is_trusted_getter() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(&dispatcher, node, "click", "(e) => (globalThis.kept = e)");
         fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
@@ -272,7 +272,7 @@ mod tests {
         #[case] key: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -318,7 +318,7 @@ mod tests {
         #[case] check: &str,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -341,7 +341,7 @@ mod tests {
     #[test]
     fn a_field_getter_throws_type_error_for_an_event_of_another_kind() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         for event in ["mousedown", "click", "wheel", "keydown", "focus"] {
             listen(
                 &dispatcher,
@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn a_mouse_field_getter_reads_a_wheel_event() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         for event in ["mousedown", "wheel"] {
             listen(
                 &dispatcher,
@@ -547,7 +547,7 @@ mod tests {
         #[case] want: serde_json::Value,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -573,7 +573,7 @@ mod tests {
         #[case] want: u32,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -595,7 +595,7 @@ mod tests {
     #[test]
     fn the_view_of_a_host_event_reads_null() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -621,7 +621,7 @@ mod tests {
         #[case] want: u32,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(&dispatcher, node, event, "(e) => out.push(e.which)");
 
         let out = fire_and_read(&dispatcher, node, event, &payload);
@@ -637,7 +637,7 @@ mod tests {
         #[case] payload: EventPayload,
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(&dispatcher, node, event, "(e) => out.push(e.detail)");
 
         let out = fire_and_read(&dispatcher, node, event, &payload);

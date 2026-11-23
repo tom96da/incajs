@@ -7,13 +7,12 @@ use inca_jsenv::callbacks;
 use rquickjs::function::Opt;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
-use crate::abort::{Table, after_removal, settle_freed};
 use crate::bindings::convert::{
     Flag, JsCallbackId, JsEventTargetId, JsNodeId, existing_node, or_null,
 };
 use crate::bindings::{Host, Natives};
 use crate::event::HookTarget;
-use inca_document::{EventTargetId, Link};
+use inca_document::EventTargetId;
 
 /// Registering and dropping input-event callbacks, and dispatching events
 /// from script.
@@ -51,7 +50,7 @@ fn add_event_listener<'js>(
     move |ctx, JsEventTargetId(target), event, callback, capture, passive, signal| {
         let mut host = host.document.borrow_mut();
         if let EventTargetId::Node(node_id) = target {
-            existing_node(&ctx, &host.tree, node_id)?;
+            existing_node(&ctx, host.tree(), node_id)?;
         }
         if !callback.is_function() {
             return Err(Exception::throw_type(
@@ -66,35 +65,22 @@ fn add_event_listener<'js>(
             ),
             None => None,
         };
-        if signal.is_some_and(|signal| host.signals.is_aborted(signal)) {
-            return or_null::<u32>(&ctx, None);
-        }
-        let id = callbacks::store(&ctx, callback)?
-            .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))?;
-        let pins = matches!(target, EventTargetId::Signal(own) if event == "abort" && host.signals.pins(own));
-        let link = Link {
-            target,
-            event: event.clone(),
-        };
-        host.listeners.insert(
+        let added = host.add_listener(
             target,
             event,
-            id,
             capture.0.flatten().unwrap_or(false),
             passive.0.flatten().unwrap_or(false),
-        );
-        if let EventTargetId::Signal(own) = target
-            && pins
-        {
-            Table::open(&ctx)?.pin(own)?;
-        }
-        if let Some(signal) = signal {
-            host.listeners.links.link(signal, id, link);
-            if host.signals.pins(signal) {
-                Table::open(&ctx)?.pin(signal)?;
-            }
-        }
-        or_null(&ctx, Some(id))
+            signal,
+            || {
+                callbacks::store(&ctx, callback)?
+                    .ok_or_else(|| Exception::throw_range(&ctx, "callback ids are exhausted"))
+            },
+        )?;
+        let Some(added) = added else {
+            return or_null::<u32>(&ctx, None);
+        };
+        crate::abort::pin(&ctx, &added.pin)?;
+        or_null(&ctx, Some(added.callback))
     }
 }
 
@@ -102,16 +88,16 @@ fn remove_event_listener<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsEventTargetId, String, JsCallbackId) -> JsResult<bool> {
     move |ctx, JsEventTargetId(target), event, JsCallbackId(callback_id)| {
-        let mut host = host.document.borrow_mut();
-        let removed = host.listeners.remove(target, &event, callback_id);
-        if removed {
-            callbacks::release(&ctx, &[callback_id])?;
-            if let EventTargetId::Signal(signal) = target {
-                after_removal(&host, &Table::open(&ctx)?, signal)?;
-            }
-            settle_freed(&ctx, &mut host)?;
-        }
-        Ok(removed)
+        let released = host
+            .document
+            .borrow_mut()
+            .remove_listener(target, &event, callback_id);
+        let Some(released) = released else {
+            return Ok(false);
+        };
+        callbacks::release(&ctx, &released.callbacks)?;
+        crate::abort::unpin(&ctx, &released.unpin)?;
+        Ok(true)
     }
 }
 
@@ -120,7 +106,7 @@ fn dispatch_event<'js>(
 ) -> impl Fn(Ctx<'js>, JsEventTargetId, Value<'js>) -> JsResult<bool> {
     move |ctx, JsEventTargetId(target), event| {
         if let EventTargetId::Node(node_id) = target {
-            existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+            existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         }
         crate::event::dispatch_event(&ctx, &host, target, &event)
     }
@@ -128,7 +114,7 @@ fn dispatch_event<'js>(
 
 fn click<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<()> {
     move |ctx, JsNodeId(node_id)| {
-        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+        existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         crate::event::click(&ctx, &host, node_id);
         Ok(())
     }
@@ -161,7 +147,7 @@ mod tests {
             .unwrap();
         let host = host.document.borrow();
         let flags: Vec<_> = host
-            .listeners
+            .listeners()
             .listeners_for(EventTargetId::Node(2), "a")
             .iter()
             .map(|l| (l.callback, l.capture, l.passive))
@@ -185,7 +171,7 @@ mod tests {
             .unwrap();
         let host = host.document.borrow();
         let flags: Vec<_> = host
-            .listeners
+            .listeners()
             .listeners_for(EventTargetId::Node(2), "a")
             .iter()
             .map(|l| (l.capture, l.passive))
@@ -210,15 +196,15 @@ mod tests {
         let host = host.document.borrow();
 
         assert_eq!(
-            callback_ids(&host.listeners, EventTargetId::Node(2), "click"),
+            callback_ids(host.listeners(), EventTargetId::Node(2), "click"),
             &[1]
         );
         assert_eq!(
-            callback_ids(&host.listeners, EventTargetId::Node(3), "click"),
+            callback_ids(host.listeners(), EventTargetId::Node(3), "click"),
             &[2]
         );
         assert_eq!(
-            host.listeners
+            host.listeners()
                 .listeners_for(EventTargetId::Node(2), "focus"),
             &[Listener {
                 callback: 3,
@@ -318,7 +304,7 @@ mod tests {
             .unwrap();
 
         assert!(type_error);
-        assert!(host.document.borrow().listeners.is_empty());
+        assert!(host.document.borrow().listeners().is_empty());
         assert!(!callback_stored(&engine, 1));
     }
 
@@ -340,7 +326,7 @@ mod tests {
             .unwrap();
 
         assert!(range_error);
-        assert!(host.document.borrow().listeners.is_empty());
+        assert!(host.document.borrow().listeners().is_empty());
     }
 
     #[test]
@@ -357,7 +343,7 @@ mod tests {
 
         assert_eq!(
             callback_ids(
-                &host.document.borrow().listeners,
+                host.document.borrow().listeners(),
                 EventTargetId::Window,
                 "click"
             ),
@@ -386,7 +372,7 @@ mod tests {
             "freeing a node frees only its own callbacks"
         );
         assert_eq!(
-            callback_ids(&host.listeners, EventTargetId::Window, "click"),
+            callback_ids(host.listeners(), EventTargetId::Window, "click"),
             [1]
         );
     }
@@ -408,7 +394,7 @@ mod tests {
         assert!(removed);
         assert!(
             callback_ids(
-                &host.document.borrow().listeners,
+                host.document.borrow().listeners(),
                 EventTargetId::Node(2),
                 "click"
             )
@@ -500,7 +486,7 @@ mod tests {
         assert!(engine.eval::<bool>(&script).unwrap(), "{bad}");
         assert_eq!(
             callback_ids(
-                &host.document.borrow().listeners,
+                host.document.borrow().listeners(),
                 EventTargetId::Node(2),
                 "click"
             ),
@@ -547,7 +533,7 @@ mod tests {
 
     fn clicks(f: &Clocked) -> Vec<u32> {
         callback_ids(
-            &f.host.document.borrow().listeners,
+            f.host.document.borrow().listeners(),
             EventTargetId::Node(node(f)),
             "click",
         )
@@ -610,7 +596,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(f.host.document.borrow().listeners.links.len(), 0);
+        assert_eq!(f.host.document.borrow().listeners().links().len(), 0);
     }
 
     #[test]
@@ -645,7 +631,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(f.json("log"), json!(["ran"]));
-        assert_eq!(f.host.document.borrow().listeners.links.len(), 0);
+        assert_eq!(f.host.document.borrow().listeners().links().len(), 0);
     }
 
     /// A dependent signal with two linked listeners, the first removed.

@@ -596,7 +596,7 @@ mod tests {
     #[case::none_held(Modifiers::none())]
     fn modifier_state_reports_each_held_modifier_and_no_lock(#[case] held: Modifiers) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -638,7 +638,7 @@ mod tests {
         #[case] want: [bool; 4],
     ) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -664,7 +664,7 @@ mod tests {
     #[test]
     fn a_detached_get_modifier_state_throws_type_error() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -694,7 +694,7 @@ mod tests {
     #[case::object_with_to_string("{ toString: () => 'Control' }", true)]
     fn get_modifier_state_converts_its_argument_to_a_string(#[case] arg: &str, #[case] want: bool) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -717,7 +717,7 @@ mod tests {
     #[case::symbol("Symbol()")]
     fn get_modifier_state_throws_type_error_for_a_missing_or_symbol_argument(#[case] arg: &str) {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,

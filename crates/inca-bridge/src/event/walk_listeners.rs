@@ -33,7 +33,7 @@ impl Invoke for JsInvoke<'_, '_> {
         self.host
             .document
             .borrow()
-            .listeners
+            .listeners()
             .listeners_for(target, name)
             .to_vec()
     }
@@ -42,7 +42,7 @@ impl Invoke for JsInvoke<'_, '_> {
         self.host
             .document
             .borrow()
-            .listeners
+            .listeners()
             .listeners_for(target, name)
             .contains(listener)
     }

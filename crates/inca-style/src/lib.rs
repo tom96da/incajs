@@ -13,7 +13,7 @@ pub use inline_style::{
     set_style, set_style_property, set_style_text, style_item, style_length, style_property_value,
 };
 pub use selector::{
-    SelectorError, check_selector, closest_selector, matches_selector, query_selector,
+    MatchFocus, SelectorError, check_selector, closest_selector, matches_selector, query_selector,
     query_selector_all,
 };
 pub use spec::{

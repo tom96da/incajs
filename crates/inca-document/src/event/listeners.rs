@@ -38,20 +38,19 @@ pub struct Listener {
 /// `addEventListener`, mapped to its [`Listener`]s. Holds owned plain data only, so it can be
 /// read at any time. Targets include element nodes, the global document and the global window.
 ///
-/// Nothing expires on its own: a registration lives until
-/// [`remove`](Self::remove) drops it, or [`release`](Self::release)
-/// does when the node goes away.
+/// Nothing expires on its own: a registration lives until the document removes it, or releases
+/// it when its node or signal goes away.
 #[derive(Debug, Default)]
 pub struct EventListeners {
     by_target: HashMap<EventTargetId, HashMap<String, Vec<Listener>>>,
     /// The registrations a signal removes when it aborts.
-    pub links: Links,
+    pub(crate) links: Links,
 }
 
 impl EventListeners {
     /// Adds `callback_id` to `(target, event)` with the given phase and
     /// passivity.
-    pub fn insert(
+    pub(crate) fn insert(
         &mut self,
         target: EventTargetId,
         event: impl Into<String>,
@@ -74,7 +73,7 @@ impl EventListeners {
 
     /// Drops `callback_id` from `(target, event)`, and reports whether it
     /// was registered.
-    pub fn remove(&mut self, target: EventTargetId, event: &str, callback_id: u32) -> bool {
+    pub(crate) fn remove(&mut self, target: EventTargetId, event: &str, callback_id: u32) -> bool {
         let Some(events) = self.by_target.get_mut(&target) else {
             return false;
         };
@@ -98,18 +97,18 @@ impl EventListeners {
 
     /// Drops every registration on `node_id` and returns the callback ids
     /// that were there, in no particular order.
-    pub fn release(&mut self, node_id: NodeId) -> Vec<u32> {
+    pub(crate) fn release(&mut self, node_id: NodeId) -> Vec<u32> {
         self.release_target(EventTargetId::Node(node_id))
     }
 
     /// Drops every registration on each of `nodes` and returns the callback ids that were there.
-    pub fn release_nodes(&mut self, nodes: &[NodeId]) -> Vec<u32> {
+    pub(crate) fn release_nodes(&mut self, nodes: &[NodeId]) -> Vec<u32> {
         nodes.iter().flat_map(|&id| self.release(id)).collect()
     }
 
     /// Drops every registration on `target` and returns the callback ids that were there, in no
     /// particular order.
-    pub fn release_target(&mut self, target: EventTargetId) -> Vec<u32> {
+    pub(crate) fn release_target(&mut self, target: EventTargetId) -> Vec<u32> {
         let ids: Vec<u32> = self
             .by_target
             .remove(&target)
@@ -119,6 +118,27 @@ impl EventListeners {
             self.links.unlink(id);
         }
         ids
+    }
+
+    /// The links from each signal to the registrations its abort removes.
+    #[must_use]
+    pub fn links(&self) -> &Links {
+        &self.links
+    }
+
+    /// Every registration as `(target, event, callback id)`.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn registrations(&self) -> Vec<(EventTargetId, String, u32)> {
+        self.by_target
+            .iter()
+            .flat_map(|(&target, events)| {
+                events.iter().flat_map(move |(event, listeners)| {
+                    listeners
+                        .iter()
+                        .map(move |l| (target, event.clone(), l.callback))
+                })
+            })
+            .collect()
     }
 
     /// Whether `target` has a registration for `event`.

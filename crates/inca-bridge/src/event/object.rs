@@ -266,7 +266,7 @@ mod tests {
     fn the_time_stamp_of_a_host_event_is_the_clock_reading_at_its_creation() {
         let (clock, at) = test_clock();
         let (dispatcher, host) = dispatcher_on_clock(clock);
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         dispatcher.engine.eval::<()>(RECORDER).unwrap();
         listen(&dispatcher, node, "click", "record");
         at.set(at.get() + Duration::from_millis(40));
@@ -350,7 +350,7 @@ mod tests {
     #[test]
     fn init_event_during_its_dispatch_changes_nothing() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(
             &dispatcher,
             node,
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn init_event_clears_the_immediate_stop_flag() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(&dispatcher, node, "a", "() => out.push('ran')");
 
         let got = eval_json(
@@ -460,7 +460,7 @@ mod tests {
     #[test]
     fn init_event_makes_a_kept_host_event_untrusted() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
         listen(&dispatcher, node, "click", "(e) => (globalThis.kept = e)");
         fire_and_read(&dispatcher, node, "click", &EventPayload::None);
 
@@ -499,7 +499,7 @@ mod tests {
     #[test]
     fn init_event_keeps_the_target() {
         let (dispatcher, host, _reported) = dispatcher_with_engine();
-        let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = host.document.borrow_mut().create_node("div").unwrap();
 
         let got = eval_json(
             &dispatcher,

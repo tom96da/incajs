@@ -30,16 +30,8 @@ impl EventDispatcher {
             inca_gpui::clear_presses(cx);
             self.reset_pointer(window, cx);
         }
-        let changed = {
-            let document = &mut *self.cells.document.borrow_mut();
-            document.focus.set_window_blurred(!active);
-            self.cells
-                .window
-                .borrow()
-                .focus
-                .observe(&mut document.focus, window, cx);
-            document.sync_focus_style()
-        };
+        self.cells.observe_focus(window, cx);
+        let changed = self.cells.document.borrow_mut().set_window_blurred(!active);
         self.restyle(changed, false, window);
         let focused = self.cells.focused_node(window, cx);
         if active {
@@ -65,7 +57,7 @@ impl EventDispatcher {
     /// press state and a canceled `pointerdown`. The release of a button the window never sees
     /// would leave them set.
     fn reset_pointer(&self, window: &mut Window, cx: &mut App) {
-        self.cells.document.borrow_mut().capture_pending = None;
+        self.cells.document.borrow_mut().cancel_capture_request();
         let payload = EventPayload::Mouse(mouse_at(gpui::Point::default(), window.modifiers()));
         self.process_capture(&payload, NO_BUTTON, window, cx);
         self.state.pointerdown_canceled.set(false);
@@ -74,7 +66,7 @@ impl EventDispatcher {
             let mut window = self.cells.window.borrow_mut();
             window.held_buttons = 0;
             window.capture_active = None;
-            self.cells.document.borrow_mut().capture_pending = None;
+            self.cells.document.borrow_mut().cancel_capture_request();
         }
         self.clear_press(window);
     }
@@ -124,7 +116,7 @@ mod tests {
     fn focusing_in_an_inactive_window_fires_focus_when_it_activates(cx: &mut TestAppContext) {
         let (dispatcher, cells, fake, window, node) = inactive_scene(cx);
 
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
         let held = focus_events(&fake);
         set_active(cx, window, &dispatcher, true);
@@ -144,9 +136,9 @@ mod tests {
     fn focusing_then_blurring_in_an_inactive_window_fires_nothing(cx: &mut TestAppContext) {
         let (dispatcher, cells, fake, window, node) = inactive_scene(cx);
 
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
-        cells.document.borrow_mut().focus.request_blur(node);
+        cells.document.borrow_mut().request_blur(node);
         draw(cx, window);
         set_active(cx, window, &dispatcher, true);
 
@@ -159,15 +151,14 @@ mod tests {
     ) {
         let (dispatcher, cells, fake, window, node) = inactive_scene(cx);
         set_active(cx, window, &dispatcher, true);
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
         fake.take();
 
         set_active(cx, window, &dispatcher, false);
         {
             let document = &mut *cells.document.borrow_mut();
-            document.tree.set_attribute(node, "inert", true).unwrap();
-            document.focus.mark_subtree_dirty(&document.tree, node);
+            document.set_attribute(node, "inert", true).unwrap();
         }
         draw(cx, window);
         set_active(cx, window, &dispatcher, true);
@@ -185,7 +176,7 @@ mod tests {
     ) {
         let (dispatcher, cells, fake, window, node) = inactive_scene(cx);
         set_active(cx, window, &dispatcher, true);
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
         fake.take();
 
@@ -209,7 +200,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (dispatcher, cells, fake, window, node) = inactive_scene(cx);
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
 
         set_active(cx, window, &dispatcher, true);
@@ -227,7 +218,7 @@ mod tests {
     ) {
         let (dispatcher, cells, fake, window, node) = inactive_scene(cx);
         set_active(cx, window, &dispatcher, true);
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
         fake.take();
 
@@ -256,12 +247,12 @@ mod tests {
         cx: &mut TestAppContext,
     ) -> (Rc<EventDispatcher>, Rc<FakeScript>, Handle) {
         let (dispatcher, cells, fake, window, node) = fake_focus_scene(cx);
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
         fake.take();
         {
             let document = &mut *cells.document.borrow_mut();
-            document.focus.drop_focus_in(&document.tree, node);
+            document.drop_focus_in(node);
         }
         (dispatcher, fake, window)
     }
@@ -296,7 +287,7 @@ mod tests {
     #[gpui::test]
     fn deactivating_the_window_clears_the_focus_state(cx: &mut TestAppContext) {
         let (dispatcher, cells, _fake, window, node) = fake_focus_scene(cx);
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
 
         assert!(!focused_after_activation(
@@ -310,7 +301,7 @@ mod tests {
     #[gpui::test]
     fn activating_the_window_restores_the_focus_state(cx: &mut TestAppContext) {
         let (dispatcher, cells, _fake, window, node) = fake_focus_scene(cx);
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
         set_active(cx, window, &dispatcher, false);
 
@@ -326,7 +317,7 @@ mod tests {
     fn activating_the_window_writes_the_node_gpui_focused_meanwhile(cx: &mut TestAppContext) {
         let (dispatcher, cells, _fake, window, first) = fake_focus_scene(cx);
         let second = crate::tests::fake_focusable_node(&cells);
-        cells.document.borrow_mut().focus.request_focus(first, true);
+        cells.document.borrow_mut().request_focus(first, true);
         draw(cx, window);
         set_active(cx, window, &dispatcher, false);
         let handle = cells.window.borrow().focus.handle(second).unwrap();
@@ -346,8 +337,8 @@ mod tests {
     #[gpui::test]
     fn deactivating_the_window_clears_the_press_state(cx: &mut TestAppContext) {
         let (dispatcher, cells, _fake, window, node) = fake_focus_scene(cx);
-        let path: Vec<_> = cells.document.borrow().tree.ancestors(node).collect();
-        cells.document.borrow_mut().tree.set_active_path(&path);
+        let path: Vec<_> = cells.document.borrow().tree().ancestors(node).collect();
+        cells.document.borrow_mut().set_active_path(&path);
         set_active(cx, window, &dispatcher, false);
 
         assert!(!state(&cells.document.borrow(), node, ":active"));

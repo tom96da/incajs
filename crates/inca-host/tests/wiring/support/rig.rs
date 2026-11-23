@@ -220,13 +220,17 @@ pub fn mount_with_timers(
 pub fn focusable_tree(children: usize, parent_focusable: bool) -> (Rig, NodeId, Vec<NodeId>) {
     let rig = Rig::default();
     let mut document = rig.cells.document.borrow_mut();
-    let parent = document.tree.create_node("div").unwrap();
+    let parent = document.create_node("div").unwrap();
     let root = document.root();
-    document.tree.append_child(root, parent).unwrap();
+    document
+        .append_child(&*rig.cells.window.borrow(), root, parent)
+        .unwrap();
     let nodes: Vec<NodeId> = (0..children)
         .map(|_| {
-            let child = document.tree.create_node("div").unwrap();
-            document.tree.append_child(parent, child).unwrap();
+            let child = document.create_node("div").unwrap();
+            document
+                .append_child(&*rig.cells.window.borrow(), parent, child)
+                .unwrap();
             child
         })
         .collect();
@@ -235,8 +239,7 @@ pub fn focusable_tree(children: usize, parent_focusable: bool) -> (Rig, NodeId, 
         .into_iter()
         .chain(nodes.iter().copied());
     for node in focusable {
-        document.tree.set_attribute(node, "tabindex", "0").unwrap();
-        document.focus.mark_tab_dirty(node);
+        document.set_attribute(node, "tabindex", "0").unwrap();
     }
     drop(document);
     (rig.clone(), parent, nodes)

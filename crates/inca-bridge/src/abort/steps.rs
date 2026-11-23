@@ -12,8 +12,6 @@ use super::classes::install as install_classes;
 use super::{IncaSignal, Table};
 
 use crate::bindings::Host;
-use inca_document::DocumentState;
-use inca_document::EventTargetId;
 
 /// Defines `AbortController` and `AbortSignal` and the signal table.
 ///
@@ -38,23 +36,18 @@ pub(crate) fn signal_id_native<'js>(ctx: Ctx<'js>, value: Value<'js>) -> JsResul
     crate::bindings::convert::or_null(&ctx, signal_id(&value))
 }
 
-/// A new signal object, tracked in the table.
+/// A new signal object for the signal `id` the document made, tracked in the table.
 ///
 /// # Errors
 ///
-/// Throws a `RangeError` after the last signal id.
+/// Throws a `RangeError` when `id` is `None`, after the last signal id.
 pub(crate) fn new_signal<'js>(
     ctx: &Ctx<'js>,
-    host: &Rc<Host>,
     table: &Table<'js>,
-    dependent: bool,
+    id: Option<u32>,
 ) -> JsResult<Class<'js, IncaSignal<'js>>> {
-    let id = host
-        .document
-        .borrow_mut()
-        .signals
-        .create(dependent)
-        .ok_or_else(|| Exception::throw_range(ctx, "signal ids are exhausted. restart the app"))?;
+    let id =
+        id.ok_or_else(|| Exception::throw_range(ctx, "signal ids are exhausted. restart the app"))?;
     let proto = inca_jsenv::required_prototype(ctx, "AbortSignal")?;
     let signal = Class::instance_proto(IncaSignal::new(id), proto)?;
     table.track(&signal, id)?;
@@ -82,7 +75,7 @@ pub(crate) fn abort_signal<'js>(
     reason: Option<Value<'js>>,
 ) -> JsResult<()> {
     let id = signal.borrow().id();
-    let Some(dependents) = host.document.borrow_mut().signals.mark_aborted(id) else {
+    let Some(dependents) = host.document.borrow_mut().abort_signal(id) else {
         return Ok(());
     };
     let reason = match reason {
@@ -107,77 +100,49 @@ pub(crate) fn abort_signal<'js>(
 /// Runs the abort steps of signal `id`: removes the registrations that name it as their `signal`
 /// option, tells core their ids, fires the event and ends the strong hold.
 fn run_abort_steps(ctx: &Ctx<'_>, host: &Rc<Host>, table: &Table<'_>, id: u32) -> JsResult<()> {
-    let removed = {
-        let mut host = host.document.borrow_mut();
-        let linked = host.listeners.links.take(id);
-        let mut ids = Vec::new();
-        for (callback, link) in linked {
-            if host.listeners.remove(link.target, &link.event, callback) {
-                ids.push(callback);
-                if let EventTargetId::Signal(target) = link.target {
-                    after_removal(&host, table, target)?;
-                }
-            }
-        }
-        settle_freed(ctx, &mut host)?;
-        ids
-    };
-    callbacks::release(ctx, &removed)?;
-    if !removed.is_empty() {
-        crate::script::notify_released(ctx, host, &[], &removed);
+    let released = host.document.borrow_mut().remove_abort_registrations(id);
+    unpin(ctx, &released.unpin)?;
+    callbacks::release(ctx, &released.callbacks)?;
+    if !released.callbacks.is_empty() {
+        crate::script::notify_released(ctx, host, &[], &released.callbacks);
     }
     if table.find(id)?.is_some() {
         crate::event::fire_abort(ctx, host, id);
     }
+    // The hold ends after the event: a dependent that nothing else holds would go before it.
     table.unpin(id)
 }
 
-/// Ends the strong hold of signal `id` when nothing needs it any more. That is the case when it is
-/// dependent with no source left, or when no `abort` listener is left on it.
-pub(crate) fn after_removal(host: &DocumentState, table: &Table<'_>, id: u32) -> JsResult<()> {
-    let listened = host
-        .listeners
-        .has_listener(EventTargetId::Signal(id), "abort")
-        || host.listeners.links.has(id);
-    if host.signals.pins(id) && listened {
-        Ok(())
-    } else {
-        table.unpin(id)
-    }
-}
-
-/// Ends the strong hold of each signal that lost a link, where nothing needs it any more. Runs no
-/// script.
-pub(crate) fn settle_freed(ctx: &Ctx<'_>, host: &mut DocumentState) -> JsResult<()> {
-    let freed = host.listeners.links.take_freed();
-    if freed.is_empty() {
+/// Holds each signal of `ids` strongly. Opens the table only for a signal to hold.
+pub(crate) fn pin(ctx: &Ctx<'_>, ids: &[u32]) -> JsResult<()> {
+    if ids.is_empty() {
         return Ok(());
     }
     let table = Table::open(ctx)?;
-    for id in freed {
-        after_removal(host, &table, id)?;
+    ids.iter().try_for_each(|&id| table.pin(id))
+}
+
+/// Ends the strong hold of each signal of `ids`. Opens the table only for a signal to release.
+pub(crate) fn unpin(ctx: &Ctx<'_>, ids: &[u32]) -> JsResult<()> {
+    if ids.is_empty() {
+        return Ok(());
     }
-    Ok(())
+    let table = Table::open(ctx)?;
+    ids.iter().try_for_each(|&id| table.unpin(id))
 }
 
 /// Drops everything of the collected signal `id`: its state, its own registrations and the
 /// callback table entries, and tells core.
 pub(crate) fn release_signal(ctx: &Ctx<'_>, host: &Rc<Host>, id: u32) -> JsResult<()> {
     let table = Table::open(ctx)?;
-    let ids = {
-        let mut host = host.document.borrow_mut();
-        let orphaned = host.signals.release(id);
-        host.listeners.links.forget(id);
-        let ids = host.listeners.release_target(EventTargetId::Signal(id));
-        for dependent in orphaned {
-            after_removal(&host, &table, dependent)?;
-        }
-        settle_freed(ctx, &mut host)?;
-        table.forget(id)?;
-        ids
-    };
-    callbacks::release(ctx, &ids)?;
-    crate::script::notify_released(ctx, host, &[], &ids);
+    let released = host.document.borrow_mut().release_signal(id);
+    released
+        .unpin
+        .iter()
+        .try_for_each(|&dependent| table.unpin(dependent))?;
+    table.forget(id)?;
+    callbacks::release(ctx, &released.callbacks)?;
+    crate::script::notify_released(ctx, host, &[], &released.callbacks);
     Ok(())
 }
 
@@ -185,11 +150,13 @@ pub(crate) fn release_signal(ctx: &Ctx<'_>, host: &Rc<Host>, id: u32) -> JsResul
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use std::rc::Rc;
+
     use rstest::rstest;
     use serde_json::json;
 
     use crate::test_support::{Clocked, callback_ids, engine_with_bindings, error_name, json_of};
-    use inca_document::{EventTargetId, Signals};
+    use inca_document::EventTargetId;
 
     /// A node, a controller `c`, its signal `s`, a log, `listen(fn, capture)` on the signal and
     /// `add(target, fn, signal, capture)`, which registers a `click` listener with the signal
@@ -438,7 +405,7 @@ mod tests {
         engine.with(|ctx| ctx.run_gc());
         drop(engine.run_jobs());
 
-        assert!(!host.document.borrow().signals.contains(1));
+        assert!(!host.document.borrow().signals().contains(1));
     }
 
     #[test]
@@ -452,7 +419,7 @@ mod tests {
             .eval::<()>("globalThis.second = new AbortController().signal;")
             .unwrap();
 
-        assert!(host.document.borrow().signals.contains(2));
+        assert!(host.document.borrow().signals().contains(2));
     }
 
     #[test]
@@ -472,7 +439,7 @@ mod tests {
         engine.with(|ctx| ctx.run_gc());
         drop(engine.run_jobs());
 
-        assert!(host.document.borrow().listeners.is_empty());
+        assert!(host.document.borrow().listeners().is_empty());
         assert!(!crate::tests::callback_stored(&engine, id));
     }
 
@@ -501,7 +468,7 @@ mod tests {
     #[test]
     fn the_class_throws_a_range_error_after_the_last_signal_id() {
         let (engine, host) = engine_with_bindings();
-        host.document.borrow_mut().signals = Signals::starting_at(u32::MAX);
+        host.document.borrow_mut().start_signal_ids_at(u32::MAX);
         engine.eval::<()>("new AbortController();").unwrap();
 
         assert_eq!(error_name(&engine, "new AbortController()"), "RangeError");
@@ -519,7 +486,7 @@ mod tests {
 
     fn clicks(f: &Clocked) -> Vec<u32> {
         callback_ids(
-            &f.host.document.borrow().listeners,
+            f.host.document.borrow().listeners(),
             EventTargetId::Node(node(f)),
             "click",
         )
@@ -553,7 +520,7 @@ mod tests {
         let other: u32 = f.engine.eval("other").unwrap();
 
         let left = callback_ids(
-            &f.host.document.borrow().listeners,
+            f.host.document.borrow().listeners(),
             EventTargetId::Node(other),
             "click",
         );
@@ -764,12 +731,12 @@ mod tests {
         f.engine.with(|ctx| ctx.run_gc());
         drop(f.engine.run_jobs());
 
-        assert_eq!(f.host.document.borrow().listeners.links.len(), 0);
+        assert_eq!(f.host.document.borrow().listeners().links().len(), 0);
         assert_eq!(clicks(&f).len(), 1);
     }
 
     #[test]
-    fn an_abort_unpins_a_signal_whose_last_link_a_sweep_dropped() {
+    fn the_release_of_a_sweep_unpins_a_signal_whose_last_link_it_dropped() {
         let f = fixture();
         f.engine
             .eval::<()>(
@@ -779,16 +746,22 @@ mod tests {
                     add(n.createNode('div'), () => {}, dependent);
                     globalThis.w = new WeakRef(dependent);
                 })();
-                globalThis.other = new AbortController();
                 ",
             )
             .unwrap();
-        let freed = f.host.document.borrow_mut().tree.sweep();
-        let mut document = f.host.document.borrow_mut();
-        inca_document::free_ids(&mut document, &mut *f.host.window.borrow_mut(), &freed);
-        drop(document);
+        let released = f
+            .host
+            .document
+            .borrow_mut()
+            .sweep(&mut *f.host.window.borrow_mut())
+            .unwrap();
+        let script = crate::JsScript::new(
+            Rc::clone(&f.engine),
+            Rc::clone(&f.host),
+            inca_jsenv::stderr_reporter(),
+        );
 
-        f.engine.eval::<()>("other.abort();").unwrap();
+        script.release(&released);
         for _ in 0..2 {
             f.engine.with(|ctx| ctx.run_gc());
             drop(f.engine.run_jobs());

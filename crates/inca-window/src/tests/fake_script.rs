@@ -14,7 +14,7 @@ use inca_document::{EventPayload, EventTargetId, MousePayload};
 use inca_node::NodeId;
 
 use async_channel::Sender;
-use inca_document::{Outcome, Walk};
+use inca_document::{Outcome, Released, Walk};
 
 use crate::test_support::cells;
 use crate::{Cells, EventDispatcher, Script};
@@ -183,7 +183,7 @@ impl Script for FakeScript {
         turn()
     }
 
-    fn release(&self, _nodes: &[NodeId], _callback_ids: &[u32]) -> bool {
+    fn release(&self, _released: &Released) -> bool {
         false
     }
 
@@ -224,17 +224,13 @@ pub(crate) fn fake_dispatcher_on(cells: &Rc<Cells>) -> (EventDispatcher, Rc<Fake
 
 /// What `setPointerCapture(node, 1)` does to the document while a button is held.
 pub(crate) fn request_capture(cells: &Cells, node: NodeId) {
-    let held = cells.window.borrow().held_buttons != 0;
-    let mut document = cells.document.borrow_mut();
-    if held && document.tree.is_connected(node) {
-        document.capture_pending = Some(node);
-    }
+    let _ = cells
+        .document
+        .borrow_mut()
+        .request_capture(&*cells.window.borrow(), node);
 }
 
 /// What `releasePointerCapture(node, 1)` does to the document.
 pub(crate) fn release_capture(cells: &Cells, node: NodeId) {
-    let mut document = cells.document.borrow_mut();
-    if document.capture_pending == Some(node) {
-        document.capture_pending = None;
-    }
+    cells.document.borrow_mut().release_capture_request(node);
 }

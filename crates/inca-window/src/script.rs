@@ -5,8 +5,7 @@
 
 use std::time::Duration;
 
-use inca_document::{Outcome, Walk};
-use inca_node::NodeId;
+use inca_document::{Outcome, Released, Walk};
 
 /// What the dispatch needs of the script side. A method that runs script keeps what the script
 /// threw, and [`report_pending`](Self::report_pending) sends it on. Call every method with no
@@ -22,9 +21,9 @@ pub trait Script {
     /// Runs the frame callbacks pending now and returns how many ran.
     fn run_frames(&self) -> usize;
 
-    /// Tells the script that `nodes` and the listener `callback_ids` were freed, and returns
-    /// whether it entered the script.
-    fn release(&self, nodes: &[NodeId], callback_ids: &[u32]) -> bool;
+    /// Tells the script that the nodes `released` names were freed with the listeners it names,
+    /// hands it the signals whose hold ends, and returns whether it entered the script.
+    fn release(&self, released: &Released) -> bool;
 
     /// Runs the queued jobs, and keeps what they threw.
     fn drain_jobs(&self);

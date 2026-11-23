@@ -1,20 +1,41 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The interaction-state pseudo-classes: `:focus`, `:focus-within`, `:hover` and `:active` read
-//! the state the tree keeps. The tests of these sit in the same file.
+//! The interaction-state pseudo-classes: `:hover` and `:active` read the state the tree keeps,
+//! and `:focus` and `:focus-within` read the focus a match names. The tests of these sit in the
+//! same file.
+
+use inca_node::tree::NodeId;
 
 use super::{Node, PseudoClass};
 
+/// The focus that `:focus` and `:focus-within` match against.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MatchFocus {
+    /// The focus the tree holds, which the drawn frame shows.
+    #[default]
+    Drawn,
+    /// The given node, or no node.
+    Given(Option<NodeId>),
+}
+
 impl Node<'_> {
-    /// Whether the element is in the interaction state `class`. Any other pseudo-class is false.
-    pub(super) fn is_in_interaction_state(&self, class: &PseudoClass) -> bool {
+    /// Whether the element is in the interaction state `class`, with `focus` for `:focus` and
+    /// `:focus-within`. Any other pseudo-class is false.
+    pub(super) fn is_in_interaction_state(&self, class: &PseudoClass, focus: MatchFocus) -> bool {
         let id = self.node.id();
-        match class {
-            PseudoClass::Hover => self.tree.is_hovered(id),
-            PseudoClass::Active => self.tree.is_active(id),
-            PseudoClass::Focus => self.tree.is_focused(id),
-            PseudoClass::FocusWithin => self.tree.is_focus_within(id),
+        let tree = self.tree;
+        match (class, focus) {
+            (PseudoClass::Hover, _) => tree.is_hovered(id),
+            (PseudoClass::Active, _) => tree.is_active(id),
+            (PseudoClass::Focus, MatchFocus::Drawn) => tree.is_focused(id),
+            (PseudoClass::FocusWithin, MatchFocus::Drawn) => tree.is_focus_within(id),
+            (PseudoClass::Focus, MatchFocus::Given(node)) => {
+                node == Some(id) && tree.is_connected(id)
+            }
+            (PseudoClass::FocusWithin, MatchFocus::Given(node)) => node.is_some_and(|focus| {
+                tree.is_connected(focus) && tree.ancestors(focus).any(|a| a == id)
+            }),
             _ => false,
         }
     }
@@ -27,6 +48,8 @@ mod tests {
     use inca_node::tree::{AttributeValue, NodeId};
     use rstest::rstest;
 
+    use super::MatchFocus;
+    use crate::matches_selector;
     use crate::tests::{Fixture, text};
 
     /// `root > (card > input, other)`.
@@ -170,6 +193,57 @@ mod tests {
         assert_eq!(before, None);
         assert_eq!(during, Some(text("1px")));
         assert_eq!(width(&s.f, s.input), None);
+    }
+
+    /// Whether `node` matches `selector` with `focus` given for the match.
+    fn matches_given(s: &Scene, node: NodeId, selector: &str, focus: Option<NodeId>) -> bool {
+        matches_selector(&s.f.tree, node, selector, MatchFocus::Given(focus)).unwrap()
+    }
+
+    #[rstest]
+    #[case::focus_on_the_given_node(|s: &Scene| s.input, ":focus", true)]
+    #[case::focus_on_the_drawn_node(|s: &Scene| s.other, ":focus", false)]
+    #[case::focus_within_on_an_ancestor_of_the_given_node(|s: &Scene| s.card, ":focus-within", true)]
+    #[case::focus_within_on_the_drawn_node(|s: &Scene| s.other, ":focus-within", false)]
+    #[case::a_compound_that_climbs_to_the_ancestor(
+        |s: &Scene| s.input,
+        ".card:focus-within > input:focus",
+        true
+    )]
+    fn a_given_focus_matches_in_place_of_the_drawn_one(
+        #[case] node: fn(&Scene) -> NodeId,
+        #[case] selector: &str,
+        #[case] expected: bool,
+    ) {
+        let mut s = scene();
+        s.f.tree.set_focus(Some(s.other));
+
+        assert_eq!(
+            matches_given(&s, node(&s), selector, Some(s.input)),
+            expected
+        );
+    }
+
+    #[test]
+    fn a_given_absent_focus_matches_no_node_the_tree_holds_as_focused() {
+        let mut s = scene();
+        s.f.tree.set_focus(Some(s.input));
+
+        assert!(!matches_given(&s, s.input, ":focus", None));
+        assert!(!matches_given(&s, s.card, ":focus-within", None));
+    }
+
+    #[rstest]
+    #[case::focus_on_the_node(|s: &Scene| s.input, ":focus")]
+    #[case::focus_within_on_the_ancestor(|s: &Scene| s.card, ":focus-within")]
+    fn a_given_focus_that_is_detached_matches_nothing(
+        #[case] node: fn(&Scene) -> NodeId,
+        #[case] selector: &str,
+    ) {
+        let mut s = scene();
+        s.f.tree.remove_child(s.f.root, s.card).unwrap();
+
+        assert!(!matches_given(&s, node(&s), selector, Some(s.input)));
     }
 
     #[rstest]

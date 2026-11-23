@@ -26,10 +26,14 @@ pub(super) fn content_window_size(
     host: &DocumentState,
     root: NodeId,
 ) -> (Option<f32>, Option<f32>) {
-    let Some(&content) = host.tree.get(root).and_then(|node| node.children().first()) else {
+    let Some(&content) = host
+        .tree()
+        .get(root)
+        .and_then(|node| node.children().first())
+    else {
         return (None, None);
     };
-    let (width, height) = declared_window_size(&host.tree, &host.style, content);
+    let (width, height) = declared_window_size(host.tree(), host.style(), content);
 
     // A window dimension in px is always far within f32's
     // precision range. No meaningful truncation risk here.
@@ -138,16 +142,19 @@ mod tests {
     fn mount_content(app: &HostedApp, width: f32, height: f32) {
         let mut host = app.session.host.document.borrow_mut();
         let root = host.root();
-        let existing = host.tree.get(root).unwrap().children().first().copied();
+        let existing = host.tree().get(root).unwrap().children().first().copied();
         let content = if let Some(id) = existing {
             id
         } else {
-            let id = host.tree.create_node("div").unwrap();
-            host.tree.append_child(root, id).unwrap();
+            let id = host.create_node("div").unwrap();
+            host.append_child(&*app.session.host.window.borrow(), root, id)
+                .unwrap();
             id
         };
-        set_style(&mut host.tree, content, "width", f64::from(width)).unwrap();
-        set_style(&mut host.tree, content, "height", f64::from(height)).unwrap();
+        host.set_style_prop(content, "width", f64::from(width))
+            .unwrap();
+        host.set_style_prop(content, "height", f64::from(height))
+            .unwrap();
     }
 
     fn bounds_size(cx: &mut TestAppContext, window: WindowHandle<HostedApp>) -> (f32, f32) {
@@ -301,13 +308,14 @@ mod tests {
     fn mount_partial(app: &HostedApp, width: Option<f64>, height: Option<f64>) {
         let mut host = app.session.host.document.borrow_mut();
         let root = host.root();
-        let content = host.tree.create_node("div").unwrap();
-        host.tree.append_child(root, content).unwrap();
+        let content = host.create_node("div").unwrap();
+        host.append_child(&*app.session.host.window.borrow(), root, content)
+            .unwrap();
         if let Some(width) = width {
-            set_style(&mut host.tree, content, "width", width).unwrap();
+            host.set_style_prop(content, "width", width).unwrap();
         }
         if let Some(height) = height {
-            set_style(&mut host.tree, content, "height", height).unwrap();
+            host.set_style_prop(content, "height", height).unwrap();
         }
     }
 
@@ -428,30 +436,30 @@ mod tests {
         assert_eq!(bounds_size(cx, window), (300.0, 150.0));
     }
 
+    /// A document whose root holds one `div` with the style props `style`, and its root.
+    fn mounted(style: &[(&str, AttributeValue)]) -> (DocumentState, NodeId) {
+        let mut tree = inca_document::new_document_tree();
+        let root = tree.root().unwrap();
+        let content = tree.create_node("div").unwrap();
+        for (key, value) in style {
+            set_style(&mut tree, content, *key, value.clone()).unwrap();
+        }
+        tree.append_child(root, content).unwrap();
+        (DocumentState::from_tree(tree), root)
+    }
+
     #[test]
     fn content_window_size_reads_the_mounted_root_childs_style() {
-        let mut state = DocumentState::default();
-        let host = &mut state;
-        let root = host.root();
-        let content = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, content, "width", 300.0).unwrap();
-        set_style(&mut host.tree, content, "height", 150.0).unwrap();
-        host.tree.append_child(root, content).unwrap();
+        let (host, root) = mounted(&[("width", 300.0.into()), ("height", 150.0.into())]);
 
-        assert_eq!(content_window_size(host, root), (Some(300.0), Some(150.0)));
+        assert_eq!(content_window_size(&host, root), (Some(300.0), Some(150.0)));
     }
 
     #[test]
     fn content_window_size_reads_a_px_string() {
-        let mut state = DocumentState::default();
-        let host = &mut state;
-        let root = host.root();
-        let content = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, content, "width", "800px").unwrap();
-        set_style(&mut host.tree, content, "height", "150px").unwrap();
-        host.tree.append_child(root, content).unwrap();
+        let (host, root) = mounted(&[("width", "800px".into()), ("height", "150px".into())]);
 
-        assert_eq!(content_window_size(host, root), (Some(800.0), Some(150.0)));
+        assert_eq!(content_window_size(&host, root), (Some(800.0), Some(150.0)));
     }
 
     #[rstest]
@@ -459,25 +467,16 @@ mod tests {
     #[case::negative_px(AttributeValue::String("-5px".into()))]
     #[case::too_large_px(AttributeValue::String("1e999px".into()))]
     fn content_window_size_drops_a_negative_or_too_large_dimension(#[case] value: AttributeValue) {
-        let mut state = DocumentState::default();
-        let host = &mut state;
-        let root = host.root();
-        let content = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, content, "width", value).unwrap();
-        host.tree.append_child(root, content).unwrap();
+        let (host, root) = mounted(&[("width", value)]);
 
-        assert_eq!(content_window_size(host, root), (None, None));
+        assert_eq!(content_window_size(&host, root), (None, None));
     }
 
     #[test]
     fn content_window_size_is_none_when_unset() {
-        let mut state = DocumentState::default();
-        let host = &mut state;
-        let root = host.root();
-        let content = host.tree.create_node("div").unwrap();
-        host.tree.append_child(root, content).unwrap();
+        let (host, root) = mounted(&[]);
 
-        assert_eq!(content_window_size(host, root), (None, None));
+        assert_eq!(content_window_size(&host, root), (None, None));
     }
 
     #[test]

@@ -51,7 +51,7 @@ impl FocusModel {
     }
 
     /// Records that `node_id`'s `tabindex` may have changed. The next
-    /// [`Self::apply_pending`] re-reads it.
+    /// [`Self::plan_frame`] re-reads it.
     pub fn mark_tab_dirty(&mut self, node_id: NodeId) {
         self.tab_dirty.insert(node_id);
     }

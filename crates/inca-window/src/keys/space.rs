@@ -12,15 +12,11 @@ use crate::dispatch::EventDispatcher;
 impl EventDispatcher {
     pub(super) fn focused_enabled_button(&self, window: &Window, cx: &App) -> Option<NodeId> {
         let document = self.cells.document.borrow();
-        let focused = self
-            .cells
-            .window
-            .borrow()
-            .focus
-            .focused_node(&document.focus, window, cx);
+        let platform = self.cells.window.borrow().focus.focused_node(window, cx);
+        let focused = document.focus().held_node(platform);
         focused.filter(|id| {
             document
-                .tree
+                .tree()
                 .get(*id)
                 .is_some_and(|node| node.is_html("button") && !inca_node::is_disabled_control(node))
         })
@@ -82,7 +78,6 @@ mod tests {
     use inca_gpui::EventSink;
     use inca_node::AttributeValue;
     use inca_node::NodeId;
-    use inca_style::set_style;
     use inca_test_macros::gpui_cases;
 
     impl Scene {
@@ -103,7 +98,6 @@ mod tests {
             self.cells
                 .document
                 .borrow_mut()
-                .tree
                 .set_attribute(node, "disabled", true)
                 .unwrap();
         }
@@ -112,7 +106,6 @@ mod tests {
             self.cells
                 .document
                 .borrow_mut()
-                .tree
                 .remove_attribute(node, "disabled")
                 .unwrap();
         }
@@ -218,14 +211,14 @@ mod tests {
             .cells
             .document
             .borrow_mut()
-            .tree
             .create_element_ns(Some(SVG), None, "button")
             .unwrap();
         {
             let mut cells = s.cells.document.borrow_mut();
-            cells.tree.set_attribute(button, "tabindex", "0").unwrap();
-            cells.tree.append_child(s.parent, button).unwrap();
-            cells.focus.mark_tab_dirty(button);
+            cells.set_attribute(button, "tabindex", "0").unwrap();
+            cells
+                .append_child(&*s.cells.window.borrow(), s.parent, button)
+                .unwrap();
         }
         s.watch(button);
         s.focus(cx, button);
@@ -452,10 +445,8 @@ mod tests {
                 fake(Box::new(move || {
                     let mut document = cells.document.borrow_mut();
                     document
-                        .tree
                         .set_attribute(nodes[changed], attribute, value)
                         .unwrap();
-                    document.focus.mark_tab_dirty(nodes[changed]);
                 }));
             }
             false
@@ -609,10 +600,12 @@ mod tests {
         let s = scene(cx);
         s.focus(cx, s.first);
         s.key(cx, "space", false, false);
-        s.disable(s.first);
-        s.key(cx, "enter", false, false);
-        s.enable(s.first);
-        s.key(cx, "space", true, false);
+        s.in_window(cx, |s, window, cx| {
+            s.disable(s.first);
+            s.send_key("enter", false, window, cx);
+            s.enable(s.first);
+            s.send_key("space", true, window, cx);
+        });
         assert_eq!(s.clicks(), [s.first]);
     }
 
@@ -623,8 +616,8 @@ mod tests {
         let s = scene(cx);
         {
             let mut cells = s.cells.document.borrow_mut();
-            set_style(&mut cells.tree, s.first, "width", 100.0).unwrap();
-            set_style(&mut cells.tree, s.first, "height", 50.0).unwrap();
+            cells.set_style_prop(s.first, "width", 100.0).unwrap();
+            cells.set_style_prop(s.first, "height", 50.0).unwrap();
         }
         s.disable(s.first);
         s.focus(cx, s.second);
@@ -651,10 +644,11 @@ mod tests {
         let s = scene(cx);
         let inner = {
             let mut cells = s.cells.document.borrow_mut();
-            let inner = cells.tree.create_node("div").unwrap();
-            cells.tree.set_attribute(inner, "tabindex", "-1").unwrap();
-            cells.tree.append_child(s.first, inner).unwrap();
-            cells.focus.mark_tab_dirty(inner);
+            let inner = cells.create_node("div").unwrap();
+            cells.set_attribute(inner, "tabindex", "-1").unwrap();
+            cells
+                .append_child(&*s.cells.window.borrow(), s.first, inner)
+                .unwrap();
             inner
         };
         s.focus(cx, inner);
@@ -669,11 +663,9 @@ mod tests {
         let s = scene(cx);
         {
             let mut cells = s.cells.document.borrow_mut();
-            cells.tree.set_attribute(s.parent, "tabindex", "0").unwrap();
-            cells.focus.mark_tab_dirty(s.parent);
+            cells.set_attribute(s.parent, "tabindex", "0").unwrap();
         }
         s.disable(s.first);
-        s.cells.document.borrow_mut().focus.mark_tab_dirty(s.first);
         s.focus(cx, s.second);
         s.mouse_down(cx, s.first);
         assert_eq!(s.focused(cx), Some(s.parent));

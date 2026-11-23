@@ -21,7 +21,7 @@ use crate::node::handle::{ELEMENT, HTML_ELEMENT};
 /// The box of the node `id` in the last drawn frame. A node that is not connected has none,
 /// whatever the frame record still holds, and an id the tree does not have is not connected.
 fn recorded_box(host: &Host, id: NodeId) -> Option<NodeBox> {
-    if !host.document.borrow().tree.is_connected(id) {
+    if !host.document.borrow().tree().is_connected(id) {
         return None;
     }
     host.window.borrow().node_box(id)
@@ -84,7 +84,7 @@ fn offset_of(host: &Shared, id: NodeId) -> (f64, f64) {
     let Some(b) = recorded_box(host, id) else {
         return (0.0, 0.0);
     };
-    let parent = host.document.borrow().tree.linked(id, Link::Parent, true);
+    let parent = host.document.borrow().tree().linked(id, Link::Parent, true);
     let origin = parent.and_then(|parent| recorded_box(host, parent));
     let (x, y) = geometry::offset_of(&b, origin.as_ref());
     (rounded(x), rounded(y))

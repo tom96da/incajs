@@ -137,7 +137,8 @@ impl<'js> IntoJsFunc<'js, ()> for Construct {
             ));
         }
         let table = Table::open(ctx)?;
-        let signal = new_signal(ctx, &self.host, &table, false)?;
+        let id = self.host.document.borrow_mut().create_signal();
+        let signal = new_signal(ctx, &table, id)?;
         let proto = new_target_prototype(&params, required_prototype(ctx, "AbortController")?)?;
         let controller = IncaController { signal };
         Ok(Class::instance_proto(controller, proto)?.into_value())
@@ -197,7 +198,7 @@ fn define_signal<'js>(ctx: &Ctx<'js>, host: &Rc<Host>, event_target: &Object<'js
     define_this_getter(ctx, &proto, "aborted", move |ctx, this| {
         let signal = receiver::<IncaSignal>(ctx, &this)?;
         let id = signal.borrow().id;
-        Ok(state.document.borrow().signals.is_aborted(id))
+        Ok(state.document.borrow().signals().is_aborted(id))
     })?;
     define_this_getter(ctx, &proto, "reason", |ctx, this| {
         let signal = receiver::<IncaSignal>(ctx, &this)?;

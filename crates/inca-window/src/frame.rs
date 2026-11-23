@@ -6,7 +6,7 @@
 use gpui::{App, Window};
 use inca_document::EventPayload;
 
-use crate::dispatch::{EventDispatcher, observe_focus};
+use crate::dispatch::EventDispatcher;
 use crate::fire::with_screen;
 use crate::focus::dispatch_transition;
 use inca_document::EventTargetId;
@@ -18,39 +18,22 @@ impl EventDispatcher {
     /// reveals the focused node and fires pending `scroll` events, and requests another frame
     /// while a focus request waits. Call it first in the window's render.
     pub fn begin_frame(&self, window: &mut Window, cx: &mut App) {
-        self.warn_style_sheets();
+        self.cells.document.borrow_mut().report_sheet_warnings();
         self.sync_modifiers(window, false);
-        let transitions = {
-            let document = &mut *self.cells.document.borrow_mut();
-            let transitions = self.cells.window.borrow_mut().focus.apply_pending(
-                &mut document.focus,
-                &document.tree,
-                &document.style,
-                window,
-                cx,
-            );
-            document.sync_focus_style();
-            transitions
-        };
+        let transitions = self.cells.apply_focus(window, cx);
         for transition in &transitions {
             self.input_focus_moved(transition, window, cx);
             dispatch_transition(transition, self, window, cx);
         }
         self.release_orphans(window, cx);
-        self.cells.reveal_focus(window);
+        if self.cells.reveal_all() {
+            window.request_animation_frame();
+        }
         self.fire_scrolls(window, cx);
         // A refresh requested while drawing has no effect, so a listener's own focus changes need
         // the next frame.
-        if self.cells.document.borrow().focus.has_queued_work() {
+        if self.cells.document.borrow().focus().has_queued_work() {
             window.request_animation_frame();
-        }
-    }
-
-    /// Prints each warning of the sheets parsed since the last frame, prefixed with `<style>: `.
-    fn warn_style_sheets(&self) {
-        let document = self.cells.document.borrow();
-        for line in document.style.take_style_warnings(&document.tree) {
-            document.warnings.emit(&format!("<style>: {line}"));
         }
     }
 
@@ -60,16 +43,15 @@ impl EventDispatcher {
     /// which this requests.
     fn release_orphans(&self, window: &mut Window, cx: &mut App) {
         let swept = self.cells.sweep_orphans();
-        let Some((nodes, callback_ids)) = swept else {
+        let Some(released) = swept else {
             return;
         };
-        observe_focus(&self.cells, window, cx);
-        let entered = self.script.release(&nodes, &callback_ids);
+        let entered = self.turn(window, cx, |_, _| self.script.release(&released));
         if entered {
             self.drain_observed(window);
         }
         // The requests end when a frame leaves no orphan.
-        if self.cells.document.borrow().tree.has_orphans() {
+        if self.cells.document.borrow().tree().has_orphans() {
             window.request_animation_frame();
         }
     }
@@ -83,13 +65,14 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) {
-        observe_focus(&self.cells, window, cx);
-        let payload = self.with_held_buttons(event, payload.clone());
-        let payload = with_screen(payload, window);
-        let (_, entered) = self.walk(target, event, &payload, &[]);
-        if entered {
-            self.drain_observed(window);
-        }
+        self.turn(window, cx, |window, _| {
+            let payload = self.with_held_buttons(event, payload.clone());
+            let payload = with_screen(payload, window);
+            let (_, entered) = self.walk(target, event, &payload, &[]);
+            if entered {
+                self.drain_observed(window);
+            }
+        });
     }
 
     /// Fires `scroll` at each container whose offset changed since the last
@@ -115,27 +98,24 @@ mod tests {
         FakeScript, Frame, draw, fake_dispatcher, fake_focus_scene, fake_focusable_node, is_focused,
     };
     use gpui::{AppContext as _, TestAppContext};
-    use std::cell::RefCell;
     use std::rc::Rc;
 
     #[gpui::test]
     fn a_frame_prints_the_warnings_of_a_style_sheet_once(cx: &mut TestAppContext) {
         let (dispatcher, cells, _fake) = fake_dispatcher();
-        let printed = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&printed);
-        cells
-            .document
-            .borrow_mut()
-            .warnings
-            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
+        let printed = cells.document.borrow_mut().record_warnings();
         {
             let mut document = cells.document.borrow_mut();
             let root = document.root();
-            let style = document.tree.create_node("style").unwrap();
-            let text = document.tree.create_node("#text").unwrap();
-            document.tree.set_data(text, ".a { bogus: 1 }").unwrap();
-            document.tree.append_child(style, text).unwrap();
-            document.tree.append_child(root, style).unwrap();
+            let style = document.create_node("style").unwrap();
+            let text = document.create_node("#text").unwrap();
+            document.set_data(text, ".a { bogus: 1 }").unwrap();
+            document
+                .append_child(&*cells.window.borrow(), style, text)
+                .unwrap();
+            document
+                .append_child(&*cells.window.borrow(), root, style)
+                .unwrap();
         }
         let window = cx.add_window(|_, _| Frame(Rc::new(dispatcher)));
 
@@ -151,7 +131,7 @@ mod tests {
     #[gpui::test]
     fn a_frame_writes_the_focus_a_request_asked_for(cx: &mut TestAppContext) {
         let (_dispatcher, cells, _fake, window, node) = fake_focus_scene(cx);
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
 
         draw(cx, window);
 
@@ -161,17 +141,52 @@ mod tests {
     #[gpui::test]
     fn a_frame_clears_the_focus_of_a_node_that_stops_being_focusable(cx: &mut TestAppContext) {
         let (_dispatcher, cells, _fake, window, node) = fake_focus_scene(cx);
-        cells.document.borrow_mut().focus.request_focus(node, true);
+        cells.document.borrow_mut().request_focus(node, true);
         draw(cx, window);
         {
             let document = &mut *cells.document.borrow_mut();
-            document.tree.remove_attribute(node, "tabindex").unwrap();
-            document.focus.mark_tab_dirty(node);
+            document.remove_attribute(node, "tabindex").unwrap();
         }
 
         draw(cx, window);
 
         assert!(!is_focused(&cells.document.borrow(), node));
+    }
+
+    #[gpui::test]
+    fn a_focused_node_that_loses_its_tab_index_is_blurred_and_the_root_parked(
+        cx: &mut TestAppContext,
+    ) {
+        let (_dispatcher, cells, fake, window, node) = fake_focus_scene(cx);
+        cells.document.borrow_mut().request_focus(node, false);
+        draw(cx, window);
+        fake.take();
+        {
+            let document = &mut *cells.document.borrow_mut();
+            document.remove_attribute(node, "tabindex").unwrap();
+        }
+
+        draw(cx, window);
+
+        let events: Vec<String> = fake
+            .take()
+            .iter()
+            .filter(|walked| {
+                ["focus", "blur", "focusin", "focusout"].contains(&walked.name.as_str())
+            })
+            .map(|walked| format!("{}:{}", walked.name, walked.target_text()))
+            .collect();
+        assert_eq!(events, [format!("blur:{node}"), format!("focusout:{node}")]);
+        let (focused, parked) = cx
+            .update_window(window.into(), |_, window, cx| {
+                (
+                    window.focused(cx),
+                    cells.window.borrow().focus.parked_handle(),
+                )
+            })
+            .unwrap();
+        assert!(focused.is_some());
+        assert_eq!(focused, parked);
     }
 
     /// A window over `count` focusable nodes on a [`FakeScript`], settled by one draw.
@@ -207,11 +222,7 @@ mod tests {
 
     impl Settled {
         fn request_focus(&self, node: u32) {
-            self.cells
-                .document
-                .borrow_mut()
-                .focus
-                .request_focus(node, false);
+            self.cells.document.borrow_mut().request_focus(node, false);
         }
 
         fn focused(&self, node: u32) -> bool {
@@ -234,7 +245,7 @@ mod tests {
     fn a_focus_requested_in_a_focus_listener_applies_on_the_next_frame(cx: &mut TestAppContext) {
         let scene = settled(cx, 2);
         let (first, second) = (scene.nodes[0], scene.nodes[1]);
-        scene.on_focus(first, move |cells| cells.focus.request_focus(second, false));
+        scene.on_focus(first, move |cells| cells.request_focus(second, false));
         scene.request_focus(first);
 
         draw(cx, scene.window);
@@ -254,17 +265,9 @@ mod tests {
             move |walked| {
                 let target = walked.target_text();
                 if walked.name == "focus" && target == first.to_string() {
-                    cells
-                        .document
-                        .borrow_mut()
-                        .focus
-                        .request_focus(second, false);
+                    cells.document.borrow_mut().request_focus(second, false);
                 } else if walked.name == "focus" && target == second.to_string() {
-                    cells
-                        .document
-                        .borrow_mut()
-                        .focus
-                        .request_focus(first, false);
+                    cells.document.borrow_mut().request_focus(first, false);
                 }
                 false
             }
@@ -301,8 +304,7 @@ mod tests {
         let scene = settled(cx, 1);
         let node = scene.nodes[0];
         scene.on_focus(node, move |cells| {
-            cells.tree.remove_attribute(node, "tabindex").unwrap();
-            cells.focus.mark_tab_dirty(node);
+            cells.remove_attribute(node, "tabindex").unwrap();
         });
         scene.request_focus(node);
 

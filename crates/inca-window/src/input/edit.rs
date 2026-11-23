@@ -27,7 +27,7 @@ impl EventDispatcher {
         if edit.range.is_empty() && edit.text.is_empty() {
             return;
         }
-        let connected = self.cells.document.borrow().tree.is_connected(node);
+        let connected = self.cells.document.borrow().tree().is_connected(node);
         if !connected || self.input_state(node).value() != before {
             return;
         }
@@ -451,8 +451,7 @@ mod tests {
             cells
                 .document
                 .borrow_mut()
-                .tree
-                .remove_child(parent, input)
+                .remove_child(&*cells.window.borrow(), parent, input)
                 .unwrap();
         });
         s.request(cx, replace("x"));

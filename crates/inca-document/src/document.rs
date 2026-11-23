@@ -4,13 +4,13 @@
 //! The tree a document starts from, and the state that joins it to its style, its listeners and
 //! its focus.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 use inca_node::{NodeId, VirtualTree};
 use inca_style::StyleCache;
 
-use crate::{EventListeners, FocusModel, InputState, Signals, StyleWarnings};
+use crate::warnings::StyleWarnings;
+use crate::{EventListeners, FocusModel, InputState, RevealQueue, Signals};
 
 /// A tree with a root element under a document node. The root is the node a mounting app
 /// attaches under.
@@ -37,40 +37,72 @@ pub fn new_document_tree() -> VirtualTree {
 /// The retained tree a document mutates, the cascade over it, the listeners registered on it and
 /// the state its focus and text controls keep.
 pub struct DocumentState {
-    pub tree: VirtualTree,
-    /// The cascade of the tree, rebuilt when the tree changes.
-    pub style: StyleCache,
-    /// Receives one line for each style a `setStyle` call stores with an unknown key, an invalid
-    /// color or a value of a shape the document does not support. A node prints each line once.
-    /// Writes to stderr by default.
-    pub warnings: StyleWarnings,
-    pub listeners: EventListeners,
-    /// The state of every `AbortSignal`, by id. Plain data.
-    pub signals: Signals,
-    pub focus: FocusModel,
-    /// Last number handed out as an `eventId`. Each event takes the next one.
-    pub last_event_id: u64,
+    /// Read through [`Self::tree`] and changed only through the operations of the document, each of
+    /// which runs the steps that follow its change.
+    pub(crate) tree: VirtualTree,
+    /// The cascade of the tree, rebuilt when the tree changes. Read through [`Self::style`].
+    pub(crate) style: StyleCache,
+    /// The sink of the style warnings with the lines each node has printed. Changed only through
+    /// the operations of the document.
+    pub(crate) warnings: StyleWarnings,
+    /// Read through [`Self::listeners`] and changed only through the operations of the document,
+    /// which keep the links of the signals in step.
+    pub(crate) listeners: EventListeners,
+    /// The state of every `AbortSignal`, by id. Read through [`Self::signals`] and changed only
+    /// through the operations of the document.
+    pub(crate) signals: Signals,
+    /// Read through [`Self::focus`] and changed only through the methods of the document. The
+    /// tree holds the drawn focus, which [`Self::plan_focus_frame`] and
+    /// [`Self::set_window_blurred`] publish. A script query reads [`Self::query_focus`].
+    pub(crate) focus: FocusModel,
+    /// The reveals that wait for a box: from a focus and from `scrollIntoView`.
+    pub(crate) reveals: RevealQueue,
+    /// The last number handed out as an `eventId`. Changed only through [`Self::next_event_id`].
+    pub(crate) last_event_id: u64,
     /// The node a script asked to capture the mouse pointer. Its `gotpointercapture` fires before
-    /// the next pointer event.
-    pub capture_pending: Option<NodeId>,
-    /// The text states of the `input` nodes, created on first use. Its own cell, as the draw runs
-    /// under a shared borrow.
-    pub inputs: RefCell<HashMap<NodeId, InputState>>,
+    /// the next pointer event. Changed only through the capture requests of the document.
+    pub(crate) capture_request: Option<NodeId>,
+    /// The text states of the `input` nodes, created on first use. Read through [`Self::input`]
+    /// and changed only through the operations of the document.
+    pub(crate) inputs: HashMap<NodeId, InputState>,
 }
 
 impl Default for DocumentState {
     fn default() -> Self {
+        Self::from_tree(new_document_tree())
+    }
+}
+
+impl DocumentState {
+    /// A document over `tree`, with no listener, signal, focus, reveal or text state yet. `tree`
+    /// declares its root and its document, as [`new_document_tree`] builds them. The hover path,
+    /// the pressed path and the drawn focus that `tree` holds are taken as they are.
+    #[must_use]
+    pub fn from_tree(tree: VirtualTree) -> Self {
         Self {
-            tree: new_document_tree(),
+            tree,
             style: StyleCache::new(),
             warnings: StyleWarnings::default(),
             listeners: EventListeners::default(),
             signals: Signals::default(),
             focus: FocusModel::default(),
+            reveals: RevealQueue::default(),
             last_event_id: 0,
-            capture_pending: None,
-            inputs: RefCell::new(HashMap::new()),
+            capture_request: None,
+            inputs: HashMap::new(),
         }
+    }
+
+    /// The tree, for reads.
+    #[must_use]
+    pub fn tree(&self) -> &VirtualTree {
+        &self.tree
+    }
+
+    /// The cascade of the tree, for reads.
+    #[must_use]
+    pub fn style(&self) -> &StyleCache {
+        &self.style
     }
 }
 
@@ -85,16 +117,6 @@ impl std::fmt::Debug for DocumentState {
 }
 
 impl DocumentState {
-    /// Sets the typed text of the `input` node `node` to `value`, creating its text state on first
-    /// use.
-    pub fn set_input_value(&self, node: NodeId, value: &str) {
-        self.inputs
-            .borrow_mut()
-            .entry(node)
-            .or_default()
-            .set_value(value);
-    }
-
     /// The node a mounting app attaches under. Allocated with the tree, so `rootNodeId` always
     /// resolves.
     ///
@@ -124,39 +146,6 @@ impl DocumentState {
         self.tree
             .document_element()
             .unwrap_or_else(|| self.document())
-    }
-
-    /// Moves where Tab starts off `node_id`'s subtree to `before`, the node right before its
-    /// place.
-    pub fn move_tab_start(&mut self, node_id: NodeId, before: Option<NodeId>) {
-        self.focus.start_leaves(&self.tree, node_id, before);
-    }
-
-    /// Queues a focus re-check of the node and its subtree.
-    pub fn mark_focus_dirty(&mut self, node_id: NodeId) {
-        self.focus.mark_subtree_dirty(&self.tree, node_id);
-    }
-
-    /// Writes the focus that style rules read from the focus model. Returns whether the value
-    /// changed.
-    pub fn sync_focus_style(&mut self) -> bool {
-        let node = self.focus.visual_focus(&self.tree, &self.style);
-        self.tree.set_focus(node)
-    }
-
-    /// Reports a style warning of `node_id` through the sink, once for each node and line.
-    pub fn warn_style(&mut self, node_id: NodeId, line: &str) {
-        self.warnings.report(&self.tree, node_id, line);
-    }
-
-    /// Drops the document state of freed nodes and returns the callback ids their listeners held.
-    pub fn forget(&mut self, ids: &[NodeId]) -> Vec<u32> {
-        for &id in ids {
-            self.warnings.forget(id);
-            self.inputs.get_mut().remove(&id);
-            self.focus.forget(id);
-        }
-        self.listeners.release_nodes(ids)
     }
 }
 

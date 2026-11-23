@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use inca_document::{Outcome, Walk};
+use inca_document::{Outcome, Released, Walk};
 use inca_jsenv::{
     Engine, EngineError, ErrorReporter, callbacks, report_jobs, run_frames, run_timers,
 };
@@ -69,13 +69,13 @@ impl JsScript {
         run_frames(&self.engine, &frames, &self.reporter())
     }
 
-    /// Tells the script that `nodes` and the listener `callback_ids` were freed, and returns
-    /// whether it entered the engine.
-    pub fn release(&self, nodes: &[NodeId], callback_ids: &[u32]) -> bool {
+    /// Tells the script that the nodes `released` names were freed with the listeners it names,
+    /// ends the holds of the signals it names, and returns whether it entered the engine.
+    pub fn release(&self, released: &Released) -> bool {
         let host = &self.host;
+        let callback_ids = &released.callbacks;
         self.engine.with(|ctx| {
-            let settled = crate::abort::settle_freed(&ctx, &mut host.document.borrow_mut());
-            if let Err(err) = settled {
+            if let Err(err) = crate::abort::unpin(&ctx, &released.unpin) {
                 host.js
                     .borrow_mut()
                     .failures
@@ -87,7 +87,7 @@ impl JsScript {
                     .failures
                     .push(EngineError::capture(&ctx, &err));
             }
-            notify_released(&ctx, host, nodes, callback_ids)
+            notify_released(&ctx, host, &released.nodes, callback_ids)
         })
     }
 

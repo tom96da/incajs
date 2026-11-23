@@ -21,7 +21,7 @@ use inca_node::NodeId;
 #[gpui::test]
 fn base_fields_follow_the_spec_rows_and_prevent_default_needs_cancelable(cx: &mut TestAppContext) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = cells.document.borrow_mut().create_node("div").unwrap();
     dispatcher.engine.eval::<()>(RECORDER).unwrap();
     let cx = cx.add_empty_window();
     let mut mismatches = Vec::new();
@@ -83,7 +83,7 @@ fn base_fields_follow_the_spec_rows_and_prevent_default_needs_cancelable(cx: &mu
 #[gpui::test]
 fn an_unlisted_event_name_takes_all_three_flags_false(cx: &mut TestAppContext) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = cells.document.borrow_mut().create_node("div").unwrap();
     dispatcher.engine.eval::<()>(RECORDER).unwrap();
     listen(&dispatcher, node, "menu:1", "record");
     let cx = cx.add_empty_window();
@@ -102,13 +102,12 @@ fn an_unlisted_event_name_takes_all_three_flags_false(cx: &mut TestAppContext) {
 #[gpui::test]
 fn fire_walks_up_only_bubbling_events_and_reports_prevention(cx: &mut TestAppContext) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let parent = cells.document.borrow_mut().tree.create_node("div").unwrap();
-    let child = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let parent = cells.document.borrow_mut().create_node("div").unwrap();
+    let child = cells.document.borrow_mut().create_node("div").unwrap();
     cells
         .document
         .borrow_mut()
-        .tree
-        .append_child(parent, child)
+        .append_child(&*cells.window.borrow(), parent, child)
         .unwrap();
     dispatcher.engine.eval::<()>(RECORDER).unwrap();
     dispatcher
@@ -147,7 +146,7 @@ fn fire_walks_up_only_bubbling_events_and_reports_prevention(cx: &mut TestAppCon
         ("click", 99, "record", &[parent], &[], false),
     ];
     for (event, start, listener, listening, reached, prevented) in rows {
-        cells.document.borrow_mut().listeners = inca_document::EventListeners::default();
+        drop(cells.document.borrow_mut().remove_every_listener());
         for node in listening {
             listen(&dispatcher, *node, event, listener);
         }
@@ -197,7 +196,7 @@ fn fire_walks_up_only_bubbling_events_and_reports_prevention(cx: &mut TestAppCon
 )]
 fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext, expr: &str, want: &str) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = cells.document.borrow_mut().create_node("div").unwrap();
     dispatcher
         .engine
         .eval::<()>(&format!(
@@ -221,25 +220,18 @@ fn the_legacy_members_follow_the_event_state(cx: &mut TestAppContext, expr: &str
 #[gpui::test]
 fn a_keyboard_click_starts_at_the_innermost_node_with_a_listener(cx: &mut TestAppContext) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let outer = cells.document.borrow_mut().tree.create_node("div").unwrap();
-    let parent = cells.document.borrow_mut().tree.create_node("div").unwrap();
-    let button = cells
+    let outer = cells.document.borrow_mut().create_node("div").unwrap();
+    let parent = cells.document.borrow_mut().create_node("div").unwrap();
+    let button = cells.document.borrow_mut().create_node("button").unwrap();
+    cells
         .document
         .borrow_mut()
-        .tree
-        .create_node("button")
+        .append_child(&*cells.window.borrow(), outer, parent)
         .unwrap();
     cells
         .document
         .borrow_mut()
-        .tree
-        .append_child(outer, parent)
-        .unwrap();
-    cells
-        .document
-        .borrow_mut()
-        .tree
-        .append_child(parent, button)
+        .append_child(&*cells.window.borrow(), parent, button)
         .unwrap();
     dispatcher.engine.eval::<()>(RECORDER).unwrap();
     listen(&dispatcher, parent, "click", "record");
@@ -331,7 +323,7 @@ fn composed_path_lists_the_target_and_its_ancestors(cx: &mut TestAppContext) {
         cells
             .document
             .borrow()
-            .tree
+            .tree()
             .ancestors(child)
             .collect::<Vec<_>>(),
         [child, parent, outer]
@@ -376,7 +368,7 @@ fn mouse_events_carry_the_aliases_and_the_pointer_fields_of_their_type(
     fields: &str,
 ) {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = cells.document.borrow_mut().create_node("div").unwrap();
     dispatcher
         .engine
         .eval::<()>(

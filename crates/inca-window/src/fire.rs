@@ -8,7 +8,7 @@ use inca_document::flags_of;
 use inca_document::{EventPayload, MousePayload, PointerSource};
 use inca_node::{NodeId, is_disabled_control};
 
-use crate::dispatch::{EventDispatcher, observe_focus};
+use crate::dispatch::EventDispatcher;
 use inca_document::EventTargetId;
 use inca_document::Walk;
 
@@ -96,7 +96,7 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        if self.cells.document.borrow().tree.get(start).is_none() {
+        if self.cells.document.borrow().tree().get(start).is_none() {
             return false;
         }
         self.fire_inner(start, event, payload, window, cx)
@@ -110,14 +110,15 @@ impl EventDispatcher {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        observe_focus(&self.cells, window, cx);
-        let payload = &self.prepare(event, start, payload, window);
-        let cut = self.cut_by_disabled_control(event, payload, cx);
-        let (canceled, entered) = self.walk(EventTargetId::Node(start), event, payload, &cut);
-        if entered {
-            self.drain_observed(window);
-        }
-        canceled
+        self.turn(window, cx, |window, cx| {
+            let payload = &self.prepare(event, start, payload, window);
+            let cut = self.cut_by_disabled_control(event, payload, cx);
+            let (canceled, entered) = self.walk(EventTargetId::Node(start), event, payload, &cut);
+            if entered {
+                self.drain_observed(window);
+            }
+            canceled
+        })
     }
 
     /// `payload` with `offsetX`/`offsetY` measured from the padding edge of
@@ -141,7 +142,7 @@ impl EventDispatcher {
 
     /// `payload` with a `related_target` that left the tree set to `None`.
     fn live_related(&self, mut payload: EventPayload) -> EventPayload {
-        let gone = |id: &NodeId| self.cells.document.borrow().tree.get(*id).is_none();
+        let gone = |id: &NodeId| self.cells.document.borrow().tree().get(*id).is_none();
         match &mut payload {
             EventPayload::Focus { related_target } => {
                 if related_target.as_ref().is_some_and(gone) {
@@ -163,7 +164,7 @@ impl EventDispatcher {
     pub(super) fn resolve(&self, found: Option<NodeId>, node_id: NodeId) -> NodeId {
         let document = self.cells.document.borrow();
         found
-            .filter(|id| document.tree.get(*id).is_some())
+            .filter(|id| document.tree().get(*id).is_some())
             .unwrap_or(node_id)
     }
 
@@ -172,7 +173,7 @@ impl EventDispatcher {
         self.cells
             .document
             .borrow()
-            .tree
+            .tree()
             .ancestors(target)
             .collect()
     }
@@ -204,7 +205,7 @@ impl EventDispatcher {
             return Vec::new();
         }
         let document = self.cells.document.borrow();
-        let disabled = |id: &NodeId| document.tree.get(*id).is_some_and(is_disabled_control);
+        let disabled = |id: &NodeId| document.tree().get(*id).is_some_and(is_disabled_control);
         let button = match payload {
             EventPayload::Mouse(mouse) => Some(mouse.button),
             _ => None,
@@ -239,15 +240,16 @@ impl EventDispatcher {
             let focusing = if prevented {
                 None
             } else {
-                path.iter()
-                    .copied()
-                    .find(|&id| handles.handle(id).is_some())
+                document.focus().press_target(&path)
             };
-            let focused = handles.focused_node(&document.focus, window, cx);
+            let focused = document.focus().held_node(handles.focused_node(window, cx));
             let top = document.top();
-            document
-                .focus
-                .press_start(target, top, focusing.filter(|&node| Some(node) != focused));
+            document.press_start(target, top, focusing.filter(|&node| Some(node) != focused));
+            // The handles index the nodes that take focus, so the press target has one.
+            debug_assert!(
+                focusing.is_none_or(|node| handles.handle(node).is_some()),
+                "the press target {focusing:?} has no handle"
+            );
             focusing.and_then(|node| handles.handle(node))
         };
         if prevented {
@@ -262,12 +264,8 @@ impl EventDispatcher {
     pub(super) fn key_target(&self, window: &mut Window, cx: &mut App) -> NodeId {
         let (top, focused) = {
             let document = self.cells.document.borrow();
-            let focused =
-                self.cells
-                    .window
-                    .borrow()
-                    .focus
-                    .focused_node(&document.focus, window, cx);
+            let platform = self.cells.window.borrow().focus.focused_node(window, cx);
+            let focused = document.focus().held_node(platform);
             (document.top(), focused)
         };
         self.resolve(focused, top)
@@ -290,38 +288,34 @@ mod tests {
     #[gpui::test]
     fn tracks_pointer_only_with_a_listener_or_a_focusable_node(cx: &mut TestAppContext) {
         let (dispatcher, cells, _fake) = fake_dispatcher();
-        let node = cells.document.borrow_mut().tree.create_node("div").unwrap();
+        let node = cells.document.borrow_mut().create_node("div").unwrap();
         let root = cells.document.borrow().root();
         cells
             .document
             .borrow_mut()
-            .tree
-            .append_child(root, node)
+            .append_child(&*cells.window.borrow(), root, node)
             .unwrap();
         assert!(!dispatcher.tracks_pointer());
 
-        cells.document.borrow_mut().listeners.insert(
+        cells.document.borrow_mut().add_plain_listener(
             inca_document::EventTargetId::Node(node),
             "keydown",
             1,
-            false,
-            false,
         );
         assert!(dispatcher.tracks_pointer());
-        cells.document.borrow_mut().listeners.remove(
+        let removed = cells.document.borrow_mut().remove_listener(
             inca_document::EventTargetId::Node(node),
             "keydown",
             1,
         );
+        assert!(removed.is_some());
         assert!(!dispatcher.tracks_pointer());
 
         cells
             .document
             .borrow_mut()
-            .tree
             .set_attribute(node, "tabindex", "0")
             .unwrap();
-        cells.document.borrow_mut().focus.mark_tab_dirty(node);
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
             let _ = crate::tests::apply_focus(&cells, window, cx);

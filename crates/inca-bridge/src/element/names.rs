@@ -49,7 +49,6 @@ fn create_element<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, String) -> JsResult<
         let id = host
             .document
             .borrow_mut()
-            .tree
             .create_node(tag.clone())
             .map_err(|err| throw_tree_error(&ctx, err))?;
         let pair = Array::new(ctx)?;
@@ -72,10 +71,9 @@ fn create_element_ns<'js>(
             .map_err(|err| throw_name_error(&ctx, err))?;
         let mut host = host.document.borrow_mut();
         let id = host
-            .tree
             .create_element_ns(namespace.as_deref(), prefix, local_name)
             .map_err(|err| throw_tree_error(&ctx, err))?;
-        match host.tree.get(id) {
+        match host.tree().get(id) {
             Some(node) => element_entry(&ctx, id, node),
             None => Err(Exception::throw_type(&ctx, "the new element is missing")),
         }
@@ -151,7 +149,7 @@ fn define_name<'js>(
     let host = Rc::clone(host);
     define_this_getter(ctx, proto, key, move |ctx, this: Value<'js>| {
         let (node, _, _) = receiver_of(ctx, &this, &ELEMENT)?;
-        read(ctx, host.document.borrow().tree.get(node))
+        read(ctx, host.document.borrow().tree().get(node))
     })
 }
 
@@ -187,7 +185,7 @@ mod tests {
         let given: String = engine.eval("pair[1]").unwrap();
 
         assert_eq!(
-            host.document.borrow().tree.get(id).unwrap().local_name(),
+            host.document.borrow().tree().get(id).unwrap().local_name(),
             tag
         );
         assert_eq!(given, tag);
@@ -240,7 +238,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            host.document.borrow().tree.get(id).unwrap().local_name(),
+            host.document.borrow().tree().get(id).unwrap().local_name(),
             "a"
         );
     }

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::support::pointer::*;
-use inca_style::set_style;
 use inca_test_macros::gpui_cases;
 
 /// A 200x200 `root` holding a disabled 100x50 `button`, which holds a 100x50 `kid`. Every
@@ -19,19 +18,20 @@ struct Disabled {
 fn mount_disabled(cx: &mut TestAppContext, listening: &[(&str, &[&str])]) -> Disabled {
     let host = Rig::default();
     let (root, button, kid) = {
+        let view = host.window.borrow();
         let mut host = host.document.borrow_mut();
-        let root = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, root, "width", 200.0).unwrap();
-        set_style(&mut host.tree, root, "height", 200.0).unwrap();
-        let button = host.tree.create_node("button").unwrap();
-        set_style(&mut host.tree, button, "width", 100.0).unwrap();
-        set_style(&mut host.tree, button, "height", 50.0).unwrap();
-        host.tree.set_attribute(button, "disabled", true).unwrap();
-        host.tree.append_child(root, button).unwrap();
-        let kid = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, kid, "width", 100.0).unwrap();
-        set_style(&mut host.tree, kid, "height", 50.0).unwrap();
-        host.tree.append_child(button, kid).unwrap();
+        let root = host.create_node("div").unwrap();
+        host.set_style_prop(root, "width", 200.0).unwrap();
+        host.set_style_prop(root, "height", 200.0).unwrap();
+        let button = host.create_node("button").unwrap();
+        host.set_style_prop(button, "width", 100.0).unwrap();
+        host.set_style_prop(button, "height", 50.0).unwrap();
+        host.set_attribute(button, "disabled", true).unwrap();
+        host.append_child(&*view, root, button).unwrap();
+        let kid = host.create_node("div").unwrap();
+        host.set_style_prop(kid, "width", 100.0).unwrap();
+        host.set_style_prop(kid, "height", 50.0).unwrap();
+        host.append_child(&*view, button, kid).unwrap();
         (root, button, kid)
     };
     let engine = wiring::engine_for(&host);
@@ -117,7 +117,6 @@ fn a_disabled_button_and_its_ancestors_get_no_pointer_event(
     d.host
         .document
         .borrow_mut()
-        .tree
         .remove_attribute(d.button, "disabled")
         .unwrap();
     d.press_and_release((10.0, 10.0), click_count);

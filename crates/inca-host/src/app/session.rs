@@ -451,7 +451,7 @@ mod tests {
             .host
             .document
             .borrow()
-            .tree
+            .tree()
             .get(first.root())
             .unwrap()
             .children()[0];
@@ -460,14 +460,14 @@ mod tests {
         drop(first);
 
         let host = second.host.document.borrow();
-        let children = host.tree.get(second.root()).unwrap().children();
+        let children = host.tree().get(second.root()).unwrap().children();
         assert_eq!(children.len(), 1, "the reloaded tree must not accumulate");
         assert_eq!(
             children[0], first_child,
             "ids restart, so the reloaded tree replaces the first"
         );
         let ids: Vec<u32> = host
-            .listeners
+            .listeners()
             .listeners_for(inca_document::EventTargetId::Node(children[0]), "click")
             .iter()
             .map(|l| l.callback)
@@ -520,7 +520,7 @@ mod tests {
                         .host
                         .document
                         .borrow()
-                        .tree
+                        .tree()
                         .get(app.session.root())
                         .unwrap()
                         .children()[0];

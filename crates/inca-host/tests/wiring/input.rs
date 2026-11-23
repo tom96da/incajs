@@ -46,7 +46,7 @@ fn a_freed_input_drops_its_state() {
     engine
         .eval::<()>("__inca_native__.destroyNode(globalThis.node)")
         .unwrap();
-    assert!(cells.document.borrow().inputs.borrow().is_empty());
+    assert!(cells.document.borrow().input(node).is_none());
     assert_eq!(
         dispatcher.dispatcher().input_layout(node),
         InputLayout::default()
@@ -56,16 +56,10 @@ fn a_freed_input_drops_its_state() {
 #[test]
 fn click_on_a_disabled_input_runs_nothing() {
     let (dispatcher, cells, _reported) = dispatcher_with_engine();
-    let input = cells
-        .document
-        .borrow_mut()
-        .tree
-        .create_node("input")
-        .unwrap();
+    let input = cells.document.borrow_mut().create_node("input").unwrap();
     cells
         .document
         .borrow_mut()
-        .tree
         .set_attribute(input, "disabled", true)
         .unwrap();
     listen(&dispatcher, input, "click", "() => out.push('click')");
@@ -120,15 +114,7 @@ fn enter_after_a_beforeinput_that_destroys_the_input_leaves_no_state(cx: &mut Te
     );
     s.key(cx, "enter");
     assert_eq!(types(&s), Vec::<String>::new());
-    assert!(
-        s.cells
-            .document
-            .borrow()
-            .inputs
-            .borrow()
-            .get(&s.input)
-            .is_none()
-    );
+    assert!(s.cells.document.borrow().input(s.input).is_none());
 }
 
 #[gpui::test]
@@ -190,4 +176,29 @@ fn a_script_that_disables_a_composing_input_ends_the_composition(cx: &mut TestAp
     cx.run_until_parked();
     assert_eq!(types(&s), ["compositionend", "blur"]);
     assert_eq!(edited_text(&s), ("abk".to_owned(), None));
+}
+
+#[gpui_cases]
+#[gpui::test]
+#[case::focus_in_a_frame("focus", None, None)]
+#[case::key_edit("beforeinput", Some("x"), None)]
+#[case::composition("beforeinput", None, Some("k"))]
+fn a_listener_writes_the_value_during_a_focus_or_an_edit(
+    cx: &mut TestAppContext,
+    event: &str,
+    key: Option<&str>,
+    composed: Option<&str>,
+) {
+    let s = js_input_scene(cx, "ab");
+    if key.is_some() {
+        s.focus(cx, s.input);
+    }
+    let write = format!("() => __inca_native__.setInputValue({}, 's')", s.input);
+    listen(&s.dispatcher, s.input, event, &write);
+    match (key, composed) {
+        (Some(key), _) => _ = s.key(cx, key),
+        (_, Some(text)) => s.request(cx, mark(text)),
+        _ => s.focus(cx, s.input),
+    }
+    assert_eq!(s.state().value(), "s");
 }

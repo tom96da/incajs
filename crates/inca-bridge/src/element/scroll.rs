@@ -27,7 +27,7 @@ pub(crate) fn install_scroll(n: &Natives<'_, '_>) -> JsResult<()> {
 
 fn scroll_of<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
-        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+        existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         let rect = node_scroll(&host, node_id);
         or_null(&ctx, rect.as_ref().map(<[f64; 4]>::as_slice))
     }
@@ -37,7 +37,7 @@ fn scroll_node<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Option<f64>, Option<f64>) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), left, top| {
-        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+        existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         scroll_to(&host, node_id, left, top);
         Ok(())
     }
@@ -47,7 +47,7 @@ fn scroll_into_view_node<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, JsAlign, JsAlign) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), JsAlign(block), JsAlign(inline)| {
-        existing_node(&ctx, &host.document.borrow().tree, node_id)?;
+        existing_node(&ctx, host.document.borrow().tree(), node_id)?;
         scroll_into_view(&host, node_id, block, inline);
         Ok(())
     }
@@ -57,7 +57,7 @@ fn scroll_into_view_node<'js>(
 /// `max left` and `max top`. A node that scrolls nothing has none.
 fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
     let document = host.document.borrow();
-    is_scroll_container(&document.tree, &document.style, id).then(|| {
+    is_scroll_container(document.tree(), document.style(), id).then(|| {
         let ScrollRange { offset, max } = host.window.borrow().scroll_range(id);
         [offset.0, offset.1, max.0, max.1].map(f64::from)
     })
@@ -66,23 +66,23 @@ fn node_scroll(host: &Host, id: NodeId) -> Option<[f64; 4]> {
 /// Moves the scroll offset of the node `id` on the given axes. A negative value counts as `0`.
 fn scroll_to(host: &Host, id: NodeId, left: Option<f64>, top: Option<f64>) {
     let document = host.document.borrow();
-    if is_scroll_container(&document.tree, &document.style, id) {
+    if is_scroll_container(document.tree(), document.style(), id) {
         host.window
             .borrow()
-            .scroll_to(&document.tree, id, left, top);
+            .scroll_to(document.tree(), id, left, top);
     }
 }
 
 /// Reveals the node `id` now, or at the next frame when it has no box yet.
 fn scroll_into_view(host: &Host, id: NodeId, block: Align, inline: Align) {
     if !host.reveal(id, block, inline) {
-        host.window.borrow_mut().queue_reveal(id, block, inline);
+        host.document.borrow_mut().queue_reveal(id, block, inline);
     }
 }
 
 /// The scroll state of the node `id`, `None` for a node that is not connected or scrolls nothing.
 fn connected_scroll(host: &Shared, id: NodeId) -> Option<[f64; 4]> {
-    let connected = host.document.borrow().tree.is_connected(id);
+    let connected = host.document.borrow().tree().is_connected(id);
     connected.then(|| node_scroll(host, id)).flatten()
 }
 
@@ -122,7 +122,7 @@ fn move_scroll<'js>(
     args: &[Value<'js>],
     relative: bool,
 ) -> JsResult<()> {
-    if !host.document.borrow().tree.is_connected(id) {
+    if !host.document.borrow().tree().is_connected(id) {
         return Ok(());
     }
     let undefined = Value::new_undefined(ctx.clone());
@@ -235,7 +235,7 @@ pub(super) fn install<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>)
         0,
         &ELEMENT,
         |ctx, host, id, _, args| {
-            if !host.document.borrow().tree.is_connected(id) {
+            if !host.document.borrow().tree().is_connected(id) {
                 return Ok(());
             }
             let (block, inline) = alignments(ctx, args.first())?;
@@ -248,6 +248,7 @@ pub(super) fn install<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>)
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
+    use crate::bindings::Host;
     use crate::test_support::TestView;
     use crate::test_support::engine_with_bindings;
     use crate::tests::with_box_view;
@@ -296,6 +297,17 @@ mod tests {
     }
 
     /// The offset the last scroll write left on the node `id`.
+    /// The `scrollIntoView` calls the document queued for the next frame.
+    fn queued(host: &Host) -> Vec<(u32, Align, Align)> {
+        host.document
+            .borrow_mut()
+            .take_reveals()
+            .fresh
+            .iter()
+            .map(|reveal| (reveal.node, reveal.block, reveal.inline))
+            .collect()
+    }
+
     fn offset(view: &Rc<RefCell<TestView>>, id: u32) -> (f32, f32) {
         view.borrow()
             .offsets
@@ -330,13 +342,13 @@ mod tests {
     #[case::freed("__inca_native__.destroyNode(id)")]
     #[case::detached("__inca_native__.removeChild(__inca_native__.rootNodeId(), id)")]
     fn a_scroll_into_view_of_a_node_without_a_box_waits_for_nothing(#[case] remove: &str) {
-        let (engine, _host, view, id) = with_box_view([0.0; 9]);
+        let (engine, host, view, id) = with_box_view([0.0; 9]);
         engine.eval::<()>(remove).unwrap();
         view.borrow_mut().boxes.remove(&id);
 
         engine.eval::<()>("el.scrollIntoView()").unwrap();
 
-        assert!(view.borrow().queued.is_empty());
+        assert!(queued(&host).is_empty());
     }
 
     #[test]
@@ -398,20 +410,20 @@ mod tests {
         #[case] block: Align,
         #[case] inline: Align,
     ) {
-        let (engine, _host, view, id) = with_box_view([0.0; 9]);
+        let (engine, host, view, id) = with_box_view([0.0; 9]);
         view.borrow_mut().boxes.remove(&id);
 
         engine.eval::<()>(call).unwrap();
 
-        assert_eq!(view.borrow().queued, [(id, block, inline)]);
+        assert_eq!(queued(&host), [(id, block, inline)]);
     }
 
     #[test]
     fn scroll_into_view_of_a_node_with_a_box_leaves_nothing_waiting() {
-        let (engine, _host, view, _id) = with_box_view([0.0; 9]);
+        let (engine, host, _view, _id) = with_box_view([0.0; 9]);
 
         engine.eval::<()>("el.scrollIntoView()").unwrap();
 
-        assert!(view.borrow().queued.is_empty());
+        assert!(queued(&host).is_empty());
     }
 }

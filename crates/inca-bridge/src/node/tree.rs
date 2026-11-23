@@ -6,7 +6,6 @@ use std::rc::Rc;
 use rquickjs::convert::Coerced;
 use rquickjs::{Ctx, Exception, Result as JsResult, Value};
 
-use inca_document::free_ids;
 use inca_jsenv::callbacks;
 use inca_node::NodeId;
 
@@ -43,8 +42,8 @@ fn document_node_id(host: Rc<Host>) -> impl Fn() -> NodeId {
 
 fn create_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, String) -> JsResult<NodeId> {
     move |ctx, local_name| {
-        let mut host = host.document.borrow_mut();
-        host.tree
+        host.document
+            .borrow_mut()
             .create_node(local_name)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
@@ -56,7 +55,7 @@ fn child_count(host: Rc<Host>) -> impl Fn(JsNodeId, Flag) -> u32 {
         saturated(
             host.document
                 .borrow()
-                .tree
+                .tree()
                 .child_count(node_id, element_only.0.flatten() == Some(true)),
         )
     }
@@ -68,7 +67,7 @@ fn child_at<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, Coerced<i32>, Flag) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id), index, element_only| {
-        let found = host.document.borrow().tree.child_at(
+        let found = host.document.borrow().tree().child_at(
             node_id,
             unsigned(index) as usize,
             element_only.0.flatten() == Some(true),
@@ -83,22 +82,22 @@ fn named_child<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> Js
     move |ctx, JsNodeId(node_id), name| {
         or_null(
             &ctx,
-            host.document.borrow().tree.named_child(node_id, &name),
+            host.document.borrow().tree().named_child(node_id, &name),
         )
     }
 }
 
 /// The supported property names of the element children of the node `id`.
 fn child_names(host: Rc<Host>) -> impl Fn(JsNodeId) -> Vec<String> {
-    move |JsNodeId(node_id)| host.document.borrow().tree.child_names(node_id)
+    move |JsNodeId(node_id)| host.document.borrow().tree().child_names(node_id)
 }
 
 /// The id of the content fragment of the template `node_id`, `null` for a node that is no template.
 fn template_content<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<Value<'js>> {
     move |ctx, JsNodeId(node_id)| {
         let host = host.document.borrow();
-        existing_node(&ctx, &host.tree, node_id)?;
-        or_null(&ctx, host.tree.template_content(node_id))
+        existing_node(&ctx, host.tree(), node_id)?;
+        or_null(&ctx, host.tree().template_content(node_id))
     }
 }
 
@@ -106,7 +105,7 @@ fn destroy_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<
     move |ctx, JsNodeId(node_id)| {
         let mut document = host.document.borrow_mut();
         if document
-            .tree
+            .tree()
             .ancestors(document.root())
             .any(|id| id == node_id)
         {
@@ -121,13 +120,10 @@ fn destroy_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<
                 "the document belongs to the host. it cannot be destroyed",
             ));
         }
-        let before = document.tree.preceding(node_id);
-        document.move_tab_start(node_id, before);
-        let freed = document.tree.destroy_node(node_id);
-        let callback_ids = free_ids(&mut document, &mut *host.window.borrow_mut(), &freed);
-        crate::abort::settle_freed(&ctx, &mut document)?;
-        callbacks::release(&ctx, &callback_ids)?;
-        Ok(callback_ids)
+        let released = document.destroy_node(&mut *host.window.borrow_mut(), node_id);
+        crate::abort::unpin(&ctx, &released.unpin)?;
+        callbacks::release(&ctx, &released.callbacks)?;
+        Ok(released.callbacks)
     }
 }
 
@@ -135,14 +131,13 @@ fn hold_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<()>
     move |ctx, JsNodeId(node_id)| {
         host.document
             .borrow_mut()
-            .tree
             .hold(node_id)
             .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
 
 fn release_node(host: Rc<Host>) -> impl Fn(JsNodeId) {
-    move |JsNodeId(node_id)| host.document.borrow_mut().tree.release(node_id)
+    move |JsNodeId(node_id)| host.document.borrow_mut().release(node_id)
 }
 
 #[cfg(test)]
@@ -284,10 +279,10 @@ mod tests {
             .unwrap();
 
         let host = host.document.borrow();
-        assert!(host.tree.get(host.root()).unwrap().children().is_empty());
+        assert!(host.tree().get(host.root()).unwrap().children().is_empty());
         assert!(
             callback_ids(
-                &host.listeners,
+                host.listeners(),
                 inca_document::EventTargetId::Node(1),
                 "click"
             )
@@ -373,7 +368,7 @@ mod tests {
 
         assert!(caught);
         let host = host.document.borrow();
-        assert!(host.tree.get(host.root()).is_some());
+        assert!(host.tree().get(host.root()).is_some());
     }
 
     #[test]
@@ -396,7 +391,7 @@ mod tests {
 
         assert!(caught, "the root belongs to the host, not to the app");
         let host = host.document.borrow();
-        assert!(host.tree.get(host.root()).is_some());
+        assert!(host.tree().get(host.root()).is_some());
     }
 
     #[test]
@@ -420,7 +415,7 @@ mod tests {
 
         assert_eq!(name, "TypeError");
         let host = host.document.borrow();
-        assert!(host.tree.get(host.document()).is_some());
+        assert!(host.tree().get(host.document()).is_some());
     }
 
     #[test]
@@ -433,7 +428,7 @@ mod tests {
 
         let host = host.document.borrow();
         assert_eq!(ids, [host.document(), host.root()]);
-        assert_eq!(host.tree.get(ids[1]).unwrap().parent(), Some(ids[0]));
+        assert_eq!(host.tree().get(ids[1]).unwrap().parent(), Some(ids[0]));
     }
 
     #[test]
@@ -496,7 +491,7 @@ mod tests {
         assert_eq!(
             host.document
                 .borrow()
-                .tree
+                .tree()
                 .get(root_id)
                 .unwrap()
                 .local_name(),
@@ -554,13 +549,13 @@ mod tests {
             .unwrap();
 
         assert!(host.sweep_orphans().is_none());
-        assert!(host.document.borrow().tree.get(node).is_some());
+        assert!(host.document.borrow().tree().get(node).is_some());
 
         engine
             .eval::<()>(&format!("__inca_native__.releaseNode({node})"))
             .unwrap();
-        let (nodes, _) = host.sweep_orphans().unwrap();
-        assert_eq!(nodes, [node]);
+        let released = host.sweep_orphans().unwrap();
+        assert_eq!(released.nodes, [node]);
     }
 
     #[test]
@@ -570,7 +565,7 @@ mod tests {
             .eval::<()>("add(node, () => {}, s); n.destroyNode(node);")
             .unwrap();
 
-        assert_eq!(f.host.document.borrow().listeners.links.len(), 0);
+        assert_eq!(f.host.document.borrow().listeners().links().len(), 0);
     }
 
     #[rstest]

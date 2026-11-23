@@ -78,15 +78,6 @@ pub(crate) struct State {
     pub(crate) frame_requested: Cell<bool>,
 }
 
-/// Records the node the window focuses in the focus model of `cells`.
-pub(crate) fn observe_focus(cells: &Cells, window: &Window, cx: &App) {
-    cells
-        .window
-        .borrow()
-        .focus
-        .observe(&mut cells.document.borrow_mut().focus, window, cx);
-}
-
 impl EventDispatcher {
     /// A dispatcher that runs listeners through `script` and works on `cells`.
     #[must_use]
@@ -103,9 +94,9 @@ impl EventDispatcher {
     #[must_use]
     pub fn tracks_pointer(&self) -> bool {
         let document = self.cells.document.borrow();
-        !document.listeners.is_empty()
+        !document.listeners().is_empty()
             || self.cells.window.borrow().focus.has_handles()
-            || document.style.uses_pointer_state(&document.tree)
+            || document.style().uses_pointer_state(document.tree())
     }
 
     /// Takes the window's current modifier keys as the baseline for the next
@@ -121,18 +112,24 @@ impl EventDispatcher {
         self.script.report_pending();
     }
 
-    /// Records the node the window focuses, so a script that runs
-    /// next sees focus the window applied itself. Call it before running the
-    /// script from outside an event.
-    pub fn observe_focus(&self, window: &Window, cx: &App) {
-        observe_focus(&self.cells, window, cx);
+    /// Runs `turn`, a turn of the JS side, after recording the node the window focuses, so the
+    /// turn starts from the focus the window applied itself. Every turn the window starts runs
+    /// through it: an event, the due timers, the frame callbacks, the released-node hook and the
+    /// job queue.
+    pub fn turn<R>(
+        &self,
+        window: &mut Window,
+        cx: &mut App,
+        turn: impl FnOnce(&mut Window, &mut App) -> R,
+    ) -> R {
+        self.cells.observe_focus(window, cx);
+        turn(window, cx)
     }
 
-    /// [`Self::observe_focus`], then runs the queued jobs and requests a redraw, then
+    /// Runs the queued jobs in a [`Self::turn`] and requests a redraw, then
     /// [`Self::report_pending`].
-    pub fn drain_jobs_and_refresh(&self, window: &mut Window, cx: &App) {
-        self.observe_focus(window, cx);
-        self.drain_observed(window);
+    pub fn drain_jobs_and_refresh(&self, window: &mut Window, cx: &mut App) {
+        self.turn(window, cx, |window, _| self.drain_observed(window));
     }
 
     pub(crate) fn drain_observed(&self, window: &mut Window) {

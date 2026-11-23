@@ -26,21 +26,20 @@ pub(crate) fn install_focus(n: &Natives<'_, '_>) -> JsResult<()> {
 fn focus_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, Flag) -> JsResult<()> {
     move |ctx, JsNodeId(node_id), prevent_scroll| {
         let mut host = host.document.borrow_mut();
-        existing_node(&ctx, &host.tree, node_id)?;
-        host.focus
-            .request_focus(node_id, prevent_scroll.0.flatten() != Some(true));
+        existing_node(&ctx, host.tree(), node_id)?;
+        host.request_focus(node_id, prevent_scroll.0.flatten() != Some(true));
         Ok(())
     }
 }
 
 fn blur_node(host: Rc<Host>) -> impl Fn(JsNodeId) {
-    move |JsNodeId(node_id)| host.document.borrow_mut().focus.request_blur(node_id)
+    move |JsNodeId(node_id)| host.document.borrow_mut().request_blur(node_id)
 }
 
 fn focused_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>) -> JsResult<Value<'js>> {
     move |ctx| {
         let host = host.document.borrow();
-        or_null(&ctx, host.focus.active_node(&host.tree, &host.style))
+        or_null(&ctx, host.focus().active_node(host.tree(), host.style()))
     }
 }
 
@@ -62,8 +61,8 @@ fn define_focus<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> Js
         |ctx, host, id, _, args| {
             let prevent = prevent_scroll(ctx, args)?;
             let mut host = host.document.borrow_mut();
-            if host.tree.is_connected(id) {
-                host.focus.request_focus(id, !prevent);
+            if host.tree().is_connected(id) {
+                host.request_focus(id, !prevent);
             }
             Ok(())
         },
@@ -77,8 +76,8 @@ fn define_focus<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> Js
         &HTML_OR_SVG,
         |_, host, id, _, _| {
             let mut host = host.document.borrow_mut();
-            if host.tree.get(id).is_some() {
-                host.focus.request_blur(id);
+            if host.tree().get(id).is_some() {
+                host.request_blur(id);
             }
             Ok(())
         },
@@ -96,7 +95,7 @@ pub(super) fn install<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>)
         0,
         &HTML_ELEMENT,
         |ctx, host, id, _, _| {
-            if host.document.borrow().tree.get(id).is_some() {
+            if host.document.borrow().tree().get(id).is_some() {
                 crate::event::click(ctx, host, id);
             }
             Ok(())
@@ -122,7 +121,7 @@ mod tests {
         let node: u32 = engine
             .eval("globalThis.n = __inca_native__.createNode('div')")
             .unwrap();
-        let dirty = |host: &Rc<Host>| host.document.borrow_mut().focus.take_tab_dirty();
+        let dirty = |host: &Rc<Host>| host.document.borrow_mut().take_tab_dirty();
         assert!(dirty(&host).is_empty());
 
         engine
@@ -160,7 +159,7 @@ mod tests {
             .eval::<()>("__inca_native__.setAttribute(n, 'tabIndex', 1)")
             .unwrap();
         let host = host.document.borrow();
-        let attrs = host.tree.get(node).unwrap().attributes();
+        let attrs = host.tree().get(node).unwrap().attributes();
         assert_eq!(attrs.get("tabindex"), Some(&AttributeValue::Number(1.0)));
         assert!(!attrs.contains_key("tabIndex"));
     }
@@ -242,11 +241,11 @@ mod tests {
     #[test]
     fn blur_of_a_node_the_tree_has_queues_a_request() {
         let (engine, host) = with_loose_node();
-        assert!(!host.document.borrow().focus.has_queued_work());
+        assert!(!host.document.borrow().focus().has_queued_work());
 
         engine.eval::<()>("el.blur()").unwrap();
 
-        assert!(host.document.borrow().focus.has_queued_work());
+        assert!(host.document.borrow().focus().has_queued_work());
     }
 
     #[test]
@@ -258,7 +257,7 @@ mod tests {
 
         engine.eval::<()>("el.blur()").unwrap();
 
-        assert!(!host.document.borrow().focus.has_queued_work());
+        assert!(!host.document.borrow().focus().has_queued_work());
     }
 
     #[rstest]
@@ -270,7 +269,7 @@ mod tests {
 
         engine.eval::<()>("el.focus()").unwrap();
 
-        assert!(!host.document.borrow().focus.has_queued_work());
+        assert!(!host.document.borrow().focus().has_queued_work());
     }
 
     #[test]

@@ -55,15 +55,12 @@ fn abort<'js>(
     host: &Rc<Host>,
     reason: Option<&Value<'js>>,
 ) -> JsResult<Class<'js, IncaSignal<'js>>> {
-    let signal = new_signal(ctx, host, &Table::open(ctx)?, false)?;
+    let id = host.document.borrow_mut().create_aborted_signal();
+    let signal = new_signal(ctx, &Table::open(ctx)?, id)?;
     let reason = match reason.filter(|v| !v.is_undefined()) {
         Some(reason) => reason.clone(),
         None => dom_exception(ctx, "AbortError", "signal is aborted without reason"),
     };
-    host.document
-        .borrow_mut()
-        .signals
-        .mark_aborted(signal.borrow().id());
     signal.borrow().set_reason(reason);
     Ok(signal)
 }
@@ -91,7 +88,8 @@ fn timeout<'js>(
     delay: Option<&Value<'js>>,
 ) -> JsResult<Class<'js, IncaSignal<'js>>> {
     let delay = delay_of(ctx, delay)?;
-    let signal = new_signal(ctx, host, &Table::open(ctx)?, false)?;
+    let id = host.document.borrow_mut().create_signal();
+    let signal = new_signal(ctx, &Table::open(ctx)?, id)?;
     let state = Rc::clone(host);
     let handler = Function::new(ctx.clone(), move |ctx: Ctx<'js>, signal: Value<'js>| {
         let signal = Class::<IncaSignal>::from_value(&signal)?;

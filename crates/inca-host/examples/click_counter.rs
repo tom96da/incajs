@@ -15,11 +15,11 @@ use gpui::{App, Bounds, Context, Window, WindowBounds, WindowOptions, prelude::*
 use gpui_platform::application;
 
 use inca_bridge::{Host, JsScript, install};
+use inca_document::{DocumentState, View};
 use inca_gpui::{Scrollbars, render_tree_with_events};
 use inca_host::script::{BridgeScript, compose};
 use inca_jsenv::{Engine, stderr_reporter, system_clock};
-use inca_node::{NodeId, VirtualTree};
-use inca_style::set_style;
+use inca_node::NodeId;
 use inca_window::EventDispatcher;
 
 struct ClickCounter {
@@ -32,8 +32,8 @@ impl Render for ClickCounter {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let host = self.host.document.borrow();
         render_tree_with_events(
-            &host.tree,
-            &host.style,
+            host.tree(),
+            host.style(),
             self.root,
             &self.dispatcher,
             Scrollbars::Overlay,
@@ -44,23 +44,35 @@ impl Render for ClickCounter {
 
 /// Builds a clickable, bordered box containing a text label and returns
 /// `(outer, label)`.
-fn build_tree(tree: &mut VirtualTree) -> (NodeId, NodeId) {
-    let outer = tree.create_node("div").unwrap();
-    set_style(tree, outer, "display", "flex").unwrap();
-    set_style(tree, outer, "justify_content", "center").unwrap();
-    set_style(tree, outer, "align_items", "center").unwrap();
-    set_style(tree, outer, "width", 300.0).unwrap();
-    set_style(tree, outer, "height", 150.0).unwrap();
-    set_style(tree, outer, "background", f64::from(0x505050)).unwrap();
-    set_style(tree, outer, "border_width", 1.0).unwrap();
-    set_style(tree, outer, "border_color", f64::from(0x0000ff)).unwrap();
-    set_style(tree, outer, "corner_radius", 8.0).unwrap();
-    set_style(tree, outer, "text_color", f64::from(0xffffff)).unwrap();
-    set_style(tree, outer, "text_size", 20.0).unwrap();
+fn build_tree(document: &mut DocumentState, view: &dyn View) -> (NodeId, NodeId) {
+    let outer = document.create_node("div").unwrap();
+    document.set_style_prop(outer, "display", "flex").unwrap();
+    document
+        .set_style_prop(outer, "justify_content", "center")
+        .unwrap();
+    document
+        .set_style_prop(outer, "align_items", "center")
+        .unwrap();
+    document.set_style_prop(outer, "width", 300.0).unwrap();
+    document.set_style_prop(outer, "height", 150.0).unwrap();
+    document
+        .set_style_prop(outer, "background", f64::from(0x505050))
+        .unwrap();
+    document.set_style_prop(outer, "border_width", 1.0).unwrap();
+    document
+        .set_style_prop(outer, "border_color", f64::from(0x0000ff))
+        .unwrap();
+    document
+        .set_style_prop(outer, "corner_radius", 8.0)
+        .unwrap();
+    document
+        .set_style_prop(outer, "text_color", f64::from(0xffffff))
+        .unwrap();
+    document.set_style_prop(outer, "text_size", 20.0).unwrap();
 
-    let label = tree.create_node("#text").unwrap();
-    tree.set_data(label, "Click me!").unwrap();
-    tree.append_child(outer, label).unwrap();
+    let label = document.create_node("#text").unwrap();
+    document.set_data(label, "Click me!").unwrap();
+    document.append_child(view, outer, label).unwrap();
 
     (outer, label)
 }
@@ -87,7 +99,7 @@ fn install_click_handler(engine: &Engine, outer: NodeId, label: NodeId) {
 fn run_example() {
     application().run(|cx: &mut App| {
         let (host, cells) = compose(system_clock());
-        let (outer, label) = build_tree(&mut host.document.borrow_mut().tree);
+        let (outer, label) = build_tree(&mut host.document.borrow_mut(), &*host.window.borrow());
 
         let engine = Rc::new(Engine::new().unwrap());
         engine.with(|ctx| install(&ctx, &host)).unwrap();

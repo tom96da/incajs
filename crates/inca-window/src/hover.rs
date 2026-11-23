@@ -38,7 +38,7 @@ impl EventDispatcher {
     /// the document drop out of the set.
     pub(super) fn deepest_hovered(&self) -> Option<NodeId> {
         let mut set = self.state.hovered.borrow_mut();
-        set.retain(|id| self.cells.document.borrow().tree.is_connected(*id));
+        set.retain(|id| self.cells.document.borrow().tree().is_connected(*id));
         set.iter()
             .copied()
             .max_by_key(|id| (self.path_from(*id).len(), *id))
@@ -80,7 +80,7 @@ impl EventDispatcher {
     ) {
         let physical = self.state.bar_drag.get().or(physical);
         let path = physical.map(|id| self.path_from(id)).unwrap_or_default();
-        let changed = self.cells.document.borrow_mut().tree.set_hover_path(&path);
+        let changed = self.cells.document.borrow_mut().set_hover_path(&path);
         self.restyle(changed, true, window);
         let mouse = mouse_at(window.mouse_position(), window.modifiers());
         self.process_capture(&EventPayload::Mouse(mouse), button, window, cx);
@@ -147,9 +147,9 @@ impl EventDispatcher {
         let document = self.cells.document.borrow();
         let redraw = changed
             && if pointer {
-                document.style.uses_pointer_state(&document.tree)
+                document.style().uses_pointer_state(document.tree())
             } else {
-                document.style.uses_focus_state(&document.tree)
+                document.style().uses_focus_state(document.tree())
             };
         if redraw {
             window.refresh();
@@ -217,10 +217,13 @@ mod tests {
         let rig = rig();
         let [a, b, c, d] = {
             let mut h = rig.dispatcher.cells.document.borrow_mut();
-            let ids = [(); 4].map(|()| h.tree.create_node("div").unwrap());
-            h.tree.append_child(ids[0], ids[1]).unwrap();
-            h.tree.append_child(ids[1], ids[2]).unwrap();
-            h.tree.append_child(ids[1], ids[3]).unwrap();
+            let ids = [(); 4].map(|()| h.create_node("div").unwrap());
+            h.append_child(&*rig.dispatcher.cells.window.borrow(), ids[0], ids[1])
+                .unwrap();
+            h.append_child(&*rig.dispatcher.cells.window.borrow(), ids[1], ids[2])
+                .unwrap();
+            h.append_child(&*rig.dispatcher.cells.window.borrow(), ids[1], ids[3])
+                .unwrap();
             ids
         };
         (rig, [a, b, c, d])
@@ -341,8 +344,9 @@ mod tests {
         let [outer, parent, child] = tree_of_three(&cells);
         let other = {
             let mut h = cells.document.borrow_mut();
-            let other = h.tree.create_node("div").unwrap();
-            h.tree.append_child(parent, other).unwrap();
+            let other = h.create_node("div").unwrap();
+            h.append_child(&*cells.window.borrow(), parent, other)
+                .unwrap();
             other
         };
         assert_eq!(dispatcher.common_ancestor(child, other), Some(parent));
@@ -357,9 +361,9 @@ mod tests {
         let [_, parent, a] = tree_of_three(&cells);
         let (b, apart) = {
             let mut h = cells.document.borrow_mut();
-            let b = h.tree.create_node("div").unwrap();
-            h.tree.append_child(parent, b).unwrap();
-            (b, h.tree.create_node("div").unwrap())
+            let b = h.create_node("div").unwrap();
+            h.append_child(&*cells.window.borrow(), parent, b).unwrap();
+            (b, h.create_node("div").unwrap())
         };
         let release = gpui::MouseUpEvent {
             button: gpui::MouseButton::Left,
@@ -387,7 +391,12 @@ mod tests {
         assert!(clicked(Some(a), apart).is_empty(), "no common ancestor");
         assert!(clicked(None, a).is_empty(), "no press container");
 
-        cells.document.borrow_mut().tree.destroy_node(b);
+        drop(
+            cells
+                .document
+                .borrow_mut()
+                .destroy_node(&mut *cells.window.borrow_mut(), b),
+        );
         assert!(clicked(Some(a), b).is_empty(), "the release node is gone");
         assert!(clicked(Some(b), a).is_empty(), "the press node is gone");
     }
@@ -399,7 +408,9 @@ mod tests {
         {
             let mut cells = rig.dispatcher.cells.document.borrow_mut();
             let root = cells.root();
-            cells.tree.append_child(root, outer).unwrap();
+            cells
+                .append_child(&*rig.dispatcher.cells.window.borrow(), root, outer)
+                .unwrap();
         }
         let cx = cx.add_empty_window();
         let at = |related_target| {
@@ -445,7 +456,9 @@ mod tests {
         {
             let mut document = cells.document.borrow_mut();
             let root = document.root();
-            document.tree.append_child(root, outer).unwrap();
+            document
+                .append_child(&*cells.window.borrow(), root, outer)
+                .unwrap();
         }
         let cx = cx.add_empty_window();
         let boundary = |rig: &Rig| -> Vec<String> {
@@ -455,7 +468,12 @@ mod tests {
         };
         cx.update(|window, cx| rig.dispatcher.report_hover(Some(child), window, cx));
         boundary(&rig);
-        cells.document.borrow_mut().tree.destroy_node(child);
+        drop(
+            cells
+                .document
+                .borrow_mut()
+                .destroy_node(&mut *cells.window.borrow_mut(), child),
+        );
         cx.update(|window, cx| rig.dispatcher.report_hover(Some(parent), window, cx));
         assert_eq!(boundary(&rig), Vec::<String>::new());
         cx.update(|window, cx| rig.dispatcher.report_hover(Some(outer), window, cx));
@@ -473,8 +491,7 @@ mod tests {
         cells
             .document
             .borrow_mut()
-            .tree
-            .remove_child(outer, parent)
+            .remove_child(&*cells.window.borrow(), outer, parent)
             .unwrap();
         cx.update(|window, cx| rig.dispatcher.report_hover(None, window, cx));
         assert_eq!(boundary(&rig), Vec::<String>::new());
@@ -486,7 +503,9 @@ mod tests {
         {
             let mut cells = rig.dispatcher.cells.document.borrow_mut();
             let root = cells.root();
-            cells.tree.append_child(root, ids[0]).unwrap();
+            cells
+                .append_child(&*rig.dispatcher.cells.window.borrow(), root, ids[0])
+                .unwrap();
         }
         (rig, ids)
     }
@@ -529,16 +548,14 @@ mod tests {
             .cells
             .document
             .borrow_mut()
-            .tree
-            .remove_child(b, c)
+            .remove_child(&*rig.dispatcher.cells.window.borrow(), b, c)
             .unwrap();
         rig.hover(cx, Some(b));
         rig.dispatcher
             .cells
             .document
             .borrow_mut()
-            .tree
-            .insert_before(b, c, None)
+            .insert_before(&*rig.dispatcher.cells.window.borrow(), b, c, None)
             .unwrap();
 
         assert_eq!(hovered(&rig, [a, b, c, d]), [true, true, false, false]);
@@ -567,9 +584,11 @@ mod tests {
         let (rig, [a, b, c, d]) = connected_hover_tree();
         rig.hover(cx, Some(c));
         {
-            let tree = &mut rig.dispatcher.cells.document.borrow_mut().tree;
-            tree.remove_child(b, c).unwrap();
-            tree.insert_before(b, c, Some(d)).unwrap();
+            let cells = &rig.dispatcher.cells;
+            let view = cells.window.borrow();
+            let mut document = cells.document.borrow_mut();
+            document.remove_child(&*view, b, c).unwrap();
+            document.insert_before(&*view, b, c, Some(d)).unwrap();
         }
 
         assert_eq!(hovered(&rig, [a, b, c, d]), [true, true, true, false]);
@@ -580,9 +599,11 @@ mod tests {
         let (rig, [a, b, c, d]) = connected_hover_tree();
         rig.hover(cx, Some(c));
         {
-            let tree = &mut rig.dispatcher.cells.document.borrow_mut().tree;
-            tree.remove_child(b, c).unwrap();
-            tree.append_child(d, c).unwrap();
+            let cells = &rig.dispatcher.cells;
+            let view = cells.window.borrow();
+            let mut document = cells.document.borrow_mut();
+            document.remove_child(&*view, b, c).unwrap();
+            document.append_child(&*view, d, c).unwrap();
         }
 
         assert_eq!(hovered(&rig, [a, b, c, d]), [true, true, true, false]);
@@ -629,7 +650,9 @@ mod tests {
     fn remove_the_root(dispatcher: &EventDispatcher) {
         let cells = &mut *dispatcher.cells.document.borrow_mut();
         let (document, root) = (cells.document(), cells.root());
-        cells.tree.remove_child(document, root).unwrap();
+        cells
+            .remove_child(&*dispatcher.cells.window.borrow(), document, root)
+            .unwrap();
     }
 
     #[gpui::test]
@@ -655,7 +678,9 @@ mod tests {
         {
             let cells = &mut *rig.dispatcher.cells.document.borrow_mut();
             let (document, root) = (cells.document(), cells.root());
-            cells.tree.append_child(document, root).unwrap();
+            cells
+                .append_child(&*rig.dispatcher.cells.window.borrow(), document, root)
+                .unwrap();
         }
         let document = rig.dispatcher.cells.document.borrow().document();
 
@@ -682,8 +707,7 @@ mod tests {
             .cells
             .document
             .borrow_mut()
-            .tree
-            .remove_child(b, c)
+            .remove_child(&*rig.dispatcher.cells.window.borrow(), b, c)
             .unwrap();
         rig.dispatcher.state.hovered.borrow_mut().clear();
 

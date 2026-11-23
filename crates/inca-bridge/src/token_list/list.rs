@@ -73,7 +73,7 @@ fn node_of<'js>(ctx: &Ctx<'js>, this: &Value<'js>) -> JsResult<NodeId> {
 pub(super) fn tokens_of(host: &Host, node: NodeId) -> Vec<String> {
     host.document
         .borrow()
-        .tree
+        .tree()
         .class_tokens(node)
         .unwrap_or_default()
 }
@@ -82,7 +82,7 @@ pub(super) fn tokens_of(host: &Host, node: NodeId) -> Vec<String> {
 fn value_of(host: &Host, node: NodeId) -> String {
     host.document
         .borrow()
-        .tree
+        .tree()
         .class_value(node)
         .unwrap_or_default()
 }
@@ -122,9 +122,9 @@ fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> 
         move |ctx, this| Ok(value_of(&read, node_of(ctx, &this)?)),
         move |ctx, this, Coerced(value): Coerced<String>| {
             let node = node_of(ctx, &this)?;
-            let result = write.document.borrow_mut().tree.set_attribute(
+            let result = write.document.borrow_mut().set_attribute(
                 node,
-                "class".to_owned(),
+                "class",
                 AttributeValue::String(value),
             );
             written(ctx, result.map_err(ClassListError::Tree))
@@ -154,7 +154,7 @@ fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> 
         let node = node_of(ctx, &this)?;
         let tokens = texts(ctx, args)?;
         let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
-        let result = h.document.borrow_mut().tree.add_classes(node, &tokens);
+        let result = h.document.borrow_mut().add_classes(node, &tokens);
         written(ctx, result)
     })?;
     let h = host.clone();
@@ -162,7 +162,7 @@ fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> 
         let node = node_of(ctx, &this)?;
         let tokens = texts(ctx, args)?;
         let tokens: Vec<&str> = tokens.iter().map(String::as_str).collect();
-        let result = h.document.borrow_mut().tree.remove_classes(node, &tokens);
+        let result = h.document.borrow_mut().remove_classes(node, &tokens);
         written(ctx, result)
     })?;
     let h = host.clone();
@@ -176,11 +176,7 @@ fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> 
             }
             _ => None,
         };
-        let result = h
-            .document
-            .borrow_mut()
-            .tree
-            .toggle_class(node, &token, force);
+        let result = h.document.borrow_mut().toggle_class(node, &token, force);
         written(ctx, result)
     })?;
     let h = host.clone();
@@ -191,7 +187,6 @@ fn define_members<'js>(ctx: &Ctx<'js>, proto: &Object<'js>, host: &Rc<Host>) -> 
         let result = h
             .document
             .borrow_mut()
-            .tree
             .replace_class(node, &token, &new_token);
         written(ctx, result)
     })?;

@@ -36,7 +36,7 @@ fn dataset_get<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) -> Js
             return Ok(Value::new_undefined(ctx));
         };
         let Some(value) = host
-            .tree
+            .tree()
             .get(node_id)
             .and_then(|node| node.attributes().get(&name))
         else {
@@ -72,11 +72,10 @@ fn dataset_set<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String, Strin
             ));
         }
         let mut host = host.document.borrow_mut();
-        if host.tree.get(node_id).is_none() {
+        if host.tree().get(node_id).is_none() {
             return Ok(());
         }
-        host.tree
-            .set_attribute(node_id, name, AttributeValue::String(value))
+        host.set_attribute(node_id, &name, AttributeValue::String(value))
             .map_err(|err| throw_tree_error(&ctx, err))
     }
 }
@@ -89,9 +88,9 @@ fn dataset_delete<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId, String) ->
             return Ok(true);
         };
         let mut host = host.document.borrow_mut();
-        if host.tree.get(node_id).is_some() {
+        if host.tree().get(node_id).is_some() {
             // The node exists here, so the removal cannot fail and its result is dropped.
-            let _ = host.tree.remove_attribute(node_id, &name);
+            let _ = host.remove_attribute(node_id, &name);
         }
         Ok(true)
     }
@@ -103,7 +102,7 @@ fn dataset_keys<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<
         Ok(host
             .document
             .borrow()
-            .tree
+            .tree()
             .get(node_id)
             .map(VirtualNode::dataset_keys)
             .unwrap_or_default())
@@ -320,7 +319,7 @@ mod tests {
     fn a_freed_node_reads_no_key_and_deletes_nothing(#[case] check: &str) {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.sweep_orphans().unwrap();
+        drop(host.sweep_orphans().unwrap());
 
         let got: bool = engine
             .eval(&check.replace("NODE", &node.to_string()))
@@ -333,7 +332,7 @@ mod tests {
     fn a_freed_node_ignores_a_write_of_a_valid_key() {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.sweep_orphans().unwrap();
+        drop(host.sweep_orphans().unwrap());
 
         engine
             .eval::<()>(&format!("__inca_native__.datasetSet({node}, 'x', 'v')"))
@@ -344,7 +343,7 @@ mod tests {
     fn a_freed_node_still_throws_for_an_invalid_name() {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.sweep_orphans().unwrap();
+        drop(host.sweep_orphans().unwrap());
 
         assert_eq!(
             error_name(

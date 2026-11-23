@@ -10,7 +10,6 @@ use gpui::{App, AppContext as _, Keystroke, TestAppContext, Window, WindowHandle
 use inca_document::{EventPayload, EventTargetId, KeyPayload};
 use inca_gpui::{EventSink, InputRequest};
 use inca_node::NodeId;
-use inca_style::set_style;
 
 use super::{FakeScript, Walked, fake_dispatcher_on, mouse_at};
 use crate::test_support::{TestRoot, cells};
@@ -43,8 +42,9 @@ pub(crate) struct Scene {
 fn tree(cells: &Cells, value: Option<&str>) -> [NodeId; 5] {
     let mut h = cells.document.borrow_mut();
     let root = h.root();
-    let parent = h.tree.create_node("div").unwrap();
-    h.tree.append_child(root, parent).unwrap();
+    let parent = h.create_node("div").unwrap();
+    h.append_child(&*cells.window.borrow(), root, parent)
+        .unwrap();
     let tags = [
         "button",
         "button",
@@ -52,24 +52,18 @@ fn tree(cells: &Cells, value: Option<&str>) -> [NodeId; 5] {
         "div",
     ];
     let [first, second, field, plain] = tags.map(|tag| {
-        let node = h.tree.create_node(tag).unwrap();
-        h.tree.append_child(parent, node).unwrap();
+        let node = h.create_node(tag).unwrap();
+        h.append_child(&*cells.window.borrow(), parent, node)
+            .unwrap();
         node
     });
     match value {
         Some(value) => {
-            set_style(&mut h.tree, field, "width", 100.0).unwrap();
-            set_style(&mut h.tree, field, "text_size", 10.0).unwrap();
-            h.inputs
-                .get_mut()
-                .entry(field)
-                .or_default()
-                .set_value(value);
+            h.set_style_prop(field, "width", 100.0).unwrap();
+            h.set_style_prop(field, "text_size", 10.0).unwrap();
+            h.set_input_value(field, value);
         }
-        None => h.tree.set_attribute(field, "tabindex", "0").unwrap(),
-    }
-    for node in [first, second, field] {
-        h.focus.mark_tab_dirty(node);
+        None => h.set_attribute(field, "tabindex", "0").unwrap(),
     }
     [parent, first, second, field, plain]
 }
@@ -135,17 +129,13 @@ fn fake_scene(cx: &mut TestAppContext, value: Option<&str>) -> Scene {
 
 impl Scene {
     pub(crate) fn focus(&self, cx: &mut TestAppContext, node: NodeId) {
-        self.cells
-            .document
-            .borrow_mut()
-            .focus
-            .request_focus(node, false);
+        self.cells.document.borrow_mut().request_focus(node, false);
         self.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
         cx.run_until_parked();
     }
 
     pub(crate) fn blur(&self, cx: &mut TestAppContext, node: NodeId) {
-        self.cells.document.borrow_mut().focus.request_blur(node);
+        self.cells.document.borrow_mut().request_blur(node);
         self.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
         cx.run_until_parked();
     }
@@ -155,20 +145,23 @@ impl Scene {
     }
 
     pub(crate) fn key(&self, cx: &mut TestAppContext, key: &str, up: bool, canceled: bool) {
-        let keystroke = Keystroke::parse_with_os(key, cx.read(|cx| cx.platform_info().os)).unwrap();
+        self.cancel.set(canceled);
+        self.in_window(cx, |scene, window, cx| scene.send_key(key, up, window, cx));
+        cx.run_until_parked();
+    }
+
+    /// Sends one key to the dispatcher inside the caller's window update, so no frame runs
+    /// before the next call.
+    pub(crate) fn send_key(&self, key: &str, up: bool, window: &mut Window, cx: &mut App) {
+        let keystroke = Keystroke::parse_with_os(key, cx.platform_info().os).unwrap();
         let payload = EventPayload::Key(KeyPayload {
             key: keystroke.key.clone(),
             repeat: false,
             modifiers: inca_gpui::modifiers_of(keystroke.modifiers),
             is_composing: false,
         });
-        self.cancel.set(canceled);
-        self.in_window(cx, |scene, window, cx| {
-            scene
-                .dispatcher
-                .key_input(&keystroke, up, &payload, window, cx);
-        });
-        cx.run_until_parked();
+        self.dispatcher
+            .key_input(&keystroke, up, &payload, window, cx);
     }
 
     /// Sends the space-separated keystrokes through the window, so a
@@ -208,7 +201,12 @@ impl Scene {
 
     /// The text state of the input field.
     pub(crate) fn state(&self) -> inca_document::InputState {
-        self.cells.document.borrow().inputs.borrow()[&self.field].clone()
+        self.cells
+            .document
+            .borrow()
+            .input(self.field)
+            .unwrap()
+            .clone()
     }
 
     pub(crate) fn mouse_down(&self, cx: &mut TestAppContext, node: NodeId) {

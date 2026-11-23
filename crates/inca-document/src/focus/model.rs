@@ -1,8 +1,8 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The focus model: the node that holds focus, the queued requests it replays, the transitions
-//! it reports and the focus a tree change takes, with the window side it drives.
+//! The focus model: the nodes that take focus, the node that holds focus, the queued requests it
+//! replays, the transitions it reports and the focus a tree change takes.
 
 use std::collections::{HashSet, VecDeque};
 
@@ -11,30 +11,7 @@ use inca_style::StyleCache;
 
 use super::Start;
 
-/// The window side of the focus. It creates and drops the platform handle of a node, reports the
-/// node the window focuses and moves the window's focus.
-pub trait FocusSurface {
-    /// The node whose handle the window focuses. None when the window focuses no node.
-    fn focused(&self) -> Option<NodeId>;
-
-    /// Gives `node` a handle to take focus with.
-    fn track(&mut self, node: NodeId);
-
-    /// Drops the handle of `node`.
-    fn untrack(&mut self, node: NodeId);
-
-    /// Moves the window's focus to the handle of `node`.
-    fn focus(&mut self, node: NodeId);
-
-    /// Releases the window's focus.
-    fn blur(&mut self);
-
-    /// Gives the window's focus to a handle that maps to no node while the window focuses
-    /// nothing, so key events reach the root container.
-    fn park(&mut self);
-}
-
-/// What changed since [`FocusModel::apply_pending`] was last called.
+/// What changed since [`FocusModel::plan_frame`] was last called.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FocusTransition {
     pub(super) blurred: Option<NodeId>,
@@ -81,22 +58,19 @@ pub(super) enum PendingFocus {
 /// queued before the next frame both apply, in order.
 ///
 /// A tree change that takes focus from a node (see [`FocusModel::drop_focus_in`]) owes the window
-/// a blur. The next [`FocusModel::apply_pending`] pays it.
+/// a blur. The next [`FocusModel::plan_frame`] pays it.
 #[derive(Debug, Default)]
 pub struct FocusModel {
-    // The nodes that have a handle on the window side.
+    // The nodes that take focus as of the last frame.
     pub(super) tracked: HashSet<NodeId>,
     pub(super) focused: Option<NodeId>,
-    // The focused node as the window last reported it. See `observe_node`.
+    // The node the window focused when last asked, owed blur or not. See `observe_node`. Read
+    // through `held`, except where `plan_frame` starts its simulated platform focus.
     pub(super) observed: Option<NodeId>,
     pub(super) pending: VecDeque<PendingFocus>,
-    // The node a tree change took focus from. The next `apply_pending`
+    // The node a tree change took focus from. The next `plan_frame`
     // releases the window's focus if it still rests on it.
     pub(super) blur_owed: Option<NodeId>,
-    // The latest focused node waiting to be scrolled into view, and the
-    // node found lacking a box that waits for the next frame.
-    pub(super) reveal: Vec<NodeId>,
-    pub(super) retry: Vec<NodeId>,
     // Set while the window is inactive, after the focused node got its `blur`.
     pub(super) window_blurred: bool,
     /// Nodes whose `tabindex` changed and wait for the next re-check.
@@ -107,7 +81,7 @@ pub struct FocusModel {
 
 impl FocusModel {
     /// Whether a request, a changed `tabindex` or a blur owed by a tree change waits for
-    /// [`Self::apply_pending`].
+    /// [`Self::plan_frame`].
     #[must_use]
     pub fn has_queued_work(&self) -> bool {
         !self.pending.is_empty() || !self.tab_dirty.is_empty() || self.blur_owed.is_some()
@@ -120,10 +94,22 @@ impl FocusModel {
         window_focus.filter(|&id| self.blur_owed != Some(id))
     }
 
+    /// The node holding focus as of the last observed platform focus.
+    pub(super) fn held(&self) -> Option<NodeId> {
+        self.held_node(self.observed)
+    }
+
+    /// The node a press focuses: the first node of `path`, the pressed node and then its
+    /// ancestors, that takes focus as of the last frame.
+    #[must_use]
+    pub fn press_target(&self, path: &[NodeId]) -> Option<NodeId> {
+        path.iter().copied().find(|id| self.tracked.contains(id))
+    }
+
     /// Records the node the window focuses now. Call it before a read of [`Self::active_node`],
     /// so the read starts from the focus the window applied itself.
     pub fn observe_node(&mut self, window_focus: Option<NodeId>) {
-        self.observed = self.held_node(window_focus);
+        self.observed = window_focus;
     }
 
     /// The node holding focus once the queued requests apply. It starts from the node last
@@ -132,7 +118,7 @@ impl FocusModel {
     #[must_use]
     pub fn active_node(&self, tree: &VirtualTree, cache: &StyleCache) -> Option<NodeId> {
         let mut active = self
-            .observed
+            .held()
             .filter(|&id| self.focusable_after_frame(tree, cache, id));
         for request in &self.pending {
             match *request {
@@ -173,8 +159,6 @@ impl FocusModel {
         self.pending.retain(
             |request| !matches!(request, PendingFocus::Focus { node, .. } if *node == node_id),
         );
-        self.reveal.retain(|&id| id != node_id);
-        self.retry.retain(|&id| id != node_id);
         if self.focused == Some(node_id) {
             // The node is gone: nothing left to dispatch a "blur" to.
             self.focused = None;
@@ -184,16 +168,13 @@ impl FocusModel {
     /// Takes focus from `node_id` and from every node below it at once. No
     /// `blur` or `focusout` is reported, and requests to focus those nodes
     /// are dropped. The window's own focus is released by the next
-    /// [`Self::apply_pending`].
+    /// [`Self::plan_frame`].
     pub fn drop_focus_in(&mut self, tree: &VirtualTree, node_id: NodeId) {
         let inside = |id: NodeId| tree.ancestors(id).any(|ancestor| ancestor == node_id);
         self.pending.retain(
             |request| !matches!(request, PendingFocus::Focus { node, .. } if inside(*node)),
         );
-        self.reveal.retain(|&id| !inside(id));
-        self.retry.retain(|&id| !inside(id));
-        if let Some(held) = self.observed.filter(|&id| inside(id)) {
-            self.observed = None;
+        if let Some(held) = self.held().filter(|&id| inside(id)) {
             self.blur_owed = Some(held);
         }
         if self.focused.is_some_and(inside) {
@@ -261,6 +242,20 @@ mod tests {
         registry.observed = Some(id);
         registry.request_focus(plain, true);
         assert_eq!(registry.active_node(&tree, &StyleCache::new()), Some(id));
+    }
+
+    #[rstest::rstest]
+    #[case::the_pressed_node(&[1, 0], Some(1))]
+    #[case::an_ancestor(&[2, 1, 0], Some(1))]
+    #[case::none(&[2], None)]
+    fn the_press_target_is_the_first_ancestor_that_takes_focus(
+        #[case] path: &[NodeId],
+        #[case] target: Option<NodeId>,
+    ) {
+        let mut registry = FocusModel::default();
+        registry.tracked.extend([0, 1]);
+
+        assert_eq!(registry.press_target(path), target);
     }
 
     #[test]

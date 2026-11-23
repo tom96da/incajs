@@ -45,8 +45,9 @@ pub struct KeyScene {
 fn key_tree(cells: &Cells, value: Option<&str>) -> [NodeId; 5] {
     let mut h = cells.document.borrow_mut();
     let root = h.root();
-    let parent = h.tree.create_node("div").unwrap();
-    h.tree.append_child(root, parent).unwrap();
+    let parent = h.create_node("div").unwrap();
+    h.append_child(&*cells.window.borrow(), root, parent)
+        .unwrap();
     let tags = [
         "button",
         "button",
@@ -54,24 +55,18 @@ fn key_tree(cells: &Cells, value: Option<&str>) -> [NodeId; 5] {
         "div",
     ];
     let [first, second, field, plain] = tags.map(|tag| {
-        let node = h.tree.create_node(tag).unwrap();
-        h.tree.append_child(parent, node).unwrap();
+        let node = h.create_node(tag).unwrap();
+        h.append_child(&*cells.window.borrow(), parent, node)
+            .unwrap();
         node
     });
     match value {
         Some(value) => {
-            set_style(&mut h.tree, field, "width", 100.0).unwrap();
-            set_style(&mut h.tree, field, "text_size", 10.0).unwrap();
-            h.inputs
-                .get_mut()
-                .entry(field)
-                .or_default()
-                .set_value(value);
+            h.set_style_prop(field, "width", 100.0).unwrap();
+            h.set_style_prop(field, "text_size", 10.0).unwrap();
+            h.set_input_value(field, value);
         }
-        None => h.tree.set_attribute(field, "tabindex", "0").unwrap(),
-    }
-    for node in [first, second, field] {
-        h.focus.mark_tab_dirty(node);
+        None => h.set_attribute(field, "tabindex", "0").unwrap(),
     }
     [parent, first, second, field, plain]
 }
@@ -135,11 +130,7 @@ fn js_scene_of(cx: &mut TestAppContext, value: Option<&str>) -> KeyScene {
 
 impl KeyScene {
     pub fn focus(&self, cx: &mut TestAppContext, node: NodeId) {
-        self.cells
-            .document
-            .borrow_mut()
-            .focus
-            .request_focus(node, false);
+        self.cells.document.borrow_mut().request_focus(node, false);
         self.in_window(cx, |_, window, cx| window.draw(cx).clear(cx));
         cx.run_until_parked();
     }
@@ -190,7 +181,12 @@ impl KeyScene {
     }
 
     pub fn state(&self) -> inca_document::InputState {
-        self.cells.document.borrow().inputs.borrow()[&self.field].clone()
+        self.cells
+            .document
+            .borrow()
+            .input(self.field)
+            .unwrap()
+            .clone()
     }
 
     pub fn in_window<R>(
@@ -209,8 +205,12 @@ impl KeyScene {
         self.cells
             .document
             .borrow_mut()
-            .tree
-            .insert_before(self.parent, self.plain, Some(self.second))
+            .insert_before(
+                &*self.cells.window.borrow(),
+                self.parent,
+                self.plain,
+                Some(self.second),
+            )
             .unwrap();
     }
 
@@ -228,17 +228,19 @@ impl KeyScene {
     pub fn add_link(&self, namespace: &str, tag: &str, attributes: &[(&str, &str)]) -> NodeId {
         let mut document = self.cells.document.borrow_mut();
         let node = document
-            .tree
             .create_element_ns(Some(namespace), None, tag)
             .unwrap();
         for &(key, value) in attributes {
-            document.tree.set_attribute(node, key, value).unwrap();
+            document.set_attribute(node, key, value).unwrap();
         }
         document
-            .tree
-            .insert_before(self.parent, node, Some(self.field))
+            .insert_before(
+                &*self.cells.window.borrow(),
+                self.parent,
+                node,
+                Some(self.field),
+            )
             .unwrap();
-        document.focus.mark_tab_dirty(node);
         node
     }
 }

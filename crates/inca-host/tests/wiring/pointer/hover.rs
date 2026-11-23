@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use crate::support::pointer::*;
-use inca_style::set_style;
 
 /// The `eventId` of the event `install_click_counter` saw last, 0 if none.
 fn last_event_id(engine: &Engine) -> u64 {
@@ -18,12 +17,13 @@ fn last_event_id(engine: &Engine) -> u64 {
 fn hover_dispatches_enter_then_leave(cx: &mut TestAppContext) {
     let host = Rig::default();
     let node = {
+        let view = host.window.borrow();
         let mut host = host.document.borrow_mut();
-        let node = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, node, "width", 100.0).unwrap();
-        set_style(&mut host.tree, node, "height", 100.0).unwrap();
+        let node = host.create_node("div").unwrap();
+        host.set_style_prop(node, "width", 100.0).unwrap();
+        host.set_style_prop(node, "height", 100.0).unwrap();
         let root = host.root();
-        host.tree.append_child(root, node).unwrap();
+        host.append_child(&*view, root, node).unwrap();
         node
     };
     let engine = wiring::engine_for(&host);
@@ -84,9 +84,9 @@ fn mouseenter_carries_the_mouse_fields(cx: &mut TestAppContext) {
     let host = Rig::default();
     let node = {
         let mut host = host.document.borrow_mut();
-        let node = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, node, "width", 100.0).unwrap();
-        set_style(&mut host.tree, node, "height", 100.0).unwrap();
+        let node = host.create_node("div").unwrap();
+        host.set_style_prop(node, "width", 100.0).unwrap();
+        host.set_style_prop(node, "height", 100.0).unwrap();
         node
     };
     let engine = wiring::engine_for(&host);
@@ -249,11 +249,12 @@ fn movement_tracks_the_delta_from_the_last_pointer_move(cx: &mut TestAppContext)
 fn bubbled_mousemove_gives_every_listener_the_same_movement(cx: &mut TestAppContext) {
     let (host, parent) = build_clickable_tree();
     let child = {
+        let view = host.window.borrow();
         let mut host = host.document.borrow_mut();
-        let child = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, child, "width", 100.0).unwrap();
-        set_style(&mut host.tree, child, "height", 100.0).unwrap();
-        host.tree.append_child(parent, child).unwrap();
+        let child = host.create_node("div").unwrap();
+        host.set_style_prop(child, "width", 100.0).unwrap();
+        host.set_style_prop(child, "height", 100.0).unwrap();
+        host.append_child(&*view, parent, child).unwrap();
         child
     };
     let engine = wiring::engine_for(&host);
@@ -342,16 +343,17 @@ fn a_node_replacing_the_hovered_one_gets_enter_events_under_a_resting_pointer(
 ) {
     let host = Rig::default();
     let (parent, old) = {
+        let view = host.window.borrow();
         let mut host = host.document.borrow_mut();
-        let parent = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, parent, "width", 100.0).unwrap();
-        set_style(&mut host.tree, parent, "height", 100.0).unwrap();
-        let old = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, old, "width", 100.0).unwrap();
-        set_style(&mut host.tree, old, "height", 100.0).unwrap();
-        host.tree.append_child(parent, old).unwrap();
+        let parent = host.create_node("div").unwrap();
+        host.set_style_prop(parent, "width", 100.0).unwrap();
+        host.set_style_prop(parent, "height", 100.0).unwrap();
+        let old = host.create_node("div").unwrap();
+        host.set_style_prop(old, "width", 100.0).unwrap();
+        host.set_style_prop(old, "height", 100.0).unwrap();
+        host.append_child(&*view, parent, old).unwrap();
         let root = host.root();
-        host.tree.append_child(root, parent).unwrap();
+        host.append_child(&*view, root, parent).unwrap();
         (parent, old)
     };
     let engine = wiring::engine_for(&host);
@@ -378,12 +380,13 @@ fn a_node_replacing_the_hovered_one_gets_enter_events_under_a_resting_pointer(
         Modifiers::none(),
     );
     let new = {
+        let view = host.window.borrow();
         let mut host = host.document.borrow_mut();
-        host.tree.remove_child(parent, old).unwrap();
-        let new = host.tree.create_node("div").unwrap();
-        set_style(&mut host.tree, new, "width", 100.0).unwrap();
-        set_style(&mut host.tree, new, "height", 100.0).unwrap();
-        host.tree.append_child(parent, new).unwrap();
+        host.remove_child(&*view, parent, old).unwrap();
+        let new = host.create_node("div").unwrap();
+        host.set_style_prop(new, "width", 100.0).unwrap();
+        host.set_style_prop(new, "height", 100.0).unwrap();
+        host.append_child(&*view, parent, new).unwrap();
         new
     };
     for event in ["mouseover", "mouseout", "mouseenter", "mouseleave"] {

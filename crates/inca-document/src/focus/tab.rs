@@ -6,27 +6,25 @@
 use inca_node::{NodeId, VirtualTree};
 use inca_style::StyleCache;
 
-use super::{FocusModel, FocusSurface, Start};
+use super::{FocusModel, FocusPlan, FocusReveal, FocusStep, Start};
 
 impl FocusModel {
-    /// Moves focus one tab stop forward, or `backward`. With no node focused,
-    /// the move starts from the last press or focus (see
-    /// [`Self::press_start`]). Past the last stop nothing holds focus, and the
-    /// next Tab starts over at the first. A move that finds no stop forgets
-    /// where it started. The transition is reported by the next
-    /// [`Self::apply_pending`]. Returns the node that took focus. The move
-    /// also drops the scroll requests of earlier focus calls. From a node that no longer takes
-    /// focus, the move goes to the nearest stop after its place in tree order (before it when
-    /// `backward`), or forward with none after it to the first stop.
-    pub fn tab_move(
+    /// Plans a move of focus one tab stop forward, or `backward`, from the platform focus last
+    /// observed. With no node focused, the move starts from the last press or focus (see
+    /// [`Self::press_start`]). Past the last stop nothing holds focus, and the next Tab starts over
+    /// at the first. A move that finds no stop forgets where it started. The transition is
+    /// reported by the next [`Self::plan_frame`]. Returns the node that takes focus and a plan that
+    /// changes no handle. The move also drops the scroll requests of earlier focus calls. From a
+    /// node that no longer takes focus, the move goes to the nearest stop after its place in tree
+    /// order (before it when `backward`), or forward with none after it to the first stop.
+    pub fn plan_tab(
         &mut self,
         tree: &VirtualTree,
         cache: &StyleCache,
         root: NodeId,
-        surface: &mut impl FocusSurface,
         backward: bool,
-    ) -> Option<NodeId> {
-        let focused = self.held_node(surface.focused());
+    ) -> (Option<NodeId>, FocusPlan) {
+        let focused = self.held();
         let start = if focused.is_none() { self.start } else { None };
         let mut stops = Vec::new();
         let from = start.map(Start::node).or(focused);
@@ -57,14 +55,12 @@ impl FocusModel {
         if target.is_none() {
             self.start = None;
         }
-        self.reveal.clear();
-        self.retry.clear();
-        if let Some(id) = target {
-            surface.focus(id);
-        } else {
-            surface.blur();
-        }
-        target
+        let plan = FocusPlan {
+            steps: vec![target.map_or(FocusStep::Blur, FocusStep::Focus)],
+            reveal: FocusReveal::Replace(None),
+            ..FocusPlan::default()
+        };
+        (target, plan)
     }
 }
 
@@ -137,7 +133,7 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
-    use crate::tests::{FakeSurface, ROOT, rooted_tree};
+    use crate::tests::{FakeWindow, ROOT, apply_frame, rooted_tree};
     use rstest::rstest;
 
     // Nodes 1 to 6 have tabindex 3, 1, 0, 0, -1 and the largest value.
@@ -212,22 +208,25 @@ mod tests {
     }
 
     /// Three tab stops under the root, all with a handle, and a model that applied them.
-    fn three_stops() -> (VirtualTree, [NodeId; 3], FocusModel, FakeSurface) {
+    fn three_stops() -> (VirtualTree, [NodeId; 3], FocusModel, FakeWindow) {
         let (tree, ids) = rooted_tree(3);
         let mut model = FocusModel::default();
-        let mut surface = FakeSurface::default();
+        let mut surface = FakeWindow::default();
         for &id in &ids {
             model.mark_tab_dirty(id);
         }
-        let _ = model.apply_pending(&tree, &StyleCache::new(), &mut surface);
+        let _ = apply_frame(&mut model, &tree, &mut surface);
         (tree, [ids[0], ids[1], ids[2]], model, surface)
     }
 
     fn tab(
-        (tree, _, model, surface): &mut (VirtualTree, [NodeId; 3], FocusModel, FakeSurface),
+        (tree, _, model, surface): &mut (VirtualTree, [NodeId; 3], FocusModel, FakeWindow),
         backward: bool,
     ) -> Option<NodeId> {
-        model.tab_move(tree, &StyleCache::new(), ROOT, surface, backward)
+        model.observe_node(surface.focus);
+        let (target, plan) = model.plan_tab(tree, &StyleCache::new(), ROOT, backward);
+        surface.apply(&plan);
+        target
     }
 
     #[rstest]
@@ -289,12 +288,10 @@ mod tests {
     fn a_tab_move_drops_the_scroll_requests_of_earlier_focus_calls() {
         let mut stops = three_stops();
         stops.2.request_focus(stops.1[0], true);
-        let _ = stops
-            .2
-            .apply_pending(&stops.0, &StyleCache::new(), &mut stops.3);
+        let _ = apply_frame(&mut stops.2, &stops.0, &mut stops.3);
 
         let _ = tab(&mut stops, false);
 
-        assert_eq!(stops.2.take_reveals(), (vec![], vec![]));
+        assert_eq!(stops.3.take_reveals(), (vec![], vec![]));
     }
 }

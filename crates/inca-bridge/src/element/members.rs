@@ -31,7 +31,7 @@ pub(crate) fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
             &PARENT_NODE,
             |_, host, id, _| {
                 Ok(
-                    u32::try_from(host.document.borrow().tree.child_count(id, true))
+                    u32::try_from(host.document.borrow().tree().child_count(id, true))
                         .unwrap_or(u32::MAX),
                 )
             },

@@ -10,10 +10,7 @@ use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, Result as JsResult};
 
-use inca_document::{
-    Position, children_of, insert_parsed, parse_adjacent, parse_inner, parse_outer,
-    replace_children, replace_with,
-};
+use inca_document::{Position, children_of};
 use inca_jsenv::required_prototype;
 use inca_node::{HtmlScope, NodeId};
 
@@ -48,15 +45,18 @@ fn set_inner_html<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let (container, parsed) =
-            parse_inner(&mut host.document.borrow_mut().tree, node_id, &markup)
-                .map_err(|err| throw_tree_error(&ctx, err))?;
-        let old = children_of(&host.document.borrow().tree, container);
+        let (container, parsed) = host
+            .document
+            .borrow_mut()
+            .parse_inner(node_id, &markup)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        let old = children_of(host.document.borrow().tree(), container);
         lose_focus_in(&ctx, &host, &old);
         let mut document = host.document.borrow_mut();
-        let old = replace_children(&mut document, &*host.window.borrow(), container, &parsed)
+        let old = document
+            .replace_children(&*host.window.borrow(), container, &parsed)
             .map_err(|err| throw_tree_error(&ctx, err))?;
-        removed_subtrees(&ctx, &document.tree, &old)
+        removed_subtrees(&ctx, document.tree(), &old)
     }
 }
 
@@ -67,19 +67,23 @@ fn set_outer_html<'js>(
     host: Rc<Host>,
 ) -> impl Fn(Ctx<'js>, JsNodeId, String) -> JsResult<Array<'js>> {
     move |ctx, JsNodeId(node_id), markup| {
-        let Some(parsed) = parse_outer(&mut host.document.borrow_mut().tree, node_id, &markup)
+        let Some(parsed) = host
+            .document
+            .borrow_mut()
+            .parse_outer(node_id, &markup)
             .map_err(|err| throw_tree_error(&ctx, err))?
         else {
             return Array::new(ctx.clone());
         };
         lose_focus_in(&ctx, &host, &[node_id]);
         let mut document = host.document.borrow_mut();
-        let replaced = replace_with(&mut document, &*host.window.borrow(), node_id, &parsed)
+        let replaced = document
+            .replace_with(&*host.window.borrow(), node_id, &parsed)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         if !replaced {
             return Array::new(ctx.clone());
         }
-        removed_subtrees(&ctx, &document.tree, &[node_id])
+        removed_subtrees(&ctx, document.tree(), &[node_id])
     }
 }
 
@@ -91,17 +95,12 @@ fn insert_adjacent_html<'js>(
     move |ctx, JsNodeId(node_id), position, markup| {
         let position = parse_position(&ctx, &position)?;
         let mut document = host.document.borrow_mut();
-        let (container, reference, parsed) =
-            parse_adjacent(&mut document.tree, node_id, position, &markup)
-                .map_err(|err| throw_tree_error(&ctx, err))?;
-        insert_parsed(
-            &mut document,
-            &*host.window.borrow(),
-            &parsed,
-            container,
-            reference,
-        )
-        .map_err(|err| throw_tree_error(&ctx, err))?;
+        let (container, reference, parsed) = document
+            .parse_adjacent(node_id, position, &markup)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
+        document
+            .insert_parsed(&*host.window.borrow(), &parsed, container, reference)
+            .map_err(|err| throw_tree_error(&ctx, err))?;
         Ok(())
     }
 }
@@ -111,10 +110,10 @@ fn insert_adjacent_html<'js>(
 fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<Host>, roots: &[NodeId]) {
     let focused = {
         let host = host.document.borrow();
-        host.focus
-            .visual_focus(&host.tree, &host.style)
+        host.focus()
+            .visual_focus(host.tree(), host.style())
             .filter(|&focused| {
-                host.tree
+                host.tree()
                     .ancestors(focused)
                     .any(|ancestor| roots.contains(&ancestor))
             })
@@ -127,10 +126,10 @@ fn lose_focus_in(ctx: &Ctx<'_>, host: &Rc<Host>, roots: &[NodeId]) {
 /// The markup of the node `id`, `""` for a freed node.
 fn markup(ctx: &Ctx<'_>, host: &Shared, id: NodeId, scope: HtmlScope) -> JsResult<String> {
     let host = host.document.borrow();
-    if host.tree.get(id).is_none() {
+    if host.tree().get(id).is_none() {
         return Ok(String::new());
     }
-    host.tree
+    host.tree()
         .serialize_html(id, scope)
         .map_err(|err| throw_tree_error(ctx, err))
 }
@@ -160,7 +159,6 @@ pub(super) fn install_getters(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::cell::RefCell;
     use std::rc::Rc;
 
     use inca_jsenv::Engine;
@@ -581,14 +579,14 @@ mod tests {
 
         let _ = error_name(&engine, "n.insertAdjacentHtml(host, 'inside', '<i></i>')");
 
-        assert!(!host.document.borrow().tree.has_orphans());
+        assert!(!host.document.borrow().tree().has_orphans());
     }
 
     #[test]
     fn nothing_fires_in_an_inactive_window() {
         let (engine, host) = engine();
         engine.eval::<()>(FOCUSED).unwrap();
-        host.document.borrow_mut().focus.set_window_blurred(true);
+        host.document.borrow_mut().set_window_blurred(true);
 
         let got = eval(&engine, "n.setInnerHtml(host, ''); return out;");
 
@@ -666,17 +664,6 @@ mod tests {
             .unwrap()
     }
 
-    /// Collects the warnings the host prints.
-    fn collect_warnings(host: &Rc<Host>) -> Rc<RefCell<Vec<String>>> {
-        let lines = Rc::new(RefCell::new(Vec::new()));
-        let sink = Rc::clone(&lines);
-        host.document
-            .borrow_mut()
-            .warnings
-            .set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
-        lines
-    }
-
     #[rstest]
     #[case::html("<input value=a>", "n.childNodeIds(host)[0]", true)]
     #[case::svg(
@@ -700,10 +687,7 @@ mod tests {
             ))
             .unwrap();
 
-        assert_eq!(
-            host.document.borrow().inputs.borrow().contains_key(&id),
-            typed
-        );
+        assert_eq!(host.document.borrow().input(id).is_some(), typed);
     }
 
     #[rstest]
@@ -718,7 +702,7 @@ mod tests {
         assert!(
             host.document
                 .borrow()
-                .tree
+                .tree()
                 .get(id)
                 .unwrap()
                 .style_props()
@@ -732,7 +716,7 @@ mod tests {
     #[case::valueless("<div style>")]
     fn an_empty_parsed_style_attribute_warns_nothing(#[case] markup: &str) {
         let (engine, host) = engine();
-        let lines = collect_warnings(&host);
+        let lines = host.document.borrow_mut().record_warnings();
 
         parse_first(&engine, markup);
 

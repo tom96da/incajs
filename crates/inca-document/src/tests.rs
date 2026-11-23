@@ -7,14 +7,14 @@
 
 use crate::geometry::Align;
 use crate::{
-    FocusSurface, InputState, NodeBox, ScrollRange, StyleWarnings, View, new_document_tree,
+    DocumentState, FocusModel, FocusPlan, FocusStep, FocusTransition, InputState, NodeBox, Reveal,
+    RevealQueue, ScrollRange, View, new_document_tree,
 };
 use inca_node::tree::{AttributeValue, NodeId, VirtualTree};
 use inca_style::StyleCache;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::Range;
-use std::rc::Rc;
 
 /// The root of a tree `rooted_tree` builds: the first node created. The document is node 1.
 pub(crate) const ROOT: NodeId = 0;
@@ -44,40 +44,59 @@ pub(crate) fn tree_with(tag: &str, tabindex: Option<AttributeValue>) -> (Virtual
     (tree, id)
 }
 
-/// A window side that records what the focus model asks of it.
+/// A window that applies focus plans as the real one does, with no platform behind it: a node
+/// panics on a focus step that names a node with no handle, and a park only counts.
 #[derive(Default)]
-pub(crate) struct FakeSurface {
+pub(crate) struct FakeWindow {
     pub(crate) handles: HashSet<NodeId>,
     pub(crate) focus: Option<NodeId>,
     pub(crate) parks: usize,
+    pub(crate) reveals: RevealQueue,
 }
 
-impl FocusSurface for FakeSurface {
-    fn focused(&self) -> Option<NodeId> {
-        self.focus
-    }
-
-    fn track(&mut self, node: NodeId) {
-        self.handles.insert(node);
-    }
-
-    fn untrack(&mut self, node: NodeId) {
-        self.handles.remove(&node);
-    }
-
-    fn focus(&mut self, node: NodeId) {
-        if self.handles.contains(&node) {
-            self.focus = Some(node);
+impl FakeWindow {
+    pub(crate) fn apply(&mut self, plan: &FocusPlan) {
+        self.handles.extend(plan.gained.iter().copied());
+        for step in &plan.steps {
+            match *step {
+                FocusStep::Focus(node) => {
+                    assert!(
+                        self.handles.contains(&node),
+                        "the focus plan names {node}, which has no handle"
+                    );
+                    self.focus = Some(node);
+                }
+                FocusStep::Blur => self.focus = None,
+            }
         }
+        for node in &plan.lost {
+            self.handles.remove(node);
+        }
+        if plan.park {
+            self.parks += 1;
+        }
+        self.reveals.follow_plan(plan);
     }
 
-    fn blur(&mut self) {
-        self.focus = None;
+    /// The nodes of the reveals a focus queued: `(retries, fresh)`.
+    pub(crate) fn take_reveals(&mut self) -> (Vec<NodeId>, Vec<NodeId>) {
+        let reveals = self.reveals.take();
+        let nodes = |list: Vec<Reveal>| list.into_iter().map(|reveal| reveal.node).collect();
+        (nodes(reveals.retries), nodes(reveals.fresh))
     }
+}
 
-    fn park(&mut self) {
-        self.parks += 1;
-    }
+/// Runs a frame of `model` on `window` as the window does: it observes the window's focus, plans
+/// the frame and applies the plan. Returns the transitions.
+pub(crate) fn apply_frame(
+    model: &mut FocusModel,
+    tree: &VirtualTree,
+    window: &mut FakeWindow,
+) -> Vec<FocusTransition> {
+    model.observe_node(window.focus);
+    let plan = model.plan_frame(tree, &StyleCache::new());
+    window.apply(&plan);
+    plan.transitions
 }
 
 /// An input state holding `value` with `selection` selected. The caret sits at the start of the
@@ -98,18 +117,11 @@ pub(crate) fn caret_at(value: &str, caret: usize) -> InputState {
     at(value, caret..caret, false)
 }
 
-/// A `StyleWarnings` that sends each line to a list the caller reads.
-pub(crate) fn collecting() -> (StyleWarnings, Rc<RefCell<Vec<String>>>) {
-    let lines = Rc::new(RefCell::new(Vec::new()));
-    let sink = Rc::clone(&lines);
-    let mut warnings = StyleWarnings::default();
-    warnings.set_sink(Rc::new(move |line| sink.borrow_mut().push(line.to_owned())));
-    (warnings, lines)
-}
-
-/// A `View` that draws nothing and records the nodes whose scroll reset and the nodes it forgot.
+/// A `View` that draws nothing, holds the buttons `held`, and records the nodes whose scroll reset
+/// and the nodes it forgot.
 #[derive(Default)]
 pub(crate) struct RecordingView {
+    pub(crate) held: u8,
     pub(crate) resets: RefCell<Vec<NodeId>>,
     pub(crate) forgotten: Vec<NodeId>,
 }
@@ -132,13 +144,9 @@ impl View for RecordingView {
         false
     }
 
-    fn queue_reveal(&mut self, _: NodeId, _: Align, _: Align) {}
-
     fn held_buttons(&self) -> u8 {
-        0
+        self.held
     }
-
-    fn set_held_buttons(&mut self, _: u8) {}
 
     fn reset_scroll(&self, _: &VirtualTree, id: NodeId) {
         self.resets.borrow_mut().push(id);
@@ -147,4 +155,16 @@ impl View for RecordingView {
     fn forget(&mut self, ids: &[NodeId]) {
         self.forgotten.extend_from_slice(ids);
     }
+}
+
+/// A document with one node under its root, and a view holding the left button.
+pub(crate) fn mounted() -> (DocumentState, RecordingView, NodeId) {
+    let view = RecordingView {
+        held: 1,
+        ..RecordingView::default()
+    };
+    let mut document = DocumentState::default();
+    let node = document.create_node("div").unwrap();
+    document.append_child(&view, document.root(), node).unwrap();
+    (document, view, node)
 }

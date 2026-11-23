@@ -36,7 +36,7 @@ fn a_move_names_its_lowest_held_button_in_which(
     want: u32,
 ) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = host.document.borrow_mut().create_node("div").unwrap();
     listen(&dispatcher, node, "mousemove", "(e) => out.push(e.which)");
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
@@ -68,7 +68,7 @@ fn which_of_a_press_or_a_wheel_skips_the_held_buttons(
     want: u32,
 ) {
     let (dispatcher, host, _reported) = dispatcher_with_engine();
-    let node = host.document.borrow_mut().tree.create_node("div").unwrap();
+    let node = host.document.borrow_mut().create_node("div").unwrap();
     listen(&dispatcher, node, event, "(e) => out.push(e.which)");
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {

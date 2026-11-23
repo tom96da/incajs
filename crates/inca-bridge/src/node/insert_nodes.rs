@@ -7,7 +7,6 @@ use std::rc::Rc;
 
 use rquickjs::{Array, Ctx, Exception, FromJs, Result as JsResult, Value};
 
-use inca_document::settle;
 use inca_node::{InsertArg, Inserted, NodeId, Placement};
 
 use super::mutation::removed_subtrees;
@@ -72,20 +71,10 @@ pub(super) fn insert_planned(
     placement: Placement,
     nodes: &[InsertArg],
 ) -> JsResult<Option<Inserted>> {
-    let mut document = host.document.borrow_mut();
-    let planned = document
-        .tree
-        .plan_insertion(node_id, placement, nodes)
-        .map_err(|err| throw_tree_error(ctx, err))?;
-    let Some(insertion) = planned else {
-        return Ok(None);
-    };
-    let inserted = document
-        .tree
-        .apply_insertion(insertion)
-        .map_err(|err| throw_tree_error(ctx, err))?;
-    settle(&mut document, &*host.window.borrow(), &inserted.removals);
-    Ok(Some(inserted))
+    host.document
+        .borrow_mut()
+        .insert_nodes(&*host.window.borrow(), node_id, placement, nodes)
+        .map_err(|err| throw_tree_error(ctx, err))
 }
 
 /// Inserts `nodes` at `place` of `node_id` after checking the whole insertion. Returns
@@ -105,7 +94,7 @@ fn insert_nodes<'js>(
         array.set(0, inserted.texts)?;
         array.set(
             1,
-            removed_subtrees(&ctx, &host.document.borrow().tree, &inserted.removed)?,
+            removed_subtrees(&ctx, host.document.borrow().tree(), &inserted.removed)?,
         )?;
         Ok(array.into_value())
     }
@@ -290,7 +279,7 @@ mod tests {
 
         let host = host.document.borrow();
         assert_eq!(
-            callback_ids(&host.listeners, EventTargetId::Node(id), "click").len(),
+            callback_ids(host.listeners(), EventTargetId::Node(id), "click").len(),
             1
         );
     }

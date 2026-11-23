@@ -85,14 +85,15 @@ fn removing_the_listener_between_frames_fires_nothing(cx: &mut TestAppContext) {
         .host
         .document
         .borrow()
-        .listeners
+        .listeners()
         .listeners_for(inca_document::EventTargetId::Node(2), "scroll")[0]
         .callback;
-    assert!(scene.host.document.borrow_mut().listeners.remove(
+    let removed = scene.host.document.borrow_mut().remove_listener(
         inca_document::EventTargetId::Node(2),
         "scroll",
-        id
-    ));
+        id,
+    );
+    assert!(removed.is_some());
     scene.wheel(-20.);
     assert_eq!(scene.ran(), r#"["scroll:2:false"]"#);
 }

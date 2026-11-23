@@ -7,7 +7,6 @@
 //! text members, and ignores a write. A native throws a `TypeError` for an attribute outside the
 //! element rows of the table, and for a freed node reads `null` and ignores a write.
 
-use super::attributes::mark_focus_dirty_for;
 use crate::bindings::convert::{JsNodeId, or_null};
 use crate::bindings::members::accessor;
 use crate::bindings::{Host, Natives};
@@ -40,7 +39,7 @@ pub(crate) fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
                     ctx,
                     host.document
                         .borrow()
-                        .tree
+                        .tree()
                         .get(id)
                         .and_then(|node| node.attributes().get(attribute))
                         .map(AttributeValue::text),
@@ -53,10 +52,10 @@ pub(crate) fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
                     Some(Coerced::<String>::from_js(ctx, value)?.0)
                 };
                 let mut host = host.document.borrow_mut();
-                if host.tree.get(id).is_some() {
+                if host.tree().get(id).is_some() {
                     let _ = match text {
-                        Some(text) => host.tree.set_attribute(id, attribute, text),
-                        None => host.tree.remove_attribute(id, attribute),
+                        Some(text) => host.set_attribute(id, attribute, text),
+                        None => host.remove_attribute(id, attribute),
                     };
                 }
                 Ok(())
@@ -70,17 +69,16 @@ pub(crate) fn install(ctx: &Ctx<'_>, host: &Rc<Host>) -> JsResult<()> {
             host,
             "tabIndex",
             &HTML_OR_SVG,
-            |_, host, id, _| Ok(host.document.borrow().tree.tab_index(id).unwrap_or(-1)),
+            |_, host, id, _| Ok(host.document.borrow().tree().tab_index(id).unwrap_or(-1)),
             |ctx, host, id, _, value| {
                 let index = Coerced::<i32>::from_js(ctx, value)?.0;
                 let mut host = host.document.borrow_mut();
-                if host.tree.get(id).is_some() {
-                    let _ = host.tree.set_attribute(
+                if host.tree().get(id).is_some() {
+                    let _ = host.set_attribute(
                         id,
                         "tabindex",
                         AttributeValue::Number(f64::from(index)),
                     );
-                    mark_focus_dirty_for(&mut host, id, "tabindex");
                 }
                 Ok(())
             },
@@ -118,7 +116,7 @@ fn aria_elements<'js>(
             &ctx,
             host.document
                 .borrow()
-                .tree
+                .tree()
                 .aria_elements(node_id, attribute),
         )
     }
@@ -132,8 +130,8 @@ fn set_aria_elements<'js>(
         let attribute = element_row(&ctx, &attribute)?;
         let ids = ids.map(|ids| ids.into_iter().map(|JsNodeId(id)| id).collect());
         let mut host = host.document.borrow_mut();
-        if host.tree.get(node_id).is_some() {
-            let _ = host.tree.set_aria_elements(node_id, attribute, ids);
+        if host.tree().get(node_id).is_some() {
+            let _ = host.set_aria_elements(node_id, attribute, ids);
         }
         Ok(())
     }
@@ -243,7 +241,7 @@ mod tests {
         );
 
         assert_eq!(got, json!(-1));
-        assert!(!host.document.borrow().focus.has_queued_work());
+        assert!(!host.document.borrow().focus().has_queued_work());
     }
 
     #[test]
