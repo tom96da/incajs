@@ -11,7 +11,7 @@ use std::rc::Rc;
 use gpui::{App, Pixels, ScrollHandle, Window, point, px};
 
 use inca_document::geometry::{Align, scroll_chain};
-use inca_document::{DocumentState, NodeBox, RevealOrigin, Reveals, ScrollRange, View};
+use inca_document::{DocumentState, NodeBox, Released, RevealOrigin, Reveals, ScrollRange, View};
 use inca_gpui::{InputLayout, NodeLayout, rect_of};
 use inca_node::{NodeId, VirtualTree};
 use inca_style::{StyleCache, is_scroll_container};
@@ -306,9 +306,9 @@ impl Cells {
     }
 
     /// Frees every orphan of the tree with its subtree and drops their per-node state. Returns the
-    /// freed node ids and the callback ids their listeners held, or `None` when nothing was
+    /// freed node ids with what their listeners leave to the script, or `None` when nothing was
     /// freed.
-    pub(crate) fn sweep_orphans(&self) -> Option<(Vec<NodeId>, Vec<u32>)> {
+    pub(crate) fn sweep_orphans(&self) -> Option<(Vec<NodeId>, Released)> {
         self.document
             .borrow_mut()
             .sweep(&mut *self.window.borrow_mut())
@@ -334,7 +334,7 @@ impl Cells {
         moved.retain(|&id| {
             inca_document::listened(
                 document.tree(),
-                &document.listeners,
+                document.listeners(),
                 "scroll",
                 flags,
                 inca_document::EventTargetId::Node(id),

@@ -391,10 +391,12 @@ mod tests {
         assert!(clicked(Some(a), apart).is_empty(), "no common ancestor");
         assert!(clicked(None, a).is_empty(), "no press container");
 
-        cells
-            .document
-            .borrow_mut()
-            .destroy_node(&mut *cells.window.borrow_mut(), b);
+        drop(
+            cells
+                .document
+                .borrow_mut()
+                .destroy_node(&mut *cells.window.borrow_mut(), b),
+        );
         assert!(clicked(Some(a), b).is_empty(), "the release node is gone");
         assert!(clicked(Some(b), a).is_empty(), "the press node is gone");
     }
@@ -466,10 +468,12 @@ mod tests {
         };
         cx.update(|window, cx| rig.dispatcher.report_hover(Some(child), window, cx));
         boundary(&rig);
-        cells
-            .document
-            .borrow_mut()
-            .destroy_node(&mut *cells.window.borrow_mut(), child);
+        drop(
+            cells
+                .document
+                .borrow_mut()
+                .destroy_node(&mut *cells.window.borrow_mut(), child),
+        );
         cx.update(|window, cx| rig.dispatcher.report_hover(Some(parent), window, cx));
         assert_eq!(boundary(&rig), Vec::<String>::new());
         cx.update(|window, cx| rig.dispatcher.report_hover(Some(outer), window, cx));

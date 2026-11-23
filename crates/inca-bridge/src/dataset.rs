@@ -319,7 +319,7 @@ mod tests {
     fn a_freed_node_reads_no_key_and_deletes_nothing(#[case] check: &str) {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.sweep_orphans().unwrap();
+        drop(host.sweep_orphans().unwrap());
 
         let got: bool = engine
             .eval(&check.replace("NODE", &node.to_string()))
@@ -332,7 +332,7 @@ mod tests {
     fn a_freed_node_ignores_a_write_of_a_valid_key() {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.sweep_orphans().unwrap();
+        drop(host.sweep_orphans().unwrap());
 
         engine
             .eval::<()>(&format!("__inca_native__.datasetSet({node}, 'x', 'v')"))
@@ -343,7 +343,7 @@ mod tests {
     fn a_freed_node_still_throws_for_an_invalid_name() {
         let (engine, host) = engine_with_bindings();
         let node: NodeId = engine.eval("__inca_native__.createNode('div')").unwrap();
-        host.sweep_orphans().unwrap();
+        drop(host.sweep_orphans().unwrap());
 
         assert_eq!(
             error_name(

@@ -15,9 +15,7 @@ use gpui::{
     AnyWindowHandle, AppContext as _, DispatchEventResult, KeyBinding, KeyDownEvent, KeyUpEvent,
     Keystroke, PlatformInput, TestAppContext, VisualTestContext, prelude::*,
 };
-use inca_document::{
-    EVENTS, EventListeners, EventPayload, EventTargetId, MousePayload, PointerSource,
-};
+use inca_document::{EVENTS, EventPayload, EventTargetId, MousePayload, PointerSource};
 use inca_gpui::{EventSink, InputLayout};
 use inca_jsenv::Engine;
 use inca_node::NodeId;
@@ -457,7 +455,7 @@ fn a_key_event_nobody_listens_for_is_reported_to_the_platform_as_unhandled(
     cx: &mut TestAppContext,
 ) {
     let (window, engine, host, _) = focused_pair(cx, "seen.push(e.type); e.preventDefault();");
-    host.document.borrow_mut().listeners = EventListeners::default();
+    drop(host.document.borrow_mut().remove_every_listener());
 
     let result = platform_result(cx, window, false, "a");
 
@@ -476,7 +474,7 @@ fn a_passive_key_listener_leaves_the_platform_result_untouched(
 ) {
     let js = "seen.push(e.type); e.preventDefault();";
     let (window, engine, host, nodes) = focused_pair(cx, js);
-    host.document.borrow_mut().listeners = EventListeners::default();
+    drop(host.document.borrow_mut().remove_every_listener());
     listen_for_keys(&engine, nodes, js, true);
 
     let result = platform_result(cx, window, up, "a");

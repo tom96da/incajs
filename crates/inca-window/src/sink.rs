@@ -337,10 +337,12 @@ mod tests {
         let (dispatcher, cells, _fake) = fake_dispatcher();
         let [_, parent, child] = tree_of_three(&cells);
         assert_eq!(dispatcher.resolve(Some(child), parent), child);
-        cells
-            .document
-            .borrow_mut()
-            .destroy_node(&mut *cells.window.borrow_mut(), child);
+        drop(
+            cells
+                .document
+                .borrow_mut()
+                .destroy_node(&mut *cells.window.borrow_mut(), child),
+        );
         assert_eq!(dispatcher.resolve(Some(child), parent), parent);
         assert_eq!(dispatcher.resolve(None, parent), parent);
     }

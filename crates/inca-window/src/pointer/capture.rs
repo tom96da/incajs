@@ -329,10 +329,12 @@ mod tests {
         let document = s.cells.document.borrow().document();
         s.watch(document);
         s.take();
-        s.cells
-            .document
-            .borrow_mut()
-            .destroy_node(&mut *s.cells.window.borrow_mut(), a);
+        drop(
+            s.cells
+                .document
+                .borrow_mut()
+                .destroy_node(&mut *s.cells.window.borrow_mut(), a),
+        );
         s.moved(b, (5.0, 5.0));
         let got = s.take();
         assert_eq!(

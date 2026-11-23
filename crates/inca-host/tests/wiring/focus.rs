@@ -114,9 +114,11 @@ fn destroying_a_focused_node_reports_no_blur(cx: &mut TestAppContext) {
     engine.eval::<()>("globalThis.seen = [];").unwrap();
 
     cx.update_window(window.into(), |_root, window, cx| {
-        host.document
-            .borrow_mut()
-            .destroy_node(&mut *host.window.borrow_mut(), a);
+        drop(
+            host.document
+                .borrow_mut()
+                .destroy_node(&mut *host.window.borrow_mut(), a),
+        );
         window.draw(cx).clear(cx);
     })
     .unwrap();

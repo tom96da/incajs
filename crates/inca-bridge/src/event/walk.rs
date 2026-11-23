@@ -29,7 +29,7 @@ pub(crate) fn listened(
     target: EventTargetId,
     cut: &[NodeId],
 ) -> bool {
-    inca_document::listened(host.tree(), &host.listeners, name, flags, target, cut)
+    inca_document::listened(host.tree(), host.listeners(), name, flags, target, cut)
 }
 
 pub(super) fn next_event_id(host: &Rc<Host>) -> u64 {

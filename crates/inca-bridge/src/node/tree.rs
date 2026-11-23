@@ -120,10 +120,10 @@ fn destroy_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<
                 "the document belongs to the host. it cannot be destroyed",
             ));
         }
-        let callback_ids = document.destroy_node(&mut *host.window.borrow_mut(), node_id);
-        crate::abort::settle_freed(&ctx, &mut document)?;
-        callbacks::release(&ctx, &callback_ids)?;
-        Ok(callback_ids)
+        let released = document.destroy_node(&mut *host.window.borrow_mut(), node_id);
+        crate::abort::unpin(&ctx, &released.unpin)?;
+        callbacks::release(&ctx, &released.callbacks)?;
+        Ok(released.callbacks)
     }
 }
 
@@ -282,7 +282,7 @@ mod tests {
         assert!(host.tree().get(host.root()).unwrap().children().is_empty());
         assert!(
             callback_ids(
-                &host.listeners,
+                host.listeners(),
                 inca_document::EventTargetId::Node(1),
                 "click"
             )
@@ -565,7 +565,7 @@ mod tests {
             .eval::<()>("add(node, () => {}, s); n.destroyNode(node);")
             .unwrap();
 
-        assert_eq!(f.host.document.borrow().listeners.links.len(), 0);
+        assert_eq!(f.host.document.borrow().listeners().links().len(), 0);
     }
 
     #[rstest]

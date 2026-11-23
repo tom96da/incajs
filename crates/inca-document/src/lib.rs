@@ -8,6 +8,7 @@ pub mod event;
 pub mod focus;
 pub mod geometry;
 pub mod markup;
+pub mod registration;
 pub mod removal;
 pub mod reveal;
 pub mod semantics;
@@ -31,6 +32,7 @@ pub use markup::{
     Position, children_of, insert_parsed, parse_adjacent, parse_inner, parse_outer,
     replace_children, replace_with,
 };
+pub use registration::{Added, AnySignal, Released};
 pub use reveal::{Reveal, RevealOrigin, RevealQueue, Reveals};
 pub use semantics::{
     ARIA_REFLECTIONS, AriaKind, AriaReferences, AriaReflection, TabIndex, aria_reflection,

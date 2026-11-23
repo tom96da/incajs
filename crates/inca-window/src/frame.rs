@@ -51,12 +51,10 @@ impl EventDispatcher {
     /// which this requests.
     fn release_orphans(&self, window: &mut Window, cx: &mut App) {
         let swept = self.cells.sweep_orphans();
-        let Some((nodes, callback_ids)) = swept else {
+        let Some((nodes, released)) = swept else {
             return;
         };
-        let entered = self.turn(window, cx, |_, _| {
-            self.script.release(&nodes, &callback_ids)
-        });
+        let entered = self.turn(window, cx, |_, _| self.script.release(&nodes, &released));
         if entered {
             self.drain_observed(window);
         }

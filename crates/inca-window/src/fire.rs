@@ -297,19 +297,18 @@ mod tests {
             .unwrap();
         assert!(!dispatcher.tracks_pointer());
 
-        cells.document.borrow_mut().listeners.insert(
+        cells.document.borrow_mut().add_plain_listener(
             inca_document::EventTargetId::Node(node),
             "keydown",
             1,
-            false,
-            false,
         );
         assert!(dispatcher.tracks_pointer());
-        cells.document.borrow_mut().listeners.remove(
+        let removed = cells.document.borrow_mut().remove_listener(
             inca_document::EventTargetId::Node(node),
             "keydown",
             1,
         );
+        assert!(removed.is_some());
         assert!(!dispatcher.tracks_pointer());
 
         cells

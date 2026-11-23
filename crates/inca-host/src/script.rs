@@ -8,7 +8,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use inca_bridge::{Host, JsScript, JsState};
-use inca_document::{DocumentState, Outcome, View, Walk};
+use inca_document::{DocumentState, Outcome, Released, View, Walk};
 use inca_jsenv::{Clock, Frames, Timers};
 use inca_node::NodeId;
 use inca_window::{Cells, Script, WindowState};
@@ -49,8 +49,8 @@ impl Script for BridgeScript {
         self.0.run_frames()
     }
 
-    fn release(&self, nodes: &[NodeId], callback_ids: &[u32]) -> bool {
-        self.0.release(nodes, callback_ids)
+    fn release(&self, nodes: &[NodeId], released: &Released) -> bool {
+        self.0.release(nodes, released)
     }
 
     fn drain_jobs(&self) {

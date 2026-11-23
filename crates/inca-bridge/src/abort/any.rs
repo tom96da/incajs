@@ -36,26 +36,13 @@ pub(super) fn any<'js>(
         Ok(())
     })?;
     let table = Table::open(ctx)?;
-    let aborted = sources
-        .iter()
-        .find(|s| host.document.borrow().signals.is_aborted(s.borrow().id()));
-    if let Some(source) = aborted {
-        let result = new_signal(ctx, host, &table, false)?;
-        host.document
-            .borrow_mut()
-            .signals
-            .mark_aborted(result.borrow().id());
-        if let Some(reason) = source.borrow().reason() {
-            result.borrow().set_reason(reason);
-        }
-        return Ok(result);
-    }
-    let result = new_signal(ctx, host, &table, true)?;
     let ids: Vec<u32> = sources.iter().map(|s| s.borrow().id()).collect();
-    host.document
-        .borrow_mut()
-        .signals
-        .link_dependent(result.borrow().id(), &ids);
+    let made = host.document.borrow_mut().create_any_signal(&ids);
+    let result = new_signal(ctx, &table, made.map(|made| made.id))?;
+    let aborted_by = made.and_then(|made| made.aborted_by);
+    if let Some(reason) = aborted_by.and_then(|index| sources[index].borrow().reason()) {
+        result.borrow().set_reason(reason);
+    }
     Ok(result)
 }
 
@@ -445,7 +432,7 @@ mod tests {
         collect(&f);
 
         assert_eq!(f.json("(c.abort(), s.aborted)"), json!(true));
-        assert!(!f.host.document.borrow().signals.contains(2));
+        assert!(!f.host.document.borrow().signals().contains(2));
     }
 
     #[test]

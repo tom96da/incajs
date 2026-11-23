@@ -255,12 +255,14 @@ pub fn listen_ahead(engine: &Engine, host: &Rc<Host>, signal: u32, js: &str) {
             .unwrap()
             .unwrap()
     });
-    host.document.borrow_mut().listeners.insert(
+    let added = host.document.borrow_mut().add_plain_listener(
         EventTargetId::Signal(signal),
         "abort",
         callback,
-        false,
-        false,
+    );
+    assert!(
+        added.pin.is_empty(),
+        "a signal that does not exist yet pins nothing"
     );
 }
 

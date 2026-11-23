@@ -45,7 +45,12 @@ the focus once the queued requests apply.
 
 `EVENTS` and `Flags` describe each event type. `EventPayload`, `Modifiers` and the other plain
 payloads carry what an event reports. `EventListeners`, `Signals` and `Links` hold the listeners and
-the abort signals and links of a document. `EventTargetId` names a target, `Walk` describes one
+the abort signals and links of a document. `DocumentState` reads them through
+`DocumentState::listeners` and `DocumentState::signals` and changes them only through its
+operations, which hold the rules of the signal option: adding and removing a listener, and creating,
+aborting and releasing a signal. `add_listener` returns the signals to hold strongly. An operation
+that drops registrations returns a `Released` with their callback ids and the signals whose strong
+hold ends. `EventTargetId` names a target, `Walk` describes one
 dispatch and `deliver` runs it through an `Invoke`. `key_code` and `keypress_code` give the `code`
 of a key.
 

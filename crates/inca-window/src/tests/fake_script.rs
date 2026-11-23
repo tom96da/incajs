@@ -14,7 +14,7 @@ use inca_document::{EventPayload, EventTargetId, MousePayload};
 use inca_node::NodeId;
 
 use async_channel::Sender;
-use inca_document::{Outcome, Walk};
+use inca_document::{Outcome, Released, Walk};
 
 use crate::test_support::cells;
 use crate::{Cells, EventDispatcher, Script};
@@ -183,7 +183,7 @@ impl Script for FakeScript {
         turn()
     }
 
-    fn release(&self, _nodes: &[NodeId], _callback_ids: &[u32]) -> bool {
+    fn release(&self, _nodes: &[NodeId], _released: &Released) -> bool {
         false
     }
 

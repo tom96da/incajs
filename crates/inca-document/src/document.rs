@@ -50,9 +50,12 @@ pub struct DocumentState {
     /// color or a value of a shape the document does not support. A node prints each line once.
     /// Writes to stderr by default.
     pub warnings: StyleWarnings,
-    pub listeners: EventListeners,
-    /// The state of every `AbortSignal`, by id. Plain data.
-    pub signals: Signals,
+    /// Read through [`Self::listeners`] and changed only through the operations of the document,
+    /// which keep the links of the signals in step.
+    pub(crate) listeners: EventListeners,
+    /// The state of every `AbortSignal`, by id. Read through [`Self::signals`] and changed only
+    /// through the operations of the document.
+    pub(crate) signals: Signals,
     /// Read through [`Self::focus`] and changed only through the methods of the document. The
     /// tree holds the drawn focus, which [`Self::plan_focus_frame`] and
     /// [`Self::set_window_blurred`] publish. A script query reads [`Self::query_focus`].

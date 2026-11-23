@@ -6,7 +6,7 @@
 
 use inca_node::{InsertArg, Inserted, NodeId, Placement, Removal, TreeError};
 
-use crate::{DocumentState, View};
+use crate::{DocumentState, Released, View};
 
 impl DocumentState {
     /// Appends `node_id` to the children of `parent_id` and settles the nodes that move. Returns
@@ -99,24 +99,25 @@ impl DocumentState {
     }
 
     /// Frees `node_id` with its subtree, moves the Tab start off it and drops the state of the
-    /// freed nodes in `view` and in the document. Returns the callback ids their listeners held.
-    pub fn destroy_node(&mut self, view: &mut dyn View, node_id: NodeId) -> Vec<u32> {
+    /// freed nodes in `view` and in the document, their listeners included.
+    pub fn destroy_node(&mut self, view: &mut dyn View, node_id: NodeId) -> Released {
         let before = self.tree.preceding(node_id);
         self.move_tab_start(node_id, before);
         let freed = self.tree.destroy_node(node_id);
-        free_ids(self, view, &freed)
+        let callbacks = free_ids(self, view, &freed);
+        self.released(callbacks, [])
     }
 
     /// Frees every orphan with its subtree and drops the state of the freed nodes in `view` and in
-    /// the document. Returns the freed ids and the callback ids their listeners held, or `None`
-    /// when nothing was freed.
-    pub fn sweep(&mut self, view: &mut dyn View) -> Option<(Vec<NodeId>, Vec<u32>)> {
+    /// the document, their listeners included. Returns the freed ids with what their listeners
+    /// leave to the JS side, or `None` when nothing was freed.
+    pub fn sweep(&mut self, view: &mut dyn View) -> Option<(Vec<NodeId>, Released)> {
         let nodes = self.tree.sweep();
         if nodes.is_empty() {
             return None;
         }
         let callbacks = free_ids(self, view, &nodes);
-        Some((nodes, callbacks))
+        Some((nodes, self.released(callbacks, [])))
     }
 }
 
@@ -267,17 +268,27 @@ mod tests {
         let mut state = DocumentState::default();
         let mut view = RecordingView::default();
         let target = |id| EventTargetId::Node(id);
-        state.listeners.insert(target(3), "click", 1, false, false);
-        state.listeners.insert(target(4), "click", 2, false, false);
-        state.listeners.insert(target(5), "click", 3, false, false);
+        state.add_plain_listener(target(3), "click", 1);
+        state.add_plain_listener(target(4), "click", 2);
+        state.add_plain_listener(target(5), "click", 3);
 
         let mut callbacks = free_ids(&mut state, &mut view, &[3, 4]);
         callbacks.sort_unstable();
 
         assert_eq!(callbacks, [1, 2]);
-        assert!(state.listeners.listeners_for(target(3), "click").is_empty());
-        assert!(state.listeners.listeners_for(target(4), "click").is_empty());
-        assert_eq!(state.listeners.listeners_for(target(5), "click").len(), 1);
+        assert!(
+            state
+                .listeners()
+                .listeners_for(target(3), "click")
+                .is_empty()
+        );
+        assert!(
+            state
+                .listeners()
+                .listeners_for(target(4), "click")
+                .is_empty()
+        );
+        assert_eq!(state.listeners().listeners_for(target(5), "click").len(), 1);
     }
 
     #[test]

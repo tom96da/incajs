@@ -279,7 +279,7 @@ mod tests {
 
         let host = host.document.borrow();
         assert_eq!(
-            callback_ids(&host.listeners, EventTargetId::Node(id), "click").len(),
+            callback_ids(host.listeners(), EventTargetId::Node(id), "click").len(),
             1
         );
     }

@@ -467,7 +467,7 @@ mod tests {
             "ids restart, so the reloaded tree replaces the first"
         );
         let ids: Vec<u32> = host
-            .listeners
+            .listeners()
             .listeners_for(inca_document::EventTargetId::Node(children[0]), "click")
             .iter()
             .map(|l| l.callback)

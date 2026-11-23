@@ -138,10 +138,10 @@ fn remove_node<'js>(host: Rc<Host>) -> impl Fn(Ctx<'js>, JsNodeId) -> JsResult<A
             .hold(node_id)
             .map_err(|err| throw_tree_error(&ctx, err))?;
         let node_ids = document.tree().subtree(node_id);
-        let callback_ids = document.listeners.release_nodes(&node_ids);
-        crate::abort::settle_freed(&ctx, &mut document)?;
-        callbacks::release(&ctx, &callback_ids)?;
-        pair(&ctx, &callback_ids, &node_ids)
+        let released = document.release_listeners(&node_ids);
+        crate::abort::unpin(&ctx, &released.unpin)?;
+        callbacks::release(&ctx, &released.callbacks)?;
+        pair(&ctx, &released.callbacks, &node_ids)
     }
 }
 
@@ -440,7 +440,7 @@ mod tests {
 
         let host = host.document.borrow();
         for id in ids {
-            assert!(callback_ids(&host.listeners, EventTargetId::Node(id), "click").is_empty());
+            assert!(callback_ids(host.listeners(), EventTargetId::Node(id), "click").is_empty());
         }
     }
 

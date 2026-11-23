@@ -305,7 +305,7 @@ fn without_a_hook_a_frame_still_frees_the_orphans(cx: &mut TestAppContext) {
     draw(cx, scene.window);
 
     assert!(scene.cells.document.borrow().tree().get(2).is_none());
-    assert!(scene.cells.document.borrow().listeners.is_empty());
+    assert!(scene.cells.document.borrow().listeners().is_empty());
 }
 
 #[gpui::test]

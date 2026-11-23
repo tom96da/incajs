@@ -146,7 +146,7 @@ fn fire_walks_up_only_bubbling_events_and_reports_prevention(cx: &mut TestAppCon
         ("click", 99, "record", &[parent], &[], false),
     ];
     for (event, start, listener, listening, reached, prevented) in rows {
-        cells.document.borrow_mut().listeners = inca_document::EventListeners::default();
+        drop(cells.document.borrow_mut().remove_every_listener());
         for node in listening {
             listen(&dispatcher, *node, event, listener);
         }

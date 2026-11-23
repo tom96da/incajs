@@ -94,7 +94,7 @@ impl EventDispatcher {
     #[must_use]
     pub fn tracks_pointer(&self) -> bool {
         let document = self.cells.document.borrow();
-        !document.listeners.is_empty()
+        !document.listeners().is_empty()
             || self.cells.window.borrow().focus.has_handles()
             || document.style.uses_pointer_state(document.tree())
     }
