@@ -10,7 +10,6 @@ use std::time::Duration;
 use inca_bridge::{Host, JsScript, JsState};
 use inca_document::{DocumentState, Outcome, Released, View, Walk};
 use inca_jsenv::{Clock, Frames, Timers};
-use inca_node::NodeId;
 use inca_window::{Cells, Script, WindowState};
 
 /// The host of the bindings and the cells of the dispatch over one document, one window state and
@@ -49,8 +48,8 @@ impl Script for BridgeScript {
         self.0.run_frames()
     }
 
-    fn release(&self, nodes: &[NodeId], released: &Released) -> bool {
-        self.0.release(nodes, released)
+    fn release(&self, released: &Released) -> bool {
+        self.0.release(released)
     }
 
     fn drain_jobs(&self) {

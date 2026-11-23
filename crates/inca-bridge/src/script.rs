@@ -69,9 +69,9 @@ impl JsScript {
         run_frames(&self.engine, &frames, &self.reporter())
     }
 
-    /// Tells the script that `nodes` were freed with the listeners `released` names, ends the
-    /// holds of the signals it names, and returns whether it entered the engine.
-    pub fn release(&self, nodes: &[NodeId], released: &Released) -> bool {
+    /// Tells the script that the nodes `released` names were freed with the listeners it names,
+    /// ends the holds of the signals it names, and returns whether it entered the engine.
+    pub fn release(&self, released: &Released) -> bool {
         let host = &self.host;
         let callback_ids = &released.callbacks;
         self.engine.with(|ctx| {
@@ -87,7 +87,7 @@ impl JsScript {
                     .failures
                     .push(EngineError::capture(&ctx, &err));
             }
-            notify_released(&ctx, host, nodes, callback_ids)
+            notify_released(&ctx, host, &released.nodes, callback_ids)
         })
     }
 

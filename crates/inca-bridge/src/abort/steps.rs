@@ -749,7 +749,7 @@ mod tests {
                 ",
             )
             .unwrap();
-        let (nodes, released) = f
+        let released = f
             .host
             .document
             .borrow_mut()
@@ -761,7 +761,7 @@ mod tests {
             inca_jsenv::stderr_reporter(),
         );
 
-        script.release(&nodes, &released);
+        script.release(&released);
         for _ in 0..2 {
             f.engine.with(|ctx| ctx.run_gc());
             drop(f.engine.run_jobs());

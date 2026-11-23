@@ -306,9 +306,9 @@ impl Cells {
     }
 
     /// Frees every orphan of the tree with its subtree and drops their per-node state. Returns the
-    /// freed node ids with what their listeners leave to the script, or `None` when nothing was
+    /// freed nodes with what their listeners leave to the script, or `None` when nothing was
     /// freed.
-    pub(crate) fn sweep_orphans(&self) -> Option<(Vec<NodeId>, Released)> {
+    pub(crate) fn sweep_orphans(&self) -> Option<Released> {
         self.document
             .borrow_mut()
             .sweep(&mut *self.window.borrow_mut())
@@ -480,7 +480,7 @@ mod tests {
 
         let swept = cells.sweep_orphans();
 
-        assert_eq!(swept.map(|(nodes, _)| nodes), Some(vec![orphan]));
+        assert_eq!(swept.map(|released| released.nodes), Some(vec![orphan]));
         assert!(
             !cells
                 .window

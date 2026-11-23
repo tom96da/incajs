@@ -554,8 +554,8 @@ mod tests {
         engine
             .eval::<()>(&format!("__inca_native__.releaseNode({node})"))
             .unwrap();
-        let (nodes, _) = host.sweep_orphans().unwrap();
-        assert_eq!(nodes, [node]);
+        let released = host.sweep_orphans().unwrap();
+        assert_eq!(released.nodes, [node]);
     }
 
     #[test]

@@ -18,10 +18,12 @@ pub struct Added {
     pub pin: Vec<u32>,
 }
 
-/// What a change that drops registrations leaves to the JS side.
+/// What a change that frees nodes or drops registrations leaves to the JS side.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[must_use]
 pub struct Released {
+    /// The nodes the change freed.
+    pub nodes: Vec<NodeId>,
     /// The callback ids of the dropped registrations.
     pub callbacks: Vec<u32>,
     /// The signals the signal table stops holding strongly.
@@ -200,7 +202,11 @@ impl DocumentState {
             .into_iter()
             .filter(|&id| !self.stays_pinned(id))
             .collect();
-        Released { callbacks, unpin }
+        Released {
+            nodes: Vec::new(),
+            callbacks,
+            unpin,
+        }
     }
 
     /// Whether the signal table keeps holding `id`: a signal that pins while an `abort` listener

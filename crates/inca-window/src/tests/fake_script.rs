@@ -183,7 +183,7 @@ impl Script for FakeScript {
         turn()
     }
 
-    fn release(&self, _nodes: &[NodeId], _released: &Released) -> bool {
+    fn release(&self, _released: &Released) -> bool {
         false
     }
 

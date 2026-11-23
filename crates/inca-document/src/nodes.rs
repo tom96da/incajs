@@ -216,19 +216,25 @@ impl DocumentState {
         self.move_tab_start(node_id, before);
         let freed = self.tree.destroy_node(node_id);
         let callbacks = free_ids(self, view, &freed);
-        self.released(callbacks, [])
+        Released {
+            nodes: freed,
+            ..self.released(callbacks, [])
+        }
     }
 
     /// Frees every orphan with its subtree and drops the state of the freed nodes in `view` and in
-    /// the document, their listeners included. Returns the freed ids with what their listeners
+    /// the document, their listeners included. Returns the freed nodes with what their listeners
     /// leave to the JS side, or `None` when nothing was freed.
-    pub fn sweep(&mut self, view: &mut dyn View) -> Option<(Vec<NodeId>, Released)> {
+    pub fn sweep(&mut self, view: &mut dyn View) -> Option<Released> {
         let nodes = self.tree.sweep();
         if nodes.is_empty() {
             return None;
         }
         let callbacks = free_ids(self, view, &nodes);
-        Some((nodes, self.released(callbacks, [])))
+        Some(Released {
+            nodes,
+            ..self.released(callbacks, [])
+        })
     }
 
     /// Drops the document state of freed nodes and returns the callback ids their listeners held.

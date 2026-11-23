@@ -105,10 +105,10 @@ impl Host {
     }
 
     /// Frees every orphan of the tree with its subtree and drops their
-    /// per-node state. Returns the freed node ids with what their listeners
+    /// per-node state. Returns the freed nodes with what their listeners
     /// leave to the JS side, or `None` when nothing was freed.
     #[cfg(test)]
-    pub(crate) fn sweep_orphans(&self) -> Option<(Vec<NodeId>, inca_document::Released)> {
+    pub(crate) fn sweep_orphans(&self) -> Option<inca_document::Released> {
         self.document
             .borrow_mut()
             .sweep(&mut *self.window.borrow_mut())
