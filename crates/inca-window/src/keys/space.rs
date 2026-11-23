@@ -219,7 +219,6 @@ mod tests {
             cells
                 .append_child(&*s.cells.window.borrow(), s.parent, button)
                 .unwrap();
-            cells.mark_tab_dirty(button);
         }
         s.watch(button);
         s.focus(cx, button);
@@ -448,7 +447,6 @@ mod tests {
                     document
                         .set_attribute(nodes[changed], attribute, value)
                         .unwrap();
-                    document.mark_tab_dirty(nodes[changed]);
                 }));
             }
             false
@@ -651,7 +649,6 @@ mod tests {
             cells
                 .append_child(&*s.cells.window.borrow(), s.first, inner)
                 .unwrap();
-            cells.mark_tab_dirty(inner);
             inner
         };
         s.focus(cx, inner);
@@ -667,10 +664,8 @@ mod tests {
         {
             let mut cells = s.cells.document.borrow_mut();
             cells.set_attribute(s.parent, "tabindex", "0").unwrap();
-            cells.mark_tab_dirty(s.parent);
         }
         s.disable(s.first);
-        s.cells.document.borrow_mut().mark_tab_dirty(s.first);
         s.focus(cx, s.second);
         s.mouse_down(cx, s.first);
         assert_eq!(s.focused(cx), Some(s.parent));

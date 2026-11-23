@@ -159,7 +159,6 @@ mod tests {
         {
             let document = &mut *cells.document.borrow_mut();
             document.set_attribute(node, "inert", true).unwrap();
-            document.mark_focus_dirty(node);
         }
         draw(cx, window);
         set_active(cx, window, &dispatcher, true);

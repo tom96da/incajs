@@ -56,8 +56,6 @@ fn tree(cells: &Cells, value: &str) -> [NodeId; 3] {
         .unwrap();
     h.set_style_prop(input, "width", 100.0).unwrap();
     h.set_style_prop(input, "text_size", 10.0).unwrap();
-    h.mark_tab_dirty(input);
-    h.mark_tab_dirty(button);
     h.set_input_value(input, value);
     [parent, input, button]
 }

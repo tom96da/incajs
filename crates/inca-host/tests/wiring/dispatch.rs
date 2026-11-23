@@ -182,7 +182,6 @@ fn drain_jobs_and_refresh_shows_js_the_focus_the_window_applied(cx: &mut TestApp
         .unwrap();
     let cx = cx.add_empty_window();
     cx.update(|window, cx| {
-        cells.document.borrow_mut().mark_tab_dirty(node);
         let _ = apply_focus(&cells, window, cx);
         cells.focus_handle(node).unwrap().focus(window, cx);
     });

@@ -157,7 +157,6 @@ fn a_timer_callback_sees_the_focus_the_window_applied(cx: &mut TestAppContext) {
     let window = cx.add_empty_window();
     window.update(|window, cx| {
         {
-            host.cells.document.borrow_mut().mark_tab_dirty(node);
             let _ = apply_focus(&host.cells, window, cx);
             host.cells.focus_handle(node).unwrap().focus(window, cx);
         }

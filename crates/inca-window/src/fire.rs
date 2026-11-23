@@ -316,7 +316,6 @@ mod tests {
             .borrow_mut()
             .set_attribute(node, "tabindex", "0")
             .unwrap();
-        cells.document.borrow_mut().mark_tab_dirty(node);
         let cx = cx.add_empty_window();
         cx.update(|window, cx| {
             let _ = crate::tests::apply_focus(&cells, window, cx);

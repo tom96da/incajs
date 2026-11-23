@@ -51,7 +51,6 @@ pub(crate) fn fake_focusable_node(cells: &Rc<Cells>) -> NodeId {
     document
         .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
         .unwrap();
-    document.mark_tab_dirty(node);
     node
 }
 

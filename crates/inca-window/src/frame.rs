@@ -146,7 +146,6 @@ mod tests {
         {
             let document = &mut *cells.document.borrow_mut();
             document.remove_attribute(node, "tabindex").unwrap();
-            document.mark_tab_dirty(node);
         }
 
         draw(cx, window);
@@ -165,7 +164,6 @@ mod tests {
         {
             let document = &mut *cells.document.borrow_mut();
             document.remove_attribute(node, "tabindex").unwrap();
-            document.mark_tab_dirty(node);
         }
 
         draw(cx, window);
@@ -307,7 +305,6 @@ mod tests {
         let node = scene.nodes[0];
         scene.on_focus(node, move |cells| {
             cells.remove_attribute(node, "tabindex").unwrap();
-            cells.mark_tab_dirty(node);
         });
         scene.request_focus(node);
 

@@ -123,7 +123,6 @@ pub fn focusable_node(dispatcher: &Wired, cells: &Rc<Cells>) -> NodeId {
     document
         .set_attribute(node, "tabindex", inca_node::AttributeValue::from("0"))
         .unwrap();
-    document.mark_tab_dirty(node);
     drop(document);
     dispatcher.engine.eval::<()>(SEEN).unwrap();
     for event in ["focus", "blur"] {

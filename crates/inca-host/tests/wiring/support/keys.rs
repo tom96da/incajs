@@ -68,9 +68,6 @@ fn key_tree(cells: &Cells, value: Option<&str>) -> [NodeId; 5] {
         }
         None => h.set_attribute(field, "tabindex", "0").unwrap(),
     }
-    for node in [first, second, field] {
-        h.mark_tab_dirty(node);
-    }
     [parent, first, second, field, plain]
 }
 
@@ -244,7 +241,6 @@ impl KeyScene {
                 Some(self.field),
             )
             .unwrap();
-        document.mark_tab_dirty(node);
         node
     }
 }

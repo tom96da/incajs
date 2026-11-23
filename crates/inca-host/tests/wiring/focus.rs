@@ -372,7 +372,6 @@ fn focus_changes_fire_four_events_with_related_targets(cx: &mut TestAppContext) 
                 Step::Blur(i) => host.request_blur(nodes[i]),
                 Step::RemoveTabindex(i) => {
                     host.remove_attribute(nodes[i], "tabindex").unwrap();
-                    host.mark_tab_dirty(nodes[i]);
                 }
             }
             drop(host);

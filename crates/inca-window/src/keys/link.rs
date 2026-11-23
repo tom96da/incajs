@@ -53,7 +53,6 @@ mod tests {
                     Some(self.field),
                 )
                 .unwrap();
-            document.mark_tab_dirty(node);
             node
         }
 
