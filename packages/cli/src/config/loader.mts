@@ -235,6 +235,7 @@ function display(value: unknown): string {
  * Refuses a `dev` that is not an object and a `dev.hmr` that is not a boolean.
  *
  * @param config - the merged config
+ * @param config.dev - its `dev` setting
  * @throws `ERR_INCA_CONFIG_INVALID` for either
  */
 function assertDev({ dev }: IncaConfig): void {
@@ -370,7 +371,8 @@ export async function resolveAppConfig(cwd: string): Promise<ResolvedAppConfig> 
  * Narrows a full config down to what a build carries for the host.
  *
  * @param config - a config {@link resolveAppConfig} returned
- * @param options - `dev` adds the members only `inca dev` writes
+ * @param options - the options
+ * @param options.dev - adds the members only `inca dev` writes
  * @returns its name, id and window, and its `dev` members when `options.dev` is true
  */
 export function runtimeConfigOf(
@@ -391,7 +393,8 @@ export function runtimeConfigOf(
  * whatever window settings it declared.
  *
  * @param cwd - the app's root directory
- * @param options - `dev` adds the members only `inca dev` writes
+ * @param options - the options
+ * @param options.dev - adds the members only `inca dev` writes
  * @returns the config, empty when the app declares none of it
  * @throws if `package.json` exists and holds malformed JSON
  */

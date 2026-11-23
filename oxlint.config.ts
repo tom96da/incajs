@@ -11,6 +11,8 @@ export default defineConfig({
     "import/consistent-type-specifier-style": "error",
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
+    "jsdoc/require-param": ["error", { ignoreWhenAllParamsMissing: true }],
+    "jsdoc/require-param-description": "error",
     "check-file/folder-naming-convention": ["error", { "packages/*/src/**/": "KEBAB_CASE" }],
     "check-file/filename-naming-convention": [
       "error",
