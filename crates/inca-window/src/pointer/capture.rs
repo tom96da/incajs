@@ -25,10 +25,7 @@ impl EventDispatcher {
         let (lost, got) = {
             let mut document = self.cells.document.borrow_mut();
             let mut window_state = self.cells.window.borrow_mut();
-            let pending = document
-                .capture_pending
-                .filter(|&node| document.tree().is_connected(node));
-            document.capture_pending = pending;
+            let pending = document.capture_request();
             let lost = window_state.capture_active.map(|node| {
                 if document.tree().is_connected(node) {
                     EventTargetId::Node(node)

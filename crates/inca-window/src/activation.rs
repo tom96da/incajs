@@ -57,7 +57,7 @@ impl EventDispatcher {
     /// press state and a canceled `pointerdown`. The release of a button the window never sees
     /// would leave them set.
     fn reset_pointer(&self, window: &mut Window, cx: &mut App) {
-        self.cells.document.borrow_mut().capture_pending = None;
+        self.cells.document.borrow_mut().cancel_capture_request();
         let payload = EventPayload::Mouse(mouse_at(gpui::Point::default(), window.modifiers()));
         self.process_capture(&payload, NO_BUTTON, window, cx);
         self.state.pointerdown_canceled.set(false);
@@ -66,7 +66,7 @@ impl EventDispatcher {
             let mut window = self.cells.window.borrow_mut();
             window.held_buttons = 0;
             window.capture_active = None;
-            self.cells.document.borrow_mut().capture_pending = None;
+            self.cells.document.borrow_mut().cancel_capture_request();
         }
         self.clear_press(window);
     }

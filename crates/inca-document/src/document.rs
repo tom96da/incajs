@@ -12,7 +12,7 @@ use inca_style::{MatchFocus, StyleCache};
 use crate::geometry::Align;
 use crate::{
     EventListeners, FocusModel, FocusPlan, InputState, Reveal, RevealOrigin, RevealQueue, Reveals,
-    Signals, StyleWarnings,
+    Signals, StyleWarnings, View,
 };
 
 /// A tree with a root element under a document node. The root is the node a mounting app
@@ -64,8 +64,8 @@ pub struct DocumentState {
     /// Last number handed out as an `eventId`. Each event takes the next one.
     pub last_event_id: u64,
     /// The node a script asked to capture the mouse pointer. Its `gotpointercapture` fires before
-    /// the next pointer event.
-    pub capture_pending: Option<NodeId>,
+    /// the next pointer event. Changed only through the capture requests of the document.
+    capture_request: Option<NodeId>,
     /// The text states of the `input` nodes, created on first use. Read through [`Self::input`]
     /// and changed only through the operations of the document.
     inputs: HashMap<NodeId, InputState>,
@@ -91,7 +91,7 @@ impl DocumentState {
             focus: FocusModel::default(),
             reveals: RevealQueue::default(),
             last_event_id: 0,
-            capture_pending: None,
+            capture_request: None,
             inputs: HashMap::new(),
         }
     }
@@ -400,6 +400,44 @@ impl DocumentState {
         self.reveals.retry(reveal);
     }
 
+    /// Asks for the capture of the mouse pointer for `node`, which starts at the next pointer
+    /// event. The request is kept only while a button of `view` is held and `node` is connected.
+    /// Returns whether `node` is connected.
+    #[must_use]
+    pub fn request_capture(&mut self, view: &dyn View, node: NodeId) -> bool {
+        let connected = self.tree.is_connected(node);
+        if connected && view.held_buttons() != 0 {
+            self.capture_request = Some(node);
+        }
+        connected
+    }
+
+    /// Drops the capture request when it names `node`.
+    pub fn release_capture_request(&mut self, node: NodeId) {
+        if self.capture_request == Some(node) {
+            self.capture_request = None;
+        }
+    }
+
+    /// Whether the capture request names `node` and `node` is connected.
+    #[must_use]
+    pub fn has_capture_request(&self, node: NodeId) -> bool {
+        self.capture_request == Some(node) && self.tree.is_connected(node)
+    }
+
+    /// The node the capture request names, for the window to apply. A request whose node is not
+    /// connected is dropped and returns `None`.
+    pub fn capture_request(&mut self) -> Option<NodeId> {
+        let tree = &self.tree;
+        self.capture_request = self.capture_request.filter(|&node| tree.is_connected(node));
+        self.capture_request
+    }
+
+    /// Drops the capture request.
+    pub fn cancel_capture_request(&mut self) {
+        self.capture_request = None;
+    }
+
     /// Reports a style warning of `node_id` through the sink, once for each node and line.
     pub fn warn_style(&mut self, node_id: NodeId, line: &str) {
         self.warnings.report(&self.tree, node_id, line);
@@ -421,7 +459,75 @@ impl DocumentState {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use rstest::rstest;
+
     use super::*;
+    use crate::tests::RecordingView;
+
+    /// A document with one node under its root, and a view holding the left button.
+    fn mounted() -> (DocumentState, RecordingView, NodeId) {
+        let view = RecordingView {
+            held: 1,
+            ..RecordingView::default()
+        };
+        let mut document = DocumentState::default();
+        let node = document.create_node("div").unwrap();
+        document.append_child(&view, document.root(), node).unwrap();
+        (document, view, node)
+    }
+
+    #[rstest]
+    #[case::held(1, true, (true, true))]
+    #[case::no_button(0, true, (true, false))]
+    #[case::detached(1, false, (false, false))]
+    fn a_capture_request_is_kept_for_a_connected_node_while_a_button_is_held(
+        #[case] held: u8,
+        #[case] attached: bool,
+        #[case] expected: (bool, bool),
+    ) {
+        let (mut document, mut view, mut node) = mounted();
+        view.held = held;
+        if !attached {
+            node = document.create_node("div").unwrap();
+        }
+
+        let connected = document.request_capture(&view, node);
+
+        assert_eq!((connected, document.has_capture_request(node)), expected);
+    }
+
+    #[test]
+    fn a_capture_release_drops_only_the_request_of_its_node() {
+        let (mut document, view, node) = mounted();
+        let other = document.create_node("div").unwrap();
+        document
+            .append_child(&view, document.root(), other)
+            .unwrap();
+        assert!(document.request_capture(&view, node));
+
+        document.release_capture_request(other);
+        let kept = document.has_capture_request(node);
+        document.release_capture_request(node);
+
+        assert_eq!((kept, document.has_capture_request(node)), (true, false));
+    }
+
+    #[test]
+    fn a_capture_request_of_a_node_that_left_the_tree_is_dropped() {
+        let (mut document, view, node) = mounted();
+        assert!(document.request_capture(&view, node));
+        let root = document.root();
+        document.remove_child(&view, root, node).unwrap();
+        let removed = (
+            document.has_capture_request(node),
+            document.capture_request(),
+        );
+
+        document.append_child(&view, root, node).unwrap();
+
+        assert_eq!(removed, (false, None));
+        assert_eq!(document.capture_request(), None);
+    }
 
     #[test]
     fn the_root_is_the_only_child_of_the_document() {

@@ -127,9 +127,11 @@ pub(crate) fn collecting() -> (StyleWarnings, Rc<RefCell<Vec<String>>>) {
     (warnings, lines)
 }
 
-/// A `View` that draws nothing and records the nodes whose scroll reset and the nodes it forgot.
+/// A `View` that draws nothing, holds the buttons `held`, and records the nodes whose scroll reset
+/// and the nodes it forgot.
 #[derive(Default)]
 pub(crate) struct RecordingView {
+    pub(crate) held: u8,
     pub(crate) resets: RefCell<Vec<NodeId>>,
     pub(crate) forgotten: Vec<NodeId>,
 }
@@ -153,7 +155,7 @@ impl View for RecordingView {
     }
 
     fn held_buttons(&self) -> u8 {
-        0
+        self.held
     }
 
     fn reset_scroll(&self, _: &VirtualTree, id: NodeId) {

@@ -72,7 +72,7 @@ impl EventDispatcher {
         if last {
             self.state.pointerdown_canceled.set(false);
             if self.cells.window.borrow().capture_active.is_some() {
-                self.cells.document.borrow_mut().capture_pending = None;
+                self.cells.document.borrow_mut().cancel_capture_request();
                 self.process_capture(payload, button, window, cx);
                 self.report_hover_with(self.deepest_hovered(), button, window, cx);
             }
@@ -151,9 +151,8 @@ mod tests {
         s.bar_up(s.a, 0);
         let a = s.a;
         assert!(s.take().contains(&format!("lostpointercapture@{a}")));
-        let pending = s.cells.document.borrow().capture_pending;
-        let active = s.cells.window.borrow().capture_active;
-        assert_eq!((pending, active), (None, None));
+        assert!(!s.cells.document.borrow().has_capture_request(a));
+        assert_eq!(s.cells.window.borrow().capture_active, None);
     }
 
     /// The events of a move over `b` with the left button held during a drag of `a`.

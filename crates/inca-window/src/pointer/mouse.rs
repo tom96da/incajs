@@ -116,7 +116,7 @@ impl EventDispatcher {
         if last {
             self.state.pointerdown_canceled.set(false);
             if self.cells.window.borrow().capture_active.is_some() {
-                self.cells.document.borrow_mut().capture_pending = None;
+                self.cells.document.borrow_mut().cancel_capture_request();
                 self.process_capture(payload, button, window, cx);
                 self.state.captured_release.set(Some((target, button)));
             }
@@ -411,12 +411,9 @@ mod tests {
             [&format!("pointermove@{b}"), &format!("mousemove@{b}")]
         );
         assert!(!got.iter().any(|e| e.starts_with("lostpointercapture")));
-        let pending = s.cells.document.borrow().capture_pending;
+        assert!(!s.cells.document.borrow().has_capture_request(a));
         let window = s.cells.window.borrow();
-        assert_eq!(
-            (window.held_buttons, pending, window.capture_active),
-            (0, None, None)
-        );
+        assert_eq!((window.held_buttons, window.capture_active), (0, None));
     }
 
     fn movement_of(payload: &EventPayload) -> (f32, f32) {

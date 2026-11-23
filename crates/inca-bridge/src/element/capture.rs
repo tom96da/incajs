@@ -46,7 +46,11 @@ fn known_pointer(ctx: &Ctx<'_>, pointer_id: i32) -> JsResult<()> {
 /// throws `InvalidStateError`.
 fn set_capture(ctx: &Ctx<'_>, host: &Rc<Host>, node: NodeId, pointer_id: i32) -> JsResult<()> {
     known_pointer(ctx, pointer_id)?;
-    if !request_capture(host, node) {
+    let connected = host
+        .document
+        .borrow_mut()
+        .request_capture(&*host.window.borrow(), node);
+    if !connected {
         return Err(Exception::throw_dom(
             ctx,
             "InvalidStateError",
@@ -56,37 +60,16 @@ fn set_capture(ctx: &Ctx<'_>, host: &Rc<Host>, node: NodeId, pointer_id: i32) ->
     Ok(())
 }
 
-/// Asks for the capture of the mouse pointer for `node`. Returns whether `node` is connected.
-fn request_capture(host: &Host, node: NodeId) -> bool {
-    let held = host.window.borrow().held_buttons() != 0;
-    let mut document = host.document.borrow_mut();
-    let connected = document.tree().is_connected(node);
-    if held && connected {
-        document.capture_pending = Some(node);
-    }
-    connected
-}
-
 /// Whether `node` has the capture of the pointer.
 fn has_capture(host: &DocumentState, node: NodeId, pointer_id: i32) -> bool {
-    pointer_id == MOUSE_POINTER
-        && host.capture_pending == Some(node)
-        && host.tree().is_connected(node)
+    pointer_id == MOUSE_POINTER && host.has_capture_request(node)
 }
 
 /// Releases the capture of the pointer when `node` has it.
 fn release_capture(ctx: &Ctx<'_>, host: &Rc<Host>, node: NodeId, pointer_id: i32) -> JsResult<()> {
     known_pointer(ctx, pointer_id)?;
-    drop_capture(host, node);
+    host.document.borrow_mut().release_capture_request(node);
     Ok(())
-}
-
-/// Drops the pending capture when `node` has it.
-fn drop_capture(host: &Host, node: NodeId) {
-    let mut document = host.document.borrow_mut();
-    if document.capture_pending == Some(node) {
-        document.capture_pending = None;
-    }
 }
 
 fn set_pointer_capture<'js>(
@@ -164,34 +147,30 @@ pub(super) fn pointer_capture<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::rc::Rc;
-
     use rstest::rstest;
 
-    use super::Host;
     use crate::test_support::{engine_with_view, error_name};
 
-    /// A mounted node, and the engine and host it lives in.
-    fn mounted(held: u8) -> (inca_jsenv::Engine, Rc<Host>, u32) {
-        let (engine, host, view) = engine_with_view();
-        view.borrow_mut().held = held;
-        let node: u32 = engine
-            .eval(
+    /// A mounted node `n` while the left button is held, and the engine it lives in.
+    fn mounted() -> inca_jsenv::Engine {
+        let (engine, _host, view) = engine_with_view();
+        view.borrow_mut().held = 1;
+        engine
+            .eval::<()>(
                 r"
                 globalThis.n = __inca_native__.createNode('div');
                 __inca_native__.appendChild(__inca_native__.rootNodeId(), n);
-                n;
                 ",
             )
             .unwrap();
-        (engine, host, node)
+        engine
     }
 
     #[rstest]
     #[case::set("setPointerCapture")]
     #[case::release("releasePointerCapture")]
     fn an_unknown_pointer_throws_not_found(#[case] method: &str) {
-        let (engine, _host, _node) = mounted(1);
+        let engine = mounted();
         assert_eq!(
             error_name(&engine, &format!("__inca_native__.{method}(n, 2)")),
             "NotFoundError"
@@ -202,7 +181,7 @@ mod tests {
     #[case::detached("__inca_native__.createNode('div')")]
     #[case::destroyed("9999")]
     fn set_pointer_capture_throws_for_a_disconnected_node(#[case] node: &str) {
-        let (engine, _host, _node) = mounted(1);
+        let engine = mounted();
         assert_eq!(
             error_name(
                 &engine,
@@ -213,58 +192,19 @@ mod tests {
     }
 
     #[test]
-    fn set_pointer_capture_without_pressed_buttons_is_noop() {
-        let (engine, host, _node) = mounted(0);
-        engine
-            .eval::<()>("__inca_native__.setPointerCapture(n, 1)")
-            .unwrap();
-        assert_eq!(host.document.borrow().capture_pending, None);
-    }
-
-    #[test]
-    fn set_pointer_capture_succeeds_for_connected_node() {
-        let (engine, host, node) = mounted(1);
-        engine
-            .eval::<()>("__inca_native__.setPointerCapture(n, 1)")
-            .unwrap();
-        assert_eq!(host.document.borrow().capture_pending, Some(node));
-    }
-
-    #[test]
-    fn has_pointer_capture_is_true_only_for_the_pending_owner() {
-        let (engine, host, _node) = mounted(1);
+    fn has_pointer_capture_follows_a_set_and_a_release_of_the_mouse_pointer() {
+        let engine = mounted();
         let flags: Vec<bool> = engine
             .eval(
                 r"
-                const other = __inca_native__.createNode('div');
-                __inca_native__.appendChild(__inca_native__.rootNodeId(), other);
                 __inca_native__.setPointerCapture(n, 1);
                 const owner = __inca_native__.hasPointerCapture(n, 1);
-                const stranger = __inca_native__.hasPointerCapture(other, 1);
                 const unsupported = __inca_native__.hasPointerCapture(n, 2);
-                __inca_native__.releasePointerCapture(other, 1);
-                const kept = __inca_native__.hasPointerCapture(n, 1);
                 __inca_native__.releasePointerCapture(n, 1);
-                [owner, stranger, unsupported, kept, __inca_native__.hasPointerCapture(n, 1)];
+                [owner, unsupported, __inca_native__.hasPointerCapture(n, 1)];
                 ",
             )
             .unwrap();
-        assert_eq!(flags, [true, false, false, true, false]);
-        assert_eq!(host.document.borrow().capture_pending, None);
-    }
-
-    #[test]
-    fn a_removed_pending_owner_no_longer_has_the_capture() {
-        let (engine, _host, _node) = mounted(1);
-        let has: bool = engine
-            .eval(
-                r"
-                __inca_native__.setPointerCapture(n, 1);
-                __inca_native__.removeChild(__inca_native__.rootNodeId(), n);
-                __inca_native__.hasPointerCapture(n, 1);
-                ",
-            )
-            .unwrap();
-        assert!(!has);
+        assert_eq!(flags, [true, false, false]);
     }
 }
