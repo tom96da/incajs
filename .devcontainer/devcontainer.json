@@ -21,10 +21,7 @@
   "mounts": [
     "source=devcontainer-cargo-cache-${devcontainerId},target=/usr/local/cargo,type=volume",
     "source=devcontainer-cargo-target-${devcontainerId},target=${containerWorkspaceFolder}/target,type=volume",
-    "source=devcontainer-node-modules-${devcontainerId},target=${containerWorkspaceFolder}/node_modules,type=volume",
-    "source=devcontainer-claude-home-${devcontainerId},target=/home/vscode/.claude,type=volume",
-    "source=${localEnv:HOME}/.claude/.credentials-devcontainer.json,target=/home/vscode/.claude/.credentials.json,type=bind",
-    "source=${localEnv:HOME}/.claude.devcontainer.json,target=/home/vscode/.claude.json,type=bind"
+    "source=devcontainer-node-modules-${devcontainerId},target=${containerWorkspaceFolder}/node_modules,type=volume"
   ],
 
   // Features to add to the dev container. More info: https://containers.dev/features.
@@ -33,7 +30,7 @@
       "version": "26",
       "pnpmVersion": "12"
     },
-    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+    "ghcr.io/devcontainer-community/devcontainer-features/bun.sh:1": {}
   },
 
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
@@ -43,28 +40,7 @@
   "postCreateCommand": ". .devcontainer/post-create.sh",
 
   // Configure tool-specific properties.
-  "customizations": {
-    "vscode": {
-      "settings": {
-        "rust-analyzer.files.watcher": "server",
-        "rust-analyzer.check.workspace": false
-      },
-      "extensions": [
-        // Common extensions.
-        "editorconfig.editorconfig",
-        "timonwong.shellcheck",
-
-        // Git extensions.
-        "mhutchie.git-graph",
-        "eamodio.gitlens",
-
-        // Frontend extensions.
-        "vue.volar",
-        "vitest.explorer",
-        "oxc.oxc-vscode"
-      ]
-    }
-  }
+  "customizations": {}
 
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   // "remoteUser": "root"
