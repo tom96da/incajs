@@ -4,7 +4,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 <script setup>
-import { onMounted, reactive, ref } from "@vue/runtime-core";
+import { onMounted, reactive, ref } from "vue";
 
 import { document, window } from "incajs";
 

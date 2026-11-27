@@ -4,7 +4,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 <script setup>
-import { onMounted, ref } from "@vue/runtime-core";
+import { onMounted, ref } from "vue";
 
 const handled = ref("none");
 const timedOut = ref("waiting");

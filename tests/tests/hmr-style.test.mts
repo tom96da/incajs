@@ -61,7 +61,7 @@ const ENTRY = dedent`
  */
 const APP = dedent`
   <script setup>
-  import { onMounted, ref } from "@vue/runtime-core";
+  import { onMounted, ref } from "vue";
 
   const ticks = ref(0);
 

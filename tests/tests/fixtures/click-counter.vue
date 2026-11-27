@@ -7,7 +7,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
   click_counter. The style block and label suffix below are substituted at test time.
 -->
 <script setup>
-import { computed, ref } from "@vue/runtime-core";
+import { computed, ref } from "vue";
 
 const clicks = ref(0);
 const label = computed(() =>

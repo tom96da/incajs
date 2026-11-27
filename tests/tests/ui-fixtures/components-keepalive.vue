@@ -4,7 +4,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 <script setup>
-import { KeepAlive, ref } from "@vue/runtime-core";
+import { KeepAlive, ref } from "vue";
 
 import Tally from "./parts/tally.vue";
 
