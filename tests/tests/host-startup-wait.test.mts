@@ -91,8 +91,6 @@ it.concurrent(
   async (ctx) => {
     const started = Date.now();
     const host = await startHost("await new Promise(() => {});", ctx);
-    await sleep(1000);
-    expect(host.messages).toEqual([]);
 
     await vi.waitFor(() => expect(host.messages).toHaveLength(1), { timeout: 6000 });
     expect(Date.now() - started).toBeGreaterThanOrEqual(1500);
