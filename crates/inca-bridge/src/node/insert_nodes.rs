@@ -104,12 +104,8 @@ fn insert_nodes<'js>(
 mod tests {
     #![allow(clippy::unwrap_used)]
 
-    use std::rc::Rc;
-
-    use inca_jsenv::Engine;
     use rstest::rstest;
 
-    use crate::Host;
     use crate::test_support::{callback_ids, error_name};
     use crate::tests::engine_with_setup;
     use inca_document::EventTargetId;
@@ -138,13 +134,9 @@ mod tests {
         };
         ";
 
-    fn engine_with_family() -> (Engine, Rc<Host>) {
-        engine_with_setup(SETUP)
-    }
-
     #[test]
     fn insert_nodes_returns_the_new_text_ids_in_argument_order() {
-        let (engine, _host) = engine_with_family();
+        let (engine, _host) = engine_with_setup(SETUP);
 
         let data: String = engine
             .eval(
@@ -165,7 +157,7 @@ mod tests {
         #[case] call: &str,
         #[case] expected: &str,
     ) {
-        let (engine, _host) = engine_with_family();
+        let (engine, _host) = engine_with_setup(SETUP);
 
         let removed: String = engine.eval(&format!("listed(() => {call}[1])")).unwrap();
 
@@ -185,7 +177,7 @@ mod tests {
         #[case] call: &str,
         #[case] expected: &str,
     ) {
-        let (engine, _host) = engine_with_family();
+        let (engine, _host) = engine_with_setup(SETUP);
         engine
             .eval::<()>(
                 r"
@@ -207,7 +199,7 @@ mod tests {
     #[case::after("after")]
     #[case::replace_with("replaceWith")]
     fn insert_nodes_returns_null_for_a_node_without_a_parent(#[case] place: &str) {
-        let (engine, _host) = engine_with_family();
+        let (engine, _host) = engine_with_setup(SETUP);
 
         let result: String = engine
             .eval(&format!(
@@ -220,7 +212,7 @@ mod tests {
 
     #[test]
     fn a_failed_plan_reaches_the_script_as_its_dom_error() {
-        let (engine, _host) = engine_with_family();
+        let (engine, _host) = engine_with_setup(SETUP);
 
         assert_eq!(
             error_name(&engine, "n.insertNodes(a, 'append', [p])"),
@@ -235,7 +227,7 @@ mod tests {
     #[case::negative("n.insertNodes(p, 'append', [-1])")]
     #[case::unknown_place("n.insertNodes(p, 'sideways', [])")]
     fn insert_nodes_throws_a_type_error_for_a_bad_argument(#[case] call: &str) {
-        let (engine, _host) = engine_with_family();
+        let (engine, _host) = engine_with_setup(SETUP);
 
         assert_eq!(error_name(&engine, call), "TypeError");
     }
@@ -244,7 +236,7 @@ mod tests {
     #[case::append("p", "append")]
     #[case::before_a_node_without_a_parent("loose", "before")]
     fn a_lone_surrogate_throws_before_any_change(#[case] target: &str, #[case] place: &str) {
-        let (engine, _host) = engine_with_family();
+        let (engine, _host) = engine_with_setup(SETUP);
 
         let outcome: String = engine
             .eval(&format!(
@@ -266,7 +258,7 @@ mod tests {
 
     #[test]
     fn replacing_a_node_with_no_node_keeps_its_listeners() {
-        let (engine, host) = engine_with_family();
+        let (engine, host) = engine_with_setup(SETUP);
         let id: u32 = engine
             .eval(
                 r"
@@ -296,7 +288,7 @@ mod tests {
         #[case] place: &str,
         #[case] expected: &str,
     ) {
-        let (engine, _host) = engine_with_family();
+        let (engine, _host) = engine_with_setup(SETUP);
 
         let order: String = engine
             .eval(&format!(
