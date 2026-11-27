@@ -1,6 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { realpath } from "node:fs/promises";
 import path from "node:path";
 
 import dedent from "ts-dedent";
@@ -32,10 +33,15 @@ function keyOf(id: string, root: string): string {
  */
 export function styleToElements(styleModule: string, root: string): Plugin[] {
   const sheets = new Map<string, string>();
+  // Vite hands out the real path of a module, so a root reached through a link has to be real too.
+  let base = root;
   return [
     {
       name: "inca:style-collect",
       apply: "build",
+      async buildStart() {
+        base = await realpath(root).catch(() => root);
+      },
       transform(css, id) {
         if (!isCSSRequest(id) || OTHER_IMPORT_RE.test(id)) return null;
         sheets.set(id, css);
@@ -54,7 +60,7 @@ export function styleToElements(styleModule: string, root: string): Plugin[] {
             dedent`
             ${code}
             import { updateStyle } from ${JSON.stringify(styleModule)};
-            updateStyle(${JSON.stringify(keyOf(id, root))}, ${JSON.stringify(css)});
+            updateStyle(${JSON.stringify(keyOf(id, base))}, ${JSON.stringify(css)});
           ` + "\n",
           map: null,
           moduleSideEffects: "no-treeshake",

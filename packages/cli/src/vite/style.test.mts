@@ -1,6 +1,10 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 import type { Plugin } from "vite";
 
@@ -75,5 +79,25 @@ describe("inca:style-apply", () => {
 
   it("leaves an id the collect step did not see", () => {
     expect(steps().applyOf("", SHEET)).toBeNull();
+  });
+});
+
+describe("a root reached through a link", () => {
+  it("keys a sheet by its path below the real root", async () => {
+    const dir = await realpath(await mkdtemp(path.join(tmpdir(), "inca-style-")));
+    try {
+      const real = path.join(dir, "real");
+      const link = path.join(dir, "link");
+      await mkdir(real);
+      await symlink(real, link);
+      const [collect, apply] = styleToElements("alpha-style", link) as [Plugin, Plugin];
+      await (collect.buildStart as () => Promise<void>)();
+      const id = path.join(real, "a.css");
+      (collect.transform as Transform)(".a {}", id);
+
+      expect((apply.transform as Transform)("", id)?.code).toContain('updateStyle("a.css"');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
