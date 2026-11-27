@@ -564,3 +564,32 @@ describe("plain and .once listeners on one element", () => {
     expect(plain).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("an array of handlers", () => {
+  const set = (value: unknown): void => patchProp(el, "onClick", null, value, undefined, null);
+  const fire = (): void => listenerOf(vi.mocked(core.addEventListener).mock.calls.at(-1)!)();
+
+  it("runs a handler added to the array after the patch from the next event", () => {
+    const log: string[] = [];
+    const handlers: unknown[] = [() => log.push("a")];
+    set(handlers);
+    handlers.push(() => log.push("b"));
+    fire();
+
+    expect(log).toEqual(["a", "b"]);
+  });
+
+  it("leaves a handler added during an event for the next event", () => {
+    const log: string[] = [];
+    const handlers: unknown[] = [];
+    handlers.push(() => {
+      log.push("a");
+      if (handlers.length === 1) handlers.push(() => log.push("b"));
+    });
+    set(handlers);
+    fire();
+    fire();
+
+    expect(log).toEqual(["a", "a", "b"]);
+  });
+});

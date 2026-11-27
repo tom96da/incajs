@@ -114,7 +114,7 @@ function patchStyle(core: RendererCore, el: Element, nextValue: unknown): void {
 function asHandlers(value: unknown, rawKey: string): unknown[] | null {
   if (!value) return null;
   if (typeof value === "function") return [value];
-  if (Array.isArray(value)) return value.slice();
+  if (Array.isArray(value)) return value;
   warn(
     `Wrong type passed as event handler to ${rawKey} - did you forget @ or : ` +
       "in front of your prop?\n" +
@@ -222,7 +222,8 @@ function createEntry(
             slot.fired = true;
             sync(core, el, entryKey, entry);
           }
-          for (const handler of slot.handlers) {
+          // Copied per event as Vue does, so a change to the array shows from the next event.
+          for (const handler of slot.handlers.slice()) {
             if (stopped()) break;
             // A falsy entry is skipped; Vue warns about any other entry that is not a function.
             if (!handler) continue;
