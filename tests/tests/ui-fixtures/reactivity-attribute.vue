@@ -4,7 +4,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 <script setup>
-import { ref } from "@vue/runtime-core";
+import { ref } from "vue";
 
 const tag = ref("on");
 const toggle = () => (tag.value = tag.value === undefined ? "on" : undefined);

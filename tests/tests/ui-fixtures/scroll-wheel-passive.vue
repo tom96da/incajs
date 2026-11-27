@@ -4,7 +4,7 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 -->
 
 <script setup>
-import { onMounted } from "@vue/runtime-core";
+import { onMounted } from "vue";
 
 onMounted(() => {
   document.addEventListener("wheel", (e) => e.preventDefault());
