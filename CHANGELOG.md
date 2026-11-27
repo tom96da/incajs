@@ -13,6 +13,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 ### Fixed
 
 - an edit saved while the app loads in `inca dev` is applied ([ed55709f](https://github.com/tom96da/incajs/commit/ed55709f))
+- a change to an array of event handlers shows from the next event ([15c3c145](https://github.com/tom96da/incajs/commit/15c3c145))
+- a project reached through a symlink builds a bundle that carries no path of the machine ([cfa2c42b](https://github.com/tom96da/incajs/commit/cfa2c42b))
 
 ## [0.0.35] - 2026-11-19
 

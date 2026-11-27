@@ -222,7 +222,7 @@ function createEntry(
             slot.fired = true;
             sync(core, el, entryKey, entry);
           }
-          // Copied per event as Vue does, so a change to the array shows from the next event.
+          // Copied per event, so a change to the array shows from the next event on.
           for (const handler of slot.handlers.slice()) {
             if (stopped()) break;
             // A falsy entry is skipped; Vue warns about any other entry that is not a function.
