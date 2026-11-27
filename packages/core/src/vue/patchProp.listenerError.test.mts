@@ -41,10 +41,13 @@ describe("errors thrown by an event handler", () => {
   const throwing = (): void => {
     throw boom;
   };
-  const instanceWith = (errorHandler?: unknown): ComponentInternalInstance =>
+  const instanceWith = (
+    errorHandler?: unknown,
+    parent: unknown = null,
+  ): ComponentInternalInstance =>
     ({
       vnode: null,
-      parent: null,
+      parent,
       appContext: { config: { errorHandler } },
     }) as unknown as ComponentInternalInstance;
 
@@ -57,11 +60,8 @@ describe("errors thrown by an event handler", () => {
   });
 
   describe("onErrorCaptured hooks", () => {
-    const withHook = (hook: () => boolean | void): ComponentInternalInstance => {
-      const child = instanceWith();
-      (child as unknown as { parent: unknown }).parent = { ec: [hook], parent: null };
-      return child;
-    };
+    const withHook = (hook: () => boolean | void): ComponentInternalInstance =>
+      instanceWith(undefined, { ec: [hook], parent: null });
 
     it("receives the error up the parent chain and a false return suppresses the report", () => {
       const hook = vi.fn<() => boolean>(() => false);
