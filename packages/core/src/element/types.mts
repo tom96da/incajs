@@ -1,7 +1,7 @@
 // Copyright (c) 2026 tom96da
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import type { Event, GlobalEventHandlersEventMap } from "../types.mts";
+import type { Event, GlobalEventHandlersEventMap, ScrollAlignment } from "../types.mts";
 import type { HANDLER_EVENTS } from "./eventHandlers.mts";
 import type { DOMRect } from "./geometry.mts";
 import type {
@@ -12,7 +12,26 @@ import type {
   ParentNode,
   TextMembers,
 } from "./nodeTypes.mts";
-import type { ScrollIntoViewOptions, ScrollOptions } from "./scroll.mts";
+
+/** The options form of `scrollTo()` and `scrollBy()`. `behavior` is accepted and ignored. */
+export interface ScrollOptions {
+  /** The horizontal offset. Omit to keep the current one. */
+  left?: number;
+  /** The vertical offset. Omit to keep the current one. */
+  top?: number;
+  /** `behavior` is ignored; every scroll applies at once. */
+  behavior?: "auto" | "instant" | "smooth";
+}
+
+/** The options form of `scrollIntoView()`. `behavior` is accepted and ignored. */
+export interface ScrollIntoViewOptions {
+  /** The vertical alignment. Defaults to `"start"`. */
+  block?: ScrollAlignment;
+  /** The horizontal alignment. Defaults to `"nearest"`. */
+  inline?: ScrollAlignment;
+  /** `behavior` is ignored; every scroll applies at once. */
+  behavior?: "auto" | "instant" | "smooth";
+}
 
 /** A function an event handler property holds, called with its target as `this` and the event. */
 export type EventHandler<E = Event, T = Element> = (this: T, event: E) => unknown;

@@ -13,7 +13,6 @@ export type {
   NonDocumentTypeChildNode,
   ParentNode,
 } from "./element/nodeTypes.mts";
-export type { ScrollIntoViewOptions, ScrollOptions } from "./element/scroll.mts";
 export type {
   Attr,
   Comment,
@@ -29,6 +28,8 @@ export type {
   HTMLTemplateElement,
   NamedNodeMap,
   NodeListOf,
+  ScrollIntoViewOptions,
+  ScrollOptions,
   Text,
 } from "./element/types.mts";
 export type {
