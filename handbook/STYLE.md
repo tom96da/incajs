@@ -68,7 +68,7 @@ Comments, documentation and commit messages state the facts that hold.
 
 ### TypeScript
 
-- A function lives in its own file, and `index.mts` only re-exports.
+- Each exported function, class, type or constant carries its own `export` keyword.
 
 ## Public API docs
 
