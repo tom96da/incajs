@@ -35,14 +35,19 @@ History is in [PLAN.md](./PLAN.md) and [CHANGELOG.md](../CHANGELOG.md).
 
 ### In progress
 
-None at the moment.
+- **Document structure**: `html`, `head` and `body` exist, style elements live in `head`, and an
+  app mounts under `body`.
+- **Window**: `window` is an instance of a global `Window`.
+- **Viewport scroll**: the viewport scrolls when the content overflows, and `window.scrollTo` and
+  the `scroll` event reach it.
+- **Accessible name**: elements have a role and an accessible name, and every node of the
+  automation snapshot carries both.
 
 ### Not started
 
 - `textarea`, word-wise editing, undo and redo, and the selection API.
 - `position` and `z-index`.
-- The `html` and `body` elements and a global `window`.
-- The accessible name, and AccessKit for the platform accessibility APIs.
+- AccessKit for the platform accessibility APIs.
 - React and other frontends. Vue 3 has to be stable first.
 
 ### Foundation
@@ -50,7 +55,7 @@ None at the moment.
 - **Release**: `v0.0.35`.
 - **Node.js**: 22.18 or newer.
 - **Toolchain**: zed `v1.29.3` for `gpui`, rquickjs `0.14.0`.
-- **QuickJS test run**: `vitest-pool-quickjs` `^0.2.2`.
+- **QuickJS test run**: `vitest-pool-quickjs` `^0.2.4`.
 - **Linux binaries**: built in an `ubuntu:22.04` container by both workflows,
   for a glibc 2.35 floor.
 - **macOS**: host packages for arm64 and x64 (Intel).
